@@ -1,3 +1,4 @@
+from asyncio import create_task
 import logging
 import json
 import os
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 class HyperliquidBot():
 
     def __init__(self):
+
         telegram_token = os.environ["HYPERLIQUID_TELEGRAM_BOT_TOKEN"]
         self.telegram_chat_id = os.environ["HYPERLIQUID_TELEGRAM_BOT_CHAT_ID"]
 
@@ -30,10 +32,14 @@ class HyperliquidBot():
 
         self.telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
 
+    def send_message(self, msg):
+        create_task(self.telegram_app.bot.sendMessage.sendMessage(chat_id=self.telegram_chat_id, text=msg))
+
     def on_user_events(self, user_events: UserEventsMsg) -> None:
         user_events_data = user_events["data"]
         if "fills" in user_events_data:
-            self.telegram_app.bot.sendMessage(chat_id=self.telegram_chat_id, text=json.dumps(user_events_data["fills"]))
+            fill_events = json.dumps(user_events_data["fills"])
+            self.send_message(fill_events)
 
     async def get_balance(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
@@ -45,5 +51,7 @@ class HyperliquidBot():
 
         await update.message.reply_text(message)
 
+
 if __name__ == '__main__':
     bot = HyperliquidBot()
+    os._exit(0)
