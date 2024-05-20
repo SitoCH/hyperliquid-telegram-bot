@@ -1,4 +1,4 @@
-from asyncio import create_task
+import asyncio
 import logging
 import json
 import os
@@ -12,6 +12,8 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
+httpx_logger = logging.getLogger("httpx")
+httpx_logger.setLevel(logging.WARNING)
 
 
 class HyperliquidBot():
@@ -33,7 +35,7 @@ class HyperliquidBot():
         self.telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
 
     def send_message(self, msg):
-        create_task(self.telegram_app.bot.sendMessage.sendMessage(chat_id=self.telegram_chat_id, text=msg))
+        asyncio.run(self.telegram_app.bot.send_message(chat_id=self.telegram_chat_id, text=msg))
 
     def on_user_events(self, user_events: UserEventsMsg) -> None:
         user_events_data = user_events["data"]
