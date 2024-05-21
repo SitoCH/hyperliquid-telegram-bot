@@ -2,10 +2,11 @@ import asyncio
 import logging
 import json
 import os
+from typing import List
 
 from hyperliquid.info import Info
 from hyperliquid.utils import constants
-from hyperliquid.utils.types import UserEventsMsg
+from hyperliquid.utils.types import UserEventsMsg, Fill
 
 from telegram import (
     KeyboardButton,
@@ -48,16 +49,40 @@ class HyperliquidBot:
             self.telegram_app.bot.send_message(chat_id=self.telegram_chat_id, text=msg)
         )
 
+    def get_fill_icon(self, closed_pnl: float) -> str:
+        return "🟢" if closed_pnl > 0 else "🔴"
+
+    def process_fill(self, fill: Fill) -> None:
+
+        price = float(fill["px"])
+        coin = fill["coin"]
+        size = fill["sz"]
+        amount = price * float(size)
+        closed_pnl = float(fill["closedPnl"])
+        if fill["dir"] == 'Open Long':
+            fill_message = f"🔵 Open Long: {size} {coin} ({amount:,.2f} USDC)"
+        elif fill["dir"] == 'Open Short':
+            fill_message = f"🔵 Open Short: {size} {coin} ({amount:,.2f} USDC)"
+        elif fill["dir"] == 'Close Long':
+            fill_message = f"{self.get_fill_icon(closed_pnl)} Close Long: {size} {coin} ({closed_pnl:,.2f} USDC)"
+        elif fill["dir"] == 'Close Short':
+            fill_message = f"{self.get_fill_icon(closed_pnl)} Close Short: {size} {coin} ({closed_pnl:,.2f} USDC)"
+        else:
+            fill_message = json.dumps(fill)
+
+        self.send_message(fill_message)
+
     def on_user_events(self, user_events: UserEventsMsg) -> None:
         user_events_data = user_events["data"]
         if "fills" in user_events_data:
-            fill_events = json.dumps(user_events_data["fills"])
-            self.send_message(fill_events)
+            fill_events: List[Fill] = user_events_data["fills"]
+            for fill in fill_events:
+                self.process_fill(fill)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = [[KeyboardButton("/balance")]]
         reply_markup = ReplyKeyboardMarkup(
-            keyboard, resize_keyboard=True, one_time_keyboard=True
+            keyboard, is_persistent=True
         )
 
         await update.message.reply_text(
