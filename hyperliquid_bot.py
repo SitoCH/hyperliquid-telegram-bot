@@ -24,6 +24,10 @@ httpx_logger = logging.getLogger("httpx")
 httpx_logger.setLevel(logging.WARNING)
 
 
+async def send_message(context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=context.job.chat_id, text=context.job.data)
+
+
 class HyperliquidBot:
 
     def __init__(self):
@@ -44,11 +48,6 @@ class HyperliquidBot:
         self.telegram_app.add_handler(CommandHandler("balance", self.get_balance))
 
         self.telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
-
-    def send_message(self, msg):
-        asyncio.run(
-            self.telegram_app.bot.send_message(chat_id=self.telegram_chat_id, text=msg)
-        )
 
     def get_fill_icon(self, closed_pnl: float) -> str:
         return "🟢" if closed_pnl > 0 else "🔴"
@@ -71,7 +70,7 @@ class HyperliquidBot:
         else:
             fill_message = json.dumps(fill)
 
-        self.send_message(fill_message)
+        self.telegram_app.job_queue.run_once(send_message, when=0, data=fill_message, chat_id=self.telegram_chat_id)
 
     def on_user_events(self, user_events: UserEventsMsg) -> None:
         user_events_data = user_events["data"]
