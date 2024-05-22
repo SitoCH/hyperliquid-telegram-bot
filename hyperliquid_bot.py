@@ -13,6 +13,7 @@ from telegram import (
     ReplyKeyboardMarkup,
     Update,
 )
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 logging.basicConfig(
@@ -86,7 +87,7 @@ class HyperliquidBot:
         )
 
         await update.message.reply_text(
-            "Welcome! Click the button below to check your balance:",
+            "Welcome! Click the button below to check the account's balance.",
             reply_markup=reply_markup,
         )
 
@@ -96,13 +97,16 @@ class HyperliquidBot:
 
         try:
             user_state = self.hyperliquid_info.user_state(self.user_address)
-            message = (
-                f"Account value: {float(user_state["crossMarginSummary"]["accountValue"]):,.2f} USDC"
-            )
+            message = '\n'.join([
+                "<b>Account performance:</b>",
+                f"Total balance: {float(user_state["crossMarginSummary"]["accountValue"]):,.2f} USDC",
+                f"Available balance: {float(user_state["withdrawable"]):,.2f} USDC",
+            ])
+            
         except Exception as e:
             message = f"Failed to fetch balance: {str(e)}"
 
-        await update.message.reply_text(message)
+        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
 
 
 if __name__ == "__main__":
