@@ -82,7 +82,7 @@ class HyperliquidBot:
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         keyboard = [[KeyboardButton("/balance")]]
         reply_markup = ReplyKeyboardMarkup(
-            keyboard, is_persistent=True
+            keyboard, is_persistent=True, resize_keyboard=True
         )
 
         await update.message.reply_text(
