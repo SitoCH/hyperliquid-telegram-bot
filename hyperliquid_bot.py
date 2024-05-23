@@ -143,9 +143,9 @@ class HyperliquidBot:
                 position_value = float(position["positionValue"])
                 unrealized_pnl = float(position["unrealizedPnl"])
                 
-                crypto_value = f"{size} {coin.rjust(6, ' ')}".rjust(14, ' ')
-                crypto_usd_value = f"{position_value:,.2f} USDC".rjust(20, ' ')
-                pnl_usd_value = f"{unrealized_pnl:,.2f} USDC".rjust(20, ' ')
+                crypto_value = f"{size} {coin.rjust(6, ' ')}".rjust(20, ' ')
+                crypto_usd_value = f"{position_value:,.2f} USDC".rjust(18, ' ')
+                pnl_usd_value = f"{unrealized_pnl:,.2f} USDC".rjust(18, ' ')
                 message_lines.append(f"<pre>{crypto_value}{crypto_usd_value}{pnl_usd_value}</pre>")
 
             message = '\n'.join(message_lines)
