@@ -47,7 +47,19 @@ class HyperliquidBot:
         self.telegram_app.add_handler(CommandHandler("start", self.start))
         self.telegram_app.add_handler(CommandHandler("balance", self.get_balance))
 
+        self.hyperliquid_info.ws_manager.ws.on_error = self.on_websocket_error
+        self.hyperliquid_info.ws_manager.ws.on_close = self.on_websocket_close
+
         self.telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+
+    def on_websocket_error(self, ws, error):
+        logger.error(f"Websocket error: {error}")
+        self.hyperliquid_info.ws_manager.ws.close()
+        self.hyperliquid_info.ws_manager.ws.run_forever()
+
+    def on_websocket_close(self, ws, close_status_code, close_msg):
+        logger.warning(f"Websocket closed: {close_msg}")
 
     def get_fill_icon(self, closed_pnl: float) -> str:
         return "🟢" if closed_pnl > 0 else "🔴"
