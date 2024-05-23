@@ -46,6 +46,7 @@ class HyperliquidBot:
 
         self.telegram_app.add_handler(CommandHandler("start", self.start))
         self.telegram_app.add_handler(CommandHandler("balance", self.get_balance))
+        self.telegram_app.add_handler(CommandHandler("positions", self.get_positions))
 
         self.hyperliquid_info.ws_manager.ws.on_error = self.on_websocket_error
         self.hyperliquid_info.ws_manager.ws.on_close = self.on_websocket_close
@@ -92,7 +93,7 @@ class HyperliquidBot:
                 self.process_fill(fill)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        keyboard = [[KeyboardButton("/balance")]]
+        keyboard = [[KeyboardButton("/balance"), KeyboardButton("/positions")]]
         reply_markup = ReplyKeyboardMarkup(
             keyboard, is_persistent=True, resize_keyboard=True
         )
@@ -116,6 +117,41 @@ class HyperliquidBot:
             
         except Exception as e:
             message = f"Failed to fetch balance: {str(e)}"
+
+        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
+
+    async def get_positions(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+
+        try:
+            user_state = self.hyperliquid_info.user_state(self.user_address)
+
+            message_lines = [
+                "<b>Account positions:</b>",
+                f"Total balance: {float(user_state["crossMarginSummary"]["accountValue"]):,.2f} USDC",
+                f"Available balance: {float(user_state["withdrawable"]):,.2f} USDC",
+            ]
+
+            if len(user_state["assetPositions"]) > 0:
+                message_lines.append("Positions:")
+
+            for asset_position in user_state["assetPositions"]:
+                position = asset_position['position']
+                coin = position["coin"]
+                size = position["szi"]
+                position_value = float(position["positionValue"])
+                unrealized_pnl = float(position["unrealizedPnl"])
+                
+                crypto_value = f"{size} {coin.rjust(6, ' ')}".rjust(14, ' ')
+                crypto_usd_value = f"{position_value:,.2f} USDC".rjust(20, ' ')
+                pnl_usd_value = f"{unrealized_pnl:,.2f} USDC".rjust(20, ' ')
+                message_lines.append(f"<pre>{crypto_value}{crypto_usd_value}{pnl_usd_value}</pre>")
+
+            message = '\n'.join(message_lines)
+            
+        except Exception as e:
+            message = f"Failed to fetch positions: {str(e)}"
 
         await update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
 
