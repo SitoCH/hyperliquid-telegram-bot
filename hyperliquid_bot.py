@@ -4,10 +4,11 @@ import os
 
 from typing import List
 
-
 from hyperliquid.info import Info
 from hyperliquid.utils import constants
 from hyperliquid.utils.types import UserEventsMsg, Fill
+
+from tabulate import tabulate
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -21,7 +22,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 httpx_logger = logging.getLogger("httpx")
 httpx_logger.setLevel(logging.WARNING)
-
 
 
 class HyperliquidBot:
@@ -128,20 +128,30 @@ class HyperliquidBot:
             if len(user_state["assetPositions"]) > 0:
                 message_lines.append("Positions:")
 
-            for asset_position in user_state["assetPositions"]:
-                position = asset_position['position']
-                coin = position["coin"]
-                size = position["szi"]
-                position_value = float(position["positionValue"])
-                unrealized_pnl = float(position["unrealizedPnl"])
-                
-                crypto_value = f"{size} {coin.rjust(6, ' ')}".rjust(20, ' ')
-                crypto_usd_value = f"{position_value:,.2f} USDC".rjust(18, ' ')
-                pnl_usd_value = f"{unrealized_pnl:,.2f} USDC".rjust(18, ' ')
-                message_lines.append(f"<pre>{crypto_value}{crypto_usd_value}{pnl_usd_value}</pre>")
+                table = tabulate(
+                    [
+                        [
+                            f"{asset_position['position']["szi"]}",
+                            f"{asset_position['position']["coin"]}",
+                            f"{float(asset_position['position']["positionValue"]):,.2f} USD",
+                            f"{float(asset_position['position']["unrealizedPnl"]):,.2f} USD"
+                        ]
+                        for asset_position in user_state["assetPositions"]
+                    ],
+                    headers=[
+                        "Size",
+                        "Coin",
+                        "Value",
+                        "PnL",
+                    ],
+                    tablefmt="simple",
+                    colalign=("right", "left", "right", "right")
+                )
 
-            message = '\n'.join(message_lines)
-            
+                message_lines.append(f"<pre>{table}</pre>")
+
+                message = '\n'.join(message_lines)
+
         except Exception as e:
             message = f"Failed to fetch positions: {str(e)}"
 
