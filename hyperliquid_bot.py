@@ -1,20 +1,19 @@
-import asyncio
 import logging
 import json
 import os
+
 from typing import List
+
 
 from hyperliquid.info import Info
 from hyperliquid.utils import constants
 from hyperliquid.utils.types import UserEventsMsg, Fill
 
-from telegram import (
-    KeyboardButton,
-    ReplyKeyboardMarkup,
-    Update,
-)
+from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
+
+from telegram_utils import send_message, reply_markup
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -23,9 +22,6 @@ logger = logging.getLogger(__name__)
 httpx_logger = logging.getLogger("httpx")
 httpx_logger.setLevel(logging.WARNING)
 
-
-async def send_message(context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=context.job.chat_id, text=context.job.data)
 
 
 class HyperliquidBot:
@@ -93,10 +89,6 @@ class HyperliquidBot:
                 self.process_fill(fill)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        keyboard = [[KeyboardButton("/balance"), KeyboardButton("/positions")]]
-        reply_markup = ReplyKeyboardMarkup(
-            keyboard, is_persistent=True, resize_keyboard=True
-        )
 
         await update.message.reply_text(
             "Welcome! Click the button below to check the account's balance.",
@@ -114,7 +106,7 @@ class HyperliquidBot:
                 f"Total balance: {float(user_state["crossMarginSummary"]["accountValue"]):,.2f} USDC",
                 f"Available balance: {float(user_state["withdrawable"]):,.2f} USDC",
             ])
-            
+
         except Exception as e:
             message = f"Failed to fetch balance: {str(e)}"
 

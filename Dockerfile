@@ -6,6 +6,6 @@ COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY hyperliquid_bot.py .
+COPY *.py .
 
 CMD ["python", "hyperliquid_bot.py"]
