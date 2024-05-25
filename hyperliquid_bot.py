@@ -126,8 +126,21 @@ class HyperliquidBot:
             ]
 
             if len(user_state["assetPositions"]) > 0:
-                message_lines.append("Positions:")
+
+                total_pnl = sum(
+                    float(asset_position['position']['unrealizedPnl'])
+                    for asset_position in user_state["assetPositions"]
+                )
+                message_lines.append(f"Unrealized profit: {total_pnl:,.2f} USDC")
+
+                message_lines.append("Open positions:")
                 
+                sorted_positions = sorted(
+                    user_state["assetPositions"],
+                    key=lambda x: float(x['position']['positionValue']),
+                    reverse=True
+                )
+
                 tablefmt = simple_separated_format(' ')
                 table = tabulate(
                     [
@@ -137,7 +150,7 @@ class HyperliquidBot:
                             f"{float(asset_position['position']["positionValue"]):,.2f}",
                             f"{float(asset_position['position']["unrealizedPnl"]):,.2f}"
                         ]
-                        for asset_position in user_state["assetPositions"]
+                        for asset_position in sorted_positions
                     ],
                     headers=[
                         "Size",
