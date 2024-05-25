@@ -60,18 +60,14 @@ class HyperliquidBot:
     def get_fill_icon(self, closed_pnl: float) -> str:
         return "🟢" if closed_pnl > 0 else "🔴"
 
-    def get_fill_description(self, initial_message, coin, size, amount, closed_pnl) -> str:
+    def get_fill_description(self, initial_message: str, coin: str, size: str, amount: float = None, closed_pnl: float = None) -> str:
         fill_description = [
             initial_message,
             f"Coin: {coin}",
             f"Size: {size}",
+            *(f"Amount: {amount:,.2f} USDC" if amount is not None else []),
+            *(f"Profit: {closed_pnl:,.2f} USDC" if closed_pnl is not None else []),
         ]
-
-        if amount is not None:
-            fill_description.append(f"Amount: {amount:,.2f} USDC")
-
-        if closed_pnl is not None:
-            fill_description.append(f"Profit: {closed_pnl:,.2f} USDC")
 
         return '\n'.join(fill_description)
 
@@ -83,13 +79,13 @@ class HyperliquidBot:
         amount = price * float(size)
         closed_pnl = float(fill["closedPnl"])
         if fill["dir"] == 'Open Long':
-            fill_message = self.get_fill_description("🔵 Opened long:", coin, size, amount, None)
+            fill_message = self.get_fill_description("🔵 Opened long:", coin, size, amount)
         elif fill["dir"] == 'Open Short':
-            fill_message = self.get_fill_description("🔵 Opened short:", coin, size, amount, None)
+            fill_message = self.get_fill_description("🔵 Opened short:", coin, size, amount)
         elif fill["dir"] == 'Close Long':
-            fill_message = self.get_fill_description("{self.get_fill_icon(closed_pnl)} Closed long:", coin, size, None, closed_pnl)
+            fill_message = self.get_fill_description(f"{self.get_fill_icon(closed_pnl)} Closed long:", coin, size, closed_pnl=closed_pnl)
         elif fill["dir"] == 'Close Short':
-            fill_message = self.get_fill_description("{self.get_fill_icon(closed_pnl)} Closed short:", coin, size, None, closed_pnl)
+            fill_message = self.get_fill_description(f"{self.get_fill_icon(closed_pnl)} Closed short:", coin, size, closed_pnl=closed_pnl)
         else:
             fill_message = json.dumps(fill)
 
@@ -131,7 +127,7 @@ class HyperliquidBot:
                 message_lines.append(f"Unrealized profit: {total_pnl:,.2f} USDC")
 
                 message_lines.append("Open positions:")
-                
+
                 sorted_positions = sorted(
                     user_state["assetPositions"],
                     key=lambda x: float(x['position']['positionValue']),
@@ -156,7 +152,7 @@ class HyperliquidBot:
                         "PnL ($)",
                     ],
                     tablefmt=tablefmt,
-                    colalign=("right", "left", "right", "right"), 
+                    colalign=("right", "left", "right", "right"),
                     floatfmt=(".1f", ".3f")
                 )
 
