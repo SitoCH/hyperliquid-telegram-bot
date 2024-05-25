@@ -64,10 +64,14 @@ class HyperliquidBot:
         fill_description = [
             initial_message,
             f"Coin: {coin}",
-            f"Size: {size}",
-            *(f"Amount: {amount:,.2f} USDC" if amount is not None else []),
-            *(f"Profit: {closed_pnl:,.2f} USDC" if closed_pnl is not None else []),
+            f"Size: {size}"
         ]
+
+        if amount is not None:
+            fill_description.append(f"Amount: {amount:,.02f} USDC")
+
+        if closed_pnl is not None:
+            fill_description.append(f"Profit: {closed_pnl:,.02f} USDC")
 
         return '\n'.join(fill_description)
 
@@ -114,8 +118,8 @@ class HyperliquidBot:
 
             message_lines = [
                 "<b>Account positions:</b>",
-                f"Total balance: {float(user_state["crossMarginSummary"]["accountValue"]):,.2f} USDC",
-                f"Available balance: {float(user_state["withdrawable"]):,.2f} USDC",
+                f"Total balance: {float(user_state["crossMarginSummary"]["accountValue"]):,.02f} USDC",
+                f"Available balance: {float(user_state["withdrawable"]):,.02f} USDC",
             ]
 
             if len(user_state["assetPositions"]) > 0:
@@ -124,7 +128,7 @@ class HyperliquidBot:
                     float(asset_position['position']['unrealizedPnl'])
                     for asset_position in user_state["assetPositions"]
                 )
-                message_lines.append(f"Unrealized profit: {total_pnl:,.2f} USDC")
+                message_lines.append(f"Unrealized profit: {total_pnl:,.02f} USDC")
 
                 message_lines.append("Open positions:")
 
