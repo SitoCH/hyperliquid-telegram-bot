@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 
 
 reply_markup = ReplyKeyboardMarkup(
-    [[KeyboardButton("/balance"), KeyboardButton("/positions")]], resize_keyboard=True
+    [[KeyboardButton("/positions")]], resize_keyboard=True
 )
 
 

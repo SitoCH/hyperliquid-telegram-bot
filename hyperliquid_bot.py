@@ -41,7 +41,6 @@ class HyperliquidBot:
         self.telegram_app = Application.builder().token(telegram_token).build()
 
         self.telegram_app.add_handler(CommandHandler("start", self.start))
-        self.telegram_app.add_handler(CommandHandler("balance", self.get_balance))
         self.telegram_app.add_handler(CommandHandler("positions", self.get_positions))
 
         self.hyperliquid_info.ws_manager.ws.on_error = self.on_websocket_error
@@ -95,23 +94,6 @@ class HyperliquidBot:
             reply_markup=reply_markup,
         )
 
-    async def get_balance(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-
-        try:
-            user_state = self.hyperliquid_info.user_state(self.user_address)
-            message = '\n'.join([
-                "<b>Account performance:</b>",
-                f"Total balance: {float(user_state["crossMarginSummary"]["accountValue"]):,.2f} USDC",
-                f"Available balance: {float(user_state["withdrawable"]):,.2f} USDC",
-            ])
-
-        except Exception as e:
-            message = f"Failed to fetch balance: {str(e)}"
-
-        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
-
     async def get_positions(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
@@ -147,8 +129,8 @@ class HyperliquidBot:
                         [
                             f"{asset_position['position']["szi"]}",
                             f"{asset_position['position']["coin"]}",
-                            f"{float(asset_position['position']["positionValue"]):,.2f}",
-                            f"{float(asset_position['position']["unrealizedPnl"]):,.2f}"
+                            f"{float(asset_position['position']["positionValue"]):,.02f}",
+                            f"{float(asset_position['position']["unrealizedPnl"]):,.02f}"
                         ]
                         for asset_position in sorted_positions
                     ],
@@ -159,7 +141,8 @@ class HyperliquidBot:
                         "PnL ($)",
                     ],
                     tablefmt=tablefmt,
-                    colalign=("right", "left", "right", "right")
+                    colalign=("right", "left", "right", "right"), 
+                    floatfmt=(".1f", ".3f")
                 )
 
                 message_lines.append(f"<pre>{table}</pre>")
