@@ -8,7 +8,7 @@ from hyperliquid.info import Info
 from hyperliquid.utils import constants
 from hyperliquid.utils.types import UserEventsMsg, Fill
 
-from tabulate import tabulate
+from tabulate import simple_separated_format, tabulate
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -127,24 +127,25 @@ class HyperliquidBot:
 
             if len(user_state["assetPositions"]) > 0:
                 message_lines.append("Positions:")
-
+                
+                tablefmt = simple_separated_format(' ')
                 table = tabulate(
                     [
                         [
                             f"{asset_position['position']["szi"]}",
                             f"{asset_position['position']["coin"]}",
-                            f"{float(asset_position['position']["positionValue"]):,.2f} USD",
-                            f"{float(asset_position['position']["unrealizedPnl"]):,.2f} USD"
+                            f"{float(asset_position['position']["positionValue"]):,.2f}",
+                            f"{float(asset_position['position']["unrealizedPnl"]):,.2f}"
                         ]
                         for asset_position in user_state["assetPositions"]
                     ],
                     headers=[
                         "Size",
                         "Coin",
-                        "Value",
-                        "PnL",
+                        "Value ($)",
+                        "PnL ($)",
                     ],
-                    tablefmt="simple",
+                    tablefmt=tablefmt,
                     colalign=("right", "left", "right", "right")
                 )
 
