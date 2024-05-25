@@ -67,7 +67,8 @@ class HyperliquidBot:
             f"Size: {size}",
         ]
 
-        fill_description.append(f"Amount: {amount:,.2f} USDC")
+        if amount is not None:
+            fill_description.append(f"Amount: {amount:,.2f} USDC")
 
         if closed_pnl is not None:
             fill_description.append(f"Profit: {closed_pnl:,.2f} USDC")
