@@ -60,6 +60,20 @@ class HyperliquidBot:
     def get_fill_icon(self, closed_pnl: float) -> str:
         return "🟢" if closed_pnl > 0 else "🔴"
 
+    def get_fill_description(self, initial_message, coin, size, amount, closed_pnl) -> str:
+        fill_description = [
+            initial_message,
+            f"Coin: {coin}",
+            f"Size: {size}",
+        ]
+
+        fill_description.append(f"Amount: {amount:,.2f} USDC")
+
+        if closed_pnl is not None:
+            fill_description.append(f"Profit: {closed_pnl:,.2f} USDC")
+
+        return '\n'.join(fill_description)
+
     def process_fill(self, fill: Fill) -> None:
 
         price = float(fill["px"])
@@ -68,13 +82,13 @@ class HyperliquidBot:
         amount = price * float(size)
         closed_pnl = float(fill["closedPnl"])
         if fill["dir"] == 'Open Long':
-            fill_message = f"🔵 Open Long: {size} {coin} ({amount:,.2f} USDC)"
+            fill_message = self.get_fill_description("🔵 Opened long:", coin, size, amount, None)
         elif fill["dir"] == 'Open Short':
-            fill_message = f"🔵 Open Short: {size} {coin} ({amount:,.2f} USDC)"
+            fill_message = self.get_fill_description("🔵 Opened short:", coin, size, amount, None)
         elif fill["dir"] == 'Close Long':
-            fill_message = f"{self.get_fill_icon(closed_pnl)} Close Long: {size} {coin} ({closed_pnl:,.2f} USDC)"
+            fill_message = self.get_fill_description("{self.get_fill_icon(closed_pnl)} Closed long:", coin, size, None, closed_pnl)
         elif fill["dir"] == 'Close Short':
-            fill_message = f"{self.get_fill_icon(closed_pnl)} Close Short: {size} {coin} ({closed_pnl:,.2f} USDC)"
+            fill_message = self.get_fill_description("{self.get_fill_icon(closed_pnl)} Closed short:", coin, size, None, closed_pnl)
         else:
             fill_message = json.dumps(fill)
 
