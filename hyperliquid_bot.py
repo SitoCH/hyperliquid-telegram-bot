@@ -116,7 +116,7 @@ class HyperliquidBot:
         try:
             user_state = self.hyperliquid_info.user_state(self.user_address)
             message_lines = [
-                "<b>Account positions:</b>",
+                "<b>Perps positions:</b>",
                 f"Total balance: {float(user_state["crossMarginSummary"]["accountValue"]):,.02f} USDC",
                 f"Available balance: {float(user_state["withdrawable"]):,.02f} USDC",
             ]
@@ -161,7 +161,7 @@ class HyperliquidBot:
                 message_lines.append(f"<pre>{table}</pre>")
 
                 spot_user_state = self.hyperliquid_info.spot_user_state(self.user_address)
-                message_lines.append("Balance:")
+                message_lines.append("<b>Spot positions:</b>")
 
                 spot_table = tabulate(
                     [
