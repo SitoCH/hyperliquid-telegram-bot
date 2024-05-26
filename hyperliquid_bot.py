@@ -14,7 +14,7 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from telegram_utils import send_message, reply_markup
+from telegram_utils import send_message, reply_markup, send_message_and_exit
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -46,13 +46,15 @@ class HyperliquidBot:
         self.hyperliquid_info.ws_manager.ws.on_error = self.on_websocket_error
         self.hyperliquid_info.ws_manager.ws.on_close = self.on_websocket_close
 
+        self.telegram_app.job_queue.run_once(send_message, when=0, data="Hyperliquid Telegram bot up and running", chat_id=self.telegram_chat_id)
+
         self.telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
     def on_websocket_error(self, ws, error):
         logger.error(f"Websocket error: {error}")
-        self.hyperliquid_info.ws_manager.ws.close()
-        self.hyperliquid_info.ws_manager.ws.run_forever()
+        self.telegram_app.job_queue.run_once(send_message_and_exit, when=0, data="Websocket error, restarting the application...", chat_id=self.telegram_chat_id)
+
 
     def on_websocket_close(self, ws, close_status_code, close_msg):
         logger.warning(f"Websocket closed: {close_msg}")
