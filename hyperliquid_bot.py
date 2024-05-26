@@ -170,7 +170,7 @@ class HyperliquidBot:
                 message_lines.append(f"<pre>{table}</pre>")
 
                 spot_user_state = self.hyperliquid_info.spot_user_state(self.user_address)
-                if "balances" in spot_user_state:
+                if len(spot_user_state['balances']) > 0:
                     message_lines.append("<b>Spot positions:</b>")
 
                     spot_table = tabulate(
