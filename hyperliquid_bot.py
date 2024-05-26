@@ -170,25 +170,26 @@ class HyperliquidBot:
                 message_lines.append(f"<pre>{table}</pre>")
 
                 spot_user_state = self.hyperliquid_info.spot_user_state(self.user_address)
-                message_lines.append("<b>Spot positions:</b>")
+                if "balances" in spot_user_state:
+                    message_lines.append("<b>Spot positions:</b>")
 
-                spot_table = tabulate(
-                    [
+                    spot_table = tabulate(
                         [
-                            f"{float(balance['total']):,.02f}",
-                            balance["coin"],
-                        ]
-                        for balance in spot_user_state['balances']
-                    ],
-                    headers=[
-                        "Total",
-                        "Coin"
-                    ],
-                    tablefmt=tablefmt,
-                    colalign=("right", "left")
-                )
+                            [
+                                f"{float(balance['total']):,.02f}",
+                                balance["coin"],
+                            ]
+                            for balance in spot_user_state['balances']
+                        ],
+                        headers=[
+                            "Total",
+                            "Coin"
+                        ],
+                        tablefmt=tablefmt,
+                        colalign=("right", "left")
+                    )
 
-                message_lines.append(f"<pre>{spot_table}</pre>")
+                    message_lines.append(f"<pre>{spot_table}</pre>")
 
                 message = '\n'.join(message_lines)
 
