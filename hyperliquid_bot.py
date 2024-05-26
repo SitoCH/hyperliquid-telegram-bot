@@ -62,11 +62,12 @@ class HyperliquidBot:
     def get_fill_icon(self, closed_pnl: float) -> str:
         return "🟢" if closed_pnl > 0 else "🔴"
 
-    def get_fill_description(self, initial_message: str, coin: str, size: str, amount: float = None, closed_pnl: float = None) -> str:
+    def get_fill_description(self, initial_message: str, coin: str, size: str, fee: float, fee_token: str, amount: float = None, closed_pnl: float = None) -> str:
         fill_description = [
             initial_message,
             f"Coin: {coin}",
-            f"Size: {size}"
+            f"Size: {size}",
+            f"Fee: {fee:,.02f} {fee_token}"
         ]
 
         if amount is not None:
@@ -82,16 +83,18 @@ class HyperliquidBot:
         price = float(fill["px"])
         coin = fill["coin"]
         size = fill["sz"]
+        fee = float(fill["fee"])
+        fee_token = fill["feeToken"]
         amount = price * float(size)
         closed_pnl = float(fill["closedPnl"])
         if fill["dir"] == 'Open Long':
-            fill_message = self.get_fill_description("🔵 Opened long:", coin, size, amount)
+            fill_message = self.get_fill_description("🔵 Opened long:", coin, size, fee, fee_token, amount)
         elif fill["dir"] == 'Open Short':
-            fill_message = self.get_fill_description("🔵 Opened short:", coin, size, amount)
+            fill_message = self.get_fill_description("🔵 Opened short:", coin, size, fee, fee_token, amount)
         elif fill["dir"] == 'Close Long':
-            fill_message = self.get_fill_description(f"{self.get_fill_icon(closed_pnl)} Closed long:", coin, size, closed_pnl=closed_pnl)
+            fill_message = self.get_fill_description(f"{self.get_fill_icon(closed_pnl)} Closed long:", coin, size, fee, fee_token, closed_pnl=closed_pnl)
         elif fill["dir"] == 'Close Short':
-            fill_message = self.get_fill_description(f"{self.get_fill_icon(closed_pnl)} Closed short:", coin, size, closed_pnl=closed_pnl)
+            fill_message = self.get_fill_description(f"{self.get_fill_icon(closed_pnl)} Closed short:", coin, size, fee, fee_token, closed_pnl=closed_pnl)
         else:
             fill_message = json.dumps(fill)
 
