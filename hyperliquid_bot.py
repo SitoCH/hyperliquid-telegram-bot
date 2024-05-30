@@ -3,7 +3,6 @@ import json
 import os
 
 from typing import List
-from collections import defaultdict
 
 from hyperliquid.info import Info
 from hyperliquid.utils import constants
@@ -15,6 +14,7 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
+from hyperliquid_orders import get_open_orders
 from telegram_utils import send_message, reply_markup, send_message_and_exit
 
 logging.basicConfig(
@@ -43,7 +43,7 @@ class HyperliquidBot:
 
         self.telegram_app.add_handler(CommandHandler("start", self.start))
         self.telegram_app.add_handler(CommandHandler("positions", self.get_positions))
-        self.telegram_app.add_handler(CommandHandler("orders", self.check_orders))
+        self.telegram_app.add_handler(CommandHandler("orders", get_open_orders))
 
         self.hyperliquid_info.ws_manager.ws.on_error = self.on_websocket_error
         self.hyperliquid_info.ws_manager.ws.on_close = self.on_websocket_close
@@ -119,72 +119,6 @@ class HyperliquidBot:
             "Welcome! Click the button below to check the account's positions.",
             reply_markup=reply_markup,
         )
-
-    async def check_orders(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-
-        try:
-            open_orders = self.hyperliquid_info.frontend_open_orders(self.user_address)
-            grouped_data = defaultdict(lambda: defaultdict(list))
-
-            for order in open_orders:
-                coin = order["coin"]
-                order_type = order["orderType"]
-                grouped_data[coin][order_type].append(order)
-
-            grouped_data = {coin: dict(order_types) for coin, order_types in grouped_data.items()}
-
-            all_mids = self.hyperliquid_info.all_mids()
-
-            for coin, order_types in grouped_data.items():
-
-                message_lines = [
-                    f"<b>Coin {coin}:</b>"
-                ]
-                mid = float(all_mids[coin])
-
-                tp_raw_orders = order_types.get('Take Profit Market', [])
-                tp_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
-                tp_orders = [
-                            [
-                                f"{order['sz']}",
-                                f"{order['triggerPx']}",
-                                f"{((float(order['triggerPx']) / mid - 1) * 100):.2f} %"
-                            ]
-                    for order in tp_raw_orders
-                ]
-
-                sl_raw_orders = order_types.get('Stop Market', [])
-                sl_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
-                sl_orders = [
-                            [
-                                f"{order['sz']}",
-                                f"{order['triggerPx']}",
-                                f"{((1 - float(order['triggerPx']) / mid) * 100):.2f} %"
-                            ]
-                    for order in sl_raw_orders
-                ]
-
-                tablefmt = simple_separated_format(' ')
-                table = tabulate(
-                    tp_orders + [["Current", all_mids[coin], ""]] + sl_orders,
-                    headers=[
-                        "Size",
-                        "Trigger price",
-                        "Distance"
-                    ],
-                    tablefmt=tablefmt
-                )
-
-                message_lines.append(f"<pre>{table}</pre>")
-
-                message = '\n'.join(message_lines)
-                await update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
-
-        except Exception as e:
-            await update.message.reply_text(text=f"Failed to check orders: {str(e)}")
-
 
     async def get_positions(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
@@ -264,7 +198,7 @@ class HyperliquidBot:
         except Exception as e:
             message = f"Failed to fetch positions: {str(e)}"
 
-        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML)
+        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
 
 if __name__ == "__main__":
