@@ -8,11 +8,11 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from telegram_utils import reply_markup
 
-from hyperliquid_utils import hyperliquid_info, user_address
+from hyperliquid_utils import hyperliquid_utils
 
 
 async def get_orders_from_hyperliquid():
-    open_orders = hyperliquid_info.frontend_open_orders(user_address)
+    open_orders = hyperliquid_utils.info.frontend_open_orders(hyperliquid_utils.user_address)
     grouped_data = defaultdict(lambda: defaultdict(list))
 
     for order in open_orders:
@@ -30,7 +30,7 @@ async def update_open_orders(
     try:
         grouped_data = await get_orders_from_hyperliquid()
 
-        all_mids = hyperliquid_info.all_mids()
+        all_mids = hyperliquid_utils.info.all_mids()
 
         for coin, order_types in grouped_data.items():
 
@@ -64,7 +64,7 @@ async def get_open_orders(
     try:
         grouped_data = await get_orders_from_hyperliquid()
 
-        all_mids = hyperliquid_info.all_mids()
+        all_mids = hyperliquid_utils.info.all_mids()
 
         for coin, order_types in grouped_data.items():
 
