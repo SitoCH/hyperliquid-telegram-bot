@@ -32,9 +32,10 @@ async def update_open_orders(
 
         all_mids = hyperliquid_utils.info.all_mids()
 
+        message_lines = []
+        
         for coin, order_types in grouped_data.items():
 
-            message_lines = []
             mid = float(all_mids[coin])
 
             tp_raw_orders = order_types.get('Take Profit Market', [])
@@ -49,9 +50,11 @@ async def update_open_orders(
                 if first_sl_order_distance > 5:
                     message_lines.append(f"{coin}: needs to be updated")
 
-            if len(message_lines) > 0:
-                message = '\n'.join(message_lines)
-                await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        message = "No orders to update"
+        if len(message_lines) > 0:
+            message = '\n'.join(message_lines)
+      
+        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
 
     except Exception as e:
         await update.message.reply_text(text=f"Failed to update orders: {str(e)}")
