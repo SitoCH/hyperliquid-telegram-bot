@@ -8,7 +8,10 @@ from telegram.ext import ContextTypes
 
 
 reply_markup = ReplyKeyboardMarkup(
-    [[KeyboardButton("/positions"), KeyboardButton("/orders")]], resize_keyboard=True
+    [
+        [KeyboardButton("/positions"), KeyboardButton("/orders")],
+        [KeyboardButton("/update_orders")]
+    ], resize_keyboard=True
 )
 
 

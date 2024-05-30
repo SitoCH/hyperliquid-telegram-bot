@@ -12,7 +12,7 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from hyperliquid_orders import get_open_orders
+from hyperliquid_orders import get_open_orders, update_open_orders
 from hyperliquid_utils import setup_hyperliquid, hyperliquid_info, user_address
 from telegram_utils import send_message, reply_markup
 
@@ -35,6 +35,7 @@ class HyperliquidBot:
         self.telegram_app.add_handler(CommandHandler("start", self.start))
         self.telegram_app.add_handler(CommandHandler("positions", self.get_positions))
         self.telegram_app.add_handler(CommandHandler("orders", get_open_orders))
+        self.telegram_app.add_handler(CommandHandler("update_orders", update_open_orders))
 
         self.telegram_app.job_queue.run_once(send_message, when=0, data="Hyperliquid Telegram bot up and running", chat_id=self.telegram_chat_id)
 

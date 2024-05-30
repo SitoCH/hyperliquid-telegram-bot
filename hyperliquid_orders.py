@@ -11,20 +11,58 @@ from telegram_utils import reply_markup
 from hyperliquid_utils import hyperliquid_info, user_address
 
 
+async def get_orders_from_hyperliquid():
+    open_orders = hyperliquid_info.frontend_open_orders(user_address)
+    grouped_data = defaultdict(lambda: defaultdict(list))
+
+    for order in open_orders:
+        coin = order["coin"]
+        order_type = order["orderType"]
+        grouped_data[coin][order_type].append(order)
+
+    return {coin: dict(order_types) for coin, order_types in grouped_data.items()}
+
+
+async def update_open_orders(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+
+    try:
+        grouped_data = await get_orders_from_hyperliquid()
+
+        all_mids = hyperliquid_info.all_mids()
+
+        for coin, order_types in grouped_data.items():
+
+            message_lines = []
+            mid = float(all_mids[coin])
+
+            tp_raw_orders = order_types.get('Take Profit Market', [])
+            tp_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
+
+            sl_raw_orders = order_types.get('Stop Market', [])
+            sl_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
+
+            if len(tp_raw_orders) == len(sl_raw_orders):
+                first_sl_order = sl_raw_orders[0]
+                first_sl_order_distance = ((1 - float(first_sl_order['triggerPx']) / mid) * 100)
+                if first_sl_order_distance > 5:
+                    message_lines.append(f"{coin}: needs to be updated")
+
+            if len(message_lines) > 0:
+                message = '\n'.join(message_lines)
+                await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+
+    except Exception as e:
+        await update.message.reply_text(text=f"Failed to update orders: {str(e)}")
+
+
 async def get_open_orders(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
 
     try:
-        open_orders = hyperliquid_info.frontend_open_orders(user_address)
-        grouped_data = defaultdict(lambda: defaultdict(list))
-
-        for order in open_orders:
-            coin = order["coin"]
-            order_type = order["orderType"]
-            grouped_data[coin][order_type].append(order)
-
-        grouped_data = {coin: dict(order_types) for coin, order_types in grouped_data.items()}
+        grouped_data = await get_orders_from_hyperliquid()
 
         all_mids = hyperliquid_info.all_mids()
 
@@ -75,4 +113,3 @@ async def get_open_orders(
 
     except Exception as e:
         await update.message.reply_text(text=f"Failed to check orders: {str(e)}")
-
