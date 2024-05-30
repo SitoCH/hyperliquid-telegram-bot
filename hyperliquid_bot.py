@@ -1,11 +1,9 @@
-import logging
+
 import json
 import os
 
 from typing import List
 
-from hyperliquid.info import Info
-from hyperliquid.utils import constants
 from hyperliquid.utils.types import UserEventsMsg, Fill
 
 from tabulate import simple_separated_format, tabulate
@@ -15,14 +13,8 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from hyperliquid_orders import get_open_orders
-from telegram_utils import send_message, reply_markup, send_message_and_exit
-
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-httpx_logger = logging.getLogger("httpx")
-httpx_logger.setLevel(logging.WARNING)
+from hyperliquid_utils import setup_hyperliquid, hyperliquid_info, user_address
+from telegram_utils import send_message, reply_markup
 
 
 class HyperliquidBot:
@@ -32,11 +24,10 @@ class HyperliquidBot:
         telegram_token = os.environ["HYPERLIQUID_TELEGRAM_BOT_TOKEN"]
         self.telegram_chat_id = os.environ["HYPERLIQUID_TELEGRAM_BOT_CHAT_ID"]
 
-        self.user_address = os.environ["HYPERLIQUID_TELEGRAM_BOT_USER"]
+        setup_hyperliquid()
 
-        self.hyperliquid_info = Info(constants.MAINNET_API_URL)
-        self.hyperliquid_info.subscribe(
-            {"type": "userEvents", "user": self.user_address}, self.on_user_events
+        hyperliquid_info.subscribe(
+            {"type": "userEvents", "user": user_address}, self.on_user_events
         )
 
         self.telegram_app = Application.builder().token(telegram_token).build()
@@ -45,21 +36,10 @@ class HyperliquidBot:
         self.telegram_app.add_handler(CommandHandler("positions", self.get_positions))
         self.telegram_app.add_handler(CommandHandler("orders", get_open_orders))
 
-        self.hyperliquid_info.ws_manager.ws.on_error = self.on_websocket_error
-        self.hyperliquid_info.ws_manager.ws.on_close = self.on_websocket_close
-
         self.telegram_app.job_queue.run_once(send_message, when=0, data="Hyperliquid Telegram bot up and running", chat_id=self.telegram_chat_id)
 
         self.telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
 
-
-    def on_websocket_error(self, ws, error):
-        logger.error(f"Websocket error: {error}")
-        self.telegram_app.job_queue.run_once(send_message_and_exit, when=0, data="Websocket error, restarting the application...", chat_id=self.telegram_chat_id)
-
-
-    def on_websocket_close(self, ws, close_status_code, close_msg):
-        logger.warning(f"Websocket closed: {close_msg}")
 
     def get_fill_icon(self, closed_pnl: float) -> str:
         return "🟢" if closed_pnl > 0 else "🔴"
@@ -125,7 +105,7 @@ class HyperliquidBot:
     ) -> None:
 
         try:
-            user_state = self.hyperliquid_info.user_state(self.user_address)
+            user_state = hyperliquid_info.user_state(user_address)
             message_lines = [
                 "<b>Perps positions:</b>",
                 f"Total balance: {float(user_state["crossMarginSummary"]["accountValue"]):,.02f} USDC",
@@ -171,7 +151,7 @@ class HyperliquidBot:
 
                 message_lines.append(f"<pre>{table}</pre>")
 
-                spot_user_state = self.hyperliquid_info.spot_user_state(self.user_address)
+                spot_user_state = hyperliquid_info.spot_user_state(user_address)
                 if len(spot_user_state['balances']) > 0:
                     message_lines.append("<b>Spot positions:</b>")
 
