@@ -20,7 +20,9 @@ async def get_orders_from_hyperliquid():
         order_type = order["orderType"]
         grouped_data[coin][order_type].append(order)
 
-    return {coin: dict(order_types) for coin, order_types in grouped_data.items()}
+    sorted_grouped_data = dict(sorted(grouped_data.items()))
+
+    return {coin: dict(order_types) for coin, order_types in sorted_grouped_data.items()}
 
 
 async def update_open_orders(

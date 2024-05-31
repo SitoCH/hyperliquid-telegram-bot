@@ -107,8 +107,8 @@ class HyperliquidBot:
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.user_address)
             message_lines = [
                 "<b>Perps positions:</b>",
-                f"Total balance: {float(user_state["crossMarginSummary"]["accountValue"]):,.02f} USDC",
-                f"Available balance: {float(user_state["withdrawable"]):,.02f} USDC",
+                f"Total balance: {float(user_state['crossMarginSummary']['accountValue']):,.02f} USDC",
+                f"Available balance: {float(user_state['withdrawable']):,.02f} USDC",
             ]
 
             if len(user_state["assetPositions"]) > 0:
@@ -131,10 +131,10 @@ class HyperliquidBot:
                 table = tabulate(
                     [
                         [
-                            f"{asset_position['position']["szi"]}",
-                            f"{asset_position['position']["coin"]}",
-                            f"{float(asset_position['position']["positionValue"]):,.02f}",
-                            f"{float(asset_position['position']["unrealizedPnl"]):,.02f}"
+                            f"{asset_position['position']['szi']}",
+                            f"{asset_position['position']['coin']}",
+                            f"{float(asset_position['position']['positionValue']):,.02f}",
+                            f"{float(asset_position['position']['unrealizedPnl']):,.02f}"
                         ]
                         for asset_position in sorted_positions
                     ],
