@@ -22,8 +22,8 @@ class HyperliquidUtils:
         self.info.ws_manager.ws.on_error = self.on_websocket_error
         self.info.ws_manager.ws.on_close = self.on_websocket_close
 
-        key_file = os.environ["HYPERLIQUID_TELEGRAM_BOT_KEY_FILE"]
-        if key_file and os.path.isfile(key_file):
+        key_file = os.environ.get("HYPERLIQUID_TELEGRAM_BOT_KEY_FILE")
+        if key_file is not None and os.path.isfile(key_file):
             with open(key_file, 'r') as file:
                 file_content = file.read()
                 account: LocalAccount = eth_account.Account.from_key(file_content)
