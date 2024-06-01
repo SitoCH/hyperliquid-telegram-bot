@@ -6,7 +6,7 @@ from tabulate import simple_separated_format, tabulate
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-from telegram_utils import reply_markup
+from telegram_utils import telegram_utils
 
 from hyperliquid_utils import hyperliquid_utils
 
@@ -56,7 +56,7 @@ async def update_open_orders(
         if len(message_lines) > 0:
             message = '\n'.join(message_lines)
       
-        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
     except Exception as e:
         await update.message.reply_text(text=f"Failed to update orders: {str(e)}")
@@ -114,7 +114,7 @@ async def get_open_orders(
             message_lines.append(f"<pre>{table}</pre>")
 
             message = '\n'.join(message_lines)
-            await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+            await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
     except Exception as e:
         await update.message.reply_text(text=f"Failed to check orders: {str(e)}")

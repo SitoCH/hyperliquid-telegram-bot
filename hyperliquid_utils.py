@@ -9,7 +9,7 @@ from hyperliquid.exchange import Exchange
 from hyperliquid.info import Info
 from hyperliquid.utils import constants
 
-from telegram_utils import send_message_and_exit
+from telegram_utils import telegram_utils
 
 
 class HyperliquidUtils:
@@ -33,7 +33,7 @@ class HyperliquidUtils:
 
     def on_websocket_error(self, ws, error):
         logger.error(f"Websocket error: {error}")
-        self.telegram_app.job_queue.run_once(send_message_and_exit, when=0, data="Websocket error, restarting the application...", chat_id=self.telegram_chat_id)
+        telegram_utils.send_and_exit("Websocket error, restarting the application...")
 
 
     def on_websocket_close(self, ws, close_status_code, close_msg):

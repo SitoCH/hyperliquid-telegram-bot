@@ -10,34 +10,26 @@ from tabulate import simple_separated_format, tabulate
 
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes
 
 from hyperliquid_orders import get_open_orders, update_open_orders
 from hyperliquid_utils import hyperliquid_utils
-from telegram_utils import send_message, reply_markup
-
+from telegram_utils import telegram_utils
 
 class HyperliquidBot:
 
     def __init__(self):
 
-        telegram_token = os.environ["HYPERLIQUID_TELEGRAM_BOT_TOKEN"]
-        self.telegram_chat_id = os.environ["HYPERLIQUID_TELEGRAM_BOT_CHAT_ID"]
-
         hyperliquid_utils.info.subscribe(
             {"type": "userEvents", "user": hyperliquid_utils.user_address}, self.on_user_events
         )
 
-        self.telegram_app = Application.builder().token(telegram_token).build()
+        telegram_utils.add_handler(CommandHandler("start", self.start))
+        telegram_utils.add_handler(CommandHandler("positions", self.get_positions))
+        telegram_utils.add_handler(CommandHandler("orders", get_open_orders))
+        telegram_utils.add_handler(CommandHandler("update_orders", update_open_orders))
 
-        self.telegram_app.add_handler(CommandHandler("start", self.start))
-        self.telegram_app.add_handler(CommandHandler("positions", self.get_positions))
-        self.telegram_app.add_handler(CommandHandler("orders", get_open_orders))
-        self.telegram_app.add_handler(CommandHandler("update_orders", update_open_orders))
-
-        self.telegram_app.job_queue.run_once(send_message, when=0, data="Hyperliquid Telegram bot up and running", chat_id=self.telegram_chat_id)
-
-        self.telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
+        telegram_utils.run_polling()
 
 
     def get_fill_icon(self, closed_pnl: float) -> str:
@@ -83,7 +75,7 @@ class HyperliquidBot:
         else:
             fill_message = json.dumps(fill)
 
-        self.telegram_app.job_queue.run_once(send_message, when=0, data=fill_message, chat_id=self.telegram_chat_id)
+        telegram_utils.send(fill_message)
 
     def on_user_events(self, user_events: UserEventsMsg) -> None:
         user_events_data = user_events["data"]
@@ -96,7 +88,7 @@ class HyperliquidBot:
 
         await update.message.reply_text(
             "Welcome! Click the button below to check the account's positions.",
-            reply_markup=reply_markup,
+            reply_markup=telegram_utils.reply_markup,
         )
 
     async def get_positions(
@@ -177,7 +169,7 @@ class HyperliquidBot:
         except Exception as e:
             message = f"Failed to fetch positions: {str(e)}"
 
-        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
 
 if __name__ == "__main__":
