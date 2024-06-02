@@ -38,9 +38,7 @@ class HyperliquidBot:
     def get_fill_description(self, initial_message: str, coin: str, size: str, fee: float, fee_token: str, amount: float = None, closed_pnl: float = None) -> str:
         fill_description = [
             initial_message,
-            f"Coin: {coin}",
-            f"Size: {size}",
-            f"Fee: {fee:,.02f} {fee_token}"
+            f"Coin: {coin}"
         ]
 
         if amount is not None:
@@ -48,6 +46,9 @@ class HyperliquidBot:
 
         if closed_pnl is not None:
             fill_description.append(f"Profit: {closed_pnl:,.02f} USDC")
+
+        fill_description.append(f"Size: {size}")
+        fill_description.append(f"Fee: {fee:,.02f} {fee_token}")
 
         return '\n'.join(fill_description)
 
