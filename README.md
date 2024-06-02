@@ -12,7 +12,9 @@ The second parameter needed, `HYPERLIQUID_TELEGRAM_BOT_CHAT_ID`, can be obtained
 
 ### Hyperliquid
 
-The only parameter, `HYPERLIQUID_TELEGRAM_BOT_USER`, needed from Hyperliquid is the user / Vault to watch
+There only mandatory parameter, `HYPERLIQUID_TELEGRAM_BOT_USER_WALLET`, is the user's wallet address.
+If the bot is monitoring a Vault you need to set also `HYPERLIQUID_TELEGRAM_BOT_USER_VAULT`.
+`HYPERLIQUID_TELEGRAM_BOT_KEY_FILE` is instead required if the bot needs to sign transactions so that it can manage orders. The file must contain the private key of the wallet.
 
 ## Docker Compose
 
@@ -29,6 +31,6 @@ services:
     environment:
       HYPERLIQUID_TELEGRAM_BOT_TOKEN: "<TELEGRAM BOT TOKEN>"
       HYPERLIQUID_TELEGRAM_BOT_CHAT_ID: "<TELEGRAM CHAT ID>"
-      HYPERLIQUID_TELEGRAM_BOT_USER: "<ADDRESS TO WATCH>"
+      HYPERLIQUID_TELEGRAM_BOT_USER_WALLET: "<ADDRESS TO WATCH>"
     restart: unless-stopped
 ```

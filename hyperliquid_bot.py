@@ -16,12 +16,13 @@ from hyperliquid_orders import get_open_orders, update_open_orders
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 
+
 class HyperliquidBot:
 
     def __init__(self):
 
         hyperliquid_utils.info.subscribe(
-            {"type": "userEvents", "user": hyperliquid_utils.user_address}, self.on_user_events
+            {"type": "userEvents", "user": hyperliquid_utils.address}, self.on_user_events
         )
 
         telegram_utils.add_handler(CommandHandler("start", self.start))
@@ -97,7 +98,7 @@ class HyperliquidBot:
     ) -> None:
 
         try:
-            user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.user_address)
+            user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             message_lines = [
                 "<b>Perps positions:</b>",
                 f"Total balance: {float(user_state['crossMarginSummary']['accountValue']):,.02f} USDC",
@@ -143,7 +144,7 @@ class HyperliquidBot:
 
                 message_lines.append(f"<pre>{table}</pre>")
 
-                spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.user_address)
+                spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
                 if len(spot_user_state['balances']) > 0:
                     message_lines.append("<b>Spot positions:</b>")
 
