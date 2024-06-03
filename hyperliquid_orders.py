@@ -34,9 +34,9 @@ async def update_open_orders(
 
         all_mids = hyperliquid_utils.info.all_mids()
 
-        message_lines = []
-
         exchange = hyperliquid_utils.get_exchange()
+
+        updated_orders = False
         if exchange is not None:
 
             for coin, order_types in grouped_data.items():
@@ -57,7 +57,7 @@ async def update_open_orders(
                     first_sl_order_distance = ((1 - current_trigger_px / mid) * 100)
                     distance_limit = 7.5
                     if first_sl_order_distance > distance_limit:
-                        message_lines.append(f"<b>{coin}:</b>")
+                        message_lines = [f"<b>{coin}:</b>"]
                         new_sl_trigger_px = round(float(f"{(mid - (mid * (distance_limit - 0.5) / 100)):.5g}"), 6)
                         coin = first_sl_order['coin']
                         sz = round(float(first_sl_order['sz']), sz_decimals[coin])
@@ -72,16 +72,17 @@ async def update_open_orders(
                             modify_tp(message_lines, exchange, coin, matching_tp_order, new_tp_trigger_px, sz)
                         else:
                             message_lines.append("No matching TP order has been found")
-
-
+                        
+                        message = '\n'.join(message_lines)
+                        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+                        updated_orders = True
         else:
-            message_lines.append("Exchange is not enabled")
+            await update.message.reply_text(text="Exchange is not enabled", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
-        message = "No orders to update"
-        if len(message_lines) > 0:
-            message = '\n'.join(message_lines)
+        if not updated_orders:
+            await update.message.reply_text(text="No orders to update", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
       
-        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+        
 
     except Exception as e:
         logger.critical(e, exc_info=True)
@@ -96,8 +97,7 @@ def modify_sl(message_lines, exchange, coin, first_sl_order, first_sl_order_dist
 
 def modify_tp(message_lines, exchange, coin, first_sl_order, new_trigger_px, sz):
     stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "tp"}}
-    res = exchange.modify_order(int(first_sl_order['oid']), coin, False, sz, float(first_sl_order['limitPx']), stop_order_type, True)
-    print(res)
+    exchange.modify_order(int(first_sl_order['oid']), coin, False, sz, float(first_sl_order['limitPx']), stop_order_type, True)
     message_lines.append(f"Adjusted TP from {first_sl_order['triggerPx']} to {new_trigger_px}")
 
 
