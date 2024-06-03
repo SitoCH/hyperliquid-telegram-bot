@@ -55,7 +55,7 @@ async def update_open_orders(
                     first_sl_order = sl_raw_orders[0]
                     current_trigger_px = float(first_sl_order['triggerPx'])
                     first_sl_order_distance = ((1 - current_trigger_px / mid) * 100)
-                    distance_limit = 7.5
+                    distance_limit = 5.5
                     if first_sl_order_distance > distance_limit:
                         message_lines = [f"<b>{coin}:</b>"]
                         new_sl_trigger_px = round(float(f"{(mid - (mid * (distance_limit - 0.5) / 100)):.5g}"), 6)
@@ -68,7 +68,7 @@ async def update_open_orders(
                         )
 
                         if matching_tp_order:
-                            new_tp_trigger_px = float(matching_tp_order['triggerPx']) + new_sl_trigger_px - current_trigger_px
+                            new_tp_trigger_px = float(matching_tp_order['triggerPx']) + (new_sl_trigger_px - current_trigger_px / 2)
                             modify_tp(message_lines, exchange, coin, matching_tp_order, new_tp_trigger_px, sz)
                         else:
                             message_lines.append("No matching TP order has been found")
