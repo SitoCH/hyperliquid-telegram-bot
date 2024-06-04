@@ -62,12 +62,12 @@ async def update_open_orders(
                         await increase_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, sl_order, current_trigger_px, sl_order_distance, SL_DISTANCE_LIMIT)
                         updated_orders = True
 
-                    tp_order = tp_raw_orders[-1]
-                    current_trigger_px = float(tp_order['triggerPx'])
-                    tp_order_distance = ((current_trigger_px / mid - 1) * 100)
-                    if tp_order_distance > TP_DISTANCE_LIMIT:
-                        await decrease_tp_trigger(update, exchange, coin, mid, sz_decimals, tp_order, TP_DISTANCE_LIMIT)
-                        updated_orders = True
+                    # tp_order = tp_raw_orders[-1]
+                    # current_trigger_px = float(tp_order['triggerPx'])
+                    # tp_order_distance = ((current_trigger_px / mid - 1) * 100)
+                    # if tp_order_distance > TP_DISTANCE_LIMIT:
+                    #     await decrease_tp_trigger(update, exchange, coin, mid, sz_decimals, tp_order, TP_DISTANCE_LIMIT)
+                    #     updated_orders = True
 
         else:
             await update.message.reply_text(text="Exchange is not enabled", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
