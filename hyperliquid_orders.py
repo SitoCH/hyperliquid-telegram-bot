@@ -11,8 +11,7 @@ from telegram_utils import telegram_utils
 
 from hyperliquid_utils import hyperliquid_utils
 
-SL_DISTANCE_LIMIT = 5.5
-TP_DISTANCE_LIMIT = 4.0
+SL_DISTANCE_LIMIT = 10.0
 
 
 async def get_orders_from_hyperliquid():
@@ -54,20 +53,12 @@ async def update_open_orders(
                 sl_raw_orders = order_types.get('Stop Market', [])
                 sl_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
 
-                if len(tp_raw_orders) == len(sl_raw_orders):
-                    sl_order = sl_raw_orders[0]
+                for index, sl_order in enumerate(sl_raw_orders):
                     current_trigger_px = float(sl_order['triggerPx'])
                     sl_order_distance = ((1 - current_trigger_px / mid) * 100)
                     if sl_order_distance > SL_DISTANCE_LIMIT:
-                        await increase_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, sl_order, current_trigger_px, sl_order_distance, SL_DISTANCE_LIMIT)
+                        await increase_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, sl_order, current_trigger_px, sl_order_distance, SL_DISTANCE_LIMIT + index)
                         updated_orders = True
-
-                    # tp_order = tp_raw_orders[-1]
-                    # current_trigger_px = float(tp_order['triggerPx'])
-                    # tp_order_distance = ((current_trigger_px / mid - 1) * 100)
-                    # if tp_order_distance > TP_DISTANCE_LIMIT:
-                    #     await decrease_tp_trigger(update, exchange, coin, mid, sz_decimals, tp_order, TP_DISTANCE_LIMIT)
-                    #     updated_orders = True
 
         else:
             await update.message.reply_text(text="Exchange is not enabled", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
@@ -78,14 +69,6 @@ async def update_open_orders(
     except Exception as e:
         logger.critical(e, exc_info=True)
         await update.message.reply_text(text=f"Failed to update orders: {str(e)}")
-
-
-async def decrease_tp_trigger(update, exchange, coin, mid, sz_decimals, tp_order, distance_limit):
-    message_lines = [f"<b>{coin}:</b>"]
-    new_tp_trigger_px = round(float(f"{(mid + (mid * (distance_limit - 0.5) / 100)):.5g}"), 6)
-    sz = round(float(tp_order['sz']), sz_decimals[coin])
-    modify_tp(message_lines, exchange, coin, tp_order, new_tp_trigger_px, sz)
-    await update.message.reply_text(text='\n'.join(message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
 
 async def increase_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, first_sl_order, current_trigger_px, first_sl_order_distance, distance_limit):
