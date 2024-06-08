@@ -10,9 +10,10 @@ from tabulate import simple_separated_format, tabulate
 
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import CommandHandler, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler
 
 from hyperliquid_orders import get_open_orders, update_open_orders
+from hyperliquid_trade import SELL_CHOOSING, sell, sell_coin, trade_cancel
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 
@@ -29,6 +30,15 @@ class HyperliquidBot:
         telegram_utils.add_handler(CommandHandler("positions", self.get_positions))
         telegram_utils.add_handler(CommandHandler("orders", get_open_orders))
         telegram_utils.add_handler(CommandHandler("update_orders", update_open_orders))
+
+        conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('sell', sell)],
+            states={
+                SELL_CHOOSING: [CallbackQueryHandler(sell_coin)]
+            },
+            fallbacks=[CommandHandler('cancel', trade_cancel)]
+        )
+        telegram_utils.add_handler(conv_handler)
 
         telegram_utils.run_polling()
 
@@ -101,8 +111,8 @@ class HyperliquidBot:
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             message_lines = [
                 "<b>Perps positions:</b>",
-                f"Total balance: {float(user_state['crossMarginSummary']['accountValue']):,.02f} USDC",
-                f"Available balance: {float(user_state['withdrawable']):,.02f} USDC",
+                f"Total balance: {float(user_state['crossMarginSummary']['accountValue']):,.2f} USDC",
+                f"Available balance: {float(user_state['withdrawable']):,.2f} USDC",
             ]
 
             if len(user_state["assetPositions"]) > 0:
@@ -111,7 +121,7 @@ class HyperliquidBot:
                     float(asset_position['position']['unrealizedPnl'])
                     for asset_position in user_state["assetPositions"]
                 )
-                message_lines.append(f"Unrealized profit: {total_pnl:,.02f} USDC")
+                message_lines.append(f"Unrealized profit: {total_pnl:,.2f} USDC")
 
                 message_lines.append("Open positions:")
 
@@ -127,8 +137,8 @@ class HyperliquidBot:
                         [
                             f"{asset_position['position']['szi']}",
                             f"{asset_position['position']['coin']}",
-                            f"{float(asset_position['position']['positionValue']):,.02f}",
-                            f"{float(asset_position['position']['unrealizedPnl']):,.02f}"
+                            f"{float(asset_position['position']['positionValue']):,.2f}",
+                            f"{float(asset_position['position']['unrealizedPnl']):,.2f}"
                         ]
                         for asset_position in sorted_positions
                     ],
@@ -151,7 +161,7 @@ class HyperliquidBot:
                     spot_table = tabulate(
                         [
                             [
-                                f"{float(balance['total']):,.02f}",
+                                f"{float(balance['total']):,.2f}",
                                 balance["coin"],
                             ]
                             for balance in spot_user_state['balances']

@@ -11,13 +11,21 @@ from telegram.ext import Application, ContextTypes
 from telegram.ext._handlers.basehandler import BaseHandler
 from telegram.ext._utils.types import CCT
 
+from warnings import filterwarnings
+from telegram.warnings import PTBUserWarning
+
+filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
+
 
 class TelegramUtils:
+
+    enable_exchange_buttons = True if os.environ.get("HYPERLIQUID_TELEGRAM_BOT_USER_VAULT") is not None else False
 
     reply_markup = ReplyKeyboardMarkup(
         [
             [KeyboardButton("/positions"), KeyboardButton("/orders")],
-            [KeyboardButton("/update_orders")]
+            [KeyboardButton("/update_orders")] if enable_exchange_buttons else [],
+            [KeyboardButton("/sell")] if enable_exchange_buttons else []
         ], resize_keyboard=True
     )
 
