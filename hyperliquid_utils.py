@@ -40,5 +40,4 @@ class HyperliquidUtils:
                 return Exchange(account, constants.MAINNET_API_URL, vault_address=os.environ.get("HYPERLIQUID_TELEGRAM_BOT_USER_VAULT"), account_address=os.environ["HYPERLIQUID_TELEGRAM_BOT_USER_WALLET"])
 
 
-
 hyperliquid_utils = HyperliquidUtils()

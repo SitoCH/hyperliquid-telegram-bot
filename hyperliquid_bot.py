@@ -16,6 +16,7 @@ from hyperliquid_orders import get_open_orders, update_open_orders
 from hyperliquid_trade import SELL_CHOOSING, sell, sell_coin, trade_cancel
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import telegram_utils
+from utils import exchange_enabled
 
 
 class HyperliquidBot:
@@ -29,16 +30,18 @@ class HyperliquidBot:
         telegram_utils.add_handler(CommandHandler("start", self.start))
         telegram_utils.add_handler(CommandHandler("positions", self.get_positions))
         telegram_utils.add_handler(CommandHandler("orders", get_open_orders))
-        telegram_utils.add_handler(CommandHandler("update_orders", update_open_orders))
 
-        conv_handler = ConversationHandler(
-            entry_points=[CommandHandler('sell', sell)],
-            states={
-                SELL_CHOOSING: [CallbackQueryHandler(sell_coin)]
-            },
-            fallbacks=[CommandHandler('cancel', trade_cancel)]
-        )
-        telegram_utils.add_handler(conv_handler)
+        if exchange_enabled:
+            telegram_utils.add_handler(CommandHandler("update_orders", update_open_orders))
+
+            conv_handler = ConversationHandler(
+                entry_points=[CommandHandler('sell', sell)],
+                states={
+                    SELL_CHOOSING: [CallbackQueryHandler(sell_coin)]
+                },
+                fallbacks=[CommandHandler('cancel', trade_cancel)]
+            )
+            telegram_utils.add_handler(conv_handler)
 
         telegram_utils.run_polling()
 
