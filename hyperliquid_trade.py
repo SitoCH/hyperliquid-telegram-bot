@@ -5,6 +5,7 @@ from telegram.ext import ConversationHandler, CallbackContext
 
 from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
+from utils import OPERATION_CANCELLED
 
 SELL_CHOOSING = range(1)
 
@@ -31,7 +32,7 @@ async def buy_select_coin(update: Update, context: CallbackContext) -> int:
 
     coin = query.data
     if coin == 'cancel':
-        await query.edit_message_text(text='Operation cancelled')
+        await query.edit_message_text(text=OPERATION_CANCELLED)
         return ConversationHandler.END
 
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
@@ -98,5 +99,5 @@ async def sell_select_coin(update: Update, context: CallbackContext) -> int:
 
 
 async def trade_cancel(update: Update, context: CallbackContext) -> int:
-    await update.message.reply_text('Operation cancelled', reply_markup=telegram_utils.reply_markup)
+    await update.message.reply_text(OPERATION_CANCELLED, reply_markup=telegram_utils.reply_markup)
     return ConversationHandler.END

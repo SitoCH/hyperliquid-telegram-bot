@@ -11,7 +11,7 @@ from telegram_utils import telegram_utils
 
 from hyperliquid_utils import hyperliquid_utils
 
-SL_DISTANCE_LIMIT = 7.5
+SL_DISTANCE_LIMIT = 6.5
 
 
 async def get_orders_from_hyperliquid():
@@ -40,12 +40,12 @@ async def update_open_orders(
 
         updated_orders = False
         if exchange is not None:
+            
+            sz_decimals = get_sz_decimals()
 
             for coin, order_types in grouped_data.items():
 
                 mid = float(all_mids[coin])
-
-                sz_decimals = get_sz_decimals()
 
                 tp_raw_orders = order_types.get('Take Profit Market', [])
                 tp_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
@@ -56,8 +56,9 @@ async def update_open_orders(
                 for index, sl_order in enumerate(sl_raw_orders):
                     current_trigger_px = float(sl_order['triggerPx'])
                     sl_order_distance = ((1 - current_trigger_px / mid) * 100)
-                    if sl_order_distance > SL_DISTANCE_LIMIT:
-                        await increase_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, sl_order, current_trigger_px, sl_order_distance, SL_DISTANCE_LIMIT + index)
+                    current_sl_distance_limit = SL_DISTANCE_LIMIT + index / 3
+                    if sl_order_distance > current_sl_distance_limit:
+                        await increase_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, sl_order, current_trigger_px, sl_order_distance, current_sl_distance_limit)
                         updated_orders = True
 
         else:
@@ -71,13 +72,13 @@ async def update_open_orders(
         await update.message.reply_text(text=f"Failed to update orders: {str(e)}")
 
 
-async def increase_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, first_sl_order, current_trigger_px, first_sl_order_distance, distance_limit):
+async def increase_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, sl_order, current_trigger_px, sl_order_distance, distance_limit):
     message_lines = [f"<b>{coin}:</b>"]
     new_sl_trigger_px = round(float(f"{(mid - (mid * (distance_limit - 0.5) / 100)):.5g}"), 6)
-    sz = round(float(first_sl_order['sz']), sz_decimals[coin])
-    modify_sl(message_lines, exchange, coin, first_sl_order, first_sl_order_distance, new_sl_trigger_px, sz)
+    sz = round(float(sl_order['sz']), sz_decimals[coin])
+    modify_sl(message_lines, exchange, coin, sl_order, sl_order_distance, new_sl_trigger_px, sz)
     matching_tp_order = next(
-                            (order for order in tp_raw_orders if order['coin'] == coin and order['sz'] == first_sl_order['sz']), None
+                            (order for order in tp_raw_orders if order['coin'] == coin and order['sz'] == sl_order['sz']), None
     )
 
     if matching_tp_order:
