@@ -39,5 +39,12 @@ class HyperliquidUtils:
                 account: LocalAccount = eth_account.Account.from_key(file_content)
                 return Exchange(account, constants.MAINNET_API_URL, vault_address=os.environ.get("HYPERLIQUID_TELEGRAM_BOT_USER_VAULT"), account_address=os.environ["HYPERLIQUID_TELEGRAM_BOT_USER_WALLET"])
 
+    def get_sz_decimals(self):
+        meta = self.info.meta()
+        sz_decimals = {}
+        for asset_info in meta["universe"]:
+            sz_decimals[asset_info["name"]] = asset_info["szDecimals"]
+        return sz_decimals
+
 
 hyperliquid_utils = HyperliquidUtils()

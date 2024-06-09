@@ -40,8 +40,8 @@ async def update_open_orders(
 
         updated_orders = False
         if exchange is not None:
-            
-            sz_decimals = get_sz_decimals()
+
+            sz_decimals = hyperliquid_utils.get_sz_decimals()
 
             for coin, order_types in grouped_data.items():
 
@@ -100,14 +100,6 @@ def modify_tp(message_lines, exchange, coin, order, new_trigger_px, sz):
     stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "tp"}}
     exchange.modify_order(int(order['oid']), coin, False, sz, float(order['limitPx']), stop_order_type, True)
     message_lines.append(f"Modified TP trigger from {order['triggerPx']} to {new_trigger_px}")
-
-
-def get_sz_decimals():
-    meta = hyperliquid_utils.info.meta()
-    sz_decimals = {}
-    for asset_info in meta["universe"]:
-        sz_decimals[asset_info["name"]] = asset_info["szDecimals"]
-    return sz_decimals
 
 
 async def get_open_orders(
