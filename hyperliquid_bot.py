@@ -10,7 +10,7 @@ from tabulate import simple_separated_format, tabulate
 
 from telegram import Update
 from telegram.constants import ParseMode
-from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler, MessageHandler
+from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler
 
 from hyperliquid_orders import get_open_orders, update_open_orders
 from hyperliquid_trade import BUY_ENTERING_AMOUNT, BUY_SELECTING_COIN, SELL_CHOOSING, buy, buy_enter_amount, buy_select_coin, sell, sell_select_coin, trade_cancel
@@ -47,7 +47,7 @@ class HyperliquidBot:
                 entry_points=[CommandHandler('buy', buy)],
                 states={
                     BUY_SELECTING_COIN: [CallbackQueryHandler(buy_select_coin)],
-                    BUY_ENTERING_AMOUNT: [MessageHandler(None, buy_enter_amount)]
+                    BUY_ENTERING_AMOUNT: [CallbackQueryHandler(buy_enter_amount)]
                 },
                 fallbacks=[CommandHandler('cancel', trade_cancel)]
             )
