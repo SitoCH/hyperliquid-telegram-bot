@@ -34,8 +34,10 @@ async def buy_select_coin(update: Update, context: CallbackContext) -> int:
         await query.edit_message_text(text='Operation cancelled')
         return ConversationHandler.END
 
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+
     context.user_data['selected_coin'] = coin
-    await query.edit_message_text(text=f"You selected {coin}. Please enter the amount to buy:")
+    await query.edit_message_text(text=f"You selected {coin}. Please enter the amount to buy ({float(user_state['withdrawable']):,.2f} USDC available):")
     return BUY_ENTERING_AMOUNT
 
 
@@ -44,8 +46,8 @@ async def buy_enter_amount(update: Update, context: CallbackContext) -> int:
     try:
         amount = float(amount)
     except ValueError:
-        await update.message.reply_text("Invalid amount. Please enter a numeric value.")
-        return BUY_ENTERING_AMOUNT
+        await update.message.reply_text("Invalid amount.")
+        return ConversationHandler.END
 
     selected_coin = context.user_data.get('selected_coin')
     if selected_coin is None:
