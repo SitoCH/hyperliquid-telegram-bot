@@ -36,7 +36,7 @@ def get_coins_by_open_intereset():
         coins.append((name, volume))
 
     sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
-    return [coin[0] for coin in sorted_coins[:15]]
+    return [coin[0] for coin in sorted_coins[:20]]
 
 
 async def buy(update: Update, context: CallbackContext) -> int:
