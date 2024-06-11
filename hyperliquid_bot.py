@@ -167,29 +167,29 @@ class HyperliquidBot:
 
                 message_lines.append(f"<pre>{table}</pre>")
 
-                spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
-                if len(spot_user_state['balances']) > 0:
-                    message_lines.append("<b>Spot positions:</b>")
+            spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
+            if len(spot_user_state['balances']) > 0:
+                message_lines.append("<b>Spot positions:</b>")
 
-                    spot_table = tabulate(
+                spot_table = tabulate(
+                    [
                         [
-                            [
-                                f"{float(balance['total']):,.2f}",
-                                balance["coin"],
-                            ]
-                            for balance in spot_user_state['balances']
-                        ],
-                        headers=[
-                            "Total",
-                            "Coin"
-                        ],
-                        tablefmt=tablefmt,
-                        colalign=("right", "left")
-                    )
+                            f"{float(balance['total']):,.2f}",
+                            balance["coin"],
+                        ]
+                        for balance in spot_user_state['balances']
+                    ],
+                    headers=[
+                        "Total",
+                        "Coin"
+                    ],
+                    tablefmt=tablefmt,
+                    colalign=("right", "left")
+                )
 
-                    message_lines.append(f"<pre>{spot_table}</pre>")
+                message_lines.append(f"<pre>{spot_table}</pre>")
 
-                message = '\n'.join(message_lines)
+            message = '\n'.join(message_lines)
 
         except Exception as e:
             message = f"Failed to fetch positions: {str(e)}"
