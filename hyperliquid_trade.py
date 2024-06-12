@@ -13,7 +13,7 @@ from utils import OPERATION_CANCELLED
 
 EXIT_CHOOSING = range(1)
 
-LONG_SELECTING_COIN, LONG_ENTERING_AMOUNT = range(2)
+SELECTING_COIN, SELECTING_AMOUNT = range(2)
 
 
 def get_coins_by_open_intereset():
@@ -36,10 +36,10 @@ def get_coins_by_open_intereset():
         coins.append((name, volume))
 
     sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
-    return [coin[0] for coin in sorted_coins[:20]]
+    return [coin[0] for coin in sorted_coins[:25]]
 
 
-async def enter_long(update: Update, context: CallbackContext) -> int:
+def get_enter_reply_markup():
     coins = get_coins_by_open_intereset()
 
     keyboard = [
@@ -47,12 +47,22 @@ async def enter_long(update: Update, context: CallbackContext) -> int:
         for coin in coins
     ]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Choose a coin to buy:', reply_markup=reply_markup)
-    return LONG_SELECTING_COIN
+    return InlineKeyboardMarkup(keyboard)
 
 
-async def long_selected_coin(update: Update, context: CallbackContext) -> int:
+async def enter_long(update: Update, context: CallbackContext) -> int:
+    context.user_data["enter_mode"] = "long"
+    await update.message.reply_text('Choose a coin to long:', reply_markup=get_enter_reply_markup())
+    return SELECTING_COIN
+
+
+async def enter_short(update: Update, context: CallbackContext) -> int:
+    context.user_data["enter_mode"] = "short"
+    await update.message.reply_text('Choose a coin to short:', reply_markup=get_enter_reply_markup())
+    return SELECTING_COIN
+
+
+async def selected_coin(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     await query.answer()
 
@@ -64,16 +74,16 @@ async def long_selected_coin(update: Update, context: CallbackContext) -> int:
     await query.edit_message_text("Loading...")
 
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-    context.user_data['selected_coin'] = coin
+    context.user_data["selected_coin"] = coin
     keyboard = [
         [InlineKeyboardButton(f"{amount}%", callback_data=amount)]
         for amount in [25, 40, 50, 60, 75, 100]
     ]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(f"You selected {coin}. Please enter the amount to buy ({float(user_state['withdrawable']):,.2f} USDC available):", reply_markup=reply_markup)
+    await query.edit_message_text(f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']} ({float(user_state['withdrawable']):,.2f} USDC available):", reply_markup=reply_markup)
 
-    return LONG_ENTERING_AMOUNT
+    return SELECTING_AMOUNT
 
 
 async def get_leverage(user_state, selected_coin) -> int:
@@ -87,11 +97,11 @@ async def get_leverage(user_state, selected_coin) -> int:
     for asset_info in meta["universe"]:
         if asset_info["name"] == selected_coin:
             leverage = int(asset_info["maxLeverage"])
-            return min(leverage, 30.0)
+            return min(leverage, 30)
     return 5
 
 
-async def long_enter_amount(update: Update, context: CallbackContext) -> int:
+async def selected_amount(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     await query.answer()
 
@@ -111,7 +121,7 @@ async def long_enter_amount(update: Update, context: CallbackContext) -> int:
         await query.edit_message_text("Error: No coin selected. Please restart the process.")
         return ConversationHandler.END
 
-    await query.edit_message_text(text=f"Buying {selected_coin}...")
+    await query.edit_message_text(text=f"Creating order for {selected_coin}...")
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange is not None:
@@ -120,6 +130,8 @@ async def long_enter_amount(update: Update, context: CallbackContext) -> int:
             balance_to_use = available_balance * amount / 100.0
 
             leverage = await get_leverage(user_state, selected_coin)
+            print(leverage)
+            print(selected_coin)
             exchange.update_leverage(leverage, selected_coin, False)
             mid = float(hyperliquid_utils.info.all_mids()[selected_coin])
             sz_decimals = hyperliquid_utils.get_sz_decimals()
@@ -127,14 +139,17 @@ async def long_enter_amount(update: Update, context: CallbackContext) -> int:
             if sz * mid < 10.0:
                 await query.edit_message_text(text="The order value is less than 10$ and can't be executed")
             else:
-                # buy at market
-                open_result = exchange.market_open(selected_coin, True, sz)
+                is_long = context.user_data["enter_mode"] == "long"
+                open_result = exchange.market_open(selected_coin, is_long, sz)
                 logger.info(open_result)
                 # set stoploss order
-                stop_order_type = {"trigger": {"triggerPx": round(float(f"{(mid * 0.97):.5g}"), 6), "isMarket": True, "tpsl": "sl"}}
-                sl_result = exchange.order(selected_coin, False, sz, round(float(f"{(mid * 0.95):.5g}"), 6), stop_order_type, reduce_only=True)
-                logger.info(sl_result)
-                await query.edit_message_text(text=f"Bought {sz} units for {selected_coin} ({leverage}x)")
+                trigger_px = mid * 0.97 if is_long else mid * 1.03
+                limit_px = mid * 0.95 if is_long else mid * 1.05
+                stop_order_type = {"trigger": {"triggerPx": round(float(f"{(trigger_px):.5g}"), 6), "isMarket": True, "tpsl": "sl"}}
+                stoploss_result = exchange.order(selected_coin, not is_long, sz, round(float(f"{(limit_px):.5g}"), 6), stop_order_type, reduce_only=True)
+                logger.info(stoploss_result)
+
+                await query.edit_message_text(text=f"Order exected for {sz} units on {selected_coin} ({leverage}x)")
         else:
             await query.edit_message_text(text="Exchange is not enabled")
     except Exception as e:

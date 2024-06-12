@@ -13,7 +13,7 @@ from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler
 
 from hyperliquid_orders import get_open_orders, update_open_orders
-from hyperliquid_trade import LONG_ENTERING_AMOUNT, LONG_SELECTING_COIN, EXIT_CHOOSING, enter_long, long_enter_amount, long_selected_coin, exit_position, exit_selected_coin, trade_cancel
+from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, enter_long, enter_short, selected_amount, selected_coin, exit_position, exit_selected_coin, trade_cancel
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 from utils import exchange_enabled
@@ -43,15 +43,25 @@ class HyperliquidBot:
             )
             telegram_utils.add_handler(sell_conv_handler)
 
-            buy_conv_handler = ConversationHandler(
+            enter_long_conv_handler = ConversationHandler(
                 entry_points=[CommandHandler('long', enter_long)],
                 states={
-                    LONG_SELECTING_COIN: [CallbackQueryHandler(long_selected_coin)],
-                    LONG_ENTERING_AMOUNT: [CallbackQueryHandler(long_enter_amount)]
+                    SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+                    SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)]
                 },
                 fallbacks=[CommandHandler('cancel', trade_cancel)]
             )
-            telegram_utils.add_handler(buy_conv_handler)
+            telegram_utils.add_handler(enter_long_conv_handler)
+
+            enter_short_conv_handler = ConversationHandler(
+                entry_points=[CommandHandler('short', enter_short)],
+                states={
+                    SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+                    SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)]
+                },
+                fallbacks=[CommandHandler('cancel', trade_cancel)]
+            )
+            telegram_utils.add_handler(enter_short_conv_handler)
 
         telegram_utils.run_polling()
 
