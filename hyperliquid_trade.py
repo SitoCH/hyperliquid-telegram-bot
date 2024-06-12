@@ -83,13 +83,9 @@ async def get_leverage(user_state, selected_coin) -> int:
             if coin == selected_coin:
                 return int(asset_position['position']['leverage']['value'])
 
-    if selected_coin in ['ETH', 'BTC']:
-        return 30
-    if selected_coin in ['SOL', 'kPEPE', 'BNB']:
-        return 20
-    if selected_coin in ['UNI', 'PENDLE', 'TON']:
-        return 10
-    return 5
+    meta = hyperliquid_utils.info.meta()
+    leverage = int(meta["universe"][selected_coin]["maxLeverage"])
+    return min(leverage, 30.0)
 
 
 async def long_enter_amount(update: Update, context: CallbackContext) -> int:
@@ -121,7 +117,7 @@ async def long_enter_amount(update: Update, context: CallbackContext) -> int:
             balance_to_use = available_balance * amount / 100.0
 
             leverage = await get_leverage(user_state, selected_coin)
-            exchange.update_leverage(leverage, selected_coin)
+            exchange.update_leverage(leverage, selected_coin, False)
             mid = float(hyperliquid_utils.info.all_mids()[selected_coin])
             sz_decimals = hyperliquid_utils.get_sz_decimals()
             sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
