@@ -128,6 +128,7 @@ class HyperliquidBot:
                 f"Available balance: {float(user_state['withdrawable']):,.2f} USDC",
             ]
 
+            tablefmt = simple_separated_format(' ')
             if len(user_state["assetPositions"]) > 0:
 
                 total_pnl = sum(
@@ -144,7 +145,6 @@ class HyperliquidBot:
                     reverse=True
                 )
 
-                tablefmt = simple_separated_format(' ')
                 table = tabulate(
                     [
                         [
