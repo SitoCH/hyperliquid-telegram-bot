@@ -84,8 +84,11 @@ async def get_leverage(user_state, selected_coin) -> int:
                 return int(asset_position['position']['leverage']['value'])
 
     meta = hyperliquid_utils.info.meta()
-    leverage = int(meta["universe"][selected_coin]["maxLeverage"])
-    return min(leverage, 30.0)
+    for asset_info in meta["universe"]:
+        if asset_info["name"] == selected_coin:
+            leverage = int(asset_info["maxLeverage"])
+            return min(leverage, 30.0)
+    return 5
 
 
 async def long_enter_amount(update: Update, context: CallbackContext) -> int:
@@ -128,10 +131,10 @@ async def long_enter_amount(update: Update, context: CallbackContext) -> int:
                 open_result = exchange.market_open(selected_coin, True, sz)
                 logger.info(open_result)
                 # set stoploss order
-                stop_order_type = {"trigger": {"triggerPx": round(float(f"{(mid * 0.95):.5g}"), 6), "isMarket": True, "tpsl": "sl"}}
-                sl_result = exchange.order(selected_coin, False, sz, round(float(f"{(mid * 0.93):.5g}"), 6), stop_order_type, reduce_only=True)
+                stop_order_type = {"trigger": {"triggerPx": round(float(f"{(mid * 0.97):.5g}"), 6), "isMarket": True, "tpsl": "sl"}}
+                sl_result = exchange.order(selected_coin, False, sz, round(float(f"{(mid * 0.95):.5g}"), 6), stop_order_type, reduce_only=True)
                 logger.info(sl_result)
-                await query.edit_message_text(text=f"Bought {sz} units for {selected_coin}")
+                await query.edit_message_text(text=f"Bought {sz} units for {selected_coin} ({leverage}x)")
         else:
             await query.edit_message_text(text="Exchange is not enabled")
     except Exception as e:
