@@ -111,11 +111,11 @@ async def get_open_orders(
 
         all_mids = hyperliquid_utils.info.all_mids()
 
+        message_lines = []
+
         for coin, order_types in grouped_data.items():
 
-            message_lines = [
-                f"<b>{coin}:</b>"
-            ]
+            message_lines.append(f"<b>{coin}:</b>")
             mid = float(all_mids[coin])
 
             tp_raw_orders = order_types.get('Take Profit Market', [])
@@ -153,8 +153,11 @@ async def get_open_orders(
 
             message_lines.append(f"<pre>{table}</pre>")
 
-            message = '\n'.join(message_lines)
-            await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+        if len(message_lines) == 0:
+            message_lines.append("No open orders")
+
+        message = '\n'.join(message_lines)
+        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
     except Exception as e:
         await update.message.reply_text(text=f"Failed to check orders: {str(e)}")

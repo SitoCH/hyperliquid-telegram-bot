@@ -11,9 +11,9 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED
 
-SELL_CHOOSING = range(1)
+EXIT_CHOOSING = range(1)
 
-BUY_SELECTING_COIN, BUY_ENTERING_AMOUNT = range(2)
+LONG_SELECTING_COIN, LONG_ENTERING_AMOUNT = range(2)
 
 
 def get_coins_by_open_intereset():
@@ -39,7 +39,7 @@ def get_coins_by_open_intereset():
     return [coin[0] for coin in sorted_coins[:20]]
 
 
-async def buy(update: Update, context: CallbackContext) -> int:
+async def enter_long(update: Update, context: CallbackContext) -> int:
     coins = get_coins_by_open_intereset()
 
     keyboard = [
@@ -49,10 +49,10 @@ async def buy(update: Update, context: CallbackContext) -> int:
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text('Choose a coin to buy:', reply_markup=reply_markup)
-    return BUY_SELECTING_COIN
+    return LONG_SELECTING_COIN
 
 
-async def buy_select_coin(update: Update, context: CallbackContext) -> int:
+async def long_selected_coin(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     await query.answer()
 
@@ -73,7 +73,7 @@ async def buy_select_coin(update: Update, context: CallbackContext) -> int:
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(f"You selected {coin}. Please enter the amount to buy ({float(user_state['withdrawable']):,.2f} USDC available):", reply_markup=reply_markup)
 
-    return BUY_ENTERING_AMOUNT
+    return LONG_ENTERING_AMOUNT
 
 
 async def get_leverage(user_state, selected_coin) -> int:
@@ -92,7 +92,7 @@ async def get_leverage(user_state, selected_coin) -> int:
     return 5
 
 
-async def buy_enter_amount(update: Update, context: CallbackContext) -> int:
+async def long_enter_amount(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     await query.answer()
 
@@ -145,9 +145,13 @@ async def buy_enter_amount(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-async def sell(update: Update, context: CallbackContext) -> range:
+async def exit_position(update: Update, context: CallbackContext) -> range:
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     coins = sorted({asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])})
+
+    if len(coins) == 0:
+        await update.message.reply_text('No positions to close', reply_markup=telegram_utils.reply_markup)
+        return ConversationHandler.END
 
     keyboard = [
         [InlineKeyboardButton(coin, callback_data=coin)]
@@ -156,10 +160,10 @@ async def sell(update: Update, context: CallbackContext) -> range:
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text('Choose a coin to sell:', reply_markup=reply_markup)
-    return SELL_CHOOSING
+    return EXIT_CHOOSING
 
 
-async def sell_select_coin(update: Update, context: CallbackContext) -> int:
+async def exit_selected_coin(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     await query.answer()
 

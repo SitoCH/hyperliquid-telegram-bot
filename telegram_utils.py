@@ -26,7 +26,7 @@ class TelegramUtils:
         [
             [KeyboardButton("/positions"), KeyboardButton("/orders")],
             [KeyboardButton("/update_orders")] if exchange_enabled else [],
-            [KeyboardButton("/buy"), KeyboardButton("/sell")] if exchange_enabled else []
+            [KeyboardButton("/long"), KeyboardButton("/exit")] if exchange_enabled else []
         ], resize_keyboard=True
     )
 

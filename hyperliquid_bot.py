@@ -13,7 +13,7 @@ from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler
 
 from hyperliquid_orders import get_open_orders, update_open_orders
-from hyperliquid_trade import BUY_ENTERING_AMOUNT, BUY_SELECTING_COIN, SELL_CHOOSING, buy, buy_enter_amount, buy_select_coin, sell, sell_select_coin, trade_cancel
+from hyperliquid_trade import LONG_ENTERING_AMOUNT, LONG_SELECTING_COIN, EXIT_CHOOSING, enter_long, long_enter_amount, long_selected_coin, exit_position, exit_selected_coin, trade_cancel
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 from utils import exchange_enabled
@@ -35,19 +35,19 @@ class HyperliquidBot:
             telegram_utils.add_handler(CommandHandler("update_orders", update_open_orders))
 
             sell_conv_handler = ConversationHandler(
-                entry_points=[CommandHandler('sell', sell)],
+                entry_points=[CommandHandler('exit', exit_position)],
                 states={
-                    SELL_CHOOSING: [CallbackQueryHandler(sell_select_coin)]
+                    EXIT_CHOOSING: [CallbackQueryHandler(exit_selected_coin)]
                 },
                 fallbacks=[CommandHandler('cancel', trade_cancel)]
             )
             telegram_utils.add_handler(sell_conv_handler)
 
             buy_conv_handler = ConversationHandler(
-                entry_points=[CommandHandler('buy', buy)],
+                entry_points=[CommandHandler('long', enter_long)],
                 states={
-                    BUY_SELECTING_COIN: [CallbackQueryHandler(buy_select_coin)],
-                    BUY_ENTERING_AMOUNT: [CallbackQueryHandler(buy_enter_amount)]
+                    LONG_SELECTING_COIN: [CallbackQueryHandler(long_selected_coin)],
+                    LONG_ENTERING_AMOUNT: [CallbackQueryHandler(long_enter_amount)]
                 },
                 fallbacks=[CommandHandler('cancel', trade_cancel)]
             )
