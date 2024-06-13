@@ -85,22 +85,6 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
 
     return SELECTING_AMOUNT
 
-
-def get_leverage(user_state, selected_coin) -> int:
-    if len(user_state["assetPositions"]) > 0:
-        for asset_position in user_state["assetPositions"]:
-            coin = asset_position['position']['coin']
-            if coin == selected_coin:
-                return int(asset_position['position']['leverage']['value'])
-
-    meta = hyperliquid_utils.info.meta()
-    for asset_info in meta["universe"]:
-        if asset_info["name"] == selected_coin:
-            leverage = int(asset_info["maxLeverage"])
-            return min(leverage, 40)
-    return 5
-
-
 def get_liquidation_px(user_state, selected_coin) -> float:
     if len(user_state["assetPositions"]) > 0:
         for asset_position in user_state["assetPositions"]:
@@ -138,7 +122,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             available_balance = float(user_state['withdrawable'])
             balance_to_use = available_balance * amount / 100.0
-            leverage = get_leverage(user_state, selected_coin)
+            leverage = hyperliquid_utils.get_leverage(user_state, selected_coin)
             exchange.update_leverage(leverage, selected_coin, False)
             mid = float(hyperliquid_utils.info.all_mids()[selected_coin])
             sz_decimals = hyperliquid_utils.get_sz_decimals()
