@@ -86,7 +86,7 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
     return SELECTING_AMOUNT
 
 
-async def get_leverage(user_state, selected_coin) -> int:
+def get_leverage(user_state, selected_coin) -> int:
     if len(user_state["assetPositions"]) > 0:
         for asset_position in user_state["assetPositions"]:
             coin = asset_position['position']['coin']
@@ -99,6 +99,16 @@ async def get_leverage(user_state, selected_coin) -> int:
             leverage = int(asset_info["maxLeverage"])
             return min(leverage, 40)
     return 5
+
+
+def get_liquidation_px(user_state, selected_coin) -> float:
+    if len(user_state["assetPositions"]) > 0:
+        for asset_position in user_state["assetPositions"]:
+            coin = asset_position['position']['coin']
+            if coin == selected_coin:
+                return float(asset_position['position']['liquidationPx'])
+
+    return 0
 
 
 async def selected_amount(update: Update, context: CallbackContext) -> int:
@@ -128,10 +138,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             available_balance = float(user_state['withdrawable'])
             balance_to_use = available_balance * amount / 100.0
-
-            leverage = await get_leverage(user_state, selected_coin)
-            print(leverage)
-            print(selected_coin)
+            leverage = get_leverage(user_state, selected_coin)
             exchange.update_leverage(leverage, selected_coin, False)
             mid = float(hyperliquid_utils.info.all_mids()[selected_coin])
             sz_decimals = hyperliquid_utils.get_sz_decimals()
@@ -143,8 +150,15 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
                 open_result = exchange.market_open(selected_coin, is_long, sz)
                 logger.info(open_result)
                 # set stoploss order
-                trigger_px = mid * 0.97 if is_long else mid * 1.03
-                limit_px = mid * 0.95 if is_long else mid * 1.05
+                user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+                liquidation_px = get_liquidation_px(user_state, selected_coin)
+                
+                if liquidation_px > 0:
+                    trigger_px = liquidation_px * 1.01 if is_long else liquidation_px * 0.99
+                else:
+                    trigger_px = mid * 0.97 if is_long else mid * 1.03
+
+                limit_px = trigger_px * 0.97 if is_long else trigger_px * 1.03
                 stop_order_type = {"trigger": {"triggerPx": round(float(f"{(trigger_px):.5g}"), 6), "isMarket": True, "tpsl": "sl"}}
                 stoploss_result = exchange.order(selected_coin, not is_long, sz, round(float(f"{(limit_px):.5g}"), 6), stop_order_type, reduce_only=True)
                 logger.info(stoploss_result)
