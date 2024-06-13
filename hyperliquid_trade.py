@@ -152,7 +152,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
                 # set stoploss order
                 user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
                 liquidation_px = get_liquidation_px(user_state, selected_coin)
-                
+
                 if liquidation_px > 0:
                     trigger_px = liquidation_px * 1.01 if is_long else liquidation_px * 0.99
                 else:
