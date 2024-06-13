@@ -123,8 +123,8 @@ async def get_open_orders(
             tp_orders = [
                         [
                             f"{order['sz']}",
-                            f"{order['triggerPx']}",
-                            f"{((float(order['triggerPx']) / mid - 1) * 100):.2f} %"
+                            f"{float(order['triggerPx']):,.2f}",
+                            f"{((float(order['triggerPx']) / mid - 1) * 100):.2f}%"
                         ]
                 for order in tp_raw_orders
             ]
@@ -134,21 +134,22 @@ async def get_open_orders(
             sl_orders = [
                         [
                             f"{order['sz']}",
-                            f"{order['triggerPx']}",
-                            f"{((1 - float(order['triggerPx']) / mid) * 100):.2f} %"
+                            f"{float(order['triggerPx']):,.2f}",
+                            f"{((1 - float(order['triggerPx']) / mid) * 100):.2f}%"
                         ]
                 for order in sl_raw_orders
             ]
 
             tablefmt = simple_separated_format(' ')
             table = tabulate(
-                tp_orders + [["Current", all_mids[coin], ""]] + sl_orders,
+                tp_orders + [["Current", f"{float(all_mids[coin]):,.2f}", ""]] + sl_orders,
                 headers=[
                     "Size",
                     "Trigger price",
                     "Distance"
                 ],
-                tablefmt=tablefmt
+                tablefmt=tablefmt,
+                colalign=("right", "right", "right")
             )
 
             message_lines.append(f"<pre>{table}</pre>")
