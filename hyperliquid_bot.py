@@ -132,9 +132,12 @@ class HyperliquidBot:
 
         try:
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+
+            total_balance = float(user_state['crossMarginSummary']['accountValue']) + float(user_state['marginSummary']['accountValue'])
+
             message_lines = [
                 "<b>Perps positions:</b>",
-                f"Total balance: {float(user_state['crossMarginSummary']['accountValue']):,.2f} USDC",
+                f"Total balance: {total_balance:,.2f} USDC",
                 f"Available balance: {float(user_state['withdrawable']):,.2f} USDC",
             ]
 
