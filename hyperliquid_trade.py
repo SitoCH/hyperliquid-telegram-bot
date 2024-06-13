@@ -97,7 +97,7 @@ async def get_leverage(user_state, selected_coin) -> int:
     for asset_info in meta["universe"]:
         if asset_info["name"] == selected_coin:
             leverage = int(asset_info["maxLeverage"])
-            return min(leverage, 30)
+            return min(leverage, 40)
     return 5
 
 
