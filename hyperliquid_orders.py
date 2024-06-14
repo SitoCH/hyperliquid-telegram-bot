@@ -29,11 +29,11 @@ async def get_orders_from_hyperliquid():
 
 def get_adjusted_sl_distance_limit(user_state, coin):
     leverage = hyperliquid_utils.get_leverage(user_state, coin)
-    if leverage > 30:
+    if leverage >= 30:
         return max(SL_DISTANCE_LIMIT - 2.0, 1.5)
-    if leverage > 20:
+    if leverage >= 20:
         return max(SL_DISTANCE_LIMIT - 1.5, 1.5)
-    if leverage > 10:
+    if leverage >= 10:
         return max(SL_DISTANCE_LIMIT - 1.0, 1.5)
     return SL_DISTANCE_LIMIT
 
