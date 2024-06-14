@@ -134,13 +134,17 @@ async def get_open_orders(
 
         all_mids = hyperliquid_utils.info.all_mids()
 
+        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+
         message_lines = []
 
         for coin, order_types in grouped_data.items():
 
-            message_lines.append(f"<b>{coin}:</b>")
+            message_lines.append(f"<b>{coin}</b>")
             mid = float(all_mids[coin])
             is_long, sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, mid)
+            message_lines.append(f"Mode: {'long' if is_long else 'short'}")
+            message_lines.append(f"Leverage: {hyperliquid_utils.get_leverage(user_state, coin)}x")
 
             tp_orders = [
                         [
