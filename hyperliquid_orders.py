@@ -56,23 +56,12 @@ async def update_open_orders(
             for coin, order_types in grouped_data.items():
 
                 mid = float(all_mids[coin])
-
-                tp_raw_orders = order_types.get('Take Profit Market', [])
-                tp_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
-
-                sl_raw_orders = order_types.get('Stop Market', [])
-                sl_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
+                is_long, sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, mid)
 
                 for index, sl_order in enumerate(sl_raw_orders):
                     current_trigger_px = float(sl_order['triggerPx'])
-                    sl_order_distance = ((1 - current_trigger_px / mid) * 100)
+                    sl_order_distance = abs((1 - current_trigger_px / mid) * 100)
                     current_sl_distance_limit = get_adjusted_sl_distance_limit(user_state, coin) + index / 3
-
-                    is_long = True
-                    if sl_order_distance < 0:
-                        is_long = False
-                        sl_order_distance = abs(sl_order_distance)
-
                     if sl_order_distance > current_sl_distance_limit:
                         await adjust_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, current_sl_distance_limit)
                         updated_orders = True
@@ -86,6 +75,19 @@ async def update_open_orders(
     except Exception as e:
         logger.critical(e, exc_info=True)
         await update.message.reply_text(text=f"Failed to update orders: {str(e)}")
+
+
+def get_sl_tp_orders(order_types, mid):
+    sl_raw_orders = order_types.get('Stop Market', [])
+    is_long = True
+    if len(sl_raw_orders) > 0 and mid < float(sl_raw_orders[0]['triggerPx']):
+        is_long = False
+
+    sl_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=is_long)
+
+    tp_raw_orders = order_types.get('Take Profit Market', [])
+    tp_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=is_long)
+    return is_long, sl_raw_orders, tp_raw_orders
 
 
 async def adjust_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, distance_limit):
@@ -136,32 +138,34 @@ async def get_open_orders(
 
             message_lines.append(f"<b>{coin}:</b>")
             mid = float(all_mids[coin])
+            is_long, sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, mid)
 
-            tp_raw_orders = order_types.get('Take Profit Market', [])
-            tp_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
             tp_orders = [
                         [
-                            f"{order['sz']}",
-                            f"{float(order['triggerPx']):,.2f}",
+                            order['sz'],
+                            order['triggerPx'],
                             f"{abs((float(order['triggerPx']) / mid - 1) * 100):.2f}%"
                         ]
                 for order in tp_raw_orders
             ]
 
-            sl_raw_orders = order_types.get('Stop Market', [])
-            sl_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=True)
             sl_orders = [
                         [
-                            f"{order['sz']}",
-                            f"{float(order['triggerPx']):,.2f}",
+                            order['sz'],
+                            order['triggerPx'],
                             f"{abs(((1 - float(order['triggerPx']) / mid) * 100)):.2f}%"
                         ]
                 for order in sl_raw_orders
             ]
 
             tablefmt = simple_separated_format(' ')
+
+            table_orders = tp_orders + [["Current", all_mids[coin], ""]] + sl_orders
+            if not is_long:
+                table_orders.reverse()
+
             table = tabulate(
-                tp_orders + [["Current", f"{float(all_mids[coin]):,.2f}", ""]] + sl_orders,
+                table_orders,
                 headers=[
                     "Size",
                     "Trigger price",
