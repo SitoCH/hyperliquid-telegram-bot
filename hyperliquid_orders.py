@@ -29,8 +29,10 @@ async def get_orders_from_hyperliquid():
 
 def get_adjusted_sl_distance_limit(user_state, coin):
     leverage = hyperliquid_utils.get_leverage(user_state, coin)
-    if leverage > 20:
+    if leverage > 30:
         return max(SL_DISTANCE_LIMIT - 2.0, 1.5)
+    if leverage > 20:
+        return max(SL_DISTANCE_LIMIT - 1.5, 1.5)
     if leverage > 10:
         return max(SL_DISTANCE_LIMIT - 1.0, 1.5)
     return SL_DISTANCE_LIMIT
@@ -61,7 +63,7 @@ async def update_open_orders(
                 for index, sl_order in enumerate(sl_raw_orders):
                     current_trigger_px = float(sl_order['triggerPx'])
                     sl_order_distance = abs((1 - current_trigger_px / mid) * 100)
-                    current_sl_distance_limit = get_adjusted_sl_distance_limit(user_state, coin) + index / 3
+                    current_sl_distance_limit = get_adjusted_sl_distance_limit(user_state, coin) + index * 0.3
                     if sl_order_distance > current_sl_distance_limit:
                         await adjust_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, current_sl_distance_limit)
                         updated_orders = True
@@ -92,7 +94,7 @@ def get_sl_tp_orders(order_types, mid):
 
 async def adjust_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, distance_limit):
     message_lines = [f"<b>{coin}:</b>"]
-    px = mid - mid * (distance_limit - 0.5) / 100 if is_long else mid + mid * (distance_limit - 0.5) / 100
+    px = mid - mid * (distance_limit - 0.25) / 100 if is_long else mid + mid * (distance_limit - 0.25) / 100
     new_sl_trigger_px = round(float(f"{px:.5g}"), 6)
     sz = round(float(sl_order['sz']), sz_decimals[coin])
     modify_sl_order(message_lines, exchange, coin, is_long, sl_order, sl_order_distance, new_sl_trigger_px, sz)
