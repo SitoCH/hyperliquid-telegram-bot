@@ -138,7 +138,7 @@ class HyperliquidBot:
 
         try:
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-            print(user_state)
+
             total_balance = float(user_state['marginSummary']['accountValue'])
 
             message_lines = [

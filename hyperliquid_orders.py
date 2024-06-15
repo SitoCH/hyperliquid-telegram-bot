@@ -42,7 +42,7 @@ async def update_orders_command(update: Update, context: ContextTypes.DEFAULT_TY
     await update_open_orders(context, True)
 
 
-async def update_open_orders(context: ContextTypes.DEFAULT_TYPE, send_message_on_no_updates: False) -> None:
+async def update_open_orders(context: ContextTypes.DEFAULT_TYPE, send_message_on_no_updates=False) -> None:
 
     try:
         grouped_data = await get_orders_from_hyperliquid()
