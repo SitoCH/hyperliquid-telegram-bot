@@ -9,7 +9,7 @@ from telegram import (
 from telegram import Update
 from telegram.ext import Application, ContextTypes
 from telegram.ext._handlers.basehandler import BaseHandler
-from telegram.ext._utils.types import CCT
+from telegram.ext._utils.types import CCT, JobCallback
 
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
@@ -53,6 +53,9 @@ class TelegramUtils:
 
     def add_handler(self, handler: BaseHandler[Any, CCT], group: int = 0) -> None:
         self.telegram_app.add_handler(handler, group)
+
+    def run_repeating(self, callback: JobCallback[CCT], interval: float, first: float = None) -> None:
+        self.telegram_app.job_queue.run_repeating(callback, interval=interval, first=first)
 
     def run_polling(self):
         self.telegram_app.job_queue.run_once(self.send_message, when=0, data="Hyperliquid Telegram bot up and running", chat_id=self.telegram_chat_id)

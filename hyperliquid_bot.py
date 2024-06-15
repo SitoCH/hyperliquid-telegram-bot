@@ -12,7 +12,7 @@ from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler
 
-from hyperliquid_orders import get_open_orders, update_open_orders
+from hyperliquid_orders import get_open_orders, update_open_orders, update_orders_command
 from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, enter_long, enter_short, selected_amount, selected_coin, exit_position, exit_selected_coin, trade_cancel
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import telegram_utils
@@ -32,7 +32,9 @@ class HyperliquidBot:
         telegram_utils.add_handler(CommandHandler("orders", get_open_orders))
 
         if exchange_enabled:
-            telegram_utils.add_handler(CommandHandler("update_orders", update_open_orders))
+            telegram_utils.add_handler(CommandHandler("update_orders", update_orders_command))
+
+            telegram_utils.run_repeating(update_open_orders, interval=600, first=15)
 
             sell_conv_handler = ConversationHandler(
                 entry_points=[CommandHandler('exit', exit_position)],

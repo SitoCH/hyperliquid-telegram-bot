@@ -38,9 +38,11 @@ def get_adjusted_sl_distance_limit(user_state, coin):
     return SL_DISTANCE_LIMIT
 
 
-async def update_open_orders(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def update_orders_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update_open_orders(context)
+
+
+async def update_open_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         grouped_data = await get_orders_from_hyperliquid()
@@ -65,18 +67,18 @@ async def update_open_orders(
                     sl_order_distance = abs((1 - current_trigger_px / mid) * 100)
                     current_sl_distance_limit = get_adjusted_sl_distance_limit(user_state, coin) + index * 0.5
                     if sl_order_distance > current_sl_distance_limit:
-                        await adjust_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, current_sl_distance_limit)
+                        await adjust_sl_trigger(context, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, current_sl_distance_limit)
                         updated_orders = True
 
         else:
-            await update.message.reply_text(text="Exchange is not enabled", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+            await context.bot.send_message(text="Exchange is not enabled", chat_id=telegram_utils.telegram_chat_id, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
         if not updated_orders:
-            await update.message.reply_text(text="No orders to update", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+            await context.bot.send_message(text="No orders to update", chat_id=telegram_utils.telegram_chat_id, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await update.message.reply_text(text=f"Failed to update orders: {str(e)}")
+        await context.bot.send_message(text=f"Failed to update orders: {str(e)}", chat_id=telegram_utils.telegram_chat_id)
 
 
 def get_sl_tp_orders(order_types, mid):
@@ -92,7 +94,7 @@ def get_sl_tp_orders(order_types, mid):
     return is_long, sl_raw_orders, tp_raw_orders
 
 
-async def adjust_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, distance_limit):
+async def adjust_sl_trigger(context, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, distance_limit):
     message_lines = [f"<b>{coin}:</b>"]
     px = mid - mid * (distance_limit - 0.25) / 100.0 if is_long else mid + mid * (distance_limit - 0.25) / 100.0
     new_sl_trigger_px = round(float(f"{px:.5g}"), 6)
@@ -111,7 +113,7 @@ async def adjust_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_ord
     else:
         message_lines.append("No matching TP order has been found")
 
-    await update.message.reply_text(text='\n'.join(message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+    await context.bot.send_message(text='\n'.join(message_lines), chat_id=telegram_utils.telegram_chat_id, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
 
 def modify_sl_order(message_lines, exchange, coin, is_long, sl_order, order_distance, new_trigger_px, sz):
