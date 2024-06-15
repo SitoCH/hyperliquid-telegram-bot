@@ -11,7 +11,7 @@ from telegram_utils import telegram_utils
 
 from hyperliquid_utils import hyperliquid_utils
 
-SL_DISTANCE_LIMIT = 3.5
+SL_DISTANCE_LIMIT = 3.0
 
 
 async def get_orders_from_hyperliquid():
@@ -30,11 +30,11 @@ async def get_orders_from_hyperliquid():
 def get_adjusted_sl_distance_limit(user_state, coin):
     leverage = hyperliquid_utils.get_leverage(user_state, coin)
     if leverage >= 30:
-        return max(SL_DISTANCE_LIMIT - 2.0, 1.5)
-    if leverage >= 20:
-        return max(SL_DISTANCE_LIMIT - 1.5, 1.5)
-    if leverage >= 10:
         return max(SL_DISTANCE_LIMIT - 1.0, 1.5)
+    if leverage >= 20:
+        return max(SL_DISTANCE_LIMIT - 0.75, 1.5)
+    if leverage >= 10:
+        return max(SL_DISTANCE_LIMIT - 0.50, 1.5)
     return SL_DISTANCE_LIMIT
 
 
@@ -63,7 +63,7 @@ async def update_open_orders(
                 for index, sl_order in enumerate(sl_raw_orders):
                     current_trigger_px = float(sl_order['triggerPx'])
                     sl_order_distance = abs((1 - current_trigger_px / mid) * 100)
-                    current_sl_distance_limit = get_adjusted_sl_distance_limit(user_state, coin) + index * 0.3
+                    current_sl_distance_limit = get_adjusted_sl_distance_limit(user_state, coin) + index * 0.5
                     if sl_order_distance > current_sl_distance_limit:
                         await adjust_sl_trigger(update, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, current_sl_distance_limit)
                         updated_orders = True
