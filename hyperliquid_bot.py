@@ -138,8 +138,8 @@ class HyperliquidBot:
 
         try:
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-
-            total_balance = float(user_state['crossMarginSummary']['totalNtlPos']) + float(user_state['marginSummary']['totalNtlPos']) + float(user_state['withdrawable'])
+            print(user_state)
+            total_balance = float(user_state['marginSummary']['accountValue'])
 
             message_lines = [
                 "<b>Perps positions:</b>",
