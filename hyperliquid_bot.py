@@ -107,6 +107,8 @@ class HyperliquidBot:
             fill_message = self.get_fill_description("🔵 Bought spot:", coin, size, fee, fee_token, amount)
         elif fill["dir"] == 'Sell':
             fill_message = self.get_fill_description("🔵 Sold spot:", coin, size, fee, fee_token, amount)
+        elif fill["dir"] == 'Liquidated Isolated Long':
+            fill_message = self.get_fill_description(f"{self.get_fill_icon(closed_pnl)} Liquidated isolated long:", coin, size, fee, fee_token, closed_pnl=closed_pnl)
         else:
             fill_message = json.dumps(fill)
 
