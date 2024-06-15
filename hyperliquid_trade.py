@@ -133,19 +133,25 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
                 is_long = context.user_data["enter_mode"] == "long"
                 open_result = exchange.market_open(selected_coin, is_long, sz)
                 logger.info(open_result)
-                # set stoploss order
+                # set SL order
                 user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
                 liquidation_px = get_liquidation_px(user_state, selected_coin)
 
                 if liquidation_px > 0:
-                    trigger_px = liquidation_px * 1.005 if is_long else liquidation_px * 0.995
+                    sl_trigger_px = liquidation_px * 1.005 if is_long else liquidation_px * 0.995
                 else:
-                    trigger_px = mid * 0.97 if is_long else mid * 1.03
+                    sl_trigger_px = mid * 0.97 if is_long else mid * 1.03
 
-                limit_px = trigger_px * 0.97 if is_long else trigger_px * 1.03
-                stop_order_type = {"trigger": {"triggerPx": round(float(f"{(trigger_px):.5g}"), 6), "isMarket": True, "tpsl": "sl"}}
-                stoploss_result = exchange.order(selected_coin, not is_long, sz, round(float(f"{(limit_px):.5g}"), 6), stop_order_type, reduce_only=True)
-                logger.info(stoploss_result)
+                sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
+                sl_order_type = {"trigger": {"triggerPx": round(float(f"{(sl_trigger_px):.5g}"), 6), "isMarket": True, "tpsl": "sl"}}
+                sl_order_result = exchange.order(selected_coin, not is_long, sz, round(float(f"{(sl_limit_px):.5g}"), 6), sl_order_type, reduce_only=True)
+                logger.info(sl_order_result)
+                # set TP order
+                tp_trigger_px = mid * 1.03 if is_long else mid * 0.97
+                tp_limit_px = tp_trigger_px * 1.03 if is_long else tp_trigger_px * 0.97
+                tp_order_type = {"trigger": {"triggerPx": round(float(f"{(tp_trigger_px):.5g}"), 6), "isMarket": True, "tpsl": "tp"}}
+                tp_order_result = exchange.order(selected_coin, not is_long, sz, round(float(f"{(tp_limit_px):.5g}"), 6), tp_order_type, reduce_only=True)
+                logger.info(tp_order_result)
 
                 await query.edit_message_text(text=f"Order executed for {sz} units on {selected_coin} ({leverage}x)")
         else:
