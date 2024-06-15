@@ -39,10 +39,10 @@ def get_adjusted_sl_distance_limit(user_state, coin):
 
 
 async def update_orders_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update_open_orders(context)
+    await update_open_orders(context, True)
 
 
-async def update_open_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
+async def update_open_orders(context: ContextTypes.DEFAULT_TYPE, send_message_on_no_updates: False) -> None:
 
     try:
         grouped_data = await get_orders_from_hyperliquid()
@@ -73,7 +73,7 @@ async def update_open_orders(context: ContextTypes.DEFAULT_TYPE) -> None:
         else:
             await context.bot.send_message(text="Exchange is not enabled", chat_id=telegram_utils.telegram_chat_id, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
-        if not updated_orders:
+        if not updated_orders and send_message_on_no_updates:
             await context.bot.send_message(text="No orders to update", chat_id=telegram_utils.telegram_chat_id, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
     except Exception as e:

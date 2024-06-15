@@ -85,6 +85,7 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
 
     return SELECTING_AMOUNT
 
+
 def get_liquidation_px(user_state, selected_coin) -> float:
     if len(user_state["assetPositions"]) > 0:
         for asset_position in user_state["assetPositions"]:
