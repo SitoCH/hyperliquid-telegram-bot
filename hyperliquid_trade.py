@@ -147,7 +147,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
                 stoploss_result = exchange.order(selected_coin, not is_long, sz, round(float(f"{(limit_px):.5g}"), 6), stop_order_type, reduce_only=True)
                 logger.info(stoploss_result)
 
-                await query.edit_message_text(text=f"Order exected for {sz} units on {selected_coin} ({leverage}x)")
+                await query.edit_message_text(text=f"Order executed for {sz} units on {selected_coin} ({leverage}x)")
         else:
             await query.edit_message_text(text="Exchange is not enabled")
     except Exception as e:
