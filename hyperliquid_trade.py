@@ -138,7 +138,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
                 liquidation_px = get_liquidation_px(user_state, selected_coin)
 
                 if liquidation_px > 0:
-                    trigger_px = liquidation_px * 1.01 if is_long else liquidation_px * 0.99
+                    trigger_px = liquidation_px * 1.005 if is_long else liquidation_px * 0.995
                 else:
                     trigger_px = mid * 0.97 if is_long else mid * 1.03
 
