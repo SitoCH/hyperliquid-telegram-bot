@@ -118,13 +118,15 @@ async def adjust_sl_trigger(context, exchange, coin, mid, sz_decimals, tp_raw_or
 
 def modify_sl_order(message_lines, exchange, coin, is_long, sl_order, order_distance, new_trigger_px, sz):
     stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "sl"}}
-    exchange.modify_order(int(sl_order['oid']), coin, not is_long, sz, float(sl_order['limitPx']), stop_order_type, True)
+    order_result = exchange.modify_order(int(sl_order['oid']), coin, not is_long, sz, float(sl_order['limitPx']), stop_order_type, True)
+    logger.info(order_result)
     message_lines.append(f"Modified SL trigger from {sl_order['triggerPx']} ({order_distance:.2f}%) to {new_trigger_px}")
 
 
 def modify_tp_order(message_lines, exchange, coin, is_long, order, new_trigger_px, sz):
     stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "tp"}}
-    exchange.modify_order(int(order['oid']), coin, not is_long, sz, float(order['limitPx']), stop_order_type, True)
+    order_result = exchange.modify_order(int(order['oid']), coin, not is_long, sz, float(order['limitPx']), stop_order_type, True)
+    logger.info(order_result)
     message_lines.append(f"Modified TP trigger from {order['triggerPx']} to {new_trigger_px}")
 
 
