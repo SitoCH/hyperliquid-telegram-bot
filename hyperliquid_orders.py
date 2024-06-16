@@ -106,10 +106,8 @@ async def adjust_sl_trigger(context, exchange, coin, mid, sz_decimals, tp_raw_or
     )
 
     if matching_tp_order:
-        old_tp_trigger_px = float(matching_tp_order['triggerPx'])
-        new_delta = abs(new_sl_trigger_px - current_trigger_px) / 2.0
-        new_tp_trigger_px = old_tp_trigger_px + new_delta if is_long else old_tp_trigger_px - new_delta
-        modify_tp_order(message_lines, exchange, coin, is_long, matching_tp_order, new_tp_trigger_px, sz)
+        sl_delta = abs(new_sl_trigger_px - current_trigger_px)
+        modify_tp_order(message_lines, exchange, coin, is_long, matching_tp_order, sz, sl_delta)
     else:
         message_lines.append("No matching TP order has been found")
 
@@ -123,9 +121,17 @@ def modify_sl_order(message_lines, exchange, coin, is_long, sl_order, order_dist
     message_lines.append(f"Modified SL trigger from {sl_order['triggerPx']} ({order_distance:.2f}%) to {new_trigger_px}")
 
 
-def modify_tp_order(message_lines, exchange, coin, is_long, order, new_trigger_px, sz):
+def modify_tp_order(message_lines, exchange, coin, is_long, order, sz, sl_delta):
+    new_delta = sl_delta / 2.0
+
+    old_trigger_px = float(order['triggerPx'])
+    new_trigger_px = old_trigger_px + new_delta if is_long else old_trigger_px - new_delta
+
+    old_limit_px = float(order['limitPx'])
+    new_limit_px = old_limit_px + new_delta if is_long else old_limit_px - new_delta
+
     stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "tp"}}
-    order_result = exchange.modify_order(int(order['oid']), coin, not is_long, sz, float(order['limitPx']), stop_order_type, True)
+    order_result = exchange.modify_order(int(order['oid']), coin, not is_long, sz, new_limit_px, stop_order_type, True)
     logger.info(order_result)
     message_lines.append(f"Modified TP trigger from {order['triggerPx']} to {new_trigger_px}")
 
