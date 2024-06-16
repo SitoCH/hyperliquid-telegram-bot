@@ -65,7 +65,7 @@ async def update_open_orders(context: ContextTypes.DEFAULT_TYPE, send_message_on
                 for index, sl_order in enumerate(sl_raw_orders):
                     current_trigger_px = float(sl_order['triggerPx'])
                     sl_order_distance = abs((1 - current_trigger_px / mid) * 100)
-                    current_sl_distance_limit = get_adjusted_sl_distance_limit(user_state, coin) + index * 0.5
+                    current_sl_distance_limit = get_adjusted_sl_distance_limit(user_state, coin) + index * 0.25
                     if sl_order_distance > current_sl_distance_limit:
                         await adjust_sl_trigger(context, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, current_sl_distance_limit)
                         updated_orders = True
@@ -96,7 +96,7 @@ def get_sl_tp_orders(order_types, mid):
 
 async def adjust_sl_trigger(context, exchange, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, current_trigger_px, sl_order_distance, distance_limit):
     message_lines = [f"<b>{coin}:</b>"]
-    px = mid - mid * (distance_limit - 0.25) / 100.0 if is_long else mid + mid * (distance_limit - 0.25) / 100.0
+    px = mid - mid * (distance_limit - 0.10) / 100.0 if is_long else mid + mid * (distance_limit - 0.10) / 100.0
     new_sl_trigger_px = round(float(f"{px:.5g}"), 6)
     sz = round(float(sl_order['sz']), sz_decimals[coin])
     modify_sl_order(message_lines, exchange, coin, is_long, sl_order, sl_order_distance, new_sl_trigger_px, sz)
