@@ -11,7 +11,7 @@ from telegram_utils import telegram_utils
 
 from hyperliquid_utils import hyperliquid_utils
 
-SL_DISTANCE_LIMIT = 3.5
+SL_DISTANCE_LIMIT = 3.00
 
 
 async def get_orders_from_hyperliquid():
