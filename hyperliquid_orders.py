@@ -125,7 +125,8 @@ def modify_tp_order(message_lines, exchange, coin, is_long, order, sz, sl_delta)
     new_delta = sl_delta / 2.0
 
     old_trigger_px = float(order['triggerPx'])
-    new_trigger_px = old_trigger_px + new_delta if is_long else old_trigger_px - new_delta
+    px = old_trigger_px + new_delta if is_long else old_trigger_px - new_delta
+    new_trigger_px = round(float(f"{px:.5g}"), 6)
 
     old_limit_px = float(order['limitPx'])
     new_limit_px = old_limit_px + new_delta if is_long else old_limit_px - new_delta
