@@ -34,7 +34,7 @@ class HyperliquidBot:
         if exchange_enabled:
             telegram_utils.add_handler(CommandHandler("update_orders", update_orders_command))
 
-            telegram_utils.run_repeating(update_open_orders, interval=600, first=15)
+            telegram_utils.run_repeating(update_open_orders, interval=300, first=15)
 
             sell_conv_handler = ConversationHandler(
                 entry_points=[CommandHandler('exit', exit_position)],
