@@ -125,11 +125,12 @@ def modify_tp_order(message_lines, exchange, coin, is_long, order, sz, sl_delta)
     new_delta = sl_delta / 3.0
 
     old_trigger_px = float(order['triggerPx'])
-    px = old_trigger_px + new_delta if is_long else old_trigger_px - new_delta
-    new_trigger_px = round(float(f"{px:.5g}"), 6)
+    new_trigger_px = old_trigger_px + new_delta if is_long else old_trigger_px - new_delta
+    new_trigger_px = round(float(f"{new_trigger_px:.5g}"), 6)
 
     old_limit_px = float(order['limitPx'])
     new_limit_px = old_limit_px + new_delta if is_long else old_limit_px - new_delta
+    new_limit_px = round(float(f"{new_limit_px:.5g}"), 6)
 
     stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "tp"}}
     order_result = exchange.modify_order(int(order['oid']), coin, not is_long, sz, new_limit_px, stop_order_type, True)
