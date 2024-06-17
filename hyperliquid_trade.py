@@ -148,7 +148,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
                 sl_order_result = exchange.order(selected_coin, not is_long, sz, round(float(f"{(sl_limit_px):.5g}"), 6), sl_order_type, reduce_only=True)
                 logger.info(sl_order_result)
                 # set TP order
-                tp_trigger_px = mid * 1.01 if is_long else mid * 0.99
+                tp_trigger_px = mid * 1.0125 if is_long else mid * 0.9875
                 tp_limit_px = tp_trigger_px * 1.02 if is_long else tp_trigger_px * 0.98
                 tp_order_type = {"trigger": {"triggerPx": round(float(f"{(tp_trigger_px):.5g}"), 6), "isMarket": True, "tpsl": "tp"}}
                 tp_order_result = exchange.order(selected_coin, not is_long, sz, round(float(f"{(tp_limit_px):.5g}"), 6), tp_order_type, reduce_only=True)
