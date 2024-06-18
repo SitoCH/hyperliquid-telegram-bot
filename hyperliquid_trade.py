@@ -36,7 +36,7 @@ def get_coins_by_open_intereset():
         coins.append((name, volume))
 
     sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
-    return reversed([coin[0] for coin in sorted_coins[:40]])
+    return reversed([coin[0] for coin in sorted_coins[:75]])
 
 
 def get_enter_reply_markup():
@@ -74,14 +74,15 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
     await query.edit_message_text("Loading...")
 
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+    withdrawable = float(user_state['withdrawable'])
     context.user_data["selected_coin"] = coin
     keyboard = [
-        [InlineKeyboardButton(f"{amount}%", callback_data=amount)]
-        for amount in [25, 40, 50, 60, 75, 100]
+        [InlineKeyboardButton(f"{amount}% (~ {(withdrawable * amount / 100.0):,.2f} USDC)", callback_data=amount)]
+        for amount in [10, 25, 40, 50, 60, 75, 90, 100]
     ]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']} ({float(user_state['withdrawable']):,.2f} USDC available):", reply_markup=reply_markup)
+    await query.edit_message_text(f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']} ({withdrawable:,.2f} USDC available):", reply_markup=reply_markup)
 
     return SELECTING_AMOUNT
 
@@ -116,7 +117,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
         await query.edit_message_text("Error: No coin selected. Please restart the process.")
         return ConversationHandler.END
 
-    await query.edit_message_text(text=f"Creating order for {selected_coin}...")
+    await query.edit_message_text(text=f"Executing orders for {selected_coin}...")
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange is not None:
