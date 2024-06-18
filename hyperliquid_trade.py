@@ -36,7 +36,7 @@ def get_coins_by_open_intereset():
         coins.append((name, volume))
 
     sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
-    return reversed([coin[0] for coin in sorted_coins[:30]])
+    return reversed([coin[0] for coin in sorted_coins[:40]])
 
 
 def get_enter_reply_markup():

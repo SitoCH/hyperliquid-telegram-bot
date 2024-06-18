@@ -122,7 +122,7 @@ def modify_sl_order(message_lines, exchange, coin, is_long, sl_order, order_dist
 
 
 def modify_tp_order(message_lines, exchange, coin, is_long, order, sz, sl_delta):
-    new_delta = sl_delta / 4.0
+    new_delta = sl_delta / 10.0
 
     old_trigger_px = float(order['triggerPx'])
     new_trigger_px = old_trigger_px + new_delta if is_long else old_trigger_px - new_delta
