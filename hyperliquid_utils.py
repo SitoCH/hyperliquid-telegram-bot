@@ -46,27 +46,32 @@ class HyperliquidUtils:
             sz_decimals[asset_info["name"]] = asset_info["szDecimals"]
         return sz_decimals
 
-    def get_unrealized_pnl(self, user_state, selected_coin) -> float:
-        if len(user_state["assetPositions"]) > 0:
-            for asset_position in user_state["assetPositions"]:
-                coin = asset_position['position']['coin']
-                if coin == selected_coin:
-                    return float(asset_position['position']['unrealizedPnl'])
+    def get_entry_px(self, user_state, selected_coin) -> float:
+        for asset_position in user_state.get("assetPositions", []):
+            if asset_position['position']['coin'] == selected_coin:
+                return float(asset_position['position']['entryPx'])
         return 0.0
 
+
+    def get_unrealized_pnl(self, user_state, selected_coin) -> float:
+        for asset_position in user_state.get("assetPositions", []):
+            if asset_position['position']['coin'] == selected_coin:
+                return float(asset_position['position']['unrealizedPnl'])
+        return 0.0
+
+
     def get_leverage(self, user_state, selected_coin) -> int:
-        if len(user_state["assetPositions"]) > 0:
-            for asset_position in user_state["assetPositions"]:
-                coin = asset_position['position']['coin']
-                if coin == selected_coin:
-                    return int(asset_position['position']['leverage']['value'])
+        for asset_position in user_state.get("assetPositions", []):
+            if asset_position['position']['coin'] == selected_coin:
+                return int(asset_position['position']['leverage']['value'])
 
         meta = hyperliquid_utils.info.meta()
-        for asset_info in meta["universe"]:
+        for asset_info in meta.get("universe", []):
             if asset_info["name"] == selected_coin:
-                leverage = int(asset_info["maxLeverage"])
-                return min(leverage, 40)
+                return min(int(asset_info["maxLeverage"]), 40)
+
         return 5
+
 
 
 hyperliquid_utils = HyperliquidUtils()

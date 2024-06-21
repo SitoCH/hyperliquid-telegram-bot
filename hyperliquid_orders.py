@@ -111,7 +111,7 @@ async def adjust_sl_trigger(
     if unrealized_pnl <= 0.0:
         return False
 
-    entry_px = float(sl_order['entryPx'])
+    entry_px = hyperliquid_utils.get_entry_px(user_state, coin)
     new_sl_trigger_px = None
 
     # Adjust stop-loss based on unrealized PnL
