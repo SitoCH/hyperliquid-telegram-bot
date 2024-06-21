@@ -3,8 +3,7 @@ import requests
 from logging_utils import logger
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ConversationHandler, CallbackContext
-
+from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
 from hyperliquid.utils.constants import MAINNET_API_URL
 
 from telegram_utils import telegram_utils
@@ -165,6 +164,22 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
+async def exit_all_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+    try:
+        exchange = hyperliquid_utils.get_exchange()
+        if exchange is not None:
+            for asset_position in user_state.get("assetPositions", []):
+                coin = asset_position['position']['coin']
+                exchange.market_close(coin)
+                await update.message.reply_text(text=f"Closed {coin}")
+        else:
+            await update.message.reply_text(text="Exchange is not enabled")
+    except Exception as e:
+        logger.critical(e, exc_info=True)
+        await update.message.reply_text(text=f"Failed to exit all positions: {str(e)}")
+
+
 async def exit_position(update: Update, context: CallbackContext) -> range:
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     coins = sorted({asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])})
@@ -202,7 +217,7 @@ async def exit_selected_coin(update: Update, context: CallbackContext) -> int:
             await query.edit_message_text(text="Exchange is not enabled")
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await query.edit_message_text(text=f"Failed to update orders: {str(e)}")
+        await query.edit_message_text(text=f"Failed to exit {coin}: {str(e)}")
 
     return ConversationHandler.END
 

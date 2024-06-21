@@ -138,9 +138,7 @@ def modify_tp_order(message_lines, exchange, coin, is_long, order, sz, sl_delta)
     message_lines.append(f"Modified TP trigger from {order['triggerPx']} to {new_trigger_px}")
 
 
-async def get_open_orders(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         grouped_data = await get_orders_from_hyperliquid()
