@@ -46,6 +46,14 @@ class HyperliquidUtils:
             sz_decimals[asset_info["name"]] = asset_info["szDecimals"]
         return sz_decimals
 
+    def get_unrealized_pnl(self, user_state, selected_coin) -> float:
+        if len(user_state["assetPositions"]) > 0:
+            for asset_position in user_state["assetPositions"]:
+                coin = asset_position['position']['coin']
+                if coin == selected_coin:
+                    return float(asset_position['position']['unrealizedPnl'])
+        return 0.0
+
     def get_leverage(self, user_state, selected_coin) -> int:
         if len(user_state["assetPositions"]) > 0:
             for asset_position in user_state["assetPositions"]:
