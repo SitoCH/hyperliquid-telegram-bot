@@ -24,9 +24,9 @@ def get_unrealized_pnl_limit(leverage):
     elif leverage >= 20:
         return 10.0
     elif leverage >= 10:
-        return 5.0
+        return 7.5
     else:
-        return 2.5
+        return 5.0
 
 
 def get_adjusted_sl_distance_limit(leverage):
@@ -91,9 +91,12 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
 
     entry_px = hyperliquid_utils.get_entry_px(user_state, coin)
     leverage = hyperliquid_utils.get_leverage(user_state, coin)
+    margin_used = hyperliquid_utils.get_margin_used(user_state, coin)
+    pnl_percentage = unrealized_pnl / margin_used * 100.0
+
     new_sl_trigger_px = None
 
-    if unrealized_pnl > get_unrealized_pnl_limit(leverage):
+    if pnl_percentage > get_unrealized_pnl_limit(leverage):
         new_sl_trigger_px = determine_new_sl_trigger(is_long, entry_px, current_trigger_px, current_price)
 
     if new_sl_trigger_px is not None:
