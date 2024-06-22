@@ -20,13 +20,13 @@ async def get_orders_from_hyperliquid():
 
 def get_unrealized_pnl_limit(leverage):
     if leverage >= 30:
-        return 20.0
-    elif leverage >= 20:
         return 15.0
-    elif leverage >= 10:
+    elif leverage >= 20:
         return 10.0
-    else:
+    elif leverage >= 10:
         return 5.0
+    else:
+        return 2.5
 
 
 def get_adjusted_sl_distance_limit(leverage):
