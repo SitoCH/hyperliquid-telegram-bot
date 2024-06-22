@@ -11,7 +11,7 @@ from telegram_utils import telegram_utils
 
 from hyperliquid_utils import hyperliquid_utils
 
-SL_DISTANCE_LIMIT = 2.25
+SL_DISTANCE_LIMIT = 2.00
 
 
 async def get_orders_from_hyperliquid():
@@ -30,12 +30,12 @@ async def get_orders_from_hyperliquid():
 def get_unrealized_pnl_limit(user_state, coin):
     leverage = hyperliquid_utils.get_leverage(user_state, coin)
     if leverage >= 30:
-        return 15.0
+        return 20.0
     if leverage >= 20:
-        return 10.0
+        return 15.0
     if leverage >= 10:
-        return 5.0
-    return 2.5
+        return 10.0
+    return 5.0
 
 
 def get_adjusted_sl_distance_limit(user_state, coin):
@@ -105,6 +105,7 @@ async def adjust_sl_trigger(
     context, exchange, user_state, coin, current_price, sz_decimals,
     tp_raw_orders, is_long, sl_order, order_index
 ):
+
     current_trigger_px = float(sl_order['triggerPx'])
     unrealized_pnl = hyperliquid_utils.get_unrealized_pnl(user_state, coin)
 
@@ -119,10 +120,11 @@ async def adjust_sl_trigger(
         new_sl_trigger_px = determine_new_sl_trigger(is_long, entry_px, current_trigger_px, current_price)
 
     if new_sl_trigger_px is not None:
+        logger.info(f"Updating order due to suffcient PnL on {coin}, stop-loss at {current_trigger_px}, current price at {current_price}")
         await update_sl_and_tp_orders(
             context, exchange, coin, is_long, sl_order,
             new_sl_trigger_px, current_trigger_px, sz_decimals,
-            tp_raw_orders
+            tp_raw_orders, current_price, unrealized_pnl
         )
         return True
 
@@ -132,10 +134,11 @@ async def adjust_sl_trigger(
 
     if sl_order_distance > distance_limit:
         new_sl_trigger_px = calculate_new_trigger_price(is_long, current_price, distance_limit)
+        logger.info(f"Updating order due to suffcient SL distance on {coin}, stop-loss at {current_trigger_px}, current price at {current_price}")
         await update_sl_and_tp_orders(
             context, exchange, coin, is_long, sl_order,
             new_sl_trigger_px, current_trigger_px, sz_decimals,
-            tp_raw_orders
+            tp_raw_orders, current_price, unrealized_pnl
         )
         return True
 
@@ -166,9 +169,14 @@ def calculate_new_trigger_price(is_long, current_price, distance_limit):
 async def update_sl_and_tp_orders(
     context, exchange, coin, is_long, sl_order,
     new_sl_trigger_px, current_trigger_px, sz_decimals,
-    tp_raw_orders
+    tp_raw_orders, current_price, unrealized_pnl
 ):
-    message_lines = [f"<b>{coin}:</b>"]
+    message_lines = [
+        f"<b>{coin}:</b>",
+        f"Current price: {current_price}",
+        f"Unrealized PnL: {unrealized_pnl:,.2f} USDC",
+        f"Size: {sl_order['sz']}"
+    ]
     sz = round(float(sl_order['sz']), sz_decimals[coin])
 
     modify_sl_order(message_lines, exchange, coin, is_long, sl_order, new_sl_trigger_px, sz)
@@ -199,7 +207,7 @@ def modify_sl_order(message_lines, exchange, coin, is_long, sl_order, new_trigge
     stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "sl"}}
     order_result = exchange.modify_order(int(sl_order['oid']), coin, not is_long, sz, float(sl_order['limitPx']), stop_order_type, True)
     logger.info(order_result)
-    message_lines.append(f"Modified SL trigger from {sl_order['triggerPx']} to {new_trigger_px}")
+    message_lines.append(f"Modified stop-loss trigger from {sl_order['triggerPx']} to {new_trigger_px}")
 
 
 def modify_tp_order(message_lines, exchange, coin, is_long, order, sz, sl_delta):
@@ -216,7 +224,7 @@ def modify_tp_order(message_lines, exchange, coin, is_long, order, sz, sl_delta)
     stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "tp"}}
     order_result = exchange.modify_order(int(order['oid']), coin, not is_long, sz, new_limit_px, stop_order_type, True)
     logger.info(order_result)
-    message_lines.append(f"Modified TP trigger from {order['triggerPx']} to {new_trigger_px}")
+    message_lines.append(f"Modified take-profit trigger from {order['triggerPx']} to {new_trigger_px}")
 
 
 async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
