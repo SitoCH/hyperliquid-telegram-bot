@@ -101,8 +101,8 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
         await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, unrealized_pnl)
         return True
 
-    sl_already_updated_by_pnl = current_trigger_px < entry_px if is_long else current_trigger_px > entry_px
-    if not sl_already_updated_by_pnl:
+    sl_not_updated_by_pnl = current_trigger_px < entry_px if is_long else current_trigger_px > entry_px
+    if not sl_not_updated_by_pnl:
         return False
 
     sl_order_distance = calculate_sl_order_distance(current_trigger_px, current_price)
