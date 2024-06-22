@@ -134,30 +134,26 @@ class HyperliquidBot:
             reply_markup=telegram_utils.reply_markup,
         )
 
-    async def get_positions(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-
+    async def get_positions(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
+            all_mids = hyperliquid_utils.info.all_mids()
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-
             total_balance = float(user_state['marginSummary']['accountValue'])
+            available_balance = float(user_state['withdrawable'])
 
             message_lines = [
                 "<b>Perps positions:</b>",
                 f"Total balance: {total_balance:,.2f} USDC",
-                f"Available balance: {float(user_state['withdrawable']):,.2f} USDC",
+                f"Available balance: {available_balance:,.2f} USDC",
             ]
 
             tablefmt = simple_separated_format(' ')
-            if len(user_state["assetPositions"]) > 0:
-
+            if user_state["assetPositions"]:
                 total_pnl = sum(
                     float(asset_position['position']['unrealizedPnl'])
                     for asset_position in user_state["assetPositions"]
                 )
                 message_lines.append(f"Unrealized profit: {total_pnl:,.2f} USDC")
-
                 message_lines.append("Open positions:")
 
                 sorted_positions = sorted(
@@ -166,44 +162,101 @@ class HyperliquidBot:
                     reverse=True
                 )
 
-                table = tabulate(
-                    [
+                table_data = []
+                for asset_position in sorted_positions:
+                    table_data.append(
                         [
-                            f"{asset_position['position']['szi']}",
                             f"{asset_position['position']['coin']}",
-                            f"{float(asset_position['position']['positionValue']):,.2f}",
-                            f"{float(asset_position['position']['unrealizedPnl']):,.2f}"
+                            "",
+                            ""
                         ]
-                        for asset_position in sorted_positions
-                    ],
-                    headers=[
-                        "Size",
-                        "Coin",
-                        "Value ($)",
-                        "PnL ($)",
-                    ],
+                    )
+                    table_data.append(
+                        [
+                            "",
+                            "PnL",
+                            f"{float(asset_position['position']['unrealizedPnl']):,.2f}$",
+                            f"({float(asset_position['position']['returnOnEquity']) * 100.0:,.2f}%)"
+                        ]
+                    )
+                    table_data.append(
+                        [
+                            "",
+                            "Entry price",
+                            "",
+                            f"{asset_position['position']['entryPx']}"
+                        ]
+                    )
+                    table_data.append(
+                        [
+                            "",
+                            "Mid price",
+                            "",
+                            f"{all_mids[asset_position['position']['coin']]}"
+                        ]
+                    )
+                    table_data.append(
+                        [
+                            "",
+                            "Margin used",
+                            "",
+                            f"{float(asset_position['position']['marginUsed']):,.2f}$"
+                        ]
+                    )
+                    table_data.append(
+                        [
+                            "",
+                            "Leverage",
+                            "",
+                            f"{asset_position['position']['leverage']['value']}x"
+                        ]
+                    )
+                    table_data.append(
+                        [
+                            "",
+                            "Funding",
+                            "",
+                            f"{float(asset_position['position']['cumFunding']['sinceOpen']) * -1.0:,.2f}$"
+                        ]
+                    )
+                    table_data.append(
+                        [
+                            "",
+                            "Pos. value",
+                            "",
+                            f"{float(asset_position['position']['positionValue']):,.2f}$"
+                        ]
+                    )
+                    table_data.append(
+                        [
+                            "",
+                            "Size",
+                            "",
+                            f"{asset_position['position']['szi']}"
+                        ]
+                    )
+                table = tabulate(
+                    table_data,
+                    headers=["Coin:", " ", " ", " ", " "],
                     tablefmt=tablefmt,
-                    colalign=("right", "left", "right", "right")
+                    colalign=("left", "right", "right", "right")
                 )
 
                 message_lines.append(f"<pre>{table}</pre>")
 
             spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
-            if len(spot_user_state['balances']) > 0:
+            if spot_user_state['balances']:
                 message_lines.append("<b>Spot positions:</b>")
 
                 spot_table = tabulate(
                     [
                         [
                             f"{float(balance['total']):,.2f}",
-                            balance["coin"],
+                            balance["coin"]
                         ]
                         for balance in spot_user_state['balances']
                     ],
-                    headers=[
-                        "Total",
-                        "Coin"
-                    ],
+                    headers=["Total", "Coin"],
                     tablefmt=tablefmt,
                     colalign=("right", "left")
                 )

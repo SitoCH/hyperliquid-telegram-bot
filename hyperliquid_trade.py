@@ -118,7 +118,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
 
             await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, user_state)
 
-            await query.edit_message_text(text=f"Order executed for {sz} units on {selected_coin} ({leverage}x)")
+            await query.edit_message_text(text=f"Orders executed for {sz} units on {selected_coin} ({leverage}x)")
         else:
             await query.edit_message_text(text="Exchange is not enabled")
     except Exception as e:
