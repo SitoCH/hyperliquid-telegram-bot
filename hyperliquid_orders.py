@@ -128,6 +128,9 @@ async def adjust_sl_trigger(
         )
         return True
 
+    if current_trigger_px < entry_px:
+        return False
+
     # Adjust stop-loss based on distance
     sl_order_distance = calculate_sl_order_distance(current_trigger_px, current_price)
     distance_limit = get_adjusted_sl_distance_limit(user_state, coin) + order_index * 0.25
