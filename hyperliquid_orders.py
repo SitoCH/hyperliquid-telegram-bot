@@ -99,7 +99,7 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
 
     if new_sl_trigger_px is not None:
         logger.info(f"Updating order due to sufficient PnL on {coin}, stop-loss at {current_trigger_px}, current price at {current_price}")
-        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, unrealized_pnl)
+        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, return_on_equity)
         return True
 
     sl_not_updated_by_pnl = current_trigger_px < entry_px if is_long else current_trigger_px > entry_px
@@ -112,7 +112,7 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
     if sl_order_distance > distance_limit:
         new_sl_trigger_px = calculate_new_trigger_price(is_long, current_price, distance_limit)
         logger.info(f"Updating order due to sufficient SL distance on {coin}, stop-loss at {current_trigger_px}, current price at {current_price}")
-        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, unrealized_pnl)
+        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, return_on_equity)
         return True
 
     return False
@@ -139,11 +139,11 @@ def calculate_new_trigger_price(is_long, current_price, distance_limit):
         return round(current_price + current_price * (distance_limit - 0.10) / 100.0, 6)
 
 
-async def update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, unrealized_pnl):
+async def update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, return_on_equity):
     message_lines = [
         f"<b>{coin}:</b>",
         f"Current price: {current_price}",
-        f"Unrealized PnL: {unrealized_pnl:,.2f} USDC",
+        f"Return on equity: {return_on_equity:,.2f}%",
         f"Size: {sl_order['sz']}"
     ]
     sz = round(float(sl_order['sz']), sz_decimals[coin])
