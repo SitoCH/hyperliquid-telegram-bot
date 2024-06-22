@@ -18,7 +18,7 @@ async def get_orders_from_hyperliquid():
     return {coin: dict(order_types) for coin, order_types in sorted(grouped_data.items())}
 
 
-def get_unrealized_pnl_limit(leverage):
+def get_return_on_equity_limit(leverage):
     if leverage >= 30:
         return 15.0
     elif leverage >= 20:
@@ -84,19 +84,17 @@ def get_sl_tp_orders(order_types, mid):
 
 async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, sz_decimals, tp_raw_orders, is_long, sl_order, order_index):
     current_trigger_px = float(sl_order['triggerPx'])
-    unrealized_pnl = hyperliquid_utils.get_unrealized_pnl(user_state, coin)
+    return_on_equity = hyperliquid_utils.get_return_on_equity(user_state, coin) * 100.0
 
-    if unrealized_pnl <= 0.0:
+    if return_on_equity <= 0.0:
         return False
 
     entry_px = hyperliquid_utils.get_entry_px(user_state, coin)
     leverage = hyperliquid_utils.get_leverage(user_state, coin)
-    margin_used = hyperliquid_utils.get_margin_used(user_state, coin)
-    pnl_percentage = unrealized_pnl / margin_used * 100.0
 
     new_sl_trigger_px = None
 
-    if pnl_percentage > get_unrealized_pnl_limit(leverage):
+    if return_on_equity > get_return_on_equity_limit(leverage):
         new_sl_trigger_px = determine_new_sl_trigger(is_long, entry_px, current_trigger_px, current_price)
 
     if new_sl_trigger_px is not None:

@@ -52,17 +52,11 @@ class HyperliquidUtils:
                 return float(asset_position['position']['entryPx'])
         return 0.0
 
-    def get_unrealized_pnl(self, user_state, selected_coin) -> float:
+
+    def get_return_on_equity(self, user_state, selected_coin) -> float:
         for asset_position in user_state.get("assetPositions", []):
             if asset_position['position']['coin'] == selected_coin:
-                return float(asset_position['position']['unrealizedPnl'])
-        return 0.0
-
-
-    def get_margin_used(self, user_state, selected_coin) -> float:
-        for asset_position in user_state.get("assetPositions", []):
-            if asset_position['position']['coin'] == selected_coin:
-                return float(asset_position['position']['marginUsed'])
+                return float(asset_position['position']['returnOnEquity'])
         return 0.0
 
 
