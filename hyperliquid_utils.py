@@ -79,7 +79,7 @@ class HyperliquidUtils:
         if position:
             return int(position['leverage']['value'])
 
-        meta = self.hyperliquid_utils.info.meta()
+        meta = self.info.meta()
         asset_info = next(
             (info for info in meta.get("universe", []) if info["name"] == selected_coin),
             None
