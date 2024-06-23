@@ -54,6 +54,10 @@ class HyperliquidUtils:
             None
         )
 
+    def get_size(self, user_state, selected_coin) -> float:
+        position = self._get_asset_position(user_state, selected_coin)
+        return float(position['szi']) if position else 0.0
+
 
     def get_entry_px(self, user_state, selected_coin) -> float:
         position = self._get_asset_position(user_state, selected_coin)

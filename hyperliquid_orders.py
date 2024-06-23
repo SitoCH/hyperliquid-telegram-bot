@@ -59,7 +59,8 @@ async def update_open_orders(context: ContextTypes.DEFAULT_TYPE, send_message_on
             for coin, order_types in grouped_data.items():
                 logger.info(f"Verifying orders on {coin}")
                 mid = float(all_mids[coin])
-                is_long, sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, mid)
+                is_long = hyperliquid_utils.get_size(user_state, coin) > 0.0
+                sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, is_long)
 
                 for index, sl_order in enumerate(sl_raw_orders):
                     if await adjust_sl_trigger(context, exchange, user_state, coin, mid, sz_decimals, tp_raw_orders, is_long, sl_order, index):
@@ -75,13 +76,12 @@ async def update_open_orders(context: ContextTypes.DEFAULT_TYPE, send_message_on
         await context.bot.send_message(text=f"Failed to update orders: {str(e)}", chat_id=telegram_utils.telegram_chat_id)
 
 
-def get_sl_tp_orders(order_types, mid):
+def get_sl_tp_orders(order_types, is_long: bool):
     sl_raw_orders = order_types.get('Stop Market', [])
-    is_long = len(sl_raw_orders) > 0 and mid < float(sl_raw_orders[0]['triggerPx'])
     sl_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=is_long)
     tp_raw_orders = order_types.get('Take Profit Market', [])
     tp_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=is_long)
-    return is_long, sl_raw_orders, tp_raw_orders
+    return sl_raw_orders, tp_raw_orders
 
 
 async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, sz_decimals, tp_raw_orders, is_long, sl_order, order_index):
@@ -206,7 +206,8 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         for coin, order_types in grouped_data.items():
             message_lines.append(f"<b>{coin}</b>")
             mid = float(all_mids[coin])
-            is_long, sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, mid)
+            is_long = hyperliquid_utils.get_size(user_state, coin) > 0.0
+            sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, is_long)
             message_lines.append(f"Mode: {'long' if is_long else 'short'}")
             message_lines.append(f"Leverage: {hyperliquid_utils.get_leverage(user_state, coin)}x")
 
