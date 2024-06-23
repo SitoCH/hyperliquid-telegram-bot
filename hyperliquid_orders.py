@@ -115,9 +115,9 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
     else:
         logger.info(f"Return on equity too low to update order based on PnL: current {fmt(return_on_equity)}%, target {fmt(return_on_equity_limit)}%")
 
-    sl_not_updated_by_pnl = current_trigger_px < entry_px if is_long else current_trigger_px > entry_px
-    if not sl_not_updated_by_pnl:
-        logger.info("Distance limit adjustment ignored due to missing previous PnL adjustment")
+    sl_already_updated_by_pnl = entry_px < current_trigger_px if is_long else entry_px > current_trigger_px
+    if not sl_already_updated_by_pnl:
+        logger.info(f"Distance limit adjustment ignored due to missing previous PnL adjustment: entry price {entry_px}, current trigger price {current_trigger_px}")
         return False
 
     sl_order_distance = calculate_sl_order_distance(current_trigger_px, current_price)
