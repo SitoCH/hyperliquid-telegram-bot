@@ -6,7 +6,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
-from utils import fmt
+from utils import fmt, px_round
 
 SL_DISTANCE_LIMIT = 2.00
 
@@ -141,7 +141,7 @@ def determine_new_sl_trigger(is_long, entry_px, current_trigger_px, current_pric
         new_px = entry_px - (entry_px - current_price) / 4.0
     else:
         return None
-    return round(new_px, 6)
+    return new_px
 
 
 def calculate_sl_order_distance(current_trigger_px, current_price):
@@ -180,7 +180,7 @@ def modify_matching_tp_order(exchange, coin, tp_raw_orders, is_long, sl_order, s
 
 
 def modify_sl_order(message_lines, exchange, coin, is_long, sl_order, new_trigger_px, sz):
-    stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "sl"}}
+    stop_order_type = {"trigger": {"triggerPx": px_round(new_trigger_px), "isMarket": True, "tpsl": "sl"}}
     order_result = exchange.modify_order(int(sl_order['oid']), coin, not is_long, sz, float(sl_order['limitPx']), stop_order_type, True)
     logger.info(order_result)
     message_lines.append(f"Modified stop-loss trigger from {sl_order['triggerPx']} to {new_trigger_px}")
@@ -190,8 +190,8 @@ def modify_tp_order(message_lines, exchange, coin, is_long, order, sz, sl_delta)
     new_delta = sl_delta / 5.0
     new_trigger_px = round(float(order['triggerPx']) + (new_delta if is_long else -new_delta), 6)
     new_limit_px = round(float(order['limitPx']) + (new_delta if is_long else -new_delta), 6)
-    stop_order_type = {"trigger": {"triggerPx": new_trigger_px, "isMarket": True, "tpsl": "tp"}}
-    order_result = exchange.modify_order(int(order['oid']), coin, not is_long, sz, new_limit_px, stop_order_type, True)
+    stop_order_type = {"trigger": {"triggerPx": px_round(new_trigger_px), "isMarket": True, "tpsl": "tp"}}
+    order_result = exchange.modify_order(int(order['oid']), coin, not is_long, sz, px_round(new_limit_px), stop_order_type, True)
     logger.info(order_result)
     message_lines.append(f"Modified take-profit trigger from {order['triggerPx']} to {new_trigger_px}")
 

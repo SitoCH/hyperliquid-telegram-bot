@@ -8,3 +8,7 @@ OPERATION_CANCELLED = 'Operation cancelled'
 
 def fmt(value: float) -> str:
     return format(value, ',.2f')
+
+
+def px_round(value: float) -> str:
+    return round(float(f"{value:.5g}"), 6)
