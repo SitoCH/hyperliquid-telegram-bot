@@ -212,11 +212,11 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             message_lines.append(f"Leverage: {hyperliquid_utils.get_leverage(user_state, coin)}x")
 
             tp_orders = [
-                [order['sz'], order['triggerPx'], f"{abs((float(order['triggerPx']) / mid - 1) * 100):.2f}%"]
+                [order['sz'], order['triggerPx'], f"{fmt(abs((float(order['triggerPx']) / mid - 1) * 100))}%"]
                 for order in tp_raw_orders
             ]
             sl_orders = [
-                [order['sz'], order['triggerPx'], f"{abs(((1 - float(order['triggerPx']) / mid) * 100)):.2f}%"]
+                [order['sz'], order['triggerPx'], f"{fmt(abs(((1 - float(order['triggerPx']) / mid) * 100)))}%"]
                 for order in sl_raw_orders
             ]
 

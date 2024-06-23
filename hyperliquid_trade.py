@@ -5,7 +5,7 @@ from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
 from hyperliquid.utils.constants import MAINNET_API_URL
 from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
-from utils import OPERATION_CANCELLED, px_round
+from utils import OPERATION_CANCELLED, fmt, px_round
 
 EXIT_CHOOSING, SELECTING_COIN, SELECTING_AMOUNT = range(3)
 
@@ -56,13 +56,13 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
     context.user_data["selected_coin"] = coin
 
     keyboard = [
-        [InlineKeyboardButton(f"{amount}% (~{withdrawable * amount / 100.0:,.2f} USDC)", callback_data=str(amount))]
+        [InlineKeyboardButton(f"{amount}% (~{fmt(withdrawable * amount / 100.0)} USDC)", callback_data=str(amount))]
         for amount in [10, 25, 40, 50, 60, 75, 90, 100]
     ]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
-        f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']} ({withdrawable:,.2f} USDC available):", 
+        f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']} ({fmt(withdrawable)} USDC available):", 
         reply_markup=reply_markup
     )
 

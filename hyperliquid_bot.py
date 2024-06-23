@@ -16,7 +16,7 @@ from hyperliquid_orders import get_open_orders, update_open_orders, update_order
 from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, enter_long, enter_short, exit_all_positions, selected_amount, selected_coin, exit_position, exit_selected_coin, trade_cancel
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import telegram_utils
-from utils import exchange_enabled
+from utils import exchange_enabled, fmt
 
 
 class HyperliquidBot:
@@ -141,20 +141,20 @@ class HyperliquidBot:
             total_balance = float(user_state['marginSummary']['accountValue'])
             available_balance = float(user_state['withdrawable'])
 
-            message_lines = [
+            perp_message_lines = [
                 "<b>Perps positions:</b>",
-                f"Total balance: {total_balance:,.2f} USDC",
-                f"Available balance: {available_balance:,.2f} USDC",
+                f"Total balance: {fmt(total_balance)} USDC",
+                f"Available balance: {fmt(available_balance)} USDC",
             ]
 
-            tablefmt = simple_separated_format(' ')
+            tablefmt = simple_separated_format('  ')
             if user_state["assetPositions"]:
                 total_pnl = sum(
                     float(asset_position['position']['unrealizedPnl'])
                     for asset_position in user_state["assetPositions"]
                 )
-                message_lines.append(f"Unrealized profit: {total_pnl:,.2f} USDC")
-                message_lines.append("Open positions:")
+                perp_message_lines.append(f"Unrealized profit: {fmt(total_pnl)} USDC")
+                await update.message.reply_text(text='\n'.join(perp_message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
                 sorted_positions = sorted(
                     user_state["assetPositions"],
@@ -162,26 +162,20 @@ class HyperliquidBot:
                     reverse=True
                 )
 
-                table_data = []
                 for asset_position in sorted_positions:
+                    coin_message_lines = [
+                        f"<b>{asset_position['position']['coin']}:</b>"
+                    ]
+                    table_data = []
                     table_data.append(
                         [
-                            f"{asset_position['position']['coin']}",
-                            "",
-                            ""
-                        ]
-                    )
-                    table_data.append(
-                        [
-                            "",
                             "PnL",
-                            f"{float(asset_position['position']['unrealizedPnl']):,.2f}$",
-                            f"({float(asset_position['position']['returnOnEquity']) * 100.0:,.2f}%)"
+                            f"{fmt(float(asset_position['position']['unrealizedPnl']))}$",
+                            f"({fmt(float(asset_position['position']['returnOnEquity']) * 100.0)}%)"
                         ]
                     )
                     table_data.append(
                         [
-                            "",
                             "Entry price",
                             "",
                             f"{asset_position['position']['entryPx']}"
@@ -189,7 +183,6 @@ class HyperliquidBot:
                     )
                     table_data.append(
                         [
-                            "",
                             "Mid price",
                             "",
                             f"{all_mids[asset_position['position']['coin']]}"
@@ -197,15 +190,13 @@ class HyperliquidBot:
                     )
                     table_data.append(
                         [
-                            "",
                             "Margin used",
                             "",
-                            f"{float(asset_position['position']['marginUsed']):,.2f}$"
+                            f"{fmt(float(asset_position['position']['marginUsed']))}$"
                         ]
                     )
                     table_data.append(
                         [
-                            "",
                             "Leverage",
                             "",
                             f"{asset_position['position']['leverage']['value']}x"
@@ -213,45 +204,48 @@ class HyperliquidBot:
                     )
                     table_data.append(
                         [
-                            "",
                             "Funding",
                             "",
-                            f"{float(asset_position['position']['cumFunding']['sinceOpen']) * -1.0:,.2f}$"
+                            f"{fmt(float(asset_position['position']['cumFunding']['sinceOpen']) * -1.0)}$"
                         ]
                     )
                     table_data.append(
                         [
-                            "",
                             "Pos. value",
                             "",
-                            f"{float(asset_position['position']['positionValue']):,.2f}$"
+                            f"{fmt(float(asset_position['position']['positionValue']))}$"
                         ]
                     )
                     table_data.append(
                         [
-                            "",
                             "Size",
                             "",
                             f"{asset_position['position']['szi']}"
                         ]
                     )
-                table = tabulate(
-                    table_data,
-                    headers=["Coin:", " ", " ", " ", " "],
-                    tablefmt=tablefmt,
-                    colalign=("left", "right", "right", "right")
-                )
+                    table = tabulate(
+                        table_data,
+                        headers=[" ", " ", " ", " "],
+                        tablefmt=tablefmt,
+                        colalign=("right", "right", "right")
+                    )
 
-                message_lines.append(f"<pre>{table}</pre>")
+                    coin_message_lines.append(f"<pre>{table}</pre>")
+                    await update.message.reply_text(text='\n'.join(coin_message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+            else:
+                await update.message.reply_text(text='\n'.join(perp_message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+
+
 
             spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
             if spot_user_state['balances']:
+                message_lines = []
                 message_lines.append("<b>Spot positions:</b>")
 
                 spot_table = tabulate(
                     [
                         [
-                            f"{float(balance['total']):,.2f}",
+                            f"{fmt(float(balance['total']))}",
                             balance["coin"]
                         ]
                         for balance in spot_user_state['balances']
@@ -262,13 +256,10 @@ class HyperliquidBot:
                 )
 
                 message_lines.append(f"<pre>{spot_table}</pre>")
-
-            message = '\n'.join(message_lines)
+                await update.message.reply_text(text='\n'.join(message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
         except Exception as e:
-            message = f"Failed to fetch positions: {str(e)}"
-
-        await update.message.reply_text(text=message, parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+            await update.message.reply_text(text=f"Failed to fetch positions: {str(e)}", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
 
 if __name__ == "__main__":
