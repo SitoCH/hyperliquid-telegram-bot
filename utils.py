@@ -4,3 +4,7 @@ exchange_enabled = True if os.environ.get("HYPERLIQUID_TELEGRAM_BOT_KEY_FILE") i
 
 
 OPERATION_CANCELLED = 'Operation cancelled'
+
+
+def fmt(value: float) -> str:
+    return format(value, ',.2f')

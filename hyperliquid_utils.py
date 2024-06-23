@@ -46,31 +46,41 @@ class HyperliquidUtils:
             sz_decimals[asset_info["name"]] = asset_info["szDecimals"]
         return sz_decimals
 
+
+    def _get_asset_position(self, user_state, selected_coin):
+        return next(
+            (asset_position['position'] for asset_position in user_state.get("assetPositions", [])
+             if asset_position['position']['coin'] == selected_coin), 
+            None
+        )
+
+
     def get_entry_px(self, user_state, selected_coin) -> float:
-        for asset_position in user_state.get("assetPositions", []):
-            if asset_position['position']['coin'] == selected_coin:
-                return float(asset_position['position']['entryPx'])
-        return 0.0
+        position = self._get_asset_position(user_state, selected_coin)
+        return float(position['entryPx']) if position else 0.0
+
+
+    def get_unrealized_pnl(self, user_state, selected_coin) -> float:
+        position = self._get_asset_position(user_state, selected_coin)
+        return float(position['unrealizedPnl']) if position else 0.0
 
 
     def get_return_on_equity(self, user_state, selected_coin) -> float:
-        for asset_position in user_state.get("assetPositions", []):
-            if asset_position['position']['coin'] == selected_coin:
-                return float(asset_position['position']['returnOnEquity'])
-        return 0.0
+        position = self._get_asset_position(user_state, selected_coin)
+        return float(position['returnOnEquity']) if position else 0.0
 
 
     def get_leverage(self, user_state, selected_coin) -> int:
-        for asset_position in user_state.get("assetPositions", []):
-            if asset_position['position']['coin'] == selected_coin:
-                return int(asset_position['position']['leverage']['value'])
+        position = self._get_asset_position(user_state, selected_coin)
+        if position:
+            return int(position['leverage']['value'])
 
-        meta = hyperliquid_utils.info.meta()
-        for asset_info in meta.get("universe", []):
-            if asset_info["name"] == selected_coin:
-                return min(int(asset_info["maxLeverage"]), 40)
-
-        return 5
+        meta = self.hyperliquid_utils.info.meta()
+        asset_info = next(
+            (info for info in meta.get("universe", []) if info["name"] == selected_coin),
+            None
+        )
+        return min(int(asset_info["maxLeverage"]), 40) if asset_info else 5
 
 
 

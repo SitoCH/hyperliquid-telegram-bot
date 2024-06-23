@@ -6,6 +6,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
+from utils import fmt
 
 SL_DISTANCE_LIMIT = 2.00
 
@@ -56,6 +57,7 @@ async def update_open_orders(context: ContextTypes.DEFAULT_TYPE, send_message_on
             sz_decimals = hyperliquid_utils.get_sz_decimals()
 
             for coin, order_types in grouped_data.items():
+                logger.info(f"Verifying orders on {coin}")
                 mid = float(all_mids[coin])
                 is_long, sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, mid)
 
@@ -85,8 +87,15 @@ def get_sl_tp_orders(order_types, mid):
 async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, sz_decimals, tp_raw_orders, is_long, sl_order, order_index):
     current_trigger_px = float(sl_order['triggerPx'])
     return_on_equity = hyperliquid_utils.get_return_on_equity(user_state, coin) * 100.0
+    unrealized_pnl = hyperliquid_utils.get_unrealized_pnl(user_state, coin)
+    logger.info(f"Verifying order {sl_order['oid']} on {coin}, unrealized PnL {fmt(unrealized_pnl)}$, RoE {fmt(return_on_equity)}%")
 
     if return_on_equity <= 0.0:
+        logger.info("RoE too low to update order")
+        return False
+
+    if unrealized_pnl <= 1.25:
+        logger.info("Unrealized PnL too low to update order")
         return False
 
     entry_px = hyperliquid_utils.get_entry_px(user_state, coin)
@@ -94,16 +103,21 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
 
     new_sl_trigger_px = None
 
-    if return_on_equity > get_return_on_equity_limit(leverage):
+    return_on_equity_limit = get_return_on_equity_limit(leverage)
+    if return_on_equity > return_on_equity_limit:
         new_sl_trigger_px = determine_new_sl_trigger(is_long, entry_px, current_trigger_px, current_price)
 
     if new_sl_trigger_px is not None:
         logger.info(f"Updating order due to sufficient PnL on {coin}, stop-loss at {current_trigger_px}, current price at {current_price}")
-        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, return_on_equity)
+        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, 
+                                      return_on_equity, unrealized_pnl)
         return True
+    else:
+        logger.info(f"Return on equity too low to update order based on PnL: current {fmt(return_on_equity)}%, target {fmt(return_on_equity_limit)}%")
 
     sl_not_updated_by_pnl = current_trigger_px < entry_px if is_long else current_trigger_px > entry_px
     if not sl_not_updated_by_pnl:
+        logger.info("Distance limit adjustment ignored due to missing previous PnL adjustment")
         return False
 
     sl_order_distance = calculate_sl_order_distance(current_trigger_px, current_price)
@@ -112,9 +126,11 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
     if sl_order_distance > distance_limit:
         new_sl_trigger_px = calculate_new_trigger_price(is_long, current_price, distance_limit)
         logger.info(f"Updating order due to sufficient SL distance on {coin}, stop-loss at {current_trigger_px}, current price at {current_price}")
-        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, return_on_equity)
+        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, 
+                                      return_on_equity, unrealized_pnl)
         return True
 
+    logger.info("No valid conditions have been found to update the order")
     return False
 
 
@@ -139,11 +155,13 @@ def calculate_new_trigger_price(is_long, current_price, distance_limit):
         return round(current_price + current_price * (distance_limit - 0.10) / 100.0, 6)
 
 
-async def update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, return_on_equity):
+async def update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price,
+                                  return_on_equity, unrealized_pnl):
     message_lines = [
         f"<b>{coin}:</b>",
         f"Current price: {current_price}",
-        f"Return on equity: {return_on_equity:,.2f}%",
+        f"Unrealized PnL: {fmt(unrealized_pnl)} USDC",
+        f"Return on equity: {fmt(return_on_equity)}%",
         f"Size: {sl_order['sz']}"
     ]
     sz = round(float(sl_order['sz']), sz_decimals[coin])
