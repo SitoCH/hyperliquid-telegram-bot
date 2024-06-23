@@ -108,7 +108,7 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
         new_sl_trigger_px = determine_new_sl_trigger(is_long, entry_px, current_trigger_px, current_price)
 
     if new_sl_trigger_px is not None:
-        logger.info(f"Updating order due to sufficient PnL on {coin}, stop-loss at {current_trigger_px}, current price at {current_price}")
+        logger.info(f"Updating order due to sufficient PnL on {coin}, stop-loss at {current_trigger_px}, entry price at {entry_px}, current price at {current_price}")
         await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, 
                                       return_on_equity, unrealized_pnl)
         return True
