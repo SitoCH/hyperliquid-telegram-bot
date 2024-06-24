@@ -135,7 +135,7 @@ async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_lon
     if liquidation_px > 0.0:
         sl_trigger_px = liquidation_px * 1.005 if is_long else liquidation_px * 0.995
     else:
-        sl_trigger_px = mid * 0.97 if is_long else mid * 1.03
+        sl_trigger_px = mid * 0.98 if is_long else mid * 1.02
 
     sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
     sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
