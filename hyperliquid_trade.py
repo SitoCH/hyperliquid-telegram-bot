@@ -133,7 +133,7 @@ async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_lon
     liquidation_px = get_liquidation_px(user_state, selected_coin)
 
     if liquidation_px > 0.0:
-        sl_trigger_px = liquidation_px * 1.004 if is_long else liquidation_px * 0.996
+        sl_trigger_px = liquidation_px * 1.005 if is_long else liquidation_px * 0.995
     else:
         sl_trigger_px = mid * 0.97 if is_long else mid * 1.03
 
