@@ -8,7 +8,8 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import fmt, px_round
 
-SL_DISTANCE_LIMIT = 2.00
+SL_DISTANCE_LIMIT = 1.75
+SL_MINIMUM_DISTANCE_LIMIT = 0.75
 
 
 async def get_orders_from_hyperliquid():
@@ -21,7 +22,7 @@ async def get_orders_from_hyperliquid():
 
 def get_return_on_equity_limit(leverage):
     if leverage >= 30:
-        return 15.0
+        return 12.5
     elif leverage >= 20:
         return 10.0
     elif leverage >= 10:
@@ -32,11 +33,11 @@ def get_return_on_equity_limit(leverage):
 
 def get_adjusted_sl_distance_limit(leverage):
     if leverage >= 30:
-        return max(SL_DISTANCE_LIMIT - 1.0, 1.0)
+        return max(SL_DISTANCE_LIMIT - 1.0, SL_MINIMUM_DISTANCE_LIMIT)
     elif leverage >= 20:
-        return max(SL_DISTANCE_LIMIT - 0.75, 1.0)
+        return max(SL_DISTANCE_LIMIT - 0.75, SL_MINIMUM_DISTANCE_LIMIT)
     elif leverage >= 10:
-        return max(SL_DISTANCE_LIMIT - 0.50, 1.0)
+        return max(SL_DISTANCE_LIMIT - 0.50, SL_MINIMUM_DISTANCE_LIMIT)
     else:
         return SL_DISTANCE_LIMIT
 
@@ -109,7 +110,7 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
 
     if new_sl_trigger_px is not None:
         logger.info(f"Updating order due to sufficient PnL on {coin}, stop-loss at {current_trigger_px}, entry price at {entry_px}, current price at {current_price}")
-        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price, 
+        await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price,
                                       return_on_equity, unrealized_pnl)
         return True
     else:
@@ -121,7 +122,7 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
         return False
 
     sl_order_distance = calculate_sl_order_distance(current_trigger_px, current_price)
-    distance_limit = get_adjusted_sl_distance_limit(leverage) + order_index * 0.25
+    distance_limit = get_adjusted_sl_distance_limit(leverage) + order_index * 0.1
 
     if sl_order_distance > distance_limit:
         new_sl_trigger_px = calculate_new_trigger_price(is_long, current_price, distance_limit)
@@ -150,9 +151,9 @@ def calculate_sl_order_distance(current_trigger_px, current_price):
 
 def calculate_new_trigger_price(is_long, current_price, distance_limit):
     if is_long:
-        return round(current_price - current_price * (distance_limit - 0.10) / 100.0, 6)
+        return round(current_price - current_price * (distance_limit - 0.05) / 100.0, 6)
     else:
-        return round(current_price + current_price * (distance_limit - 0.10) / 100.0, 6)
+        return round(current_price + current_price * (distance_limit - 0.05) / 100.0, 6)
 
 
 async def update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price,
