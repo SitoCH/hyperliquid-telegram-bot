@@ -73,7 +73,7 @@ def get_liquidation_px(user_state, selected_coin) -> float:
     for asset_position in user_state.get("assetPositions", []):
         if asset_position['position']['coin'] == selected_coin:
             return float(asset_position['position']['liquidationPx'])
-    return 0
+    return 0.0
 
 
 async def selected_amount(update: Update, context: CallbackContext) -> int:
@@ -116,7 +116,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
             open_result = exchange.market_open(selected_coin, is_long, sz)
             logger.info(open_result)
 
-            await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, user_state)
+            await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid)
 
             await query.edit_message_text(text=f"Orders executed for {sz} units on {selected_coin} ({leverage}x)")
         else:
@@ -128,10 +128,11 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, user_state):
+async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid):
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     liquidation_px = get_liquidation_px(user_state, selected_coin)
 
-    if liquidation_px > 0:
+    if liquidation_px > 0.0:
         sl_trigger_px = liquidation_px * 1.004 if is_long else liquidation_px * 0.996
     else:
         sl_trigger_px = mid * 0.97 if is_long else mid * 1.03
