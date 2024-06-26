@@ -8,8 +8,8 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import fmt, px_round
 
-SL_DISTANCE_LIMIT = 2.25
-SL_MINIMUM_DISTANCE_LIMIT = 1.00
+SL_DISTANCE_LIMIT = 1.75
+SL_MINIMUM_DISTANCE_LIMIT = 0.75
 
 
 async def get_orders_from_hyperliquid():
@@ -22,13 +22,13 @@ async def get_orders_from_hyperliquid():
 
 def get_return_on_equity_limit(leverage):
     if leverage >= 30:
-        return 17.5
-    elif leverage >= 20:
         return 15.0
-    elif leverage >= 10:
+    elif leverage >= 20:
         return 12.5
-    else:
+    elif leverage >= 10:
         return 10.0
+    else:
+        return 7.5
 
 
 def get_adjusted_sl_distance_limit(leverage):
@@ -95,7 +95,7 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
         logger.info("RoE too low to update order")
         return False
 
-    if unrealized_pnl <= 5.0:
+    if unrealized_pnl <= 2.5:
         logger.info("Unrealized PnL too low to update order")
         return False
 
@@ -188,7 +188,7 @@ def modify_sl_order(message_lines, exchange, coin, is_long, sl_order, new_trigge
 
 
 def modify_tp_order(message_lines, exchange, coin, is_long, order, sz, sl_delta):
-    new_delta = sl_delta / 5.0
+    new_delta = sl_delta / 4.0
     new_trigger_px = round(float(order['triggerPx']) + (new_delta if is_long else -new_delta), 6)
     new_limit_px = round(float(order['limitPx']) + (new_delta if is_long else -new_delta), 6)
     stop_order_type = {"trigger": {"triggerPx": px_round(new_trigger_px), "isMarket": True, "tpsl": "tp"}}
