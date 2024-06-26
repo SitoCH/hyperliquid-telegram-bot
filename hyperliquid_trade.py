@@ -142,7 +142,7 @@ async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_lon
     sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
     logger.info(sl_order_result)
 
-    tp_trigger_px = mid * 1.0125 if is_long else mid * 0.9875
+    tp_trigger_px = mid * 1.015 if is_long else mid * 0.985
     tp_limit_px = tp_trigger_px * 1.02 if is_long else tp_trigger_px * 0.98
     tp_order_type = {"trigger": {"triggerPx": px_round(tp_trigger_px), "isMarket": True, "tpsl": "tp"}}
     tp_order_result = exchange.order(selected_coin, not is_long, sz, px_round(tp_limit_px), tp_order_type, reduce_only=True)
