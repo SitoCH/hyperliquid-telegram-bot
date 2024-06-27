@@ -8,8 +8,8 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import fmt, px_round
 
-SL_DISTANCE_LIMIT = 1.75
-SL_MINIMUM_DISTANCE_LIMIT = 0.75
+SL_DISTANCE_LIMIT = 1.50
+SL_MINIMUM_DISTANCE_LIMIT = 0.50
 
 
 async def get_orders_from_hyperliquid():
@@ -24,11 +24,11 @@ def get_return_on_equity_limit(leverage):
     if leverage >= 30:
         return 15.0
     elif leverage >= 20:
-        return 12.5
-    elif leverage >= 10:
         return 10.0
-    else:
+    elif leverage >= 10:
         return 7.5
+    else:
+        return 5.0
 
 
 def get_adjusted_sl_distance_limit(leverage):
@@ -113,8 +113,6 @@ async def adjust_sl_trigger(context, exchange, user_state, coin, current_price, 
         await update_sl_and_tp_orders(context, exchange, coin, is_long, sl_order, new_sl_trigger_px, current_trigger_px, sz_decimals, tp_raw_orders, current_price,
                                       return_on_equity, unrealized_pnl)
         return True
-    else:
-        logger.info(f"Return on equity too low to update order based on PnL: current {fmt(return_on_equity)}%, target {fmt(return_on_equity_limit)}%")
 
     sl_already_updated_by_pnl = entry_px < current_trigger_px if is_long else entry_px > current_trigger_px
     if not sl_already_updated_by_pnl:
