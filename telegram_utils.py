@@ -14,7 +14,7 @@ from telegram.ext._utils.types import CCT, JobCallback
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
-from utils import exchange_enabled
+from utils import exchange_enabled, update_orders_enabled
 
 
 filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
@@ -27,8 +27,9 @@ class TelegramUtils:
     reply_markup = ReplyKeyboardMarkup(
         [
             [KeyboardButton("/positions"), KeyboardButton("/orders")],
-            [KeyboardButton("/long"), KeyboardButton("/short"), KeyboardButton("/exit")] if exchange_enabled else [],
-            [KeyboardButton(f"/{exit_all_command}"), KeyboardButton("/update_orders")] if exchange_enabled else []
+            [KeyboardButton("/long"), KeyboardButton("/short")] if exchange_enabled else [],
+            [KeyboardButton(f"/{exit_all_command}"), KeyboardButton("/exit")] if exchange_enabled else [],
+            [KeyboardButton("/update_orders")] if exchange_enabled and update_orders_enabled else []
         ], resize_keyboard=True
     )
 
