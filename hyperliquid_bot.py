@@ -239,20 +239,31 @@ class HyperliquidBot:
 
             spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
             if spot_user_state['balances']:
+                spot_meta = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
+                tokens_data = spot_meta[0]["tokens"]
+                market_data = spot_meta[1]
+                token_mid_price_map = {}
+                for token in tokens_data:
+                    token_name = token["name"]
+                    index = token["index"]
+                    if 0 <= index < len(market_data):
+                        token_mid_price_map[token_name] = float(market_data[index - 1]["midPx"])
                 message_lines = []
                 message_lines.append("<b>Spot positions:</b>")
 
                 spot_table = tabulate(
                     [
                         [
+                            balance["coin"],
                             f"{fmt(float(balance['total']))}",
-                            balance["coin"]
+                            f"{fmt(token_mid_price_map[balance['coin']] * float(balance['total']))}$",
                         ]
                         for balance in spot_user_state['balances']
+                        if token_mid_price_map[balance["coin"]] * float(balance['total']) > 1.0
                     ],
-                    headers=["Total", "Coin"],
+                    headers=["Coin", "Balance", "Pos. value"],
                     tablefmt=tablefmt,
-                    colalign=("right", "left")
+                    colalign=("left", "right", "right")
                 )
 
                 message_lines.append(f"<pre>{spot_table}</pre>")
