@@ -84,7 +84,13 @@ class HyperliquidUtils:
             (info for info in meta.get("universe", []) if info["name"] == selected_coin),
             None
         )
-        return min(int(asset_info["maxLeverage"]), 40) if asset_info else 5
+        if asset_info:
+            max_leverage = int(asset_info["maxLeverage"])
+            if max_leverage > 20:
+                return 15
+            if max_leverage > 10:
+                return 10
+        return 5
 
 
 
