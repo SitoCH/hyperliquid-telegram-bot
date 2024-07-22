@@ -210,6 +210,7 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             message_lines.append(f"Mode: {'long' if is_long else 'short'}")
             message_lines.append(f"Leverage: {hyperliquid_utils.get_leverage(user_state, coin)}x")
 
+
             tp_orders = [
                 [order['sz'], order['triggerPx'], f"{fmt(abs((float(order['triggerPx']) / mid - 1) * 100))}%"]
                 for order in tp_raw_orders
@@ -220,6 +221,33 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             ]
 
             table_orders = tp_orders + [["Current", all_mids[coin], ""]] + sl_orders
+
+            entry_px = hyperliquid_utils.get_entry_px_str(user_state, coin)
+            entry_order = ["Entry", entry_px, ""]
+            inserted = False
+            
+            for i in range(len(table_orders)):
+                if float(entry_px) > float(table_orders[i][1]) if is_long else float(entry_px) < float(table_orders[i][1]):
+                    table_orders.insert(i, entry_order)
+                    inserted = True
+                    break
+            
+            if not inserted:
+                table_orders.append(entry_order)
+
+            liquidation_px = hyperliquid_utils.get_liquidation_px_str(user_state, coin)
+            liq_order = ["Liq.", liquidation_px, ""]
+            inserted = False
+            
+            for i in range(len(table_orders)):
+                if float(liquidation_px) > float(table_orders[i][1]) if is_long else float(liquidation_px) < float(table_orders[i][1]):
+                    table_orders.insert(i, liq_order)
+                    inserted = True
+                    break
+            
+            if not inserted:
+                table_orders.append(liq_order)
+
             if not is_long:
                 table_orders.reverse()
 
