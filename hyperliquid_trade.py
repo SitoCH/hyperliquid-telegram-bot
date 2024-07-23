@@ -57,7 +57,7 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
 
     keyboard = [
         [InlineKeyboardButton(f"{amount}% (~{fmt(withdrawable * amount / 100.0)} USDC)", callback_data=str(amount))]
-        for amount in [10, 25, 40, 50, 60, 75, 90, 100]
+        for amount in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     ]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
