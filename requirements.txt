@@ -1,3 +1,5 @@
 python-telegram-bot[job-queue]>=21.1.1
 hyperliquid-python-sdk>=0.5.0
 tabulate>=0.9.0
+pandas>=2.2.2
+ta>=0.11.0

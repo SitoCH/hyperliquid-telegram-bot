@@ -62,7 +62,7 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
-        f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']} ({fmt(withdrawable)} USDC available):", 
+        f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']} ({fmt(withdrawable)} USDC available):",
         reply_markup=reply_markup
     )
 
