@@ -210,43 +210,16 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             message_lines.append(f"Mode: {'long' if is_long else 'short'}")
             message_lines.append(f"Leverage: {hyperliquid_utils.get_leverage(user_state, coin)}x")
 
-
-            tp_orders = [
-                [order['sz'], order['triggerPx'], f"{fmt(abs((float(order['triggerPx']) / mid - 1) * 100))}%"]
-                for order in tp_raw_orders
-            ]
-            sl_orders = [
-                [order['sz'], order['triggerPx'], f"{fmt(abs(((1 - float(order['triggerPx']) / mid) * 100)))}%"]
-                for order in sl_raw_orders
-            ]
+            tp_orders = format_orders(tp_raw_orders, mid, percentage_format=abs)
+            sl_orders = format_orders(sl_raw_orders, mid, percentage_format=lambda x: abs(1 - x) * 100)
 
             table_orders = tp_orders + [["Current", all_mids[coin], ""]] + sl_orders
 
             entry_px = hyperliquid_utils.get_entry_px_str(user_state, coin)
-            entry_order = ["Entry", entry_px, ""]
-            inserted = False
-            
-            for i in range(len(table_orders)):
-                if float(entry_px) > float(table_orders[i][1]) if is_long else float(entry_px) < float(table_orders[i][1]):
-                    table_orders.insert(i, entry_order)
-                    inserted = True
-                    break
-            
-            if not inserted:
-                table_orders.append(entry_order)
-
             liquidation_px = hyperliquid_utils.get_liquidation_px_str(user_state, coin)
-            liq_order = ["Liq.", liquidation_px, ""]
-            inserted = False
-            
-            for i in range(len(table_orders)):
-                if float(liquidation_px) > float(table_orders[i][1]) if is_long else float(liquidation_px) < float(table_orders[i][1]):
-                    table_orders.insert(i, liq_order)
-                    inserted = True
-                    break
-            
-            if not inserted:
-                table_orders.append(liq_order)
+
+            table_orders = insert_order(table_orders, ["Entry", entry_px, ""], is_long)
+            table_orders = insert_order(table_orders, ["Liq.", liquidation_px, ""], is_long)
 
             if not is_long:
                 table_orders.reverse()
@@ -262,7 +235,38 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if not message_lines:
             message_lines.append("No open orders")
 
-        await update.message.reply_text(text='\n'.join(message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+        await update.message.reply_text(
+            text='\n'.join(message_lines),
+            parse_mode=ParseMode.HTML,
+            reply_markup=telegram_utils.reply_markup
+        )
 
     except Exception as e:
         await update.message.reply_text(text=f"Failed to check orders: {str(e)}")
+
+
+def format_orders(raw_orders, mid, percentage_format):
+    return [
+        [
+            order['sz'],
+            order['triggerPx'],
+            f"{fmt(percentage_format(float(order['triggerPx']) / mid * 100))}%"
+        ]
+        for order in raw_orders
+    ]
+
+
+def insert_order(orders, new_order, is_long):
+    order_px = float(new_order[1])
+    inserted = False
+
+    for i in range(len(orders)):
+        if (order_px > float(orders[i][1]) if is_long else order_px < float(orders[i][1])):
+            orders.insert(i, new_order)
+            inserted = True
+            break
+
+    if not inserted:
+        orders.append(new_order)
+
+    return orders
