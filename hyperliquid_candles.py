@@ -2,21 +2,25 @@ import os
 import time
 import pandas as pd
 import pandas_ta as ta
+from tabulate import simple_separated_format, tabulate
 from telegram.ext import ContextTypes
 from telegram_utils import telegram_utils
+from telegram.constants import ParseMode
 from hyperliquid_utils import hyperliquid_utils
+from utils import fmt
 
 
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     coins = os.getenv("HYPERLIQUID_TELEGRAM_BOT_ANALYZE_COINS", "")
-    for coin in coins.split(","):
-        await analyze_candles_for_coin(context, coin)
+    if len(coins) > 0:
+        for coin in coins.split(","):
+            await analyze_candles_for_coin(context, coin)
 
 
 async def analyze_candles_for_coin(context, coin: str) -> None:
     try:
         now = int(time.time() * 1000)
-        five_days_ago = now - 5 * 86400000
+        five_days_ago = now - 7 * 86400000
 
         candles = hyperliquid_utils.info.candles_snapshot(coin, "1h", five_days_ago, now)
         df = prepare_dataframe(candles)
@@ -62,28 +66,49 @@ def apply_indicators(df: pd.DataFrame) -> tuple:
 
 
 async def send_trend_change_message(context, df: pd.DataFrame, coin: str) -> None:
-    aroon_up_before = df['Aroon_Up'].iloc[-2]
-    aroon_down_before = df['Aroon_Down'].iloc[-2]
+    aroon_up_prev = df['Aroon_Up'].iloc[-2]
+    aroon_down_prev = df['Aroon_Down'].iloc[-2]
     aroon_up = df['Aroon_Up'].iloc[-1]
     aroon_down = df['Aroon_Down'].iloc[-1]
-    aroon_trend_before = "uptrend" if aroon_up_before > aroon_down_before else "downtrend"
+    aroon_trend_prev = "uptrend" if aroon_up_prev > aroon_down_prev else "downtrend"
     aroon_trend = "uptrend" if aroon_up > aroon_down else "downtrend"
 
-    supertrend_before = df['SuperTrend'].iloc[-2]
+    supertrend_prev = df['SuperTrend'].iloc[-2]
     supertrend = df['SuperTrend'].iloc[-1]
-    supertrend_trend_before = "uptrend" if df['InUptrend'].iloc[-2] else "downtrend"
+    supertrend_trend_prev = "uptrend" if df['InUptrend'].iloc[-2] else "downtrend"
     supertrend_trend = "uptrend" if df['InUptrend'].iloc[-1] else "downtrend"
 
+    aroon_table = tabulate(
+        [
+            ["Trend: ", aroon_trend_prev, aroon_trend],
+            ["Up: ", fmt(aroon_up_prev), fmt(aroon_up)],
+            ["Down: ", fmt(aroon_down_prev), fmt(aroon_down)],
+        ],
+        headers=["", "Previous", "Current"],
+        tablefmt=simple_separated_format(' '),
+        colalign=("right", "right", "right")
+    )
+
+    supertrend_table = tabulate(
+        [
+            ["Trend: ", supertrend_trend_prev, supertrend_trend],
+            ["Value: ", supertrend_prev, supertrend],
+        ],
+        headers=["", "Previous", "Current"],
+        tablefmt=simple_separated_format(' '),
+        colalign=("right", "right", "right")
+    )
+
     message_lines = [
-        f"<b>A trend indicator changed for {coin}:</b>",
-        f"Aroon from {aroon_trend_before} to {aroon_trend}:",
-        f"  Up: {aroon_up_before} -> {aroon_up}",
-        f"  Down: {aroon_down_before} -> {aroon_down}",
-        f"Supertrend from {supertrend_trend_before} to {supertrend_trend}",
-        f"  Value: {supertrend_before} -> {supertrend}",
+        f"<b>A trend indicator changed for {coin}</b>",
+        "Aroon:",
+        f"<pre>{aroon_table}</pre>"
+        "Supertrend:",
+        f"<pre>{supertrend_table}</pre>"
     ]
 
     await context.bot.send_message(
         text='\n'.join(message_lines),
+        parse_mode=ParseMode.HTML,
         chat_id=telegram_utils.telegram_chat_id
     )
