@@ -9,10 +9,16 @@ from hyperliquid_utils import hyperliquid_utils
 
 
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
+    await analyze_candles_for_coin(context, "BTC")
+    await analyze_candles_for_coin(context, "ETH")
+    await analyze_candles_for_coin(context, "kPEPE")
+
+
+async def analyze_candles_for_coin(context, coin):
     now = int(time.time() * 1000)
     yesterday = now - 5 * 86400000
 
-    candles = hyperliquid_utils.info.candles_snapshot("ETH", "1h", yesterday, now)
+    candles = hyperliquid_utils.info.candles_snapshot(coin, "1h", yesterday, now)
 
     df = pd.DataFrame(candles)
 
@@ -34,4 +40,4 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
         aroon_down_before = df['Aroon_Down'].iloc[-2]
         aroon_up = df['Aroon_Up'].iloc[-1]
         aroon_down = df['Aroon_Down'].iloc[-1]
-        await context.bot.send_message(text=f"Aroon indicator flipped on ETH, up {aroon_up_before} -> {aroon_up} down {aroon_down_before} -> {aroon_down}", chat_id=telegram_utils.telegram_chat_id)
+        await context.bot.send_message(text=f"Aroon indicator flipped on {coin}, up {aroon_up_before} -> {aroon_up} down {aroon_down_before} -> {aroon_down}", chat_id=telegram_utils.telegram_chat_id)

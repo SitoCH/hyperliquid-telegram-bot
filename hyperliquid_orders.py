@@ -210,8 +210,8 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             message_lines.append(f"Mode: {'long' if is_long else 'short'}")
             message_lines.append(f"Leverage: {hyperliquid_utils.get_leverage(user_state, coin)}x")
 
-            tp_orders = format_orders(tp_raw_orders, mid, percentage_format=abs)
-            sl_orders = format_orders(sl_raw_orders, mid, percentage_format=lambda x: abs(1 - x) * 100)
+            tp_orders = format_orders(tp_raw_orders, mid, percentage_format=lambda triggerPx, mid: abs((triggerPx / mid - 1) * 100))
+            sl_orders = format_orders(sl_raw_orders, mid, percentage_format=lambda triggerPx, mid: abs(((1 - triggerPx / mid) * 100)))
 
             table_orders = tp_orders + [["Current", all_mids[coin], ""]] + sl_orders
 
@@ -250,7 +250,7 @@ def format_orders(raw_orders, mid, percentage_format):
         [
             order['sz'],
             order['triggerPx'],
-            f"{fmt(percentage_format(float(order['triggerPx']) / mid * 100))}%"
+            f"{fmt(percentage_format(float(order['triggerPx']), mid ))}%"
         ]
         for order in raw_orders
     ]
