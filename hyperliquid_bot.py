@@ -247,10 +247,11 @@ class HyperliquidBot:
                 tokens_data = spot_meta[0]["tokens"]
                 market_data = spot_meta[1]
                 token_mid_price_map = {}
+                token_mid_price_map["USDC"] = 1.0
                 for token in tokens_data:
                     token_name = token["name"]
                     index = token["index"]
-                    if 0 <= index < len(market_data):
+                    if token_name != "USDC" and 0 <= index < len(market_data):
                         token_mid_price_map[token_name] = float(market_data[index - 1]["midPx"])
                 message_lines = []
                 message_lines.append("<b>Spot positions:</b>")
