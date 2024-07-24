@@ -40,7 +40,7 @@ class HyperliquidBot:
 
                 telegram_utils.run_repeating(update_open_orders, interval=150, first=15)
 
-            telegram_utils.run_repeating(analyze_candles, interval=1800, first=10)
+            telegram_utils.run_repeating(analyze_candles, interval=600, first=5)
 
             sell_conv_handler = ConversationHandler(
                 entry_points=[CommandHandler('exit', exit_position)],
