@@ -1,7 +1,9 @@
 
 import json
 import os
+import datetime
 
+import time
 from typing import List
 
 from hyperliquid.utils.types import UserEventsMsg, Fill
@@ -40,7 +42,9 @@ class HyperliquidBot:
 
                 telegram_utils.run_repeating(update_open_orders, interval=150, first=15)
 
-            telegram_utils.run_repeating(analyze_candles, interval=600, first=5)
+
+            next_hour = datetime.now().replace(minute=1, second=0, microsecond=0) + datetime.timedelta(hours=1)
+            telegram_utils.run_repeating(analyze_candles, interval=datetime.timedelta(hours=1.0), first=next_hour)
 
             sell_conv_handler = ConversationHandler(
                 entry_points=[CommandHandler('exit', exit_position)],

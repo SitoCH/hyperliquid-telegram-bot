@@ -1,4 +1,5 @@
 import os
+import datetime
 from typing import Any
 
 from telegram import (
@@ -15,6 +16,8 @@ from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
 from utils import exchange_enabled, update_orders_enabled
+
+from typing import Optional, Union
 
 
 filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
@@ -57,7 +60,9 @@ class TelegramUtils:
     def add_handler(self, handler: BaseHandler[Any, CCT], group: int = 0) -> None:
         self.telegram_app.add_handler(handler, group)
 
-    def run_repeating(self, callback: JobCallback[CCT], interval: float, first: float = None) -> None:
+    def run_repeating(self, callback: JobCallback[CCT],
+                      interval: Union[float, datetime.timedelta],
+                      first: Optional[Union[float, datetime.timedelta, datetime.datetime, datetime.time]] = None,) -> None:
         self.telegram_app.job_queue.run_repeating(callback, interval=interval, first=first)
 
     def run_polling(self):
