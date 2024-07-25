@@ -81,12 +81,12 @@ async def send_trend_change_message(context, df: pd.DataFrame, coin: str) -> Non
     table = tabulate(
         [
             ["Aroon: ", "", ""],
-            ["Trend: ", aroon_trend_prev, aroon_trend],
-            ["Up: ", fmt(aroon_up_prev), fmt(aroon_up)],
-            ["Down: ", fmt(aroon_down_prev), fmt(aroon_down)],
+            ["Trend ", aroon_trend_prev, aroon_trend],
+            ["Up ", fmt(aroon_up_prev), fmt(aroon_up)],
+            ["Down ", fmt(aroon_down_prev), fmt(aroon_down)],
             ["Supertrend: ", "", ""],
-            ["Trend: ", supertrend_trend_prev, supertrend_trend],
-            ["Value: ", round(supertrend_prev, 2 if supertrend_prev > 1 else 4), round(supertrend_prev, 2 if supertrend > 1 else 4)],
+            ["Trend ", supertrend_trend_prev, supertrend_trend],
+            ["Value ", round(supertrend_prev, 2 if supertrend_prev > 1 else 4), round(supertrend_prev, 2 if supertrend > 1 else 4)],
         ],
         headers=["", "Previous", "Current"],
         tablefmt=simple_separated_format(' '),
