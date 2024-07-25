@@ -86,7 +86,7 @@ async def send_trend_change_message(context, df: pd.DataFrame, coin: str) -> Non
             ["Down: ", fmt(aroon_down_prev), fmt(aroon_down)],
             ["Supertrend: ", "", ""],
             ["Trend: ", supertrend_trend_prev, supertrend_trend],
-            ["Value: ", supertrend_prev, supertrend],
+            ["Value: ", round(supertrend_prev, 2 if supertrend_prev > 1 else 4), round(supertrend_prev, 2 if supertrend > 1 else 4)],
         ],
         headers=["", "Previous", "Current"],
         tablefmt=simple_separated_format(' '),
