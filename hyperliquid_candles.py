@@ -78,19 +78,13 @@ async def send_trend_change_message(context, df: pd.DataFrame, coin: str) -> Non
     supertrend_trend_prev = "uptrend" if df['InUptrend'].iloc[-2] else "downtrend"
     supertrend_trend = "uptrend" if df['InUptrend'].iloc[-1] else "downtrend"
 
-    aroon_table = tabulate(
+    table = tabulate(
         [
+            ["Aroon: ", "", ""],
             ["Trend: ", aroon_trend_prev, aroon_trend],
             ["Up: ", fmt(aroon_up_prev), fmt(aroon_up)],
             ["Down: ", fmt(aroon_down_prev), fmt(aroon_down)],
-        ],
-        headers=["", "Previous", "Current"],
-        tablefmt=simple_separated_format(' '),
-        colalign=("right", "right", "right")
-    )
-
-    supertrend_table = tabulate(
-        [
+            ["Supertrend: ", "", ""],
             ["Trend: ", supertrend_trend_prev, supertrend_trend],
             ["Value: ", supertrend_prev, supertrend],
         ],
@@ -101,10 +95,8 @@ async def send_trend_change_message(context, df: pd.DataFrame, coin: str) -> Non
 
     message_lines = [
         f"<b>A trend indicator changed for {coin}</b>",
-        "Aroon:",
-        f"<pre>{aroon_table}</pre>"
-        "Supertrend:",
-        f"<pre>{supertrend_table}</pre>"
+        "Indicators:",
+        f"<pre>{table}</pre>"
     ]
 
     await context.bot.send_message(
