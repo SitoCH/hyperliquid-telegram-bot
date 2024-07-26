@@ -7,7 +7,7 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt, px_round
 
-EXIT_CHOOSING, SELECTING_COIN, SELECTING_AMOUNT = range(3)
+EXIT_CHOOSING, SELECTING_COIN, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT = range(4)
 
 
 def get_coins_by_open_interest():
@@ -39,6 +39,36 @@ async def enter_short(update: Update, context: CallbackContext) -> int:
     context.user_data["enter_mode"] = "short"
     await update.message.reply_text('Choose a coin to short:', reply_markup=get_enter_reply_markup())
     return SELECTING_COIN
+
+
+async def selected_amount(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    amount = query.data
+    if amount == 'cancel':
+        await query.edit_message_text(text=OPERATION_CANCELLED)
+        return ConversationHandler.END
+
+    try:
+        amount = float(amount)
+        context.user_data["amount"] = amount
+    except ValueError:
+        await query.edit_message_text("Invalid amount.")
+        return ConversationHandler.END
+
+    keyboard = [
+        [InlineKeyboardButton(f"{take_profit}%", callback_data=str(take_profit))]
+        for take_profit in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+    ]
+    keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(
+        "Please enter the desired take profit percentage:",
+        reply_markup=reply_markup
+    )
+
+    return SELECTING_TAKE_PROFIT
 
 
 async def selected_coin(update: Update, context: CallbackContext) -> int:
@@ -76,19 +106,18 @@ def get_liquidation_px(user_state, selected_coin) -> float:
     return 0.0
 
 
-async def selected_amount(update: Update, context: CallbackContext) -> int:
+async def selected_take_profit(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     await query.answer()
 
-    amount = query.data
-    if amount == 'cancel':
+    take_profit_percentage = query.data
+    if take_profit_percentage == 'cancel':
         await query.edit_message_text(text=OPERATION_CANCELLED)
         return ConversationHandler.END
 
-    try:
-        amount = float(amount)
-    except ValueError:
-        await query.edit_message_text("Invalid amount.")
+    amount = context.user_data.get('amount')
+    if not amount:
+        await query.edit_message_text("Error: No amount selected. Please restart the process.")
         return ConversationHandler.END
 
     selected_coin = context.user_data.get('selected_coin')
@@ -116,7 +145,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
             open_result = exchange.market_open(selected_coin, is_long, sz)
             logger.info(open_result)
 
-            await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid)
+            await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, take_profit_percentage)
 
             await query.edit_message_text(text=f"Orders executed for {sz} units on {selected_coin} ({leverage}x)")
         else:
@@ -128,7 +157,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid):
+async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, take_profit_percentage):
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     liquidation_px = get_liquidation_px(user_state, selected_coin)
 
@@ -142,7 +171,8 @@ async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_lon
     sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
     logger.info(sl_order_result)
 
-    tp_trigger_px = mid * 1.03 if is_long else mid * 0.97
+
+    tp_trigger_px = mid * (1.0 + take_profit_percentage / 100.0) if is_long else mid *  (1.0 - take_profit_percentage / 100.0)
     tp_limit_px = tp_trigger_px * 1.02 if is_long else tp_trigger_px * 0.98
     tp_order_type = {"trigger": {"triggerPx": px_round(tp_trigger_px), "isMarket": True, "tpsl": "tp"}}
     tp_order_result = exchange.order(selected_coin, not is_long, sz, px_round(tp_limit_px), tp_order_type, reduce_only=True)

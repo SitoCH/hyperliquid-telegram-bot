@@ -15,7 +15,7 @@ from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, Con
 
 from hyperliquid_candles import analyze_candles
 from hyperliquid_orders import get_open_orders, update_open_orders, update_orders_command
-from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, enter_long, enter_short, exit_all_positions, selected_amount, selected_coin, exit_position, exit_selected_coin, trade_cancel
+from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_TAKE_PROFIT, enter_long, enter_short, exit_all_positions, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_take_profit, trade_cancel
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 from utils import exchange_enabled, update_orders_enabled, fmt
@@ -57,6 +57,7 @@ class HyperliquidBot:
                 entry_points=[CommandHandler('long', enter_long)],
                 states={
                     SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+                    SELECTING_TAKE_PROFIT: [CallbackQueryHandler(selected_take_profit)],
                     SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)]
                 },
                 fallbacks=[CommandHandler('cancel', trade_cancel)]
@@ -67,6 +68,7 @@ class HyperliquidBot:
                 entry_points=[CommandHandler('short', enter_short)],
                 states={
                     SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+                    SELECTING_TAKE_PROFIT: [CallbackQueryHandler(selected_take_profit)],
                     SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)]
                 },
                 fallbacks=[CommandHandler('cancel', trade_cancel)]
