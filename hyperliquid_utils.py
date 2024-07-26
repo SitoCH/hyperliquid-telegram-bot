@@ -94,9 +94,11 @@ class HyperliquidUtils:
         if asset_info:
             max_leverage = int(asset_info["maxLeverage"])
             if max_leverage > 20:
-                return 15
+                return 16
             if max_leverage > 10:
-                return 10
+                return 11
+            if max_leverage > 5:
+                return 6
         return 5
 
 
