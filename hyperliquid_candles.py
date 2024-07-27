@@ -30,14 +30,14 @@ async def analyze_candles_for_coin(context, coin: str) -> None:
 
         candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 7 * 86400000, now)
         candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 14 * 86400000, now)
-        
+
         df_1h = prepare_dataframe(candles_1h)
-        aroon_flip_1h, supertrend_flip_1h = apply_indicators(df_1h)
+        flip_on_1h = apply_indicators(df_1h)
 
         df_4h = prepare_dataframe(candles_4h)
-        aroon_flip_4h, supertrend_flip_4h = apply_indicators(df_4h)
+        flip_on_4h = False if df_4h['T'].iloc[-1] < pd.Timestamp.now() - pd.Timedelta(hours=2) else apply_indicators(df_4h)
 
-        if aroon_flip_1h or supertrend_flip_1h or aroon_flip_4h or supertrend_flip_4h:
+        if flip_on_1h or flip_on_4h:
             await send_trend_change_message(context, df_1h, df_4h, coin)
     except Exception as e:
         await context.bot.send_message(
@@ -59,20 +59,28 @@ def prepare_dataframe(candles: list) -> pd.DataFrame:
 
 
 def apply_indicators(df: pd.DataFrame) -> tuple:
+
+    length = 20
+
     # Aroon Indicator
-    aroon = ta.aroon(df['h'], df['l'], length=14)
-    df['Aroon_Up'] = aroon['AROONU_14']
-    df['Aroon_Down'] = aroon['AROOND_14']
+    aroon = ta.aroon(df['h'], df['l'], length=length)
+    df['Aroon_Up'] = aroon[f'AROONU_{length}']
+    df['Aroon_Down'] = aroon[f'AROOND_{length}']
     df['Aroon_Up_Down_Flip'] = (df['Aroon_Up'] > df['Aroon_Down']).astype(int)
     df['Aroon_Flip_Detected'] = df['Aroon_Up_Down_Flip'].diff().abs() == 1
 
     # SuperTrend
-    supertrend = ta.supertrend(df['h'], df['l'], df['c'], length=20, multiplier=3)
-    df['SuperTrend'] = supertrend['SUPERT_20_3']
-    df['InUptrend'] = supertrend['SUPERTd_20_3'] == 1
+    supertrend = ta.supertrend(df['h'], df['l'], df['c'], length=length, multiplier=3)
+    df['SuperTrend'] = supertrend[f'SUPERT_{length}_3']
+    df['InUptrend'] = supertrend[f'SUPERTd_{length}_3'] == 1
     df['SuperTrend_Flip_Detected'] = df['InUptrend'].diff().abs() == 1
 
-    return df['Aroon_Flip_Detected'].iloc[-1], df['SuperTrend_Flip_Detected'].iloc[-1]
+    # Z-score
+    zscore = ta.zscore(df['c'], length=length)
+    df['Zscore'] = zscore
+    df['Zscore_Flip_Detected'] = ((df['Zscore'] > 0) & (df['Zscore'].shift() < 0)) | ((df['Zscore'] < 0) & (df['Zscore'].shift() > 0))
+
+    return df['Aroon_Flip_Detected'].iloc[-1] or df['SuperTrend_Flip_Detected'].iloc[-1] or df['Zscore_Flip_Detected'].iloc[-1]
 
 
 async def send_trend_change_message(context, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> None:
@@ -88,6 +96,9 @@ async def send_trend_change_message(context, df_1h: pd.DataFrame, df_4h: pd.Data
             ["Supertrend 1h: ", "", ""],
             ["Trend ", results_1h["supertrend_trend_prev"], results_1h["supertrend_trend"]],
             ["Value ", round(results_1h["supertrend_prev"], 2 if results_1h["supertrend_prev"] > 1 else 4), round(results_1h["supertrend_prev"], 2 if results_1h["supertrend"] > 1 else 4)],
+            ["Z-score 1h: ", "", ""],
+            ["Trend ", results_1h["zscore_trend"], results_1h["zscore_trend"]],
+            ["Value ", fmt(results_1h["zscore_prev"]), fmt(results_1h["zscore"])],
             ["Aroon 4h: ", "", ""],
             ["Trend ", results_4h["aroon_trend_prev"], results_4h["aroon_trend"]],
             ["Up ", fmt(results_4h["aroon_up_prev"]), fmt(results_4h["aroon_up"])],
@@ -95,6 +106,9 @@ async def send_trend_change_message(context, df_1h: pd.DataFrame, df_4h: pd.Data
             ["Supertrend 4h: ", "", ""],
             ["Trend ", results_4h["supertrend_trend_prev"], results_4h["supertrend_trend"]],
             ["Value ", round(results_4h["supertrend_prev"], 2 if results_4h["supertrend_prev"] > 1 else 4), round(results_4h["supertrend_prev"], 2 if results_4h["supertrend"] > 1 else 4)],
+            ["Z-score 4h: ", "", ""],
+            ["Trend ", results_4h["zscore_trend"], results_4h["zscore_trend"]],
+            ["Value ", fmt(results_4h["zscore_prev"]), fmt(results_4h["zscore"])],
         ],
         headers=["", "Previous", "Current"],
         tablefmt=simple_separated_format(' '),
@@ -127,6 +141,10 @@ def get_ta_results(df):
     supertrend_trend_prev = "uptrend" if df['InUptrend'].iloc[-2] else "downtrend"
     supertrend_trend = "uptrend" if df['InUptrend'].iloc[-1] else "downtrend"
 
+    zscore_prev = df['Zscore'].iloc[-2]
+    zscore = df['Zscore'].iloc[-1]
+    zscore_trend = "uptrend" if zscore > zscore_prev else "downtrend"
+
     return {
         "aroon_up_prev": aroon_up_prev,
         "aroon_down_prev": aroon_down_prev,
@@ -137,5 +155,8 @@ def get_ta_results(df):
         "supertrend_prev": supertrend_prev,
         "supertrend": supertrend,
         "supertrend_trend_prev": supertrend_trend_prev,
-        "supertrend_trend": supertrend_trend
+        "supertrend_trend": supertrend_trend,
+        "zscore_prev": zscore_prev,
+        "zscore": zscore,
+        "zscore_trend": zscore_trend
     }
