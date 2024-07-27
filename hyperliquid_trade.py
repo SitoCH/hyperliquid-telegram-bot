@@ -51,8 +51,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
         return ConversationHandler.END
 
     try:
-        amount = float(amount)
-        context.user_data["amount"] = amount
+        context.user_data["amount"] = float(amount)
     except ValueError:
         await query.edit_message_text("Invalid amount.")
         return ConversationHandler.END
@@ -110,10 +109,11 @@ async def selected_take_profit(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     await query.answer()
 
-    take_profit_percentage = query.data
-    if take_profit_percentage == 'cancel':
+    if query.data == 'cancel':
         await query.edit_message_text(text=OPERATION_CANCELLED)
         return ConversationHandler.END
+
+    take_profit_percentage = float(query.data)
 
     amount = context.user_data.get('amount')
     if not amount:
@@ -125,7 +125,7 @@ async def selected_take_profit(update: Update, context: CallbackContext) -> int:
         await query.edit_message_text("Error: No coin selected. Please restart the process.")
         return ConversationHandler.END
 
-    await query.edit_message_text(text=f"Executing orders for {selected_coin}...")
+    await query.edit_message_text(text=f"Opening {context.user_data['enter_mode']} for {selected_coin}...")
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
@@ -147,7 +147,7 @@ async def selected_take_profit(update: Update, context: CallbackContext) -> int:
 
             await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, take_profit_percentage)
 
-            await query.edit_message_text(text=f"Orders executed for {sz} units on {selected_coin} ({leverage}x)")
+            await query.edit_message_text(text=f"Opened {context.user_data['enter_mode']} for {sz} units on {selected_coin} ({leverage}x)")
         else:
             await query.edit_message_text(text="Exchange is not enabled")
     except Exception as e:
@@ -157,7 +157,7 @@ async def selected_take_profit(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, take_profit_percentage):
+async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, take_profit_percentage: float):
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     liquidation_px = get_liquidation_px(user_state, selected_coin)
 
@@ -172,7 +172,7 @@ async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_lon
     logger.info(sl_order_result)
 
 
-    tp_trigger_px = mid * (1.0 + take_profit_percentage / 100.0) if is_long else mid *  (1.0 - take_profit_percentage / 100.0)
+    tp_trigger_px = mid * (1.0 + take_profit_percentage / 100.0) if is_long else mid * (1.0 - take_profit_percentage / 100.0)
     tp_limit_px = tp_trigger_px * 1.02 if is_long else tp_trigger_px * 0.98
     tp_order_type = {"trigger": {"triggerPx": px_round(tp_trigger_px), "isMarket": True, "tpsl": "tp"}}
     tp_order_result = exchange.order(selected_coin, not is_long, sz, px_round(tp_limit_px), tp_order_type, reduce_only=True)
