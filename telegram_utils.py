@@ -26,10 +26,11 @@ filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBU
 class TelegramUtils:
 
     exit_all_command = "exit_all"
+    overview_command = "overview"
 
     reply_markup = ReplyKeyboardMarkup(
         [
-            [KeyboardButton("/positions"), KeyboardButton("/orders")],
+            [KeyboardButton("/positions"), KeyboardButton("/orders"), KeyboardButton(f"/{overview_command}")],
             [KeyboardButton("/long"), KeyboardButton("/short")] if exchange_enabled else [],
             [KeyboardButton(f"/{exit_all_command}"), KeyboardButton("/exit")] if exchange_enabled else [],
             [KeyboardButton("/update_orders")] if exchange_enabled and update_orders_enabled else []

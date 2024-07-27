@@ -30,6 +30,7 @@ class HyperliquidBot:
         )
 
         telegram_utils.add_handler(CommandHandler("start", self.start))
+        telegram_utils.add_handler(CommandHandler(telegram_utils.overview_command, self.get_overview))
         telegram_utils.add_handler(CommandHandler("positions", self.get_positions))
         telegram_utils.add_handler(CommandHandler("orders", get_open_orders))
         telegram_utils.add_handler(CommandHandler(telegram_utils.exit_all_command, exit_all_positions))
@@ -244,42 +245,99 @@ class HyperliquidBot:
                 await update.message.reply_text(text='\n'.join(perp_message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
 
+            spot_messages = await self.spot_positions_messages(tablefmt)
+            if len(spot_messages) > 0:
+                await update.message.reply_text(text='\n'.join(spot_messages), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
-            spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
-            if spot_user_state['balances']:
-                spot_meta = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
-                tokens_data = spot_meta[0]["tokens"]
-                market_data = spot_meta[1]
-                token_mid_price_map = {}
-                token_mid_price_map["USDC"] = 1.0
-                for token in tokens_data:
-                    token_name = token["name"]
-                    index = token["index"]
-                    if token_name != "USDC" and 0 <= index < len(market_data):
-                        token_mid_price_map[token_name] = float(market_data[index - 1]["midPx"])
-                message_lines = []
-                message_lines.append("<b>Spot positions:</b>")
-
-                spot_table = tabulate(
-                    [
-                        [
-                            balance["coin"],
-                            f"{fmt(float(balance['total']))}",
-                            f"{fmt(token_mid_price_map[balance['coin']] * float(balance['total']))}$",
-                        ]
-                        for balance in spot_user_state['balances']
-                        if token_mid_price_map[balance["coin"]] * float(balance['total']) > 1.0
-                    ],
-                    headers=["Coin", "Balance", "Pos. value"],
-                    tablefmt=tablefmt,
-                    colalign=("left", "right", "right")
-                )
-
-                message_lines.append(f"<pre>{spot_table}</pre>")
-                await update.message.reply_text(text='\n'.join(message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
         except Exception as e:
             await update.message.reply_text(text=f"Failed to fetch positions: {str(e)}", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+
+
+    async def get_overview(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        try:
+            user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+            total_balance = float(user_state['marginSummary']['accountValue'])
+            available_balance = float(user_state['withdrawable'])
+
+            message_lines = [
+                "<b>Perps positions:</b>",
+                f"Total balance: {fmt(total_balance)} USDC",
+                f"Available balance: {fmt(available_balance)} USDC",
+            ]
+
+            tablefmt = simple_separated_format(' ')
+            if user_state["assetPositions"]:
+                total_pnl = sum(
+                    float(asset_position['position']['unrealizedPnl'])
+                    for asset_position in user_state["assetPositions"]
+                )
+                message_lines.append(f"Unrealized profit: {fmt(total_pnl)} USDC")
+
+                sorted_positions = sorted(
+                    user_state["assetPositions"],
+                    key=lambda x: float(x['position']['positionValue']),
+                    reverse=True
+                )
+
+                table = tabulate(
+                    [
+                        [
+                            "(L)" if float(position['position']['szi']) > 0 else "(S)",
+                            position['position']['coin'],
+                            f"{fmt(float(position['position']['positionValue']))}$",
+                            f"{fmt(float(position['position']['unrealizedPnl']))}$",
+                            f"({fmt(float(position['position']['returnOnEquity']) * 100.0)}%)"
+                        ]
+                        for position in sorted_positions
+                    ],
+                    headers=["", "Coin", "Balance", "PnL", ""],
+                    tablefmt=tablefmt,
+                    colalign=("left", "left", "right", "right", "left")
+                )
+
+                message_lines.append(f"<pre>{table}</pre>")
+
+            spot_messages = await self.spot_positions_messages(tablefmt)
+            message_lines += spot_messages
+            await update.message.reply_text(text='\n'.join(message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+
+        except Exception as e:
+            await update.message.reply_text(text=f"Failed to fetch positions: {str(e)}", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+
+    async def spot_positions_messages(self, tablefmt):
+        spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
+        if spot_user_state['balances']:
+            spot_meta = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
+            tokens_data = spot_meta[0]["tokens"]
+            market_data = spot_meta[1]
+            token_mid_price_map = {}
+            token_mid_price_map["USDC"] = 1.0
+            for token in tokens_data:
+                token_name = token["name"]
+                index = token["index"]
+                if token_name != "USDC" and 0 <= index < len(market_data):
+                    token_mid_price_map[token_name] = float(market_data[index - 1]["midPx"])
+            message_lines = []
+            message_lines.append("<b>Spot positions:</b>")
+
+            spot_table = tabulate(
+                [
+                    [
+                        balance["coin"],
+                        f"{fmt(float(balance['total']))}",
+                        f"{fmt(token_mid_price_map[balance['coin']] * float(balance['total']))}$",
+                    ]
+                    for balance in spot_user_state['balances']
+                    if token_mid_price_map[balance["coin"]] * float(balance['total']) > 1.0
+                ],
+                headers=["Coin", "Balance", "Pos. value"],
+                tablefmt=tablefmt,
+                colalign=("left", "right", "right")
+            )
+
+            message_lines.append(f"<pre>{spot_table}</pre>")
+        return message_lines
 
 
 if __name__ == "__main__":
