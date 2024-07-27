@@ -306,6 +306,7 @@ class HyperliquidBot:
             await update.message.reply_text(text=f"Failed to fetch positions: {str(e)}", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
     async def spot_positions_messages(self, tablefmt):
+        message_lines = []
         spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
         if spot_user_state['balances']:
             spot_meta = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
@@ -318,7 +319,6 @@ class HyperliquidBot:
                 index = token["index"]
                 if token_name != "USDC" and 0 <= index < len(market_data):
                     token_mid_price_map[token_name] = float(market_data[index - 1]["midPx"])
-            message_lines = []
             message_lines.append("<b>Spot positions:</b>")
 
             spot_table = tabulate(
