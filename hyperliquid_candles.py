@@ -35,7 +35,9 @@ async def analyze_candles_for_coin(context, coin: str) -> None:
         flip_on_1h = apply_indicators(df_1h)
 
         df_4h = prepare_dataframe(candles_4h)
-        flip_on_4h = False if df_4h['T'].iloc[-1] < pd.Timestamp.now() - pd.Timedelta(hours=2) else apply_indicators(df_4h)
+        flip_on_4h = apply_indicators(df_4h)
+
+        flip_on_4h = False if df_4h['T'].iloc[-1] < pd.Timestamp.now() - pd.Timedelta(hours=1) else flip_on_4h
 
         if flip_on_1h or flip_on_4h:
             await send_trend_change_message(context, df_1h, df_4h, coin)
@@ -58,7 +60,7 @@ def prepare_dataframe(candles: list) -> pd.DataFrame:
     return df
 
 
-def apply_indicators(df: pd.DataFrame) -> tuple:
+def apply_indicators(df: pd.DataFrame) -> bool:
 
     length = 20
 
@@ -78,36 +80,43 @@ def apply_indicators(df: pd.DataFrame) -> tuple:
     # Z-score
     zscore = ta.zscore(df['c'], length=length)
     df['Zscore'] = zscore
-    df['Zscore_Flip_Detected'] = ((df['Zscore'] > 0) & (df['Zscore'].shift() < 0)) | ((df['Zscore'] < 0) & (df['Zscore'].shift() > 0))
+    df['Zscore_Flip_Detected'] = ((df['Zscore'] > 0) & (df['Zscore'].shift() <= 0)) | ((df['Zscore'] < 0) & (df['Zscore'].shift() >= 0))
 
     return df['Aroon_Flip_Detected'].iloc[-1] or df['SuperTrend_Flip_Detected'].iloc[-1] or df['Zscore_Flip_Detected'].iloc[-1]
 
 
 async def send_trend_change_message(context, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> None:
     results_1h = get_ta_results(df_1h)
-    results_4h = get_ta_results(df_4h)
-
-    table = tabulate(
+    table_1h = tabulate(
         [
-            ["Aroon 1h: ", "", ""],
+            ["Aroon: ", "", ""],
             ["Trend ", results_1h["aroon_trend_prev"], results_1h["aroon_trend"]],
             ["Up ", fmt(results_1h["aroon_up_prev"]), fmt(results_1h["aroon_up"])],
             ["Down ", fmt(results_1h["aroon_down_prev"]), fmt(results_1h["aroon_down"])],
-            ["Supertrend 1h: ", "", ""],
+            ["Supertrend: ", "", ""],
             ["Trend ", results_1h["supertrend_trend_prev"], results_1h["supertrend_trend"]],
             ["Value ", round(results_1h["supertrend_prev"], 2 if results_1h["supertrend_prev"] > 1 else 4), round(results_1h["supertrend_prev"], 2 if results_1h["supertrend"] > 1 else 4)],
-            ["Z-score 1h: ", "", ""],
-            ["Trend ", results_1h["zscore_trend"], results_1h["zscore_trend"]],
-            ["Value ", fmt(results_1h["zscore_prev"]), fmt(results_1h["zscore"])],
-            ["Aroon 4h: ", "", ""],
+            ["Z-score: ", "", ""],
+            ["Trend ", results_1h["zscore_trend_prev"], results_1h["zscore_trend"]],
+            ["Value ", fmt(results_1h["zscore_prev"]), fmt(results_1h["zscore"])]
+        ],
+        headers=["", "Previous", "Current"],
+        tablefmt=simple_separated_format(' '),
+        colalign=("right", "right", "right")
+    )
+
+    results_4h = get_ta_results(df_4h)
+    table_4h = tabulate(
+        [
+            ["Aroon: ", "", ""],
             ["Trend ", results_4h["aroon_trend_prev"], results_4h["aroon_trend"]],
             ["Up ", fmt(results_4h["aroon_up_prev"]), fmt(results_4h["aroon_up"])],
             ["Down ", fmt(results_4h["aroon_down_prev"]), fmt(results_4h["aroon_down"])],
-            ["Supertrend 4h: ", "", ""],
+            ["Supertrend: ", "", ""],
             ["Trend ", results_4h["supertrend_trend_prev"], results_4h["supertrend_trend"]],
             ["Value ", round(results_4h["supertrend_prev"], 2 if results_4h["supertrend_prev"] > 1 else 4), round(results_4h["supertrend_prev"], 2 if results_4h["supertrend"] > 1 else 4)],
-            ["Z-score 4h: ", "", ""],
-            ["Trend ", results_4h["zscore_trend"], results_4h["zscore_trend"]],
+            ["Z-score: ", "", ""],
+            ["Trend ", results_4h["zscore_trend_prev"], results_4h["zscore_trend"]],
             ["Value ", fmt(results_4h["zscore_prev"]), fmt(results_4h["zscore"])],
         ],
         headers=["", "Previous", "Current"],
@@ -117,8 +126,10 @@ async def send_trend_change_message(context, df_1h: pd.DataFrame, df_4h: pd.Data
 
     message_lines = [
         f"<b>A trend indicator changed for {coin}</b>",
-        "Indicators:",
-        f"<pre>{table}</pre>"
+        "1h indicators:",
+        f"<pre>{table_1h}</pre>",
+        "4h indicators:",
+        f"<pre>{table_4h}</pre>"
     ]
 
     await context.bot.send_message(
@@ -142,8 +153,9 @@ def get_ta_results(df):
     supertrend_trend = "uptrend" if df['InUptrend'].iloc[-1] else "downtrend"
 
     zscore_prev = df['Zscore'].iloc[-2]
+    zscore_trend_prev = "uptrend" if zscore_prev > 0.0 else "downtrend"
     zscore = df['Zscore'].iloc[-1]
-    zscore_trend = "uptrend" if zscore > zscore_prev else "downtrend"
+    zscore_trend = "uptrend" if zscore > 0.0 else "downtrend"
 
     return {
         "aroon_up_prev": aroon_up_prev,
@@ -158,5 +170,6 @@ def get_ta_results(df):
         "supertrend_trend": supertrend_trend,
         "zscore_prev": zscore_prev,
         "zscore": zscore,
+        "zscore_trend_prev": zscore_trend_prev,
         "zscore_trend": zscore_trend
     }
