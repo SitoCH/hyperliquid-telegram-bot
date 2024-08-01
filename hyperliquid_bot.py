@@ -321,7 +321,8 @@ class HyperliquidBot:
                 token_name = token["name"]
                 index = token["index"]
                 if token_name != "USDC" and 0 <= index < len(market_data):
-                    token_mid_price_map[token_name] = float(market_data[index - 1]["midPx"])
+                    mid_px = market_data[index - 1]["midPx"]
+                    token_mid_price_map[token_name] = float(mid_px) if mid_px is not None else 0.0
             message_lines.append("<b>Spot positions:</b>")
 
             spot_table = tabulate(
