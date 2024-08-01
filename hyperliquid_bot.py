@@ -3,6 +3,8 @@ import json
 import os
 import datetime
 
+from logging_utils import logger
+
 from typing import List
 
 from hyperliquid.utils.types import UserEventsMsg, Fill
@@ -303,6 +305,7 @@ class HyperliquidBot:
             await update.message.reply_text(text='\n'.join(message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
         except Exception as e:
+            logger.critical(e, exc_info=True)
             await update.message.reply_text(text=f"Failed to fetch positions: {str(e)}", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
 
     async def spot_positions_messages(self, tablefmt):
