@@ -7,7 +7,7 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt, px_round
 
-EXIT_CHOOSING, SELECTING_COIN, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT = range(4)
+EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT = range(5)
 
 
 def get_coins_by_open_interest():
@@ -57,6 +57,32 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
         return ConversationHandler.END
 
     keyboard = [
+        [InlineKeyboardButton(f"{stop_loss}%", callback_data=str(stop_loss))]
+        for stop_loss in [1.0, 2.0, 3.0, 4.0, 5.0]
+    ]
+    keyboard.append([InlineKeyboardButton("Maximum", callback_data='100.0')])
+    keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(
+        "Please enter the desired stop loss percentage:",
+        reply_markup=reply_markup
+    )
+
+    return SELECTING_STOP_LOSS
+
+
+async def selected_stop_loss(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    stop_loss = query.data
+    if stop_loss == 'cancel':
+        await query.edit_message_text(text=OPERATION_CANCELLED)
+        return ConversationHandler.END
+
+    context.user_data["stop_loss"] = stop_loss
+
+    keyboard = [
         [InlineKeyboardButton(f"{take_profit}%", callback_data=str(take_profit))]
         for take_profit in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
     ]
@@ -98,13 +124,6 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
     return SELECTING_AMOUNT
 
 
-def get_liquidation_px(user_state, selected_coin) -> float:
-    for asset_position in user_state.get("assetPositions", []):
-        if asset_position['position']['coin'] == selected_coin:
-            return float(asset_position['position']['liquidationPx'])
-    return 0.0
-
-
 async def selected_take_profit(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     await query.answer()
@@ -119,6 +138,12 @@ async def selected_take_profit(update: Update, context: CallbackContext) -> int:
     if not amount:
         await query.edit_message_text("Error: No amount selected. Please restart the process.")
         return ConversationHandler.END
+
+    stop_loss_percentage = float(context.user_data.get('stop_loss'))
+    if not stop_loss_percentage:
+        await query.edit_message_text("Error: No stop loss selected. Please restart the process.")
+        return ConversationHandler.END
+
 
     selected_coin = context.user_data.get('selected_coin')
     if not selected_coin:
@@ -145,7 +170,7 @@ async def selected_take_profit(update: Update, context: CallbackContext) -> int:
             open_result = exchange.market_open(selected_coin, is_long, sz)
             logger.info(open_result)
 
-            await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, take_profit_percentage)
+            await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, stop_loss_percentage, take_profit_percentage)
 
             await query.edit_message_text(text=f"Opened {context.user_data['enter_mode']} for {sz} units on {selected_coin} ({leverage}x)")
         else:
@@ -157,12 +182,14 @@ async def selected_take_profit(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, take_profit_percentage: float):
+async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, stop_loss_percentage: float, take_profit_percentage: float):
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-    liquidation_px = get_liquidation_px(user_state, selected_coin)
+    liquidation_px = float(hyperliquid_utils.get_liquidation_px_str(user_state, selected_coin))
 
     if liquidation_px > 0.0:
-        sl_trigger_px = liquidation_px * 1.005 if is_long else liquidation_px * 0.995
+        liquidation_trigger_px = liquidation_px * (1.005 if is_long else 0.995)
+        user_trigger_px = mid * (1.0 - stop_loss_percentage / 100.0) if is_long else mid * (1.0 + stop_loss_percentage / 100.0)
+        sl_trigger_px = max(liquidation_trigger_px, user_trigger_px) if is_long else min(liquidation_trigger_px, user_trigger_px)
     else:
         sl_trigger_px = mid * 0.98 if is_long else mid * 1.02
 
