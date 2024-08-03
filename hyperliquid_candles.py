@@ -13,7 +13,7 @@ from telegram.constants import ParseMode
 
 from hyperliquid_utils import hyperliquid_utils
 
-from utils import fmt
+from utils import fmt, fmt_price
 
 
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -95,7 +95,7 @@ async def send_trend_change_message(context, df_1h: pd.DataFrame, df_4h: pd.Data
             ["Down ", fmt(results_1h["aroon_down_prev"]), fmt(results_1h["aroon_down"])],
             ["Supertrend: ", "", ""],
             ["Trend ", results_1h["supertrend_trend_prev"], results_1h["supertrend_trend"]],
-            ["Value ", round(results_1h["supertrend_prev"], 2 if results_1h["supertrend_prev"] > 1 else 4), round(results_1h["supertrend_prev"], 2 if results_1h["supertrend"] > 1 else 4)],
+            ["Value ", fmt_price(results_1h["supertrend_prev"]), fmt_price(results_1h["supertrend"])],
             ["Z-score: ", "", ""],
             ["Trend ", results_1h["zscore_trend_prev"], results_1h["zscore_trend"]],
             ["Value ", fmt(results_1h["zscore_prev"]), fmt(results_1h["zscore"])]
@@ -114,7 +114,7 @@ async def send_trend_change_message(context, df_1h: pd.DataFrame, df_4h: pd.Data
             ["Down ", fmt(results_4h["aroon_down_prev"]), fmt(results_4h["aroon_down"])],
             ["Supertrend: ", "", ""],
             ["Trend ", results_4h["supertrend_trend_prev"], results_4h["supertrend_trend"]],
-            ["Value ", round(results_4h["supertrend_prev"], 2 if results_4h["supertrend_prev"] > 1 else 4), round(results_4h["supertrend_prev"], 2 if results_4h["supertrend"] > 1 else 4)],
+            ["Value ", fmt_price(results_4h["supertrend_prev"]), fmt_price(results_4h["supertrend"])],
             ["Z-score: ", "", ""],
             ["Trend ", results_4h["zscore_trend_prev"], results_4h["zscore_trend"]],
             ["Value ", fmt(results_4h["zscore_prev"]), fmt(results_4h["zscore"])],

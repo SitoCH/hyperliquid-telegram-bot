@@ -5,7 +5,7 @@ from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
 from hyperliquid.utils.constants import MAINNET_API_URL
 from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
-from utils import OPERATION_CANCELLED, fmt, px_round
+from utils import OPERATION_CANCELLED, fmt, px_round, fmt_price
 
 EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT = range(5)
 
@@ -41,6 +41,10 @@ async def enter_short(update: Update, context: CallbackContext) -> int:
     return SELECTING_COIN
 
 
+def ger_price_estimate(mid, decrease, percentage) -> str:
+    return fmt_price(mid * (1.0 - percentage / 100.0) if decrease else mid * (1.0 + percentage / 100.0))
+
+
 async def selected_amount(update: Update, context: CallbackContext) -> int:
     query = update.callback_query
     await query.answer()
@@ -56,15 +60,19 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
         await query.edit_message_text("Invalid amount.")
         return ConversationHandler.END
 
+    coin = context.user_data["selected_coin"]
+    mid = float(hyperliquid_utils.info.all_mids()[coin])
+    is_long = context.user_data["enter_mode"] == "long"
+
     keyboard = [
-        [InlineKeyboardButton(f"{stop_loss}%", callback_data=str(stop_loss))]
-        for stop_loss in [1.0, 2.0, 3.0, 4.0, 5.0]
+        [InlineKeyboardButton(f"{stop_loss}% (~{ger_price_estimate(mid, is_long, stop_loss)} USDC)", callback_data=str(stop_loss))]
+        for stop_loss in [1.0, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
     ]
     keyboard.append([InlineKeyboardButton("Maximum", callback_data='100.0')])
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
-        "Please enter the desired stop loss percentage:",
+        f"Please enter the desired stop loss percentage (market price: {fmt_price(mid)} USDC):",
         reply_markup=reply_markup
     )
 
@@ -82,14 +90,18 @@ async def selected_stop_loss(update: Update, context: CallbackContext) -> int:
 
     context.user_data["stop_loss"] = stop_loss
 
+    coin = context.user_data["selected_coin"]
+    mid = float(hyperliquid_utils.info.all_mids()[coin])
+    is_long = context.user_data["enter_mode"] == "long"
+
     keyboard = [
-        [InlineKeyboardButton(f"{take_profit}%", callback_data=str(take_profit))]
+        [InlineKeyboardButton(f"{take_profit}% (~{ger_price_estimate(mid, not is_long, take_profit)} USDC)", callback_data=str(take_profit))]
         for take_profit in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
     ]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
-        "Please enter the desired take profit percentage:",
+        f"Please enter the desired take profit percentage (market price: {fmt_price(mid)} USDC):",
         reply_markup=reply_markup
     )
 
@@ -117,7 +129,7 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
-        f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']} ({fmt(withdrawable)} USDC available):",
+        f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']}:",
         reply_markup=reply_markup
     )
 
