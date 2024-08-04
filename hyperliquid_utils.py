@@ -108,7 +108,7 @@ class HyperliquidUtils:
         user_state = self.info.user_state(self.address)
         return [asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])]
 
-    def get_coins_by_open_interest(self)-> List[str]:
+    def get_coins_by_open_interest(self) -> List[str]:
         response_data = self.info.meta_and_asset_ctxs()
         universe, coin_data = response_data[0]['universe'], response_data[1]
 

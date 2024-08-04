@@ -10,13 +10,13 @@ EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELEC
 
 async def enter_long(update: Update, context: CallbackContext) -> int:
     context.user_data["enter_mode"] = "long"
-    await update.message.reply_text('Choose a coin to long:', reply_markup=hyperliquid_utils.get_enter_reply_markup())
+    await update.message.reply_text('Choose a coin to long:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
     return SELECTING_COIN
 
 
 async def enter_short(update: Update, context: CallbackContext) -> int:
     context.user_data["enter_mode"] = "short"
-    await update.message.reply_text('Choose a coin to short:', reply_markup=hyperliquid_utils.get_enter_reply_markup())
+    await update.message.reply_text('Choose a coin to short:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
     return SELECTING_COIN
 
 
