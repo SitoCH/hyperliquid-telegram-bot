@@ -1,8 +1,6 @@
-import requests
 from logging_utils import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
-from hyperliquid.utils.constants import MAINNET_API_URL
 from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt, px_round, fmt_price
@@ -10,34 +8,15 @@ from utils import OPERATION_CANCELLED, fmt, px_round, fmt_price
 EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT = range(5)
 
 
-def get_coins_by_open_interest():
-    headers = {"Content-Type": "application/json"}
-    data = {"type": "metaAndAssetCtxs"}
-    response = requests.post(f"{MAINNET_API_URL}/info", headers=headers, json=data)
-    response_data = response.json()
-    universe, coin_data = response_data[0]['universe'], response_data[1]
-
-    coins = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
-    sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
-    return [coin[0] for coin in reversed(sorted_coins[:75])]
-
-
-def get_enter_reply_markup():
-    coins = get_coins_by_open_interest()
-    keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
-    keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
-    return InlineKeyboardMarkup(keyboard)
-
-
 async def enter_long(update: Update, context: CallbackContext) -> int:
     context.user_data["enter_mode"] = "long"
-    await update.message.reply_text('Choose a coin to long:', reply_markup=get_enter_reply_markup())
+    await update.message.reply_text('Choose a coin to long:', reply_markup=hyperliquid_utils.get_enter_reply_markup())
     return SELECTING_COIN
 
 
 async def enter_short(update: Update, context: CallbackContext) -> int:
     context.user_data["enter_mode"] = "short"
-    await update.message.reply_text('Choose a coin to short:', reply_markup=get_enter_reply_markup())
+    await update.message.reply_text('Choose a coin to short:', reply_markup=hyperliquid_utils.get_enter_reply_markup())
     return SELECTING_COIN
 
 
@@ -270,9 +249,4 @@ async def exit_selected_coin(update: Update, context: CallbackContext) -> int:
         logger.critical(e, exc_info=True)
         await query.edit_message_text(text=f"Failed to exit {coin}: {str(e)}")
 
-    return ConversationHandler.END
-
-
-async def trade_cancel(update: Update, context: CallbackContext) -> int:
-    await update.message.reply_text(OPERATION_CANCELLED, reply_markup=telegram_utils.reply_markup)
     return ConversationHandler.END

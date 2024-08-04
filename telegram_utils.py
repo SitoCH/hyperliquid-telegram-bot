@@ -8,14 +8,14 @@ from telegram import (
 )
 
 from telegram import Update
-from telegram.ext import Application, ContextTypes
+from telegram.ext import Application, ContextTypes, ConversationHandler, CallbackContext
 from telegram.ext._handlers.basehandler import BaseHandler
 from telegram.ext._utils.types import CCT, JobCallback
 
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
-from utils import exchange_enabled, update_orders_enabled
+from utils import OPERATION_CANCELLED, exchange_enabled, update_orders_enabled
 
 from typing import Optional, Union
 
@@ -23,14 +23,20 @@ from typing import Optional, Union
 filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
 
 
+async def conversation_cancel(update: Update, context: CallbackContext) -> int:
+    await update.message.reply_text(OPERATION_CANCELLED, reply_markup=telegram_utils.reply_markup)
+    return ConversationHandler.END
+
+
 class TelegramUtils:
 
     exit_all_command = "exit_all"
     overview_command = "overview"
+    ta_command = "ta"
 
     reply_markup = ReplyKeyboardMarkup(
         [
-            [KeyboardButton("/positions"), KeyboardButton("/orders"), KeyboardButton(f"/{overview_command}")],
+            [KeyboardButton("/positions"), KeyboardButton(f"/{ta_command}"), KeyboardButton("/orders"), KeyboardButton(f"/{overview_command}")],
             [KeyboardButton("/long"), KeyboardButton("/short")] if exchange_enabled else [],
             [KeyboardButton(f"/{exit_all_command}"), KeyboardButton("/exit")] if exchange_enabled else [],
             [KeyboardButton("/update_orders")] if exchange_enabled and update_orders_enabled else []

@@ -1,7 +1,9 @@
 import os
+from typing import List
 
 import eth_account
 from eth_account.signers.local import LocalAccount
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from logging_utils import logger
 
@@ -105,6 +107,20 @@ class HyperliquidUtils:
     def get_coins_with_open_positions(self):
         user_state = self.info.user_state(self.address)
         return [asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])]
+
+    def get_coins_by_open_interest(self)-> List[str]:
+        response_data = self.info.meta_and_asset_ctxs()
+        universe, coin_data = response_data[0]['universe'], response_data[1]
+
+        coins = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
+        sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
+        return [coin[0] for coin in reversed(sorted_coins[:75])]
+
+    def get_coins_reply_markup(self):
+        coins = self.get_coins_by_open_interest()
+        keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
+        keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
+        return InlineKeyboardMarkup(keyboard)
 
 
 hyperliquid_utils = HyperliquidUtils()

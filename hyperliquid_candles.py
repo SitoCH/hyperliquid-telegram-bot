@@ -7,13 +7,36 @@ from tabulate import simple_separated_format, tabulate
 
 from logging_utils import logger
 
-from telegram.ext import ContextTypes
+from telegram import Update
+from telegram.ext import ContextTypes, CallbackContext, ConversationHandler
 from telegram_utils import telegram_utils
 from telegram.constants import ParseMode
 
 from hyperliquid_utils import hyperliquid_utils
 
-from utils import fmt, fmt_price
+from utils import OPERATION_CANCELLED, fmt, fmt_price
+
+SELECTING_COIN_FOR_TA = range(1)
+
+
+async def execute_ta(update: Update, context: CallbackContext) -> int:
+    await update.message.reply_text('Choose a coin to analyze:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
+    return SELECTING_COIN_FOR_TA
+
+
+async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    coin = query.data
+    if coin == 'cancel':
+        await query.edit_message_text(text=OPERATION_CANCELLED)
+        return ConversationHandler.END
+
+    await query.edit_message_text(text=f"Analyzing {coin}...")
+    await analyze_candles_for_coin(context, coin, True)
+    await query.delete_message()
+    return ConversationHandler.END
 
 
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -24,10 +47,10 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     coins_with_open_positions = set(hyperliquid_utils.get_coins_with_open_positions())
     coins = coins_to_analyze | coins_with_open_positions
     for coin in coins:
-        await analyze_candles_for_coin(context, coin)
+        await analyze_candles_for_coin(context, coin, False)
 
 
-async def analyze_candles_for_coin(context, coin: str) -> None:
+async def analyze_candles_for_coin(context, coin: str, always_notify: bool) -> None:
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
@@ -43,7 +66,7 @@ async def analyze_candles_for_coin(context, coin: str) -> None:
 
         flip_on_4h = False if df_4h['T'].iloc[-1] < pd.Timestamp.now() - pd.Timedelta(hours=1) else flip_on_4h
 
-        if flip_on_1h or flip_on_4h:
+        if always_notify or flip_on_1h or flip_on_4h:
             await send_trend_change_message(context, df_1h, df_4h, coin)
     except Exception as e:
         await context.bot.send_message(
@@ -130,7 +153,7 @@ async def send_trend_change_message(context, df_1h: pd.DataFrame, df_4h: pd.Data
     )
 
     message_lines = [
-        f"<b>A trend indicator changed for {coin}</b>",
+        f"<b>Indicators for {coin}</b>",
         "1h indicators:",
         f"<pre>{table_1h}</pre>",
         "4h indicators:",
