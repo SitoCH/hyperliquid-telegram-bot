@@ -17,10 +17,14 @@ from utils import fmt, fmt_price
 
 
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
-    coins = os.getenv("HYPERLIQUID_TELEGRAM_BOT_ANALYZE_COINS", "")
-    if len(coins) > 0:
-        for coin in coins.split(","):
-            await analyze_candles_for_coin(context, coin)
+    coins_to_analyze = []
+    if len(coins_to_analyze) > 0:
+        coins_to_analyze = set(os.getenv("HYPERLIQUID_TELEGRAM_BOT_ANALYZE_COINS", "").split(","))
+
+    coins_with_open_positions = set(hyperliquid_utils.get_coins_with_open_positions())
+    coins = coins_to_analyze | coins_with_open_positions
+    for coin in coins:
+        await analyze_candles_for_coin(context, coin)
 
 
 async def analyze_candles_for_coin(context, coin: str) -> None:
@@ -81,8 +85,9 @@ def apply_indicators(df: pd.DataFrame) -> bool:
     zscore = ta.zscore(df['c'], length=length)
     df['Zscore'] = zscore
     df['Zscore_Flip_Detected'] = ((df['Zscore'] > 0) & (df['Zscore'].shift() <= 0)) | ((df['Zscore'] < 0) & (df['Zscore'].shift() >= 0))
+    zscore_flip_detected = df['Zscore_Flip_Detected'].iloc[-1] and (df['Zscore_Flip_Detected'].iloc[-1] > 0.25 or df['Zscore_Flip_Detected'].iloc[-1] < 0.25)
 
-    return df['Aroon_Flip_Detected'].iloc[-1] or df['SuperTrend_Flip_Detected'].iloc[-1] or df['Zscore_Flip_Detected'].iloc[-1]
+    return df['Aroon_Flip_Detected'].iloc[-1] or df['SuperTrend_Flip_Detected'].iloc[-1] or zscore_flip_detected
 
 
 async def send_trend_change_message(context, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> None:

@@ -50,7 +50,7 @@ class HyperliquidUtils:
     def _get_asset_position(self, user_state, selected_coin):
         return next(
             (asset_position['position'] for asset_position in user_state.get("assetPositions", [])
-             if asset_position['position']['coin'] == selected_coin), 
+             if asset_position['position']['coin'] == selected_coin),
             None
         )
 
@@ -101,6 +101,10 @@ class HyperliquidUtils:
                 return 8
         return 5
 
+
+    def get_coins_with_open_positions(self):
+        user_state = self.info.user_state(self.address)
+        return [asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])]
 
 
 hyperliquid_utils = HyperliquidUtils()
