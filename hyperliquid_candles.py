@@ -42,10 +42,9 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     coins_to_analyze = []
     if len(coins_to_analyze) > 0:
-        coins_to_analyze = set(os.getenv("HYPERLIQUID_TELEGRAM_BOT_ANALYZE_COINS", "").split(","))
+        coins_to_analyze = os.getenv("HYPERLIQUID_TELEGRAM_BOT_ANALYZE_COINS", "").split(",")
 
-    coins_with_open_positions = set(hyperliquid_utils.get_coins_with_open_positions())
-    coins = coins_to_analyze | coins_with_open_positions
+    coins = set(coins_to_analyze) | set(hyperliquid_utils.get_coins_with_open_positions())
     for coin in coins:
         await analyze_candles_for_coin(context, coin, False)
 
