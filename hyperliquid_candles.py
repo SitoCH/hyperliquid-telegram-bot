@@ -31,7 +31,7 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
         return ConversationHandler.END
 
     await query.edit_message_text(text=f"Analyzing {coin}...")
-    await analyze_candles_for_coin(context, coin, always_notify=True)
+    await analyze_candles_for_coin(context, coin, hyperliquid_utils.info.all_mids(), always_notify=True)
     await query.delete_message()
     return ConversationHandler.END
 
@@ -39,28 +39,31 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     coins_to_analyze = os.getenv("HYPERLIQUID_TELEGRAM_BOT_ANALYZE_COINS", "").split(",")
     coins = set(coins_to_analyze) | set(hyperliquid_utils.get_coins_with_open_positions())
+    all_mids = hyperliquid_utils.info.all_mids()
 
     for coin in coins:
-        await analyze_candles_for_coin(context, coin, always_notify=False)
+        await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
 
 
-async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, always_notify: bool) -> None:
+async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, all_mids, always_notify: bool) -> None:
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
-        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 7 * 86400000, now)
-        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 14 * 86400000, now)
+        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 14 * 86400000, now)
+        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 21 * 86400000, now)
 
         df_1h = prepare_dataframe(candles_1h)
         df_4h = prepare_dataframe(candles_4h)
 
-        flip_on_1h = apply_indicators(df_1h)
-        flip_on_4h = apply_indicators(df_4h)
-        flip_on_4h = flip_on_4h and df_4h["T"].iloc[-1] >= pd.Timestamp.now() - pd.Timedelta(hours=1)
+        mid = float(all_mids[coin])
+        flip_on_1h = apply_indicators(df_1h, mid)
+        flip_on_4h = apply_indicators(df_4h, mid)
+        flip_on_4h = flip_on_4h and 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now() - pd.Timedelta(hours=1)
 
         if always_notify or flip_on_1h or flip_on_4h:
-            await send_trend_change_message(context, df_1h, df_4h, coin)
+            await send_trend_change_message(context, mid, df_1h, df_4h, coin)
     except Exception as e:
+        logger.critical(e, exc_info=True)
         await context.bot.send_message(text=f"Failed to analyze candles for {coin}: {str(e)}", chat_id=telegram_utils.telegram_chat_id)
 
 
@@ -73,8 +76,11 @@ def prepare_dataframe(candles: list) -> pd.DataFrame:
     return df
 
 
-def apply_indicators(df: pd.DataFrame) -> bool:
+def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     length = 20
+
+    df.set_index("T", inplace=True)
+    df.sort_index(inplace=True)
 
     # Aroon Indicator
     aroon = ta.aroon(df["h"], df["l"], length=length)
@@ -91,18 +97,23 @@ def apply_indicators(df: pd.DataFrame) -> bool:
     df["Zscore"] = ta.zscore(df["c"], length=length)
     df["Zscore_Flip_Detected"] = (df["Zscore"].gt(0) & df["Zscore"].shift().le(0)) | (df["Zscore"].lt(0) & df["Zscore"].shift().ge(0))
 
-    return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "Zscore_Flip_Detected"]].any(axis=1).iloc[-1]
+    # VWAP
+    df["VWAP"] = ta.vwap(df["h"], df["l"], df["c"], df["v"])
+    df["VWAP_Flip_Detected"] = (mid > df["VWAP"].iloc[-2]) & (mid <= df["VWAP"].iloc[-1]) | (mid < df["VWAP"].iloc[-2]) & (mid >= df["VWAP"].iloc[-1])
+
+    return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "Zscore_Flip_Detected", "VWAP_Flip_Detected"]].any(axis=1).iloc[-1]
 
 
-async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> None:
-    results_1h = get_ta_results(df_1h)
-    results_4h = get_ta_results(df_4h)
+async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> None:
+    results_1h = get_ta_results(df_1h, mid)
+    results_4h = get_ta_results(df_4h, mid)
 
     table_1h = format_table(results_1h)
     table_4h = format_table(results_4h)
 
     message_lines = [
         f"<b>Indicators for {coin}</b>",
+        f"Market price: {fmt_price(mid)} USDC",
         "1h indicators:",
         f"<pre>{table_1h}</pre>",
         "4h indicators:",
@@ -112,11 +123,12 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, df_1h: p
     await context.bot.send_message(text="\n".join(message_lines), parse_mode=ParseMode.HTML, chat_id=telegram_utils.telegram_chat_id)
 
 
-def get_ta_results(df: pd.DataFrame) -> dict:
+def get_ta_results(df: pd.DataFrame, mid: float) -> dict:
     aroon_up_prev, aroon_down_prev = df["Aroon_Up"].iloc[-2], df["Aroon_Down"].iloc[-2]
     aroon_up, aroon_down = df["Aroon_Up"].iloc[-1], df["Aroon_Down"].iloc[-1]
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
     zscore_prev, zscore = df["Zscore"].iloc[-2], df["Zscore"].iloc[-1]
+    vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
 
     return {
         "aroon_up_prev": aroon_up_prev,
@@ -133,6 +145,10 @@ def get_ta_results(df: pd.DataFrame) -> dict:
         "zscore": zscore,
         "zscore_trend_prev": "uptrend" if zscore_prev > 0 else "downtrend",
         "zscore_trend": "uptrend" if zscore > 0 else "downtrend",
+        "vwap_prev": vwap_prev,
+        "vwap": vwap,
+        "vwap_trend_prev": "uptrend" if mid > vwap_prev else "downtrend",
+        "vwap_trend": "uptrend" if mid > vwap else "downtrend",
     }
 
 
@@ -149,6 +165,9 @@ def format_table(results: dict) -> str:
             ["Z-score: ", "", ""],
             ["Trend ", results["zscore_trend_prev"], results["zscore_trend"]],
             ["Value ", fmt(results["zscore_prev"]), fmt(results["zscore"])],
+            ["VWAP: ", "", ""],
+            ["Trend ", results["vwap_trend_prev"], results["vwap_trend"]],
+            ["Value ", fmt(results["vwap_prev"]), fmt(results["vwap"])],
         ],
         headers=["", "Previous", "Current"],
         tablefmt=simple_separated_format(" "),
