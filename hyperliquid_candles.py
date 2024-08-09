@@ -167,7 +167,7 @@ def format_table(results: dict) -> str:
             ["Value ", fmt(results["zscore_prev"]), fmt(results["zscore"])],
             ["VWAP: ", "", ""],
             ["Trend ", results["vwap_trend_prev"], results["vwap_trend"]],
-            ["Value ", fmt(results["vwap_prev"]), fmt(results["vwap"])],
+            ["Value ", fmt_price(results["vwap_prev"]), fmt_price(results["vwap"])],
         ],
         headers=["", "Previous", "Current"],
         tablefmt=simple_separated_format(" "),
