@@ -51,8 +51,8 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
-        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 14 * 86400000, now)
-        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 21 * 86400000, now)
+        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 7 * 86400000, now)
+        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 14 * 86400000, now)
 
         df_1h = prepare_dataframe(candles_1h)
         df_4h = prepare_dataframe(candles_4h)
