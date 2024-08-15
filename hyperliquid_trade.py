@@ -205,7 +205,6 @@ async def exit_all_positions(update: Update, context: ContextTypes.DEFAULT_TYPE)
             for asset_position in user_state.get("assetPositions", []):
                 coin = asset_position['position']['coin']
                 exchange.market_close(coin)
-                await update.message.reply_text(text=f"Closed {coin}")
         else:
             await update.message.reply_text(text="Exchange is not enabled")
     except Exception as e:
@@ -242,7 +241,7 @@ async def exit_selected_coin(update: Update, context: CallbackContext) -> int:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
             exchange.market_close(coin)
-            await query.edit_message_text(text=f"Closed {coin}")
+            await query.delete_message()
         else:
             await query.edit_message_text(text="Exchange is not enabled")
     except Exception as e:
