@@ -45,7 +45,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
 
     keyboard = [
         [InlineKeyboardButton(f"{stop_loss}% (~{ger_price_estimate(mid, is_long, stop_loss)} USDC)", callback_data=str(stop_loss))]
-        for stop_loss in [1.0, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+        for stop_loss in [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
     ]
     keyboard.append([InlineKeyboardButton("Maximum", callback_data='100.0')])
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
