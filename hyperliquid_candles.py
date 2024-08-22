@@ -133,7 +133,13 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
         return buf
 
     df_5m_plot = df_5m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+    from_time = df_5m_plot['t'].max() - pd.Timedelta(hours=6)
+    df_5m_plot = df_5m_plot.loc[df_5m_plot['t'] >= from_time]
+
     df_1h_plot = df_1h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+    from_time = df_1h_plot['t'].max() - pd.Timedelta(hours=36)
+    df_1h_plot = df_1h_plot.loc[df_1h_plot['t'] >= from_time]
+
     df_4h_plot = df_4h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
 
     chart_buffers.append(save_to_buffer(df_5m_plot, f"{coin} - 5M Chart"))
