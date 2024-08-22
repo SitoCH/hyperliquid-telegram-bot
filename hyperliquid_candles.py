@@ -1,7 +1,10 @@
 import os
+import io
 import time
 import pandas as pd
 import pandas_ta as ta
+import matplotlib.pyplot as plt
+import mplfinance as mpf
 from tabulate import tabulate, simple_separated_format
 from telegram import Update
 from telegram.ext import CallbackContext, ContextTypes, ConversationHandler
@@ -51,19 +54,22 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
+        candles_5m = hyperliquid_utils.info.candles_snapshot(coin, "5m", now - 1 * 86400000, now)
         candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 5 * 86400000, now)
         candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 10 * 86400000, now)
 
+        df_5m = prepare_dataframe(candles_5m)
         df_1h = prepare_dataframe(candles_1h)
         df_4h = prepare_dataframe(candles_4h)
 
         mid = float(all_mids[coin])
+        apply_indicators(df_5m, mid)
         flip_on_1h = apply_indicators(df_1h, mid)
         flip_on_4h = apply_indicators(df_4h, mid)
         flip_on_4h = flip_on_4h and 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now() - pd.Timedelta(hours=1)
 
         if always_notify or flip_on_1h or flip_on_4h:
-            await send_trend_change_message(context, mid, df_1h, df_4h, coin)
+            await send_trend_change_message(context, mid, df_5m, df_1h, df_4h, coin)
     except Exception as e:
         logger.critical(e, exc_info=True)
         await context.bot.send_message(text=f"Failed to analyze candles for {coin}: {str(e)}", chat_id=telegram_utils.telegram_chat_id)
@@ -106,7 +112,44 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "Zscore_Flip_Detected", "VWAP_Flip_Detected"]].any(axis=1).iloc[-1]
 
 
-async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> None:
+def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> list:
+    chart_buffers = []
+
+    def save_to_buffer(df_plot: pd.DataFrame, title: str) -> io.BytesIO:
+        buf = io.BytesIO()
+        fig, ax = plt.subplots(2, 1, figsize=(12, 6), gridspec_kw={'height_ratios': [3, 1]})
+        mpf.plot(df_plot.set_index("t"),
+                 type='candle',
+                 ax=ax[0],
+                 volume=ax[1],
+                 axtitle=title,
+                 style='charles',
+                 mav=(20),
+                 addplot=[mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0]),
+                          mpf.make_addplot(df_plot['VWAP'], ax=ax[0])])
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+
+    df_5m_plot = df_5m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+    df_1h_plot = df_1h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+    df_4h_plot = df_4h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+
+    chart_buffers.append(save_to_buffer(df_5m_plot, f"{coin} - 5M Chart"))
+    chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart"))
+    chart_buffers.append(save_to_buffer(df_4h_plot, f"{coin} - 4H Chart"))
+
+    return chart_buffers
+
+
+async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> None:
+    chart_buffers = generate_chart(df_5m, df_1h, df_4h, coin)
+
+    for buf in chart_buffers:
+        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=buf)
+
+
     results_1h = get_ta_results(df_1h, mid)
     results_4h = get_ta_results(df_4h, mid)
 
@@ -122,7 +165,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
         f"<pre>{table_4h}</pre>",
     ]
 
-    await context.bot.send_message(text="\n".join(message_lines), parse_mode=ParseMode.HTML, chat_id=telegram_utils.telegram_chat_id)
+    await context.bot.send_message(chat_id=telegram_utils.telegram_chat_id, text="\n".join(message_lines), parse_mode=ParseMode.HTML)
 
 
 def get_ta_results(df: pd.DataFrame, mid: float) -> dict:
