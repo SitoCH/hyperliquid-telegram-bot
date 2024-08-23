@@ -118,15 +118,24 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
     def save_to_buffer(df_plot: pd.DataFrame, title: str) -> io.BytesIO:
         buf = io.BytesIO()
         fig, ax = plt.subplots(2, 1, figsize=(12, 6), gridspec_kw={'height_ratios': [3, 1]})
+
+        df_plot['SuperTrend_Green'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] > row['SuperTrend'] else float('nan'), axis=1)
+        df_plot['SuperTrend_Red'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] <= row['SuperTrend'] else float('nan'), axis=1)
+
         mpf.plot(df_plot.set_index("t"),
                  type='candle',
                  ax=ax[0],
                  volume=ax[1],
                  axtitle=title,
                  style='charles',
-                 mav=(20),
-                 addplot=[mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0]),
-                          mpf.make_addplot(df_plot['VWAP'], ax=ax[0])])
+                 addplot=[
+                     mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', label='SuperTrend', width=0.75),
+                     mpf.make_addplot(df_plot['SuperTrend_Red'], ax=ax[0], color='red', width=0.75),
+                     mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='lightblue', label='VWAP', width=0.75)
+        ])
+
+        ax[0].legend(loc='upper left')
+
         plt.savefig(buf, format='png')
         buf.seek(0)
         plt.close(fig)
