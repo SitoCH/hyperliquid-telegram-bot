@@ -1,6 +1,6 @@
 
 import json
-import os
+import sys
 import datetime
 
 from logging_utils import logger
@@ -356,4 +356,4 @@ class HyperliquidBot:
 
 if __name__ == "__main__":
     bot = HyperliquidBot()
-    os._exit(0)
+    sys.exit()

@@ -1,4 +1,5 @@
 import os
+import sys
 import datetime
 from typing import Any
 
@@ -62,7 +63,7 @@ class TelegramUtils:
 
     async def send_message_and_exit(self, context: ContextTypes.DEFAULT_TYPE):
         await self.send_message(context)
-        os._exit(0)
+        sys.exit()
 
     def add_handler(self, handler: BaseHandler[Any, CCT], group: int = 0) -> None:
         self.telegram_app.add_handler(handler, group)
