@@ -112,6 +112,26 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "Zscore_Flip_Detected", "VWAP_Flip_Detected"]].any(axis=1).iloc[-1]
 
 
+def heikin_ashi(df):
+    ha_close = (df['Open'] + df['High'] + df['Low'] + df['Close']) / 4
+
+    ha_df = pd.DataFrame(dict(Close=ha_close, Volume=df['Volume']))
+
+    ha_df['Open'] = [0.0] * len(df)
+
+    prekey = df.index[0]
+    ha_df.at[prekey, 'Open'] = df.at[prekey, 'Open']
+
+    for key in df.index[1:]:
+        ha_df.at[key, 'Open'] = (ha_df.at[prekey, 'Open'] + ha_df.at[prekey, 'Close']) / 2.0
+        prekey = key
+
+    ha_df['High'] = pd.concat([ha_df.Open, df.High], axis=1).max(axis=1)
+    ha_df['Low'] = pd.concat([ha_df.Open, df.Low], axis=1).min(axis=1)
+
+    return ha_df
+
+
 def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> list:
     chart_buffers = []
 
@@ -122,7 +142,9 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
         df_plot['SuperTrend_Green'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] > row['SuperTrend'] else float('nan'), axis=1)
         df_plot['SuperTrend_Red'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] <= row['SuperTrend'] else float('nan'), axis=1)
 
-        mpf.plot(df_plot.set_index("t"),
+        ha_df = heikin_ashi(df_plot)
+
+        mpf.plot(ha_df,
                  type='candle',
                  ax=ax[0],
                  volume=ax[1],
