@@ -146,7 +146,7 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
 
     def save_to_buffer(df_plot: pd.DataFrame, title: str) -> io.BytesIO:
         buf = io.BytesIO()
-        fig, ax = plt.subplots(2, 1, figsize=(12, 6), gridspec_kw={'height_ratios': [3, 1]})
+        fig, ax = plt.subplots(3, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1, 1]})
 
         df_plot['SuperTrend_Green'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] > row['SuperTrend'] else float('nan'), axis=1)
         df_plot['SuperTrend_Red'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] <= row['SuperTrend'] else float('nan'), axis=1)
@@ -182,8 +182,16 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
                      mpf.make_addplot(df_plot['MACD_Hist'], type='bar', width=0.7, color=macd_hist_colors, ax=ax[1], alpha=0.5, secondary_y=False)
                  ])
 
+        ax[2].plot(df_plot.index, df_plot['Aroon_Up'], label='Aroon Upper', color='green')
+        ax[2].plot(df_plot.index, df_plot['Aroon_Down'], label='Aroon Lower', color='red')
+        ax[2].set_ylim(-10, 110)
+        ax[2].set_yticks([0, 50, 100])
+        ax[2].legend(loc='upper left')
+        ax[2].set_title('Aroon Indicator')
+
         ax[0].legend(loc='upper left')
 
+        plt.tight_layout()
         plt.savefig(buf, format='png')
         buf.seek(0)
         plt.close(fig)
