@@ -115,6 +115,9 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     df["MACD_Signal"] = macd["MACDs_12_26_9"]
     df["MACD_Hist"] = macd["MACDh_12_26_9"]
 
+    # EMA (Exponential Moving Average)
+    df["EMA"] = ta.ema(df["c"], length=length)
+
     return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "Zscore_Flip_Detected", "VWAP_Flip_Detected"]].any(axis=1).iloc[-1]
 
 
@@ -174,7 +177,8 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
                  addplot=[
                      mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', label='SuperTrend', width=0.75),
                      mpf.make_addplot(df_plot['SuperTrend_Red'], ax=ax[0], color='red', width=0.75),
-                     mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='lightblue', label='VWAP', width=0.75),
+                     mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='blue', label='VWAP', width=0.75),
+                     mpf.make_addplot(df_plot['EMA'], ax=ax[0], color='orange', label='EMA', width=0.75),
                      mpf.make_addplot(df_plot['MACD_Hist'], type='bar', width=0.7, color=macd_hist_colors, ax=ax[1], alpha=0.5, secondary_y=False)
                  ])
 
