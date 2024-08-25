@@ -109,6 +109,12 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     df["VWAP"] = ta.vwap(df["h"], df["l"], df["c"], df["v"])
     df["VWAP_Flip_Detected"] = (mid > df["VWAP"].iloc[-2]) & (mid <= df["VWAP"].iloc[-1]) | (mid < df["VWAP"].iloc[-2]) & (mid >= df["VWAP"].iloc[-1])
 
+    # MACD
+    macd = ta.macd(df["c"], fast=12, slow=26, signal=9)
+    df["MACD"] = macd["MACD_12_26_9"]
+    df["MACD_Signal"] = macd["MACDs_12_26_9"]
+    df["MACD_Hist"] = macd["MACDh_12_26_9"]
+
     return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "Zscore_Flip_Detected", "VWAP_Flip_Detected"]].any(axis=1).iloc[-1]
 
 
@@ -144,17 +150,33 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
 
         ha_df = heikin_ashi(df_plot)
 
+        strong_positive_threshold = df_plot['MACD_Hist'].max() * 0.5
+        strong_negative_threshold = df_plot['MACD_Hist'].min() * 0.5
+
+        def determine_color(value):
+            if value >= strong_positive_threshold:
+                return 'green'
+            elif 0 < value < strong_positive_threshold:
+                return 'lightgreen'
+            elif strong_negative_threshold < value <= 0:
+                return 'lightcoral'
+            else:
+                return 'red'
+
+        macd_hist_colors = df_plot['MACD_Hist'].apply(determine_color).values
+
         mpf.plot(ha_df,
                  type='candle',
                  ax=ax[0],
-                 volume=ax[1],
+                 volume=False,
                  axtitle=title,
                  style='charles',
                  addplot=[
                      mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', label='SuperTrend', width=0.75),
                      mpf.make_addplot(df_plot['SuperTrend_Red'], ax=ax[0], color='red', width=0.75),
-                     mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='lightblue', label='VWAP', width=0.75)
-        ])
+                     mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='lightblue', label='VWAP', width=0.75),
+                     mpf.make_addplot(df_plot['MACD_Hist'], type='bar', width=0.7, color=macd_hist_colors, ax=ax[1], alpha=0.5, secondary_y=False)
+                 ])
 
         ax[0].legend(loc='upper left')
 
