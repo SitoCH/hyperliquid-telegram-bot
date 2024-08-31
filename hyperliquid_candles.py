@@ -101,10 +101,6 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     df["SuperTrend"] = supertrend[f"SUPERT_{length}_3"]
     df["SuperTrend_Flip_Detected"] = supertrend[f"SUPERTd_{length}_3"].diff().abs() == 1
 
-    # Z-score
-    df["Zscore"] = ta.zscore(df["c"], length=length)
-    df["Zscore_Flip_Detected"] = (df["Zscore"].gt(0) & df["Zscore"].shift().le(0)) | (df["Zscore"].lt(0) & df["Zscore"].shift().ge(0))
-
     # VWAP
     df["VWAP"] = ta.vwap(df["h"], df["l"], df["c"], df["v"])
     df["VWAP_Flip_Detected"] = (mid > df["VWAP"].iloc[-2]) & (mid <= df["VWAP"].iloc[-1]) | (mid < df["VWAP"].iloc[-2]) & (mid >= df["VWAP"].iloc[-1])
@@ -118,7 +114,7 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     # EMA (Exponential Moving Average)
     df["EMA"] = ta.ema(df["c"], length=length)
 
-    return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "Zscore_Flip_Detected", "VWAP_Flip_Detected"]].any(axis=1).iloc[-1]
+    return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "VWAP_Flip_Detected"]].any(axis=1).iloc[-1]
 
 
 def heikin_ashi(df):
@@ -215,11 +211,7 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
 
 
 async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> None:
-    chart_buffers = generate_chart(df_5m, df_1h, df_4h, coin)
-
-    for buf in chart_buffers:
-        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=buf)
-
+    charts = generate_chart(df_5m, df_1h, df_4h, coin)
 
     results_1h = get_ta_results(df_1h, mid)
     results_4h = get_ta_results(df_4h, mid)
@@ -238,12 +230,15 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
 
     await context.bot.send_message(chat_id=telegram_utils.telegram_chat_id, text="\n".join(message_lines), parse_mode=ParseMode.HTML)
 
+    for buf in charts:
+        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=buf)
+
+
 
 def get_ta_results(df: pd.DataFrame, mid: float) -> dict:
     aroon_up_prev, aroon_down_prev = df["Aroon_Up"].iloc[-2], df["Aroon_Down"].iloc[-2]
     aroon_up, aroon_down = df["Aroon_Up"].iloc[-1], df["Aroon_Down"].iloc[-1]
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
-    zscore_prev, zscore = df["Zscore"].iloc[-2], df["Zscore"].iloc[-1]
     vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
 
     return {
@@ -257,10 +252,6 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> dict:
         "supertrend": supertrend,
         "supertrend_trend_prev": "uptrend" if df["SuperTrend"].shift().gt(0).iloc[-2] else "downtrend",
         "supertrend_trend": "uptrend" if df["SuperTrend"].shift().gt(0).iloc[-1] else "downtrend",
-        "zscore_prev": zscore_prev,
-        "zscore": zscore,
-        "zscore_trend_prev": "uptrend" if zscore_prev > 0 else "downtrend",
-        "zscore_trend": "uptrend" if zscore > 0 else "downtrend",
         "vwap_prev": vwap_prev,
         "vwap": vwap,
         "vwap_trend_prev": "uptrend" if mid > vwap_prev else "downtrend",
@@ -279,10 +270,6 @@ def format_table(results: dict) -> str:
             ["Supertrend: ", "", ""],
             ["Trend ", results["supertrend_trend_prev"], results["supertrend_trend"]],
             ["Value ", fmt_price(results["supertrend_prev"]), fmt_price(results["supertrend"])],
-            ["", "", ""],
-            ["Z-score: ", "", ""],
-            ["Trend ", results["zscore_trend_prev"], results["zscore_trend"]],
-            ["Value ", fmt(results["zscore_prev"]), fmt(results["zscore"])],
             ["", "", ""],
             ["VWAP: ", "", ""],
             ["Trend ", results["vwap_trend_prev"], results["vwap_trend"]],
