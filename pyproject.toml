@@ -1,0 +1,18 @@
+[project]
+name = "hyperliquid-telegram-bot"
+version = "0.1.0"
+description = "-"
+readme = "README.md"
+requires-python = ">=3.10, < 3.11"
+dependencies = [
+    "hyperliquid-python-sdk>=0.7.1",
+    "matplotlib>=3.9.2",
+    "mplfinance>=0.12.10b0",
+    "pandas-ta",
+    "python-telegram-bot[job-queue]>=21.6",
+    "setuptools>=75.1.0",
+    "tabulate>=0.9.0",
+]
+
+[tool.uv.sources]
+pandas-ta = { git = "https://github.com/twopirllc/pandas-ta.git", branch = "development" }

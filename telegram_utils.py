@@ -65,7 +65,7 @@ class TelegramUtils:
         await self.send_message(context)
         sys.exit()
 
-    def add_handler(self, handler: BaseHandler[Any, CCT], group: int = 0) -> None:
+    def add_handler(self, handler: BaseHandler[Any, CCT, Any], group: int = 0) -> None:
         self.telegram_app.add_handler(handler, group)
 
     def run_repeating(self, callback: JobCallback[CCT],
