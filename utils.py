@@ -2,8 +2,6 @@ import os
 
 exchange_enabled = True if os.environ.get("HYPERLIQUID_TELEGRAM_BOT_KEY_FILE") is not None and os.path.isfile(os.environ.get("HYPERLIQUID_TELEGRAM_BOT_KEY_FILE")) else False
 
-update_orders_enabled = True if os.environ.get("HYPERLIQUID_TELEGRAM_BOT_UPDATE_ORDERS", "true") == "true" else False
-
 
 OPERATION_CANCELLED = 'Operation cancelled'
 

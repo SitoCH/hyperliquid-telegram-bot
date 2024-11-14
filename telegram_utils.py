@@ -16,7 +16,7 @@ from telegram.ext._utils.types import CCT, JobCallback
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
-from utils import OPERATION_CANCELLED, exchange_enabled, update_orders_enabled
+from utils import OPERATION_CANCELLED, exchange_enabled
 
 from typing import Optional, Union
 
@@ -39,8 +39,7 @@ class TelegramUtils:
         [
             [KeyboardButton("/positions"), KeyboardButton(f"/{ta_command}"), KeyboardButton("/orders"), KeyboardButton(f"/{overview_command}")],
             [KeyboardButton("/long"), KeyboardButton("/short")] if exchange_enabled else [],
-            [KeyboardButton(f"/{exit_all_command}"), KeyboardButton("/exit")] if exchange_enabled else [],
-            [KeyboardButton("/update_orders")] if exchange_enabled and update_orders_enabled else []
+            [KeyboardButton(f"/{exit_all_command}"), KeyboardButton("/exit")] if exchange_enabled else []
         ], resize_keyboard=True
     )
 
@@ -67,6 +66,9 @@ class TelegramUtils:
 
     def add_handler(self, handler: BaseHandler[Any, CCT, Any], group: int = 0) -> None:
         self.telegram_app.add_handler(handler, group)
+
+    def run_once(self, callback: JobCallback[CCT]):
+        self.telegram_app.job_queue.run_once(callback, when=0, chat_id=self.telegram_chat_id)
 
     def run_repeating(self, callback: JobCallback[CCT],
                       interval: Union[float, datetime.timedelta],

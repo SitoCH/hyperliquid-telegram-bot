@@ -2,6 +2,8 @@
 import json
 import sys
 import datetime
+import importlib
+import os
 
 from logging_utils import logger
 
@@ -16,11 +18,11 @@ from telegram.constants import ParseMode
 from telegram.ext import CommandHandler, ContextTypes, CallbackQueryHandler, ConversationHandler
 
 from hyperliquid_candles import SELECTING_COIN_FOR_TA, analyze_candles, execute_ta, selected_coin_for_ta
-from hyperliquid_orders import get_open_orders, update_open_orders, update_orders_command
+from hyperliquid_orders import get_open_orders
 from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, enter_long, enter_short, exit_all_positions, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import conversation_cancel, telegram_utils
-from utils import exchange_enabled, update_orders_enabled, fmt
+from utils import exchange_enabled, fmt
 
 
 class HyperliquidBot:
@@ -47,10 +49,12 @@ class HyperliquidBot:
 
 
         if exchange_enabled:
-            if update_orders_enabled:
-                telegram_utils.add_handler(CommandHandler("update_orders", update_orders_command))
-
-                telegram_utils.run_repeating(update_open_orders, interval=150, first=15)
+            strategy_name = os.environ.get("HYPERLIQUID_TELEGRAM_BOT_STRATEGY")
+            if strategy_name is not None:
+                strategy = self.load_strategy(strategy_name)
+                if strategy:
+                    telegram_utils.run_once(strategy.init_strategy)
+                logger.info(f'Exchange order enabled and loaded the strategy "{strategy_name}"')
 
             next_hour = datetime.datetime.now().replace(minute=1, second=0, microsecond=0) + datetime.timedelta(hours=1)
             telegram_utils.run_repeating(analyze_candles, interval=datetime.timedelta(hours=1.0), first=next_hour)
@@ -88,8 +92,20 @@ class HyperliquidBot:
             )
             telegram_utils.add_handler(enter_short_conv_handler)
 
+        else:
+            logger.info('Exchange orders disabled')
+
         telegram_utils.run_polling()
 
+    def load_strategy(self, strategy_name):
+        module_name = f"strategies.{strategy_name}.{strategy_name}"
+        try:
+            strategy_module = importlib.import_module(module_name)
+            strategy_class = getattr(strategy_module, strategy_name.title().replace('_', ''))
+            return strategy_class()
+        except (ModuleNotFoundError, AttributeError) as e:
+            logger.critical(e, exc_info=True)
+            return None
 
     def get_fill_icon(self, closed_pnl: float) -> str:
         return "🟢" if closed_pnl > 0 else "🔴"

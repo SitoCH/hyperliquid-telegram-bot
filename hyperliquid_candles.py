@@ -5,6 +5,7 @@ import pandas as pd
 import pandas_ta as ta
 import matplotlib.pyplot as plt
 import mplfinance as mpf
+
 from tabulate import tabulate, simple_separated_format
 from telegram import Update
 from telegram.ext import CallbackContext, ContextTypes, ConversationHandler
@@ -19,8 +20,7 @@ SELECTING_COIN_FOR_TA = range(1)
 
 
 async def execute_ta(update: Update, context: CallbackContext) -> int:
-    reply_markup = hyperliquid_utils.get_coins_reply_markup()
-    await update.message.reply_text("Choose a coin to analyze:", reply_markup=reply_markup)
+    await update.message.reply_text("Choose a coin to analyze:", reply_markup=hyperliquid_utils.get_coins_reply_markup())
     return SELECTING_COIN_FOR_TA
 
 
