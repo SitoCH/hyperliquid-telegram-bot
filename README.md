@@ -20,7 +20,7 @@ If the bot is monitoring a Vault you need to set also `HTB_USER_VAULT`.
 
 | Variable    | Description | Example |
 | -------- | ------- | ------- |
-| HTB_COINS_TO_ANALYZE    | Coins to anylze every hour | "BTC,ETH"|
+| HTB_COINS_TO_ANALYZE    | Coins to analyze every hour | "BTC,ETH"|
 | HTB_ANALYZE_COINS_WITH_OPEN_ORDERS    | Analyze also coins that have open orders |"True"|
 
 ## Docker Compose
