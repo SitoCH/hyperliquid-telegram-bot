@@ -49,7 +49,7 @@ class HyperliquidBot:
 
 
         if exchange_enabled:
-            strategy_name = os.environ.get("HYPERLIQUID_TELEGRAM_BOT_STRATEGY")
+            strategy_name = os.environ.get("HTB_STRATEGY")
             if strategy_name is not None:
                 strategy = self.load_strategy(strategy_name)
                 if strategy:

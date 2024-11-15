@@ -63,8 +63,8 @@ class TelegramUtils:
     )
 
     def __init__(self):
-        telegram_token = os.environ["HYPERLIQUID_TELEGRAM_BOT_TOKEN"]
-        self.telegram_chat_id = os.environ["HYPERLIQUID_TELEGRAM_BOT_CHAT_ID"]
+        telegram_token = os.environ["HTB_TOKEN"]
+        self.telegram_chat_id = os.environ["HTB_CHAT_ID"]
 
         self.telegram_app = Application.builder().token(telegram_token).build()
 

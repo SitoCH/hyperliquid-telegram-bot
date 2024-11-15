@@ -18,8 +18,8 @@ class HyperliquidUtils:
 
     def __init__(self):
 
-        user_wallet = os.environ["HYPERLIQUID_TELEGRAM_BOT_USER_WALLET"]
-        user_vault = os.environ.get("HYPERLIQUID_TELEGRAM_BOT_USER_VAULT")
+        user_wallet = os.environ["HTB_USER_WALLET"]
+        user_vault = os.environ.get("HTB_USER_VAULT")
         self.address = user_vault if user_vault is not None else user_wallet
 
         self.info = Info(constants.MAINNET_API_URL)
@@ -34,12 +34,12 @@ class HyperliquidUtils:
         logger.warning(f"Websocket closed: {close_msg}")
 
     def get_exchange(self):
-        key_file = os.environ.get("HYPERLIQUID_TELEGRAM_BOT_KEY_FILE")
+        key_file = os.environ.get("HTB_KEY_FILE")
         if key_file is not None and os.path.isfile(key_file):
             with open(key_file, 'r') as file:
                 file_content = file.read()
                 account: LocalAccount = eth_account.Account.from_key(file_content)
-                return Exchange(account, constants.MAINNET_API_URL, vault_address=os.environ.get("HYPERLIQUID_TELEGRAM_BOT_USER_VAULT"), account_address=os.environ["HYPERLIQUID_TELEGRAM_BOT_USER_WALLET"])
+                return Exchange(account, constants.MAINNET_API_URL, vault_address=os.environ.get("HTB_USER_VAULT"), account_address=os.environ["HTB_USER_WALLET"])
 
     def get_sz_decimals(self):
         meta = self.info.meta()

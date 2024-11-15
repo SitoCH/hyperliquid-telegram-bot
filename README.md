@@ -7,14 +7,21 @@ The inspiration for it comes from Freqtrade: https://www.freqtrade.io/en/stable/
 
 ### Telegram
 
-In order to create a Telegram bot you need the `HYPERLIQUID_TELEGRAM_BOT_TOKEN` from @BotFather. Send the command `/newbot` to it, follow the steps and copy the Bot token given to you at the end of the procedure.
-The second parameter needed, `HYPERLIQUID_TELEGRAM_BOT_CHAT_ID`, can be obtained form the @userinfobot (the field is named `Id`).
+In order to create a Telegram bot you need the `HTB_TOKEN` from @BotFather. Send the command `/newbot` to it, follow the steps and copy the Bot token given to you at the end of the procedure.
+The second parameter needed, `HTB_CHAT_ID`, can be obtained form the @userinfobot (the field is named `Id`).
 
 ### Hyperliquid
 
-There only mandatory parameter, `HYPERLIQUID_TELEGRAM_BOT_USER_WALLET`, is the user's wallet address.
-If the bot is monitoring a Vault you need to set also `HYPERLIQUID_TELEGRAM_BOT_USER_VAULT`.
-`HYPERLIQUID_TELEGRAM_BOT_KEY_FILE` is instead required if the bot needs to sign transactions so that it can manage orders. The file must contain the private key of the wallet.
+There only mandatory parameter, `HTB_USER_WALLET`, is the user's wallet address.
+If the bot is monitoring a Vault you need to set also `HTB_USER_VAULT`.
+`HTB_KEY_FILE` is instead required if the bot needs to sign transactions so that it can manage orders. The file must contain the private key of the wallet.
+
+### Other environment variables
+
+| Variable    | Description | Example |
+| -------- | ------- |
+| HTB_COINS_TO_ANALYZE    | Coins to anylze every hour | "BTC,ETH"|
+| HTB_ANALYZE_COINS_WITH_OPEN_ORDERS    | Analyze also coins that have open orders |"True"|
 
 ## Docker Compose
 
@@ -29,8 +36,8 @@ services:
     image: sito/hyperliquid-telegram-bot:latest
     container_name: hyperliquid_bot
     environment:
-      HYPERLIQUID_TELEGRAM_BOT_TOKEN: "<TELEGRAM BOT TOKEN>"
-      HYPERLIQUID_TELEGRAM_BOT_CHAT_ID: "<TELEGRAM CHAT ID>"
-      HYPERLIQUID_TELEGRAM_BOT_USER_WALLET: "<ADDRESS TO WATCH>"
+      HTB_TOKEN: "<TELEGRAM BOT TOKEN>"
+      HTB_CHAT_ID: "<TELEGRAM CHAT ID>"
+      HTB_USER_WALLET: "<ADDRESS TO WATCH>"
     restart: unless-stopped
 ```
