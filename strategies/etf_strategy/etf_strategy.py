@@ -1,4 +1,5 @@
 import requests
+import os
 from logging_utils import logger
 from tabulate import simple_separated_format, tabulate
 from typing import List, Dict, Optional, Any
@@ -235,14 +236,17 @@ class EtfStrategy:
                     "price_change_percentage": "24h,30d,1y",
                 },
             )
+            coins_number = int(os.getenv('HTB_ETF_STRATEGY_COINS_NUMBER', '5'))
+            min_yearly_performance = int(os.getenv('HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE', '15.0'))
+            max_market_cap = int(os.getenv('HTB_ETF_STRATEGY_MAX_MARKET_CAP', '10000'))
             await self.display_crypto_info(
-                update, hyperliquid_utils.address, cryptos, 10000, 5, 15.0
+                update, hyperliquid_utils.address, cryptos, max_market_cap, coins_number, min_yearly_performance
             )
         except Exception as e:
             logger.error(f"Error executing ETF strategy: {str(e)}")
 
 
     async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE):
-        button_text = 'analyze'
+        button_text = 'etf_analyze'
         telegram_utils.add_buttons([f'/{button_text}'], 1)
         telegram_utils.add_handler(CommandHandler(button_text, self.analyze))
