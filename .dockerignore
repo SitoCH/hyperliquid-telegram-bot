@@ -1,0 +1,5 @@
+*
+!*.py
+!strategies/**/*.py
+!pyproject.toml
+!uv.lock

@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y git && apt-get clean && \
     uv sync --frozen
 
 # Copy application code
-COPY *.py strategies/ ./
+COPY COPY . ./
 
 # Final stage
 FROM python:3.10-slim
@@ -23,9 +23,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Copy only necessary files from builder
-COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/*.py /app/
-COPY --from=builder /app/strategies /app/strategies
+COPY --from=builder /app/ /app/
 
 # Use the virtual environment
 ENV PATH="/app/.venv/bin:$PATH"
