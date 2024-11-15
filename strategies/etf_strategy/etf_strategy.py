@@ -6,8 +6,9 @@ from hyperliquid.info import Info
 from hyperliquid_utils import hyperliquid_utils
 from telegram.constants import ParseMode
 from telegram_utils import telegram_utils
-from telegram.ext import CallbackContext, ContextTypes, ConversationHandler
+from telegram.ext import CallbackContext, ContextTypes, ConversationHandler, CommandHandler
 from utils import exchange_enabled, fmt
+from telegram import Update
 
 
 class EtfStrategy:
@@ -175,7 +176,7 @@ class EtfStrategy:
 
     async def display_crypto_info(
         self,
-        context: ContextTypes.DEFAULT_TYPE,
+        update: Update,
         user_address: str,
         cryptos: List[Dict],
         market_cap_max_limit: int,
@@ -217,11 +218,11 @@ class EtfStrategy:
                 f"<pre>{table}</pre>",
             ]
 
-            await telegram_utils.send(context, '\n'.join(message), parse_mode=ParseMode.HTML)
+            await telegram_utils.reply(update, '\n'.join(message), parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"Error displaying crypto info: {str(e)}")
 
-    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE) -> Optional[bool]:
+    async def analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             cryptos = self.fetch_cryptos(
                 self.COINGECKO_URL,
@@ -235,9 +236,13 @@ class EtfStrategy:
                 },
             )
             await self.display_crypto_info(
-                context, hyperliquid_utils.address, cryptos, 10000, 5, 15.0
+                update, hyperliquid_utils.address, cryptos, 10000, 5, 15.0
             )
-            return True
         except Exception as e:
             logger.error(f"Error executing ETF strategy: {str(e)}")
-            return False
+
+
+    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE):
+        button_text = 'analyze'
+        telegram_utils.add_buttons([f'/{button_text}'], 1)
+        telegram_utils.add_handler(CommandHandler(button_text, self.analyze))
