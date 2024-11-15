@@ -9,7 +9,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies in a virtual environment
-RUN uv venv /app/.venv && \
+RUN apt-get update && apt-get install -y git && apt-get clean && \
+    uv venv /app/.venv && \
     . /app/.venv/bin/activate && \
     uv sync --frozen
 
