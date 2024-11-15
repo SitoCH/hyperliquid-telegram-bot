@@ -155,7 +155,7 @@ class HyperliquidBot:
         else:
             fill_message = json.dumps(fill)
 
-        telegram_utils.send(fill_message)
+        telegram_utils.queue_send(fill_message)
 
     def on_user_events(self, user_events: UserEventsMsg) -> None:
         user_events_data = user_events["data"]

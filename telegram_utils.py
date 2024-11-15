@@ -75,7 +75,10 @@ class TelegramUtils:
             message, parse_mode=parse_mode, reply_markup=self.reply_markup
         )
 
-    def send(self, message):
+    async def send(self, context: ContextTypes.DEFAULT_TYPE, message: str, parse_mode: ODVInput[str] = None):
+        await context.bot.send_message(text=message, parse_mode=parse_mode, chat_id=self.telegram_chat_id)
+
+    def queue_send(self, message):
         self.telegram_app.job_queue.run_once(
             self.send_message, when=0, data=message, chat_id=self.telegram_chat_id
         )

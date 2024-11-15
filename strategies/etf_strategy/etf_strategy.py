@@ -217,7 +217,7 @@ class EtfStrategy:
                 f"<pre>{table}</pre>",
             ]
 
-            await telegram_utils.reply(update, '\n'.join(message), parse_mode=ParseMode.HTML)
+            await telegram_utils.send(context, '\n'.join(message), parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"Error displaying crypto info: {str(e)}")
 
