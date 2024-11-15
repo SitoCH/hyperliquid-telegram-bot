@@ -165,11 +165,8 @@ class HyperliquidBot:
                 self.process_fill(fill)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await telegram_utils.reply(update, "Welcome! Click the button below to check the account's positions.")
 
-        await update.message.reply_text(
-            "Welcome! Click the button below to check the account's positions.",
-            reply_markup=telegram_utils.reply_markup,
-        )
 
     async def get_positions(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
@@ -191,7 +188,7 @@ class HyperliquidBot:
                     for asset_position in user_state["assetPositions"]
                 )
                 perp_message_lines.append(f"Unrealized profit: {fmt(total_pnl)} USDC")
-                await update.message.reply_text(text='\n'.join(perp_message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+                await telegram_utils.reply(update, '\n'.join(perp_message_lines), parse_mode=ParseMode.HTML)
 
                 sorted_positions = sorted(
                     user_state["assetPositions"],
@@ -268,18 +265,19 @@ class HyperliquidBot:
                     )
 
                     coin_message_lines.append(f"<pre>{table}</pre>")
-                    await update.message.reply_text(text='\n'.join(coin_message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+
+                    await telegram_utils.reply(update, '\n'.join(coin_message_lines), parse_mode=ParseMode.HTML)
             else:
-                await update.message.reply_text(text='\n'.join(perp_message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+                await telegram_utils.reply(update, '\n'.join(perp_message_lines), parse_mode=ParseMode.HTML)
 
 
             spot_messages = await self.spot_positions_messages(tablefmt)
             if len(spot_messages) > 0:
-                await update.message.reply_text(text='\n'.join(spot_messages), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+                await telegram_utils.reply(update, '\n'.join(spot_messages), parse_mode=ParseMode.HTML)
 
 
         except Exception as e:
-            await update.message.reply_text(text=f"Failed to fetch positions: {str(e)}", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+            await telegram_utils.reply(update, f"Failed to fetch positions: {str(e)}")
 
 
     async def get_overview(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -328,11 +326,11 @@ class HyperliquidBot:
 
             spot_messages = await self.spot_positions_messages(tablefmt)
             message_lines += spot_messages
-            await update.message.reply_text(text='\n'.join(message_lines), parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+            await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
         except Exception as e:
             logger.critical(e, exc_info=True)
-            await update.message.reply_text(text=f"Failed to fetch positions: {str(e)}", parse_mode=ParseMode.HTML, reply_markup=telegram_utils.reply_markup)
+            await telegram_utils.reply(update, f"Failed to fetch positions: {str(e)}")
 
     async def spot_positions_messages(self, tablefmt):
         message_lines = []

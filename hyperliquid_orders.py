@@ -65,14 +65,10 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if not message_lines:
             message_lines.append("No open orders")
 
-        await update.message.reply_text(
-            text='\n'.join(message_lines),
-            parse_mode=ParseMode.HTML,
-            reply_markup=telegram_utils.reply_markup
-        )
+        await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
     except Exception as e:
-        await update.message.reply_text(text=f"Failed to check orders: {str(e)}")
+        await telegram_utils.reply(update, f"Failed to check orders: {str(e)}")
 
 
 def format_orders(raw_orders, mid, percentage_format):

@@ -217,20 +217,11 @@ class EtfStrategy:
                 f"<pre>{table}</pre>",
             ]
 
-            await context.bot.send_message(
-                chat_id=telegram_utils.telegram_chat_id,
-                text="\n".join(message),
-                parse_mode=ParseMode.HTML,
-            )
+            await telegram_utils.reply(update, '\n'.join(message), parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"Error displaying crypto info: {str(e)}")
 
     async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE) -> Optional[bool]:
-
-
-
-
-
         try:
             cryptos = self.fetch_cryptos(
                 self.COINGECKO_URL,

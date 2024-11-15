@@ -217,13 +217,13 @@ async def exit_position(update: Update, context: CallbackContext) -> int:
     coins = sorted({asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])})
 
     if not coins:
-        await update.message.reply_text('No positions to close', reply_markup=telegram_utils.reply_markup)
+        await telegram_utils.reply(update, 'No positions to close')
         return ConversationHandler.END
 
     keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Choose a coin to sell:', reply_markup=reply_markup)
+    await telegram_utils.reply(update, 'Choose a coin to sell:')
     return EXIT_CHOOSING
 
 
