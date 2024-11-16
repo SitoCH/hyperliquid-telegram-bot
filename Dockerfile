@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.10-slim as builder
+FROM python:3.10-alpine as builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
@@ -9,16 +9,18 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies in a virtual environment
-RUN apt-get update && apt-get install -y git && apt-get clean && \
+RUN apk add --no-cache --virtual .build-deps git && \
     uv venv /app/.venv && \
     . /app/.venv/bin/activate && \
-    uv sync --frozen
+    uv sync --frozen && \
+    apk del .build-deps && \
+    rm -rf /root/.cache /tmp/*
 
 # Copy application code
 COPY . ./
 
 # Final stage
-FROM python:3.10-slim
+FROM python:3.10-alpine
 
 WORKDIR /app
 
