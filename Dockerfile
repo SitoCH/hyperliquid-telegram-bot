@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y git && apt-get clean && \
     uv sync --frozen
 
 # Copy application code
-COPY COPY . ./
+COPY . ./
 
 # Final stage
 FROM python:3.10-slim
