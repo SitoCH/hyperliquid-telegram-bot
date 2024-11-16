@@ -7,7 +7,12 @@ from hyperliquid.info import Info
 from hyperliquid_utils import hyperliquid_utils
 from telegram.constants import ParseMode
 from telegram_utils import telegram_utils
-from telegram.ext import CallbackContext, ContextTypes, ConversationHandler, CommandHandler
+from telegram.ext import (
+    CallbackContext,
+    ContextTypes,
+    ConversationHandler,
+    CommandHandler,
+)
 from utils import exchange_enabled, fmt
 from telegram import Update
 
@@ -68,13 +73,17 @@ class EtfStrategy:
             reverse=True,
         )[:coins_to_include]
 
-    def calculate_account_values(self, user_state: Dict) -> tuple[dict[Any, float], float, float]:
+    def calculate_account_values(
+        self, user_state: Dict
+    ) -> tuple[dict[Any, float], float, float]:
         position_values = {
             pos["position"]["coin"].lstrip("k"): float(pos["position"]["positionValue"])
             for pos in user_state["assetPositions"]
         }
         usdc_balance = float(user_state["crossMarginSummary"]["totalRawUsd"])
-        total_account_value = sum(position_values.values()) + usdc_balance * self.LEVERAGE
+        total_account_value = (
+            sum(position_values.values()) + usdc_balance * self.LEVERAGE
+        )
         usdc_target_balance = max(
             total_account_value * self.USDC_BALANCE_PERCENT / self.LEVERAGE,
             self.MIN_USDC_BALANCE,
@@ -115,7 +124,7 @@ class EtfStrategy:
                         "",
                         "Market cap",
                         f"{format(market_cap_billion, ',.0f')}B",
-                        f"{fmt(rel_market_cap_pct)}%"
+                        f"{fmt(rel_market_cap_pct)}%",
                     ],
                     ["", "Target value", f"{fmt(target_value)}$"],
                     [
@@ -154,6 +163,7 @@ class EtfStrategy:
                         ["", "1Y", f"{price_change_1y_str}%"],
                         ["", "Market cap", f"{format(market_cap_billion, ',.0f')}B"],
                         ["", "Current value", f"{fmt(position_value)}$"],
+                        ["", "", ""],
                     ]
                 )
             else:
@@ -161,6 +171,7 @@ class EtfStrategy:
                     [
                         ["", "", symbol],
                         ["", "Current value", f"{fmt(position_value)}$"],
+                        ["", "", ""],
                     ]
                 )
 
@@ -189,8 +200,8 @@ class EtfStrategy:
                 cryptos, market_cap_max_limit, coins_to_include, minimum_price_change
             )
             user_state = hyperliquid_utils.info.user_state(user_address)
-            position_values, total_account_value, usdc_target_balance = self.calculate_account_values(
-                user_state
+            position_values, total_account_value, usdc_target_balance = (
+                self.calculate_account_values(user_state)
             )
 
             total_market_cap = sum(coin["market_cap"] for coin in top_cryptos)
@@ -219,7 +230,9 @@ class EtfStrategy:
                 f"<pre>{table}</pre>",
             ]
 
-            await telegram_utils.reply(update, '\n'.join(message), parse_mode=ParseMode.HTML)
+            await telegram_utils.reply(
+                update, "\n".join(message), parse_mode=ParseMode.HTML
+            )
         except Exception as e:
             logger.error(f"Error displaying crypto info: {str(e)}")
 
@@ -236,17 +249,23 @@ class EtfStrategy:
                     "price_change_percentage": "24h,30d,1y",
                 },
             )
-            coins_number = int(os.getenv('HTB_ETF_STRATEGY_COINS_NUMBER', '5'))
-            min_yearly_performance = int(os.getenv('HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE', '15.0'))
-            max_market_cap = int(os.getenv('HTB_ETF_STRATEGY_MAX_MARKET_CAP', '10000'))
+            coins_number = int(os.getenv("HTB_ETF_STRATEGY_COINS_NUMBER", "5"))
+            min_yearly_performance = int(
+                os.getenv("HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE", "15.0")
+            )
+            max_market_cap = int(os.getenv("HTB_ETF_STRATEGY_MAX_MARKET_CAP", "10000"))
             await self.display_crypto_info(
-                update, hyperliquid_utils.address, cryptos, max_market_cap, coins_number, min_yearly_performance
+                update,
+                hyperliquid_utils.address,
+                cryptos,
+                max_market_cap,
+                coins_number,
+                min_yearly_performance,
             )
         except Exception as e:
             logger.error(f"Error executing ETF strategy: {str(e)}")
 
-
     async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE):
-        button_text = 'etf_analyze'
-        telegram_utils.add_buttons([f'/{button_text}'], 1)
+        button_text = "etf_analyze"
+        telegram_utils.add_buttons([f"/{button_text}"], 1)
         telegram_utils.add_handler(CommandHandler(button_text, self.analyze))
