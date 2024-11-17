@@ -1,4 +1,3 @@
-
 import json
 import sys
 import datetime
@@ -110,7 +109,7 @@ class HyperliquidBot:
     def get_fill_icon(self, closed_pnl: float) -> str:
         return "🟢" if closed_pnl > 0 else "🔴"
 
-    def get_fill_description(self, initial_message: str, coin: str, size: str, fee: float, fee_token: str, amount: float = None, closed_pnl: float = None) -> str:
+    def get_fill_description(self, initial_message: str, coin: str, size: str, fee: float, fee_token: str, amount: float | None = None, closed_pnl: float | None = None) -> str:
         fill_description = [
             initial_message,
             f"Coin: {coin}"
@@ -166,7 +165,6 @@ class HyperliquidBot:
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await telegram_utils.reply(update, "Welcome! Click the button below to check the account's positions.")
-
 
     async def get_positions(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:

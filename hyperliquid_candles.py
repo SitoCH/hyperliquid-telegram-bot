@@ -75,7 +75,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
             await send_trend_change_message(context, mid, df_5m, df_1h, df_4h, coin)
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await context.bot.send_message(text=f"Failed to analyze candles for {coin}: {str(e)}", chat_id=telegram_utils.telegram_chat_id)
+        await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
 
 
 def prepare_dataframe(candles: list) -> pd.DataFrame:
@@ -231,7 +231,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
         f"<pre>{table_4h}</pre>",
     ]
 
-    await context.bot.send_message(chat_id=telegram_utils.telegram_chat_id, text="\n".join(message_lines), parse_mode=ParseMode.HTML)
+    await telegram_utils.send("\n".join(message_lines), parse_mode=ParseMode.HTML)
 
     for buf in charts:
         await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=buf)

@@ -330,12 +330,13 @@ class EtfStrategy:
                 symbol = coin["symbol"]
                 difference = coin["difference"]
                 if difference < 10.0:
-                    logger.info(f"The order value for {symbol} is less than 10 USDC and can't be executed")
+                    logger.info(f"The order value for {symbol} is less than 10 USDC ({fmt(difference)} USDC) and can't be executed")
                 else:
                     exchange.update_leverage(self.LEVERAGE, symbol, False)
+                    mid = float(hyperliquid_utils.info.all_mids()[symbol])
                     sz_decimals = hyperliquid_utils.get_sz_decimals()
-                    sz = round(difference, sz_decimals[symbol])
-                    logger.info(f"Buying {fmt(sz)} USDC worth of {symbol}")
+                    sz = round(difference / mid, sz_decimals[symbol])
+                    logger.info(f"Need to buy {fmt(difference)} USDC worth of {symbol}: {sz} units")
                     open_result = exchange.market_open(symbol, True, sz)
                     logger.info(open_result)
                     
