@@ -100,13 +100,13 @@ class TelegramUtils:
 
     def queue_send(self, message: str):
         self.telegram_app.job_queue.run_once(
-            self.send_message, when=0, data=message, chat_id=self.telegram_chat_id
+            self.send_message, when=1, data=message, chat_id=self.telegram_chat_id
         )
 
     def send_and_exit(self, message: str):
         self.telegram_app.job_queue.run_once(
             self.send_message_and_exit,
-            when=0,
+            when=1,
             data=message,
             chat_id=self.telegram_chat_id,
         )
@@ -130,7 +130,7 @@ class TelegramUtils:
 
     def run_once(self, callback: JobCallback[CCT]):
         self.telegram_app.job_queue.run_once(
-            callback, when=0, chat_id=self.telegram_chat_id
+            callback, when=1, chat_id=self.telegram_chat_id
         )
 
     def run_repeating(
@@ -148,7 +148,7 @@ class TelegramUtils:
     def run_polling(self):
         self.telegram_app.job_queue.run_once(
             self.send_message,
-            when=0,
+            when=1,
             data="Hyperliquid Telegram bot up and running",
             chat_id=self.telegram_chat_id,
         )
