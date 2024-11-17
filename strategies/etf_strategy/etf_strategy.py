@@ -22,7 +22,6 @@ class EtfStrategy:
     COINGECKO_URL = "https://api.coingecko.com/api/v3/coins/markets"
     LIMIT_PERCENTAGE = 0.25
     EXCLUDED_SYMBOLS = {"STETH", "WSTETH", "WBTC", "WETH", "WEETH", "LEO", "USDS"}
-    LEVERAGE = 5
     MIN_USDC_BALANCE = 2.0
     USDC_BALANCE_PERCENT = 0.01
 
@@ -75,7 +74,7 @@ class EtfStrategy:
         )[:coins_to_include]
 
     def calculate_account_values(
-        self, user_state: Dict
+        self, user_state: Dict, leverage: int
     ) -> tuple[dict[Any, float], float, float]:
         position_values = {
             pos["position"]["coin"].lstrip("k"): float(pos["position"]["positionValue"])
@@ -83,10 +82,10 @@ class EtfStrategy:
         }
         usdc_balance = float(user_state["crossMarginSummary"]["totalRawUsd"])
         total_account_value = (
-            sum(position_values.values()) + usdc_balance * self.LEVERAGE
+            sum(position_values.values()) + usdc_balance * leverage
         )
         usdc_target_balance = max(
-            total_account_value * self.USDC_BALANCE_PERCENT / self.LEVERAGE,
+            total_account_value * self.USDC_BALANCE_PERCENT / leverage,
             self.MIN_USDC_BALANCE,
         )
         return position_values, total_account_value, usdc_target_balance
@@ -212,7 +211,7 @@ class EtfStrategy:
 
         return table_data
 
-    def get_strategy_data(self) -> Tuple[List[Dict], int, int, float]:
+    def get_strategy_data(self) -> Tuple[List[Dict], int, int, float, int]:
         cryptos = self.fetch_cryptos(
             self.COINGECKO_URL,
             {
@@ -225,12 +224,13 @@ class EtfStrategy:
             },
         )
         coins_number = int(os.getenv("HTB_ETF_STRATEGY_COINS_NUMBER", "5"))
+        leverage = int(os.getenv("HTB_ETF_STRATEGY_LEVERAGE", "5"))
         min_yearly_performance = int(
             os.getenv("HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE", "15.0")
         )
         max_market_cap = int(os.getenv("HTB_ETF_STRATEGY_MAX_MARKET_CAP", "10000"))
         
-        return cryptos, max_market_cap, coins_number, min_yearly_performance
+        return cryptos, max_market_cap, coins_number, min_yearly_performance, leverage
 
     async def display_crypto_info(
         self,
@@ -240,6 +240,7 @@ class EtfStrategy:
         market_cap_max_limit: int,
         coins_to_include: int,
         minimum_price_change: float,
+        leverage: int
     ) -> None:
         try:
             top_cryptos = self.filter_top_cryptos(
@@ -247,7 +248,7 @@ class EtfStrategy:
             )
             user_state = hyperliquid_utils.info.user_state(user_address)
             position_values, total_account_value, usdc_target_balance = (
-                self.calculate_account_values(user_state)
+                self.calculate_account_values(user_state, leverage)
             )
 
             total_market_cap = sum(coin["market_cap"] for coin in top_cryptos)
@@ -284,7 +285,7 @@ class EtfStrategy:
 
     async def analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
-            cryptos, max_market_cap, coins_number, min_yearly_performance = self.get_strategy_data()
+            cryptos, max_market_cap, coins_number, min_yearly_performance, leverage = self.get_strategy_data()
             await self.display_crypto_info(
                 update,
                 hyperliquid_utils.address,
@@ -292,6 +293,7 @@ class EtfStrategy:
                 max_market_cap,
                 coins_number,
                 min_yearly_performance,
+                leverage
             )
         except Exception as e:
             logger.error(f"Error executing ETF strategy: {str(e)}")
@@ -313,14 +315,14 @@ class EtfStrategy:
             
             await telegram_utils.reply(update, "Opening new positions based on current market data...")
             
-            cryptos, max_market_cap, coins_number, min_yearly_performance = self.get_strategy_data()
+            cryptos, max_market_cap, coins_number, min_yearly_performance, leverage = self.get_strategy_data()
             
             top_cryptos = self.filter_top_cryptos(
                 cryptos, max_market_cap, coins_number, min_yearly_performance
             )
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             position_values, total_account_value, usdc_target_balance = (
-                self.calculate_account_values(user_state)
+                self.calculate_account_values(user_state, leverage)
             )
 
             total_market_cap = sum(coin["market_cap"] for coin in top_cryptos)
@@ -346,7 +348,7 @@ class EtfStrategy:
                         continue
 
                     hyperliquid_symbol = self.get_hyperliquid_symbol(symbol) 
-                    exchange.update_leverage(self.LEVERAGE, hyperliquid_symbol, False)
+                    exchange.update_leverage(leverage, hyperliquid_symbol, False)
                     mid = float(hyperliquid_utils.info.all_mids()[hyperliquid_symbol])
                     sz_decimals = hyperliquid_utils.get_sz_decimals()
                     sz = round(difference / mid, sz_decimals[hyperliquid_symbol])
