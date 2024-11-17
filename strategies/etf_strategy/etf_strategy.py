@@ -298,9 +298,12 @@ class EtfStrategy:
 
     async def rebalance(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
+            await telegram_utils.reply(update, "Closing all current positions...")
+            
             exchange = hyperliquid_utils.get_exchange()
-
             await exit_all_positions(update, context)
+            
+            await telegram_utils.reply(update, "Opening new positions based on current market data...")
             
             cryptos, max_market_cap, coins_number, min_yearly_performance = self.get_strategy_data()
             
@@ -339,10 +342,8 @@ class EtfStrategy:
                     logger.info(f"Need to buy {fmt(difference)} USDC worth of {symbol}: {sz} units")
                     open_result = exchange.market_open(symbol, True, sz)
                     logger.info(open_result)
-                    
-            await telegram_utils.reply(
-                update, "Rebalancing completed", parse_mode=ParseMode.HTML
-            )
+            
+            await telegram_utils.reply(update, "Rebalancing completed")
         except Exception as e:
             logger.critical(e, exc_info=True)
             await telegram_utils.reply(
