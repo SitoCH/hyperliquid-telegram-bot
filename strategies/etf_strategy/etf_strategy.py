@@ -296,6 +296,14 @@ class EtfStrategy:
         except Exception as e:
             logger.error(f"Error executing ETF strategy: {str(e)}")
 
+
+    def get_hyperliquid_symbol(self, symbol: str):
+        if symbol == "SHIB":
+            return "kSHIB"
+        if symbol == "PEPE":
+            return "kPEPE"
+        return symbol
+
     async def rebalance(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             await telegram_utils.reply(update, "Closing all current positions...")
@@ -330,18 +338,24 @@ class EtfStrategy:
             )
                     
             for coin in allocation_data:
-                symbol = coin["symbol"]
-                difference = coin["difference"]
-                if difference < 10.0:
-                    logger.info(f"The order value for {symbol} is less than 10 USDC ({fmt(difference)} USDC) and can't be executed")
-                else:
-                    exchange.update_leverage(self.LEVERAGE, symbol, False)
-                    mid = float(hyperliquid_utils.info.all_mids()[symbol])
+                try:
+                    symbol = coin["symbol"]
+                    difference = coin["difference"]
+                    if difference < 10.0:
+                        logger.info(f"The order value for {symbol} is less than 10 USDC ({fmt(difference)} USDC) and can't be executed")
+                        continue
+
+                    hyperliquid_symbol = self.get_hyperliquid_symbol(symbol) 
+                    exchange.update_leverage(self.LEVERAGE, hyperliquid_symbol, False)
+                    mid = float(hyperliquid_utils.info.all_mids()[hyperliquid_symbol])
                     sz_decimals = hyperliquid_utils.get_sz_decimals()
-                    sz = round(difference / mid, sz_decimals[symbol])
-                    logger.info(f"Need to buy {fmt(difference)} USDC worth of {symbol}: {sz} units")
-                    open_result = exchange.market_open(symbol, True, sz)
+                    sz = round(difference / mid, sz_decimals[hyperliquid_symbol])
+                    logger.info(f"Need to buy {fmt(difference)} USDC worth of {hyperliquid_symbol}: {sz} units")
+                    open_result = exchange.market_open(hyperliquid_symbol, True, sz)
                     logger.info(open_result)
+                except Exception as e:
+                    logger.error(f"Unable to open position for {symbol}: {str(e)}")
+                    continue
             
             await telegram_utils.reply(update, "Rebalancing completed")
         except Exception as e:
