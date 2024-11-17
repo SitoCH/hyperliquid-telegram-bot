@@ -103,7 +103,7 @@ class TelegramUtils:
     def send_and_exit(self, message: str):
         self.telegram_app.job_queue.run_once(
             self.send_message_and_exit,
-            when=1,
+            when=0.25,
             job_kwargs={'misfire_grace_time': 60},
             data=message,
             chat_id=self.telegram_chat_id,
@@ -111,7 +111,7 @@ class TelegramUtils:
 
     def queue_send(self, message: str):
         self.telegram_app.job_queue.run_once(
-            self.send_message, when=1, job_kwargs={'misfire_grace_time': 60}, data=message, chat_id=self.telegram_chat_id
+            self.send_message, when=0.25, job_kwargs={'misfire_grace_time': 60}, data=message, chat_id=self.telegram_chat_id
         )
 
     async def send_message(self, context: ContextTypes.DEFAULT_TYPE):
@@ -133,7 +133,7 @@ class TelegramUtils:
 
     def run_once(self, callback: JobCallback[CCT]):
         self.telegram_app.job_queue.run_once(
-            callback, when=1, job_kwargs={'misfire_grace_time': 60}, chat_id=self.telegram_chat_id
+            callback, when=0.25, job_kwargs={'misfire_grace_time': 60}, chat_id=self.telegram_chat_id
         )
 
     def run_repeating(
@@ -151,7 +151,7 @@ class TelegramUtils:
     def run_polling(self):
         self.telegram_app.job_queue.run_once(
             self.send_message,
-            when=1,
+            when=0.25,
             job_kwargs={'misfire_grace_time': 60},
             data="Hyperliquid Telegram bot up and running",
             chat_id=self.telegram_chat_id,
