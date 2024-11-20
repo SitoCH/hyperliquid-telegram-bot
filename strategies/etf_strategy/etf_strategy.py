@@ -29,7 +29,10 @@ class EtfStrategy:
         try:
             response = requests.get(url, params=params)
             response.raise_for_status()
-            return response.json()
+            cryptos = response.json()
+            for crypto in cryptos:
+                crypto["symbol"] = self.get_hyperliquid_symbol(crypto["symbol"].upper())
+            return cryptos
         except requests.RequestException as e:
             logger.error(f"Error fetching crypto data: {e}")
             return []
@@ -41,37 +44,49 @@ class EtfStrategy:
         coins_to_include: int,
         minimum_price_change: float,
     ) -> List[Dict]:
-        filtered_cryptos = [
-            {
+        all_mids = hyperliquid_utils.info.all_mids()
+        filtered_cryptos = []
+        for coin in cryptos:
+            symbol = coin["symbol"]
+            market_cap_billions = coin["market_cap"] / 1_000_000_000
+            yearly_change = coin["price_change_percentage_1y_in_currency"]
+            daily_change = coin["price_change_percentage_24h_in_currency"]
+            monthly_change = coin["price_change_percentage_30d_in_currency"]
+            
+            if symbol in self.EXCLUDED_SYMBOLS:
+                logger.info(f"Excluding {symbol}: in EXCLUDED_SYMBOLS")
+                continue
+                
+            if symbol not in all_mids:
+                logger.info(f"Excluding {symbol}: not available on Hyperliquid")
+                continue
+                
+            if market_cap_billions > market_cap_max_limit:
+                logger.info(f"Excluding {symbol}: market cap {market_cap_billions}B > {market_cap_max_limit}B limit")
+                continue
+                
+            if yearly_change is not None and yearly_change <= minimum_price_change:
+                logger.info(f"Excluding {symbol}: yearly change {fmt(yearly_change)}% <= {minimum_price_change}%")
+                continue
+                
+            if abs(daily_change) <= self.LIMIT_PERCENTAGE and abs(monthly_change) <= self.LIMIT_PERCENTAGE:
+                logger.info(f"Excluding {symbol}: price changes (24h: {daily_change}%, 30d: {monthly_change}%) <= {self.LIMIT_PERCENTAGE}%")
+                continue
+
+            filtered_cryptos.append({
                 "name": coin["name"],
-                "symbol": coin["symbol"].upper(),
+                "symbol": symbol,
                 "market_cap": coin["market_cap"],
-                "price_change_percentage_1y_in_currency": coin[
-                    "price_change_percentage_1y_in_currency"
-                ],
-            }
-            for coin in cryptos
-            if (
-                coin["symbol"].upper() not in self.EXCLUDED_SYMBOLS
-                and coin["market_cap"] / 1_000_000_000 <= market_cap_max_limit
-                and (
-                    coin["price_change_percentage_1y_in_currency"] is None
-                    or coin["price_change_percentage_1y_in_currency"]
-                    > minimum_price_change
-                )
-                and (
-                    abs(coin["price_change_percentage_24h_in_currency"])
-                    > self.LIMIT_PERCENTAGE
-                    or abs(coin["price_change_percentage_30d_in_currency"])
-                    > self.LIMIT_PERCENTAGE
-                )
-            )
-        ]
-        return sorted(
+                "price_change_percentage_1y_in_currency": yearly_change,
+            })
+
+        sorted_cryptos = sorted(
             filtered_cryptos,
             key=lambda x: x["market_cap"],
             reverse=True,
         )[:coins_to_include]
+        
+        return sorted_cryptos
 
     def calculate_account_values(
         self, user_state: Dict, leverage: int
@@ -122,8 +137,8 @@ class EtfStrategy:
 
         other_positions = []
         for symbol, value in position_values.items():
-            if symbol.upper() not in top_crypto_symbols:
-                coin_data = next((c for c in cryptos if c["symbol"].upper() == symbol.upper()), None)
+            if symbol not in top_crypto_symbols:
+                coin_data = next((c for c in cryptos if c["symbol"] == symbol), None)
                 other_positions.append({
                     "symbol": symbol,
                     "name": coin_data["name"] if coin_data else symbol,
@@ -304,6 +319,10 @@ class EtfStrategy:
             return "kSHIB"
         if symbol == "PEPE":
             return "kPEPE"
+        if symbol == "FLOKI":
+            return "kFLOKI"
+        if symbol == "BONK":
+            return "kBONK"
         return symbol
 
     async def rebalance(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -347,13 +366,12 @@ class EtfStrategy:
                         logger.info(f"The order value for {symbol} is less than 10 USDC ({fmt(difference)} USDC) and can't be executed")
                         continue
 
-                    hyperliquid_symbol = self.get_hyperliquid_symbol(symbol) 
-                    exchange.update_leverage(leverage, hyperliquid_symbol, False)
-                    mid = float(hyperliquid_utils.info.all_mids()[hyperliquid_symbol])
+                    exchange.update_leverage(leverage, symbol, False)
+                    mid = float(hyperliquid_utils.info.all_mids()[symbol])
                     sz_decimals = hyperliquid_utils.get_sz_decimals()
-                    sz = round(difference / mid, sz_decimals[hyperliquid_symbol])
-                    logger.info(f"Need to buy {fmt(difference)} USDC worth of {hyperliquid_symbol}: {sz} units")
-                    open_result = exchange.market_open(hyperliquid_symbol, True, sz)
+                    sz = round(difference / mid, sz_decimals[symbol])
+                    logger.info(f"Need to buy {fmt(difference)} USDC worth of {symbol}: {sz} units")
+                    open_result = exchange.market_open(symbol, True, sz)
                     logger.info(open_result)
                 except Exception as e:
                     logger.error(f"Unable to open position for {symbol}: {str(e)}")
