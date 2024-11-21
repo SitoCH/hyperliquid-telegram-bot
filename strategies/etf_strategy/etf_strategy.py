@@ -92,7 +92,7 @@ class EtfStrategy:
         self, user_state: Dict, leverage: int
     ) -> tuple[dict[Any, float], float, float]:
         position_values = {
-            pos["position"]["coin"].lstrip("k"): float(pos["position"]["positionValue"])
+            pos["position"]["coin"]: float(pos["position"]["positionValue"])
             for pos in user_state["assetPositions"]
         }
         usdc_balance = float(user_state["crossMarginSummary"]["totalRawUsd"])
@@ -250,7 +250,6 @@ class EtfStrategy:
     async def display_crypto_info(
         self,
         update: Update,
-        user_address: str,
         cryptos: List[Dict],
         market_cap_max_limit: int,
         coins_to_include: int,
@@ -261,7 +260,7 @@ class EtfStrategy:
             top_cryptos = self.filter_top_cryptos(
                 cryptos, market_cap_max_limit, coins_to_include, minimum_price_change
             )
-            user_state = hyperliquid_utils.info.user_state(user_address)
+            user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             position_values, total_account_value, usdc_target_balance = (
                 self.calculate_account_values(user_state, leverage)
             )
@@ -303,7 +302,6 @@ class EtfStrategy:
             cryptos, max_market_cap, coins_number, min_yearly_performance, leverage = self.get_strategy_data()
             await self.display_crypto_info(
                 update,
-                hyperliquid_utils.address,
                 cryptos,
                 max_market_cap,
                 coins_number,
