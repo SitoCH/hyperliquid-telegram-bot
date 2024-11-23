@@ -49,9 +49,9 @@ class EtfStrategy:
     def filter_top_cryptos(
         self,
         cryptos: List[Dict],
-        config: StrategyConfig
+        config: StrategyConfig,
+        all_mids: Dict[str, str]
     ) -> List[Dict]:
-        all_mids = hyperliquid_utils.info.all_mids()
         filtered_cryptos = []
         
         for coin in cryptos:
@@ -232,7 +232,7 @@ class EtfStrategy:
 
         return table_data
 
-    def get_strategy_params(self) -> Tuple[List[Dict], StrategyConfig]:
+    def get_strategy_params(self) -> Tuple[List[Dict], StrategyConfig, Dict[str, str]]:
         cryptos = self.fetch_cryptos(
             self.COINGECKO_URL,
             {
@@ -253,7 +253,9 @@ class EtfStrategy:
             excluded_symbols=set(os.getenv("HTB_ETF_STRATEGY_EXCLUDED_SYMBOLS", "").split(","))
         )
         
-        return cryptos, config
+        all_mids = hyperliquid_utils.info.all_mids()
+        
+        return cryptos, config, all_mids
 
     def get_hyperliquid_symbol(self, symbol: str) -> str:
         symbol_mapping = {
@@ -268,10 +270,11 @@ class EtfStrategy:
         self,
         update: Update,
         cryptos: List[Dict],
-        config: StrategyConfig
+        config: StrategyConfig,
+        all_mids: Dict[str, str]
     ) -> None:
         try:
-            top_cryptos = self.filter_top_cryptos(cryptos, config)
+            top_cryptos = self.filter_top_cryptos(cryptos, config, all_mids)
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             position_values, total_account_value, usdc_target_balance = (
                 self.calculate_account_values(user_state, config.leverage)
@@ -311,8 +314,8 @@ class EtfStrategy:
 
     async def analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
-            cryptos, config = self.get_strategy_params()
-            await self.display_crypto_info(update, cryptos, config)
+            cryptos, config, all_mids = self.get_strategy_params()
+            await self.display_crypto_info(update, cryptos, config, all_mids)
         except Exception as e:
             logger.error(f"Error executing ETF strategy: {str(e)}")
 
@@ -325,9 +328,9 @@ class EtfStrategy:
             
             await telegram_utils.reply(update, "Opening new positions based on current market data...")
             
-            cryptos, config = self.get_strategy_params()
+            cryptos, config, all_mids = self.get_strategy_params()
             
-            top_cryptos = self.filter_top_cryptos(cryptos, config)
+            top_cryptos = self.filter_top_cryptos(cryptos, config, all_mids)
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             position_values, total_account_value, usdc_target_balance = (
                 self.calculate_account_values(user_state, config.leverage)
@@ -356,7 +359,7 @@ class EtfStrategy:
                         continue
 
                     exchange.update_leverage(config.leverage, symbol, False)
-                    mid = float(hyperliquid_utils.info.all_mids()[symbol])
+                    mid = float(all_mids[symbol])
                     sz_decimals = hyperliquid_utils.get_sz_decimals()
                     sz = round(difference / mid, sz_decimals[symbol])
                     logger.info(f"Need to buy {fmt(difference)} USDC worth of {symbol}: {sz} units")
