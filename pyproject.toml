@@ -16,8 +16,18 @@ dependencies = [
     "types-tabulate>=0.9.0.20240106",
 ]
 
-[tool.mypy]
-exclude = ["hyperliquid-python-sdk", "mplfinance"]
+[[tool.mypy.overrides]]
+module = "hyperliquid.utils.types"
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = "hyperliquid.exchange"
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = "hyperliquid.info"
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = "hyperliquid.utils"
+ignore_missing_imports = true
 
 [tool.uv.sources]
 pandas-ta = { git = "https://github.com/twopirllc/pandas-ta.git", branch = "development" }
