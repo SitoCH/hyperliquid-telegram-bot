@@ -26,6 +26,7 @@ class StrategyConfig:
     min_yearly_performance: float
     leverage: int
     excluded_symbols: Set[str]
+    category: Optional[str]
 
 
 class EtfStrategy:
@@ -233,26 +234,28 @@ class EtfStrategy:
         return table_data
 
     def get_strategy_params(self) -> Tuple[List[Dict], StrategyConfig, Dict[str, str]]:
-        cryptos = self.fetch_cryptos(
-            self.COINGECKO_URL,
-            {
-                "vs_currency": "usd",
-                "order": "market_cap_desc",
-                "per_page": 50,
-                "page": 1,
-                "sparkline": "false",
-                "price_change_percentage": "24h,30d,1y",
-            },
-        )
-        
         config = StrategyConfig(
             coins_number=int(os.getenv("HTB_ETF_STRATEGY_COINS_NUMBER", "5")),
             coins_offset=int(os.getenv("HTB_ETF_STRATEGY_COINS_OFFSET", "0")),
             min_yearly_performance=float(os.getenv("HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE", "15.0")),
             leverage=int(os.getenv("HTB_ETF_STRATEGY_LEVERAGE", "5")),
-            excluded_symbols=set(os.getenv("HTB_ETF_STRATEGY_EXCLUDED_SYMBOLS", "").split(","))
+            excluded_symbols=set(os.getenv("HTB_ETF_STRATEGY_EXCLUDED_SYMBOLS", "").split(",")),
+            category=os.getenv("HTB_ETF_STRATEGY_CATEGORY")
         )
         
+        params = {
+            "vs_currency": "usd",
+            "order": "market_cap_desc",
+            "per_page": 50,
+            "page": 1,
+            "sparkline": "false",
+            "price_change_percentage": "24h,30d,1y",
+        }
+        
+        if config.category:
+            params["category"] = config.category
+        
+        cryptos = self.fetch_cryptos(self.COINGECKO_URL, params)
         all_mids = hyperliquid_utils.info.all_mids()
         
         return cryptos, config, all_mids
