@@ -1,37 +1,22 @@
 # hyperliquid-telegram-bot
 
-This is a Telegram bot for Hyperliquid that allows you to check the open positions of a given address and receive updates when an order is filled.
-The inspiration for it comes from Freqtrade: https://www.freqtrade.io/en/stable/
+A Telegram bot for Hyperliquid that monitors cryptocurrency trading positions and sends notifications for filled orders. Inspired by [Freqtrade](https://www.freqtrade.io/en/stable/).
 
-## Parameters required
+## Features
 
-### Telegram
+- 🔍 Monitor open positions for any wallet address
+- 📊 Real-time notifications for filled orders
+- 📈 Support for custom trading strategies
+- ⏰ Periodic coin analysis
+- 🐳 Docker support for easy deployment
 
-In order to create a Telegram bot you need the `HTB_TOKEN` from @BotFather. Send the command `/newbot` to it, follow the steps and copy the Bot token given to you at the end of the procedure.
-The second parameter needed, `HTB_CHAT_ID`, can be obtained form the @userinfobot (the field is named `Id`).
+## Quick Start
 
-### Hyperliquid
+1. Create a `docker-compose.yml` file:
 
-There only mandatory parameter, `HTB_USER_WALLET`, is the user's wallet address.
-If the bot is monitoring a Vault you need to set also `HTB_USER_VAULT`.
-`HTB_KEY_FILE` is instead required if the bot needs to sign transactions so that it can manage orders. The file must contain the private key of the wallet.
-
-### Other environment variables
-
-| Variable    | Description | Example |
-| -------- | ------- | ------- |
-| HTB_COINS_TO_ANALYZE    | Coins to analyze every hour | "BTC,ETH"|
-| HTB_ANALYZE_COINS_WITH_OPEN_ORDERS    | Analyze also coins that have open orders |"True"|
-
-## Docker Compose
-
-The bot can be started adding it as a normal Docker Compose service:
-
-```
----
+```yaml
 version: '3'
 services:
-
   hyperliquid_bot:
     image: sito/hyperliquid-telegram-bot:latest
     container_name: hyperliquid_bot
@@ -41,3 +26,54 @@ services:
       HTB_USER_WALLET: "<ADDRESS TO WATCH>"
     restart: unless-stopped
 ```
+
+2. Run the bot:
+```bash
+docker-compose up -d
+```
+
+## Configuration
+
+### Required Parameters
+
+#### Telegram Setup
+1. Create a new bot through [@BotFather](https://t.me/BotFather):
+   - Send `/newbot` command
+   - Follow the setup procedure
+   - Copy the provided bot token to `HTB_TOKEN`
+2. Get your chat ID from [@userinfobot](https://t.me/userinfobot):
+   - The "Id" field is your `HTB_CHAT_ID`
+
+#### Hyperliquid Parameters
+- `HTB_USER_WALLET`: The wallet address to monitor (required)
+- `HTB_USER_VAULT`: Vault address (optional, for vault monitoring)
+- `HTB_KEY_FILE`: Path to private key file (optional, for order management)
+
+### Optional Parameters
+
+| Variable | Description | Example | Default |
+|----------|-------------|---------|---------|
+| HTB_COINS_TO_ANALYZE | Coins to analyze hourly | "BTC,ETH" | None |
+| HTB_ANALYZE_COINS_WITH_OPEN_ORDERS | Include coins with open orders in analysis | "True" | False |
+
+## Trading Strategies
+
+The bot supports custom trading strategies in the `strategies/` directory:
+
+- `default_strategy`: Basic trading strategy implementation
+- `etf_strategy`: Strategy focused on ETF-like trading behavior
+
+To implement a new strategy:
+1. Create a new directory under `strategies/`
+2. Implement your strategy following the base strategy interface
+3. Register your strategy in the bot configuration
+
+## Contributing
+
+Contributions are welcome! For major changes:
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
