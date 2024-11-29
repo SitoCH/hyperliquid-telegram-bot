@@ -2,6 +2,7 @@ import sys
 import datetime
 import importlib
 import os
+import random
 
 from logging_utils import logger
 from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandler
@@ -10,7 +11,7 @@ from hyperliquid_candles import SELECTING_COIN_FOR_TA, analyze_candles, execute_
 from hyperliquid_orders import get_open_orders
 from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, enter_long, enter_short, exit_all_positions, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit
 from hyperliquid_utils import hyperliquid_utils
-from hyperliquid_positions import get_positions, get_overview
+from hyperliquid_positions import get_positions, get_overview, check_profit_percentage
 from hyperliquid_events import on_user_events
 from telegram_utils import conversation_cancel, telegram_utils
 from utils import exchange_enabled
@@ -34,6 +35,11 @@ class HyperliquidBot:
             fallbacks=[CommandHandler('cancel', conversation_cancel)]
         )
         telegram_utils.add_handler(ta_conv_handler)
+
+        telegram_utils.run_repeating(
+            check_profit_percentage,
+            interval=datetime.timedelta(minutes=random.randint(50, 70))
+        )
 
         if exchange_enabled:
             strategy_name = os.environ.get("HTB_STRATEGY")

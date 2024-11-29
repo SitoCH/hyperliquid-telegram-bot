@@ -8,6 +8,31 @@ from telegram_utils import telegram_utils
 from utils import fmt
 from logging_utils import logger
 
+async def check_profit_percentage(context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+        total_balance = float(user_state['marginSummary']['accountValue'])
+        
+        if user_state["assetPositions"]:
+            total_pnl = sum(
+                float(asset_position['position']['unrealizedPnl'])
+                for asset_position in user_state["assetPositions"]
+            )
+            
+            pnl_percentage = (total_pnl / total_balance) * 100
+            
+            if abs(pnl_percentage) > 10:
+                emoji = "🚀" if pnl_percentage > 10 else "📉"
+                message = (
+                    f"{emoji} <b>Profit Alert</b> {emoji}"
+                    f"Unrealized profit: {fmt(total_pnl)} USDC"
+                    f"Total balance: {fmt(total_balance)} USDC"
+                    f"Profit percentage: {fmt(pnl_percentage)}%"
+                )
+                await telegram_utils.send(message, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.critical(e, exc_info=True)
+
 async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         all_mids = hyperliquid_utils.info.all_mids()
