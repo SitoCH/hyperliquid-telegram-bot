@@ -51,9 +51,15 @@ class EtfStrategy:
         self,
         cryptos: List[Dict],
         config: StrategyConfig,
-        all_mids: Dict[str, str]
+        all_mids: Dict[str, str],
+        meta: Dict
     ) -> List[Dict]:
         filtered_cryptos = []
+
+        asset_info_map = {
+            info["name"]: int(info["maxLeverage"])
+            for info in meta.get("universe", [])
+        }
         
         for coin in cryptos:
             symbol = coin["symbol"]
@@ -75,6 +81,11 @@ class EtfStrategy:
                 
             if abs(daily_change) <= self.LIMIT_PERCENTAGE and abs(monthly_change) <= self.LIMIT_PERCENTAGE:
                 logger.info(f"Excluding {symbol}: price changes (24h: {daily_change}%, 30d: {monthly_change}%) <= {self.LIMIT_PERCENTAGE}%")
+                continue
+
+            max_leverage = asset_info_map.get(symbol)
+            if max_leverage is not None and config.leverage > max_leverage:
+                logger.info(f"Excluding {symbol}: strategy leverage {config.leverage} exceeds max allowed leverage {max_leverage}")
                 continue
 
             filtered_cryptos.append({
@@ -233,7 +244,7 @@ class EtfStrategy:
 
         return table_data
 
-    def get_strategy_params(self) -> Tuple[List[Dict], StrategyConfig, Dict[str, str]]:
+    def get_strategy_params(self) -> Tuple[List[Dict], StrategyConfig, Dict[str, str], Dict]:
         config = StrategyConfig(
             coins_number=int(os.getenv("HTB_ETF_STRATEGY_COINS_NUMBER", "5")),
             coins_offset=int(os.getenv("HTB_ETF_STRATEGY_COINS_OFFSET", "0")),
@@ -257,8 +268,9 @@ class EtfStrategy:
         
         cryptos = self.fetch_cryptos(self.COINGECKO_URL, params)
         all_mids = hyperliquid_utils.info.all_mids()
+        meta = hyperliquid_utils.info.meta()
         
-        return cryptos, config, all_mids
+        return cryptos, config, all_mids, meta
 
     def get_hyperliquid_symbol(self, symbol: str) -> str:
         symbol_mapping = {
@@ -274,10 +286,11 @@ class EtfStrategy:
         update: Update,
         cryptos: List[Dict],
         config: StrategyConfig,
-        all_mids: Dict[str, str]
+        all_mids: Dict[str, str],
+        meta: Dict
     ) -> None:
         try:
-            top_cryptos = self.filter_top_cryptos(cryptos, config, all_mids)
+            top_cryptos = self.filter_top_cryptos(cryptos, config, all_mids, meta)
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             position_values, total_account_value, usdc_target_balance = (
                 self.calculate_account_values(user_state, config.leverage)
@@ -317,8 +330,8 @@ class EtfStrategy:
 
     async def analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
-            cryptos, config, all_mids = self.get_strategy_params()
-            await self.display_crypto_info(update, cryptos, config, all_mids)
+            cryptos, config, all_mids, meta = self.get_strategy_params()
+            await self.display_crypto_info(update, cryptos, config, all_mids, meta)
         except Exception as e:
             logger.error(f"Error executing ETF strategy: {str(e)}")
 
@@ -331,9 +344,9 @@ class EtfStrategy:
             
             await telegram_utils.reply(update, "Opening new positions based on current market data...")
             
-            cryptos, config, all_mids = self.get_strategy_params()
+            cryptos, config, all_mids, meta = self.get_strategy_params()
             
-            top_cryptos = self.filter_top_cryptos(cryptos, config, all_mids)
+            top_cryptos = self.filter_top_cryptos(cryptos, config, all_mids, meta)
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             position_values, total_account_value, usdc_target_balance = (
                 self.calculate_account_values(user_state, config.leverage)
