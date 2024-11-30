@@ -61,12 +61,47 @@ docker-compose up -d
 The bot supports custom trading strategies in the `strategies/` directory:
 
 - `default_strategy`: Basic trading strategy implementation
-- `etf_strategy`: Strategy focused on ETF-like trading behavior
+- `etf_strategy`: Strategy focused on ETF-like trading behavior that automatically allocates funds across top cryptocurrencies based on market capitalization
 
-To implement a new strategy:
-1. Create a new directory under `strategies/`
-2. Implement your strategy following the base strategy interface
-3. Register your strategy in the bot configuration
+### ETF Strategy Configuration
+
+The ETF strategy can be configured using the following environment variables:
+
+| Variable | Description | Example | Default |
+|----------|-------------|---------|---------|
+| HTB_ETF_STRATEGY_COINS_NUMBER | Number of top coins to include in portfolio | "5" | 5 |
+| HTB_ETF_STRATEGY_COINS_OFFSET | Number of top coins to skip (useful to exclude BTC/ETH) | "2" | 0 |
+| HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE | Minimum 1-year performance percentage to include a coin | "15.0" | 15.0 |
+| HTB_ETF_STRATEGY_LEVERAGE | Leverage to use for positions | "5" | 5 |
+| HTB_ETF_STRATEGY_EXCLUDED_SYMBOLS | Comma-separated list of symbols to exclude | "DOGE,SHIB" | "" |
+| HTB_ETF_STRATEGY_CATEGORY | Filter coins by category (e.g., "layer-1") | "defi" | None |
+
+Example configuration in docker-compose.yml:
+```yaml
+version: '3'
+services:
+  hyperliquid_bot:
+    image: sito/hyperliquid-telegram-bot:latest
+    container_name: hyperliquid_bot
+    environment:
+      HTB_TOKEN: "<TELEGRAM BOT TOKEN>"
+      HTB_CHAT_ID: "<TELEGRAM CHAT ID>"
+      HTB_USER_WALLET: "<ADDRESS TO WATCH>"
+      HTB_ETF_STRATEGY_COINS_NUMBER: "3"
+      HTB_ETF_STRATEGY_COINS_OFFSET: "2"
+      HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE: "20.0"
+      HTB_ETF_STRATEGY_LEVERAGE: "3"
+      HTB_ETF_STRATEGY_EXCLUDED_SYMBOLS: "DOGE,SHIB"
+      HTB_ETF_STRATEGY_CATEGORY: "layer-1"
+    restart: unless-stopped
+```
+
+This configuration would create a portfolio that:
+- Skips the top 2 coins (typically BTC and ETH)
+- Includes the next 3 top layer-1 coins by market cap
+- Only includes coins with >20% yearly performance
+- Uses 3x leverage
+- Excludes DOGE and SHIB from consideration
 
 ## Contributing
 
