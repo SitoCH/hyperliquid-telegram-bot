@@ -12,6 +12,15 @@ async def check_profit_percentage(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
         total_balance = float(user_state['marginSummary']['accountValue'])
+        available_balance = float(user_state['withdrawable'])
+        
+        if available_balance > 100:
+            message = [
+                "💰 <b>Available balance alert</b> 💰",
+                f"Total balance: {fmt(total_balance)} USDC",
+                f"Available balance: {fmt(available_balance)} USDC",
+            ]
+            await telegram_utils.send('\n'.join(message), parse_mode=ParseMode.HTML)
         
         if user_state["assetPositions"]:
             total_pnl = sum(
@@ -24,7 +33,7 @@ async def check_profit_percentage(context: ContextTypes.DEFAULT_TYPE) -> None:
             if abs(pnl_percentage) > 10:
                 emoji = "🚀" if pnl_percentage > 10 else "📉"
                 message = [
-                    f"{emoji} <b>Profit Alert</b> {emoji}",
+                    f"{emoji} <b>Unrealized profit alert</b> {emoji}",
                     f"Total balance: {fmt(total_balance)} USDC",
                     f"Unrealized profit: {fmt(total_pnl)} USDC ({fmt(pnl_percentage)}%)",
                 ]
