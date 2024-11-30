@@ -23,13 +23,12 @@ async def check_profit_percentage(context: ContextTypes.DEFAULT_TYPE) -> None:
             
             if abs(pnl_percentage) > 10:
                 emoji = "🚀" if pnl_percentage > 10 else "📉"
-                message = (
-                    f"{emoji} <b>Profit Alert</b> {emoji}"
-                    f"Unrealized profit: {fmt(total_pnl)} USDC"
-                    f"Total balance: {fmt(total_balance)} USDC"
-                    f"Profit percentage: {fmt(pnl_percentage)}%"
-                )
-                await telegram_utils.send(message, parse_mode=ParseMode.HTML)
+                message = [
+                    f"{emoji} <b>Profit Alert</b> {emoji}",
+                    f"Total balance: {fmt(total_balance)} USDC",
+                    f"Unrealized profit: {fmt(total_pnl)} USDC ({fmt(pnl_percentage)}%)",
+                ]
+                await telegram_utils.send('\n'.join(message), parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.critical(e, exc_info=True)
 
