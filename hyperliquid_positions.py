@@ -241,6 +241,7 @@ async def spot_positions_messages(tablefmt):
     for balance in spot_user_state['balances']:
         token = balance['coin']
         amount = float(balance['total'])
+        entry_value = float(balance['entryNtl'])
         price = token_prices.get(token, 0.0)
         usd_value = price * amount
         
@@ -248,7 +249,8 @@ async def spot_positions_messages(tablefmt):
             positions.append({
                 'token': token,
                 'amount': amount,
-                'usd_value': usd_value
+                'usd_value': usd_value,
+                'entry_value': entry_value
             })
     
     positions.sort(key=lambda x: x['usd_value'], reverse=True)
@@ -258,13 +260,14 @@ async def spot_positions_messages(tablefmt):
             [
                 pos['token'],
                 f"{fmt(pos['amount'])}",
-                f"{fmt(pos['usd_value'])}$"
+                f"{fmt(pos['usd_value'])}$",
+                f"{fmt(pos['usd_value'] - pos['entry_value'])}$" if pos['token'] != 'USDC' else ''
             ]
             for pos in positions
         ],
-        headers=["Coin", "Balance", "Pos. value"],
+        headers=["Coin", "Balance", "Pos. value", "PnL"],
         tablefmt=tablefmt,
-        colalign=("left", "right", "right")
+        colalign=("left", "right", "right", "right")
     )
     
     return [
