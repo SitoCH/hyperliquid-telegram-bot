@@ -202,37 +202,85 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.critical(e, exc_info=True)
         await telegram_utils.reply(update, f"Failed to fetch positions: {str(e)}")
 
+def _get_token_prices():
+    """Get token prices from market data."""
+    response = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
+    metadata, market_data = response
+    
+    tokens_data = metadata["tokens"]
+    universe = metadata["universe"]
+    
+    token_prices = {"USDC": 1.0}
+    
+    market_data_map = {i: data for i, data in enumerate(market_data)}
+    
+    for pair in universe:
+        market_index = pair["index"]
+        if market_index not in market_data_map:
+            continue
+            
+        market = market_data_map[market_index]
+        mid_price = float(market["midPx"]) if market["midPx"] is not None else 0.0
+        if not mid_price:
+            continue
+
+        base_token_idx = pair["tokens"][0]
+        quote_token_idx = pair["tokens"][1]
+        
+        base_token = tokens_data[base_token_idx]["name"]
+        quote_token = tokens_data[quote_token_idx]["name"]
+        
+        if quote_token == "USDC":
+            token_prices[base_token] = mid_price
+        elif base_token == "USDC":
+            token_prices[quote_token] = 1.0 / mid_price if mid_price != 0 else 0.0
+        else:
+            if base_token in token_prices:
+                token_prices[quote_token] = token_prices[base_token] / mid_price if mid_price != 0 else 0.0
+            elif quote_token in token_prices:
+                token_prices[base_token] = token_prices[quote_token] * mid_price
+                
+    return token_prices
+
 async def spot_positions_messages(tablefmt):
-    message_lines = []
+    """Generate messages for spot positions, sorted by USD value."""
     spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
-    if spot_user_state['balances']:
-        spot_meta = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
-        tokens_data = spot_meta[0]["tokens"]
-        market_data = spot_meta[1]
-        token_mid_price_map = {}
-        token_mid_price_map["USDC"] = 1.0
-        for token in tokens_data:
-            token_name = token["name"]
-            index = token["index"]
-            if token_name != "USDC" and 0 <= index < len(market_data):
-                mid_px = market_data[index - 1]["midPx"]
-                token_mid_price_map[token_name] = float(mid_px) if mid_px is not None else 0.0
-        message_lines.append("<b>Spot positions:</b>")
+    if not spot_user_state['balances']:
+        return []
 
-        spot_table = tabulate(
+    token_prices = _get_token_prices()
+    
+    positions = []
+    for balance in spot_user_state['balances']:
+        token = balance['coin']
+        amount = float(balance['total'])
+        price = token_prices.get(token, 0.0)
+        usd_value = price * amount
+        
+        if usd_value > 1.0:
+            positions.append({
+                'token': token,
+                'amount': amount,
+                'usd_value': usd_value
+            })
+    
+    positions.sort(key=lambda x: x['usd_value'], reverse=True)
+    
+    table = tabulate(
+        [
             [
-                [
-                    balance["coin"],
-                    f"{fmt(float(balance['total']))}",
-                    f"{fmt(token_mid_price_map[balance['coin']] * float(balance['total']))}$",
-                ]
-                for balance in spot_user_state['balances']
-                if token_mid_price_map[balance["coin"]] * float(balance['total']) > 1.0
-            ],
-            headers=["Coin", "Balance", "Pos. value"],
-            tablefmt=tablefmt,
-            colalign=("left", "right", "right")
-        )
-
-        message_lines.append(f"<pre>{spot_table}</pre>")
-    return message_lines
+                pos['token'],
+                f"{fmt(pos['amount'])}",
+                f"{fmt(pos['usd_value'])}$"
+            ]
+            for pos in positions
+        ],
+        headers=["Coin", "Balance", "Pos. value"],
+        tablefmt=tablefmt,
+        colalign=("left", "right", "right")
+    )
+    
+    return [
+        "<b>Spot positions:</b>",
+        f"<pre>{table}</pre>"
+    ]
