@@ -204,43 +204,30 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 def _get_token_prices():
     """Get token prices from market data."""
-    response = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
-    metadata, market_data = response
-    
-    tokens_data = metadata["tokens"]
-    universe = metadata["universe"]
-    
-    token_prices = {"USDC": 1.0}
-    
+    metadata, market_data = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
+    tokens, universe = metadata["tokens"], metadata["universe"]
     market_data_map = {i: data for i, data in enumerate(market_data)}
-    
-    for pair in universe:
-        market_index = pair["index"]
-        if market_index not in market_data_map:
-            continue
-            
-        market = market_data_map[market_index]
-        mid_price = float(market["midPx"]) if market["midPx"] is not None else 0.0
-        if not mid_price:
-            continue
+    token_prices = {"USDC": 1.0}
 
-        base_token_idx = pair["tokens"][0]
-        quote_token_idx = pair["tokens"][1]
+    for pair in universe:
+        market = market_data_map.get(pair["index"])
+        if not market or not (mid_price := float(market.get("midPx") or 0)):
+            continue
         
-        base_token = tokens_data[base_token_idx]["name"]
-        quote_token = tokens_data[quote_token_idx]["name"]
+        base_token, quote_token = (tokens[idx]["name"] for idx in pair["tokens"])
         
         if quote_token == "USDC":
             token_prices[base_token] = mid_price
         elif base_token == "USDC":
-            token_prices[quote_token] = 1.0 / mid_price if mid_price != 0 else 0.0
+            token_prices[quote_token] = 1 / mid_price
         else:
             if base_token in token_prices:
-                token_prices[quote_token] = token_prices[base_token] / mid_price if mid_price != 0 else 0.0
+                token_prices[quote_token] = token_prices[base_token] / mid_price
             elif quote_token in token_prices:
                 token_prices[base_token] = token_prices[quote_token] * mid_price
-                
+
     return token_prices
+
 
 async def spot_positions_messages(tablefmt):
     """Generate messages for spot positions, sorted by USD value."""
