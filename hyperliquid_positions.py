@@ -246,11 +246,13 @@ async def spot_positions_messages(tablefmt):
         usd_value = price * amount
         
         if usd_value > 1.0:
+            pnl = usd_value - entry_value
+            pnl_percentage = (pnl / entry_value * 100) if entry_value != 0 else 0
             positions.append({
                 'token': token,
-                'amount': amount,
                 'usd_value': usd_value,
-                'entry_value': entry_value
+                'pnl': pnl,
+                'pnl_percentage': pnl_percentage
             })
     
     positions.sort(key=lambda x: x['usd_value'], reverse=True)
@@ -259,13 +261,13 @@ async def spot_positions_messages(tablefmt):
         [
             [
                 pos['token'],
-                f"{fmt(pos['amount'])}",
                 f"{fmt(pos['usd_value'])}$",
-                f"{fmt(pos['usd_value'] - pos['entry_value'])}$" if pos['token'] != 'USDC' else ''
+                f"{fmt(pos['pnl'])}$" if pos['token'] != 'USDC' else '',
+                f"({fmt(pos['pnl_percentage'])}%)" if pos['token'] != 'USDC' else ''
             ]
             for pos in positions
         ],
-        headers=["Coin", "Balance", "Pos. value", "PnL"],
+        headers=["Coin", "Balance", "PnL", ""],
         tablefmt=tablefmt,
         colalign=("left", "right", "right", "right")
     )
