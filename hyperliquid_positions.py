@@ -30,8 +30,8 @@ async def check_profit_percentage(context: ContextTypes.DEFAULT_TYPE) -> None:
             
             pnl_percentage = (total_pnl / total_balance) * 100
             
-            if abs(pnl_percentage) > 20:
-                emoji = "🚀" if pnl_percentage > 20 else "📉"
+            if abs(pnl_percentage) > 30:
+                emoji = "🚀" if pnl_percentage > 30 else "📉"
                 message = [
                     f"{emoji} <b>Unrealized profit alert</b> {emoji}",
                     f"Total balance: {fmt(total_balance)} USDC",
