@@ -27,13 +27,25 @@ class FixedTokenStrategy(BaseStrategy):
         )
 
     def fetch_cryptos(self, url: str, params: Dict) -> List[Dict]:
+        all_cryptos = []
         try:
+            # Fetch first page
             response = requests.get(url, params=params)
             response.raise_for_status()
             cryptos = response.json()
-            for crypto in cryptos:
+            all_cryptos.extend(cryptos)
+
+            # Fetch second page
+            params["page"] = 2
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            cryptos = response.json()
+            all_cryptos.extend(cryptos)
+
+            # Process symbols
+            for crypto in all_cryptos:
                 crypto["symbol"] = self.get_hyperliquid_symbol(crypto["symbol"].upper())
-            return cryptos
+            return all_cryptos
         except requests.RequestException as e:
             logger.error(f"Error fetching crypto data: {e}")
             return []
