@@ -1,6 +1,5 @@
 import os
 import datetime
-import requests
 import random
 from dataclasses import dataclass
 from telegram.ext import ContextTypes, CommandHandler
@@ -16,42 +15,33 @@ from utils import fmt
 class EtfConfig:
     coins_number: int
     coins_offset: int
-    min_yearly_performance: float
     excluded_symbols: Set[str]
     category: Optional[str]
 
 
 class EtfStrategy(BaseStrategy):
+    """Strategy that manages a portfolio of top market cap cryptocurrencies."""
 
     def __init__(self):
         leverage = int(os.getenv("HTB_ETF_STRATEGY_LEVERAGE", "5"))
-        self._config = BaseStrategyConfig(leverage=leverage)
+        min_yearly_performance = float(os.getenv("HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE", "15.0"))
+        self._config = BaseStrategyConfig(
+            leverage=leverage,
+            min_yearly_performance=min_yearly_performance
+        )
         self._etf_config = EtfConfig(
             coins_number=int(os.getenv("HTB_ETF_STRATEGY_COINS_NUMBER", "5")),
             coins_offset=int(os.getenv("HTB_ETF_STRATEGY_COINS_OFFSET", "0")),
-            min_yearly_performance=float(os.getenv("HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE", "15.0")),
             excluded_symbols=set(os.getenv("HTB_ETF_STRATEGY_EXCLUDED_SYMBOLS", "").split(",")),
             category=os.getenv("HTB_ETF_STRATEGY_CATEGORY")
         )
 
-    def fetch_cryptos(self, url: str, params: Dict) -> List[Dict]:
-        try:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            cryptos = response.json()
-            for crypto in cryptos:
-                crypto["symbol"] = self.get_hyperliquid_symbol(crypto["symbol"].upper())
-            return cryptos
-        except requests.RequestException as e:
-            logger.error(f"Error fetching crypto data: {e}")
-            return []
-
     def get_strategy_params(self) -> Tuple[List[Dict], Dict[str, str], Dict]:
+        """Get strategy parameters including filtered crypto data and exchange info."""
         params = {
             "vs_currency": "usd",
             "order": "market_cap_desc",
             "per_page": 50,
-            "page": 1,
             "sparkline": "false",
             "price_change_percentage": "24h,30d,1y",
         }
@@ -59,7 +49,7 @@ class EtfStrategy(BaseStrategy):
         if self._etf_config.category:
             params["category"] = self._etf_config.category
         
-        cryptos = self.fetch_cryptos(self.COINGECKO_URL, params)
+        cryptos = super().fetch_cryptos(params)
         all_mids = hyperliquid_utils.info.all_mids()
         meta = hyperliquid_utils.info.meta()
         
@@ -71,6 +61,7 @@ class EtfStrategy(BaseStrategy):
         all_mids: Dict[str, str],
         meta: Dict
     ) -> List[Dict]:
+        """Filter and sort cryptos according to ETF strategy criteria."""
         filtered_cryptos = []
 
         asset_info_map = {
@@ -90,13 +81,13 @@ class EtfStrategy(BaseStrategy):
                 logger.info(f"Excluding {symbol}: not available on Hyperliquid")
                 continue
                 
-            if yearly_change is not None and yearly_change <= self._etf_config.min_yearly_performance:
-                logger.info(f"Excluding {symbol}: yearly change {fmt(yearly_change)}% <= {self._etf_config.min_yearly_performance}%")
+            if yearly_change is not None and yearly_change <= self.config.min_yearly_performance:
+                logger.info(f"Excluding {symbol}: yearly change {fmt(yearly_change)}% <= {self.config.min_yearly_performance}%")
                 continue
 
             max_leverage = asset_info_map.get(symbol)
-            if max_leverage is not None and self._config.leverage > max_leverage:
-                logger.info(f"Excluding {symbol}: strategy leverage {self._config.leverage} exceeds max allowed leverage {max_leverage}")
+            if max_leverage is not None and self.config.leverage > max_leverage:
+                logger.info(f"Excluding {symbol}: strategy leverage {self.config.leverage} exceeds max allowed leverage {max_leverage}")
                 continue
 
             filtered_cryptos.append({
@@ -120,6 +111,7 @@ class EtfStrategy(BaseStrategy):
         return sorted_cryptos[self._etf_config.coins_offset:self._etf_config.coins_offset + self._etf_config.coins_number]
 
     async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE):
+        """Initialize strategy by setting up Telegram commands and periodic checks."""
         rebalance_button_text = "rebalance"
         telegram_utils.add_buttons([f"/{rebalance_button_text}"], 1)
         telegram_utils.add_handler(CommandHandler(rebalance_button_text, self.rebalance))
