@@ -62,6 +62,7 @@ The bot supports custom trading strategies in the `strategies/` directory:
 
 - `default_strategy`: Basic trading strategy implementation
 - `etf_strategy`: Strategy focused on ETF-like trading behavior that automatically allocates funds across top cryptocurrencies based on market capitalization
+- `fixed_token_strategy`: Strategy that trades a fixed set of tokens with configurable parameters
 
 ### ETF Strategy Configuration
 
@@ -102,6 +103,38 @@ This configuration would create a portfolio that:
 - Only includes coins with >20% yearly performance
 - Uses 3x leverage
 - Excludes DOGE and SHIB from consideration
+
+### Fixed Token Strategy Configuration
+
+The Fixed Token strategy allows you to trade a specific set of tokens with configurable parameters. It can be configured using the following environment variables:
+
+| Variable | Description | Example | Default |
+|----------|-------------|---------|---------|
+| HTB_FIXED_TOKEN_STRATEGY_TOKENS | Comma-separated list of tokens to trade | "BTC,ETH" | "BTC,ETH" |
+| HTB_FIXED_TOKEN_STRATEGY_LEVERAGE | Leverage to use for positions | "5" | 5 |
+| HTB_FIXED_TOKEN_STRATEGY_MIN_YEARLY_PERFORMANCE | Minimum 1-year performance percentage to include a token | "15.0" | 15.0 |
+
+Example configuration in docker-compose.yml:
+```yaml
+version: '3'
+services:
+  hyperliquid_bot:
+    image: sito/hyperliquid-telegram-bot:latest
+    container_name: hyperliquid_bot
+    environment:
+      HTB_TOKEN: "<TELEGRAM BOT TOKEN>"
+      HTB_CHAT_ID: "<TELEGRAM CHAT ID>"
+      HTB_USER_WALLET: "<ADDRESS TO WATCH>"
+      HTB_FIXED_TOKEN_STRATEGY_TOKENS: "BTC,ETH,SOL"
+      HTB_FIXED_TOKEN_STRATEGY_LEVERAGE: "3"
+      HTB_FIXED_TOKEN_STRATEGY_MIN_YEARLY_PERFORMANCE: "20.0"
+    restart: unless-stopped
+```
+
+This configuration would:
+- Trade only BTC, ETH, and SOL
+- Use 3x leverage for positions
+- Only include tokens with >20% yearly performance
 
 ## Contributing
 
