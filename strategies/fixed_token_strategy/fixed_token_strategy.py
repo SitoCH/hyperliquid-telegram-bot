@@ -2,7 +2,7 @@ import os
 import requests
 from dataclasses import dataclass
 from telegram.ext import ContextTypes, CommandHandler
-from typing import List, Dict, Set, Optional, Tuple
+from typing import List, Dict, Set, Tuple
 from strategies.base_strategy.base_strategy import BaseStrategy, BaseStrategyConfig
 from logging_utils import logger
 from hyperliquid_utils import hyperliquid_utils
@@ -11,25 +11,19 @@ from utils import fmt
 
 
 @dataclass
-class EtfConfig:
-    coins_number: int
-    coins_offset: int
+class FixedTokenConfig:
+    tokens: Set[str]
     min_yearly_performance: float
-    excluded_symbols: Set[str]
-    category: Optional[str]
 
 
-class EtfStrategy(BaseStrategy):
+class FixedTokenStrategy(BaseStrategy):
 
     def __init__(self):
-        leverage = int(os.getenv("HTB_ETF_STRATEGY_LEVERAGE", "5"))
+        leverage = int(os.getenv("HTB_FIXED_TOKEN_STRATEGY_LEVERAGE", "5"))
         self._config = BaseStrategyConfig(leverage=leverage)
-        self._etf_config = EtfConfig(
-            coins_number=int(os.getenv("HTB_ETF_STRATEGY_COINS_NUMBER", "5")),
-            coins_offset=int(os.getenv("HTB_ETF_STRATEGY_COINS_OFFSET", "0")),
-            min_yearly_performance=float(os.getenv("HTB_ETF_STRATEGY_MIN_YEARLY_PERFORMANCE", "15.0")),
-            excluded_symbols=set(os.getenv("HTB_ETF_STRATEGY_EXCLUDED_SYMBOLS", "").split(",")),
-            category=os.getenv("HTB_ETF_STRATEGY_CATEGORY")
+        self._fixed_token_config = FixedTokenConfig(
+            tokens=set(os.getenv("HTB_FIXED_TOKEN_STRATEGY_TOKENS", "BTC,ETH").split(",")),
+            min_yearly_performance=float(os.getenv("HTB_FIXED_TOKEN_STRATEGY_MIN_YEARLY_PERFORMANCE", "15.0")),
         )
 
     def fetch_cryptos(self, url: str, params: Dict) -> List[Dict]:
@@ -48,14 +42,11 @@ class EtfStrategy(BaseStrategy):
         params = {
             "vs_currency": "usd",
             "order": "market_cap_desc",
-            "per_page": 50,
+            "per_page": 250,
             "page": 1,
             "sparkline": "false",
             "price_change_percentage": "24h,30d,1y",
         }
-        
-        if self._etf_config.category:
-            params["category"] = self._etf_config.category
         
         cryptos = self.fetch_cryptos(self.COINGECKO_URL, params)
         all_mids = hyperliquid_utils.info.all_mids()
@@ -70,7 +61,6 @@ class EtfStrategy(BaseStrategy):
         meta: Dict
     ) -> List[Dict]:
         filtered_cryptos = []
-
         asset_info_map = {
             info["name"]: int(info["maxLeverage"])
             for info in meta.get("universe", [])
@@ -79,17 +69,17 @@ class EtfStrategy(BaseStrategy):
         for coin in cryptos:
             symbol = coin["symbol"]
             yearly_change = coin["price_change_percentage_1y_in_currency"]
-
-            if symbol in self._etf_config.excluded_symbols:
-                logger.info(f"Excluding {symbol}: in HTB_ETF_STRATEGY_EXCLUDED_SYMBOLS")
+            
+            if symbol not in self._fixed_token_config.tokens:
+                logger.info(f"Excluding {symbol}: not in fixed token list")
                 continue
                 
             if symbol not in all_mids:
                 logger.info(f"Excluding {symbol}: not available on Hyperliquid")
                 continue
                 
-            if yearly_change is not None and yearly_change <= self._etf_config.min_yearly_performance:
-                logger.info(f"Excluding {symbol}: yearly change {fmt(yearly_change)}% <= {self._etf_config.min_yearly_performance}%")
+            if yearly_change is not None and yearly_change <= self._fixed_token_config.min_yearly_performance:
+                logger.info(f"Excluding {symbol}: yearly change {fmt(yearly_change)}% <= {self._fixed_token_config.min_yearly_performance}%")
                 continue
 
             max_leverage = asset_info_map.get(symbol)
@@ -104,18 +94,7 @@ class EtfStrategy(BaseStrategy):
                 "price_change_percentage_1y_in_currency": yearly_change,
             })
 
-        sorted_cryptos = sorted(
-            filtered_cryptos,
-            key=lambda x: x["market_cap"],
-            reverse=True,
-        )
-        
-        if self._etf_config.coins_offset > 0:
-            for coin in sorted_cryptos[:self._etf_config.coins_offset]:
-                logger.info(f"Skipping {coin['symbol']} due to coins_offset={self._etf_config.coins_offset}")
-        
-        # Apply offset and limit
-        return sorted_cryptos[self._etf_config.coins_offset:self._etf_config.coins_offset + self._etf_config.coins_number]
+        return sorted(filtered_cryptos, key=lambda x: x["market_cap"], reverse=True)
 
     async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE):
         rebalance_button_text = "rebalance"
