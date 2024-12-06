@@ -1,5 +1,7 @@
 import os
+import datetime
 import requests
+import random
 from dataclasses import dataclass
 from telegram.ext import ContextTypes, CommandHandler
 from typing import List, Dict, Set, Optional, Tuple
@@ -125,3 +127,8 @@ class EtfStrategy(BaseStrategy):
         analyze_button_text = "analyze"
         telegram_utils.add_buttons([f"/{analyze_button_text}"], 1)
         telegram_utils.add_handler(CommandHandler(analyze_button_text, self.analyze))
+
+        telegram_utils.run_repeating(
+            self.check_position_allocation_drifts,
+            interval=datetime.timedelta(minutes=random.randint(50, 70))
+        )

@@ -97,6 +97,45 @@ class BaseStrategy(ABC):
         
         return allocation_data, other_positions, usdc_difference
 
+    async def check_position_allocation_drifts(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        try:
+            cryptos, all_mids, meta = self.get_strategy_params()
+            top_cryptos = self.filter_top_cryptos(cryptos, all_mids, meta)
+            user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+            position_values, total_account_value, usdc_target_balance = (
+                self.calculate_account_values(user_state, self.config.leverage)
+            )
+
+            total_market_cap = sum(coin["market_cap"] for coin in top_cryptos)
+            usdc_balance = float(user_state["crossMarginSummary"]["totalRawUsd"])
+            tradeable_balance = total_account_value - usdc_target_balance
+
+            allocation_data, _, _ = self.calculate_allocations(
+                top_cryptos,
+                position_values,
+                tradeable_balance,
+                total_market_cap,
+                cryptos,
+                usdc_balance,
+                usdc_target_balance,
+            )
+
+            for coin in allocation_data:
+                if abs(coin["difference"]) > 10:
+                    emoji = "🔼" if coin["difference"] > 0 else "🔽"
+                    message = [
+                        f"{emoji} <b>Coin difference alert</b> {emoji}",
+                        f"Coin: {coin['name']} ({coin['symbol']})",
+                        f"Target value: {fmt(coin['target_value'])} USDC",
+                        f"Current value: {fmt(coin['current_value'])} USDC",
+                        f"Difference: {fmt(coin['difference'])} USDC",
+                    ]
+                    await telegram_utils.send('\n'.join(message), parse_mode=ParseMode.HTML)
+
+        except Exception as e:
+            logger.error(f"Error checking differences: {str(e)}")
+            await telegram_utils.send(f"Error checking differences: {str(e)}")
+
     def generate_table_data(
         self,
         top_cryptos: List[Dict],
