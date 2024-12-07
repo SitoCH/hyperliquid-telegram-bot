@@ -225,9 +225,19 @@ class BaseStrategy(ABC):
     async def check_position_allocation_drifts(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Monitor and report significant position allocation drifts."""
         try:
+
+
+            user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+            unrealized_pnl = sum(
+                float(asset_position['position']['unrealizedPnl'])
+                for asset_position in user_state["assetPositions"]
+            )
+
+            if unrealized_pnl < 25:
+                return
+
             cryptos, all_mids, meta = self.get_strategy_params()
             top_cryptos = self.filter_top_cryptos(cryptos, all_mids, meta)
-            user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             position_values, total_account_value, usdc_target_balance = (
                 self.calculate_account_values(user_state, self.config.leverage)
             )
@@ -247,7 +257,7 @@ class BaseStrategy(ABC):
             )
 
             for allocation in allocation_data:
-                if abs(allocation.difference) > 10:
+                if abs(allocation.difference) > 25:
                     emoji = "🔼" if allocation.difference > 0 else "🔽"
                     message = [
                         f"{emoji} <b>Coin difference alert</b> {emoji}",
