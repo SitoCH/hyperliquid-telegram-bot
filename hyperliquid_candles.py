@@ -10,6 +10,7 @@ from tabulate import tabulate, simple_separated_format
 from telegram import Update
 from telegram.ext import CallbackContext, ContextTypes, ConversationHandler
 from telegram.constants import ParseMode
+from typing import Set
 
 from logging_utils import logger
 from telegram_utils import telegram_utils
@@ -40,9 +41,7 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
 
 
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
-    coins_to_analyze = set()
-    if len(coins_to_analyze) > 0:
-        coins_to_analyze = set(os.getenv("HTB_COINS_TO_ANALYZE", "").split(","))
+    coins_to_analyze: Set[str] = set(os.getenv("HTB_COINS_TO_ANALYZE", "").split(","))
 
     if os.getenv('HTB_ANALYZE_COINS_WITH_OPEN_ORDERS', 'False') == 'True':
         coins_to_analyze = set(coins_to_analyze) | set(hyperliquid_utils.get_coins_with_open_positions())
