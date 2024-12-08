@@ -109,9 +109,14 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
 
     # MACD
     macd = ta.macd(df["c"], fast=12, slow=26, signal=9)
-    df["MACD"] = macd["MACD_12_26_9"]
-    df["MACD_Signal"] = macd["MACDs_12_26_9"]
-    df["MACD_Hist"] = macd["MACDh_12_26_9"]
+    if macd is not None:  # Add check for None
+        df["MACD"] = macd["MACD_12_26_9"]
+        df["MACD_Signal"] = macd["MACDs_12_26_9"]
+        df["MACD_Hist"] = macd["MACDh_12_26_9"]
+    else:  # If MACD calculation fails, set columns to NaN
+        df["MACD"] = float('nan')
+        df["MACD_Signal"] = float('nan')
+        df["MACD_Hist"] = float('nan')
 
     # EMA (Exponential Moving Average)
     df["EMA"] = ta.ema(df["c"], length=length)
