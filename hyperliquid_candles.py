@@ -46,10 +46,10 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     if os.getenv('HTB_ANALYZE_COINS_WITH_OPEN_ORDERS', 'False') == 'True':
         coins_to_analyze = set(coins_to_analyze) | set(hyperliquid_utils.get_coins_with_open_positions())
 
-    all_mids = hyperliquid_utils.info.all_mids()
-
-    for coin in coins_to_analyze:
-        await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
+    if len(coins_to_analyze) > 0:
+        all_mids = hyperliquid_utils.info.all_mids()
+        for coin in coins_to_analyze:
+            await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
 
 
 async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, all_mids, always_notify: bool) -> None:
