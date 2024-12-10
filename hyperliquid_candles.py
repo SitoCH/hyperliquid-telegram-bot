@@ -1,16 +1,18 @@
 import os
 import io
 import time
-import pandas as pd
-import pandas_ta as ta
+from tzlocal import get_localzone
+from typing import Set, List, Dict, Any, Optional, cast
+import pandas as pd  # type: ignore[import]
+import pandas_ta as ta  # type: ignore[import]
 import matplotlib.pyplot as plt
-import mplfinance as mpf
+import mplfinance as mpf  # type: ignore[import]
 
 from tabulate import tabulate, simple_separated_format
-from telegram import Update
+from telegram import Update, Message, CallbackQuery
 from telegram.ext import CallbackContext, ContextTypes, ConversationHandler
 from telegram.constants import ParseMode
-from typing import Set
+from telegram.error import TelegramError
 
 from logging_utils import logger
 from telegram_utils import telegram_utils
@@ -21,13 +23,22 @@ SELECTING_COIN_FOR_TA = range(1)
 
 
 async def execute_ta(update: Update, context: CallbackContext) -> int:
+    if not update.message:
+        return ConversationHandler.END
+    
     await update.message.reply_text("Choose a coin to analyze:", reply_markup=hyperliquid_utils.get_coins_reply_markup())
-    return SELECTING_COIN_FOR_TA
+    return cast(int, SELECTING_COIN_FOR_TA)
 
 
 async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
+    if not update.callback_query:
+        return ConversationHandler.END
+
     query = update.callback_query
     await query.answer()
+
+    if not query.data:
+        return ConversationHandler.END
 
     coin = query.data
     if coin == "cancel":
@@ -52,7 +63,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
             await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
 
 
-async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, all_mids, always_notify: bool) -> None:
+async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, all_mids: Dict[str, Any], always_notify: bool) -> None:
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
@@ -60,15 +71,16 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 5 * 86400000, now)
         candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 10 * 86400000, now)
 
-        df_5m = prepare_dataframe(candles_5m)
-        df_1h = prepare_dataframe(candles_1h)
-        df_4h = prepare_dataframe(candles_4h)
+        local_tz = get_localzone()
+        df_5m = prepare_dataframe(candles_5m, local_tz)
+        df_1h = prepare_dataframe(candles_1h, local_tz)
+        df_4h = prepare_dataframe(candles_4h, local_tz)
 
         mid = float(all_mids[coin])
         apply_indicators(df_5m, mid)
         flip_on_1h = apply_indicators(df_1h, mid)
         flip_on_4h = apply_indicators(df_4h, mid)
-        flip_on_4h = flip_on_4h and 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now() - pd.Timedelta(hours=1)
+        flip_on_4h = flip_on_4h and 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
 
         if always_notify or flip_on_1h or flip_on_4h:
             await send_trend_change_message(context, mid, df_5m, df_1h, df_4h, coin)
@@ -77,10 +89,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
 
 
-def prepare_dataframe(candles: list) -> pd.DataFrame:
+def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     df = pd.DataFrame(candles)
-    df["T"] = pd.to_datetime(df["T"], unit="ms")
-    df["t"] = pd.to_datetime(df["t"], unit="ms")
+    df["T"] = pd.to_datetime(df["T"], unit="ms", utc=True).dt.tz_convert(local_tz)
+    df["t"] = pd.to_datetime(df["t"], unit="ms", utc=True).dt.tz_convert(local_tz)
     df[["c", "h", "l", "o", "v"]] = df[["c", "h", "l", "o", "v"]].astype(float)
     df["n"] = df["n"].astype(int)
     return df
@@ -124,7 +136,7 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "VWAP_Flip_Detected"]].any(axis=1).iloc[-1]
 
 
-def heikin_ashi(df):
+def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
     ha_close = (df['Open'] + df['High'] + df['Low'] + df['Close']) / 4
 
     ha_df = pd.DataFrame(dict(Close=ha_close, Volume=df['Volume']))
@@ -144,7 +156,7 @@ def heikin_ashi(df):
     return ha_df
 
 
-def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> list:
+def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> List[io.BytesIO]:
     chart_buffers = []
 
     def save_to_buffer(df_plot: pd.DataFrame, title: str) -> io.BytesIO:
@@ -159,7 +171,7 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
         strong_positive_threshold = df_plot['MACD_Hist'].max() * 0.5
         strong_negative_threshold = df_plot['MACD_Hist'].min() * 0.5
 
-        def determine_color(value):
+        def determine_color(value: float) -> str:
             if value >= strong_positive_threshold:
                 return 'green'
             elif 0 < value < strong_positive_threshold:
@@ -241,8 +253,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
         await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=buf)
 
 
-
-def get_ta_results(df: pd.DataFrame, mid: float) -> dict:
+def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
     aroon_up_prev, aroon_down_prev = df["Aroon_Up"].iloc[-2], df["Aroon_Down"].iloc[-2]
     aroon_up, aroon_down = df["Aroon_Up"].iloc[-1], df["Aroon_Down"].iloc[-1]
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
@@ -266,7 +277,7 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> dict:
     }
 
 
-def format_table(results: dict) -> str:
+def format_table(results: Dict[str, Any]) -> str:
     return tabulate(
         [
             ["Aroon: ", "", ""],

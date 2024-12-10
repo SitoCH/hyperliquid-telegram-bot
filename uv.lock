@@ -362,12 +362,14 @@ dependencies = [
     { name = "hyperliquid-python-sdk" },
     { name = "matplotlib" },
     { name = "mplfinance" },
+    { name = "pandas-stubs" },
     { name = "pandas-ta" },
     { name = "python-telegram-bot", extra = ["job-queue"] },
     { name = "setuptools" },
     { name = "tabulate" },
     { name = "types-requests" },
     { name = "types-tabulate" },
+    { name = "tzlocal" },
 ]
 
 [package.metadata]
@@ -375,12 +377,14 @@ requires-dist = [
     { name = "hyperliquid-python-sdk", specifier = ">=0.7.1" },
     { name = "matplotlib", specifier = ">=3.9.2" },
     { name = "mplfinance", specifier = ">=0.12.10b0" },
+    { name = "pandas-stubs", specifier = ">=2.2.3.241126" },
     { name = "pandas-ta", git = "https://github.com/twopirllc/pandas-ta.git?branch=development" },
     { name = "python-telegram-bot", extras = ["job-queue"], specifier = ">=21.6" },
     { name = "setuptools", specifier = ">=75.5.0" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "types-requests", specifier = ">=2.32.0.20241016" },
     { name = "types-tabulate", specifier = ">=0.9.0.20240106" },
+    { name = "tzlocal", specifier = ">=5.2" },
 ]
 
 [[package]]
@@ -601,6 +605,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pandas-stubs"
+version = "2.2.3.241126"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "types-pytz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/90/86/93c545d149c3e1fe1c4c55478cc3a69859d0ea3467e1d9892e9eb28cb1e7/pandas_stubs-2.2.3.241126.tar.gz", hash = "sha256:cf819383c6d9ae7d4dabf34cd47e1e45525bb2f312e6ad2939c2c204cb708acd", size = 104204 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6f/ab/ed42acf15bab2e86e5c49fad4aa038315233c4c2d22f41b49faa4d837516/pandas_stubs-2.2.3.241126-py3-none-any.whl", hash = "sha256:74aa79c167af374fe97068acc90776c0ebec5266a6e5c69fe11e9c2cf51f2267", size = 158280 },
+]
+
+[[package]]
 name = "pandas-ta"
 version = "0.4.19b0"
 source = { git = "https://github.com/twopirllc/pandas-ta.git?branch=development#438f3a97b71b26bc17efb1a204fb0e0fdc48e0aa" }
@@ -808,6 +825,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/8a/0b/d80dfa675bf592f636d1ea0b835eab4ec8df6e9415d8cfd766df54456123/toolz-1.0.0.tar.gz", hash = "sha256:2c86e3d9a04798ac556793bced838816296a2f085017664e4995cb40a1047a02", size = 66790 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/03/98/eb27cc78ad3af8e302c9d8ff4977f5026676e130d28dd7578132a457170c/toolz-1.0.0-py3-none-any.whl", hash = "sha256:292c8f1c4e7516bf9086f8850935c799a874039c8bcf959d47b600e4c44a6236", size = 56383 },
+]
+
+[[package]]
+name = "types-pytz"
+version = "2024.2.0.20241003"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/66/d0/73aa3063a9ef9881bd7103cb4ae379bfd8fafda0e86b01b694d676313a4b/types-pytz-2024.2.0.20241003.tar.gz", hash = "sha256:575dc38f385a922a212bac00a7d6d2e16e141132a3c955078f4a4fd13ed6cb44", size = 5474 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/86/60/2a2977ce0f91255bbb668350b127a801a06ad37c326a2e5bfd52f03e0784/types_pytz-2024.2.0.20241003-py3-none-any.whl", hash = "sha256:3e22df1336c0c6ad1d29163c8fda82736909eb977281cb823c57f8bae07118b7", size = 5245 },
 ]
 
 [[package]]
