@@ -56,16 +56,19 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 order_types = grouped_data.get(coin, {})
                 sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, is_long)
 
-                tp_orders = format_orders(tp_raw_orders, mid, percentage_format=lambda triggerPx, mid: abs((triggerPx / mid - 1) * 100))
-                sl_orders = format_orders(sl_raw_orders, mid, percentage_format=lambda triggerPx, mid: abs(((1 - triggerPx / mid) * 100)))
+                tp_orders = format_orders(tp_raw_orders, mid, percentage_format=lambda triggerPx, mid: (triggerPx / mid - 1) * 100)
+                sl_orders = format_orders(sl_raw_orders, mid, percentage_format=lambda triggerPx, mid: (1 - triggerPx / mid) * 100)
 
                 table_orders = tp_orders + [["Current", all_mids[coin], ""]] + sl_orders
 
-                entry_px = position['entryPx']
-                liquidation_px = position['liquidationPx']
+                entry_px = float(position['entryPx'])
+                liquidation_px = float(position['liquidationPx'])
 
-                table_orders = insert_order(table_orders, ["Entry", entry_px, ""], is_long)
-                table_orders = insert_order(table_orders, ["Liq.", liquidation_px, ""], is_long)
+                entry_distance = (entry_px / mid - 1) * 100
+                liq_distance = (liquidation_px / mid - 1) * 100
+
+                table_orders = insert_order(table_orders, ["Entry", entry_px, f"{fmt(entry_distance)}%"], is_long)
+                table_orders = insert_order(table_orders, ["Liq.", liquidation_px, f"{fmt(liq_distance)}%"], is_long)
 
                 if not is_long:
                     table_orders.reverse()
@@ -92,7 +95,7 @@ def format_orders(raw_orders, mid, percentage_format):
         [
             order['sz'],
             order['triggerPx'],
-            f"{fmt(percentage_format(float(order['triggerPx']), mid ))}%"
+            f"{fmt(percentage_format(float(order['triggerPx']), mid))}%"
         ]
         for order in raw_orders
     ]
