@@ -153,7 +153,7 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     except Exception as e:
         logger.error(f"Error getting positions: {str(e)}")
-        await telegram_utils.reply_text(
+        await telegram_utils.reply(
             update,
             "Error getting positions. Please try again later."
         )
