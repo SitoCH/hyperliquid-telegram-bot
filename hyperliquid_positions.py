@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+from typing import Dict, List, Any
 from tabulate import simple_separated_format, tabulate
 from telegram import Update
 from telegram.constants import ParseMode
@@ -8,40 +10,62 @@ from telegram_utils import telegram_utils
 from utils import fmt
 from logging_utils import logger
 
+@dataclass
+class PortfolioBalance:
+    perp_total: float
+    perp_available: float 
+    spot_total: float
+    
+    @property
+    def total(self) -> float:
+        return self.perp_total + self.spot_total
+        
+def _calculate_spot_balance(spot_state: Dict[str, Any], token_prices: Dict[str, float]) -> float:
+    """Calculate total spot balance from user state and token prices."""
+    return sum(
+        float(balance['total']) * token_prices.get(balance['coin'], 0.0)
+        for balance in spot_state.get('balances', [])
+    )
+
+def _get_portfolio_balance() -> PortfolioBalance:
+    """Get current portfolio balance information."""
+    address = hyperliquid_utils.address
+    perp_state = hyperliquid_utils.info.user_state(address)
+    spot_state = hyperliquid_utils.info.spot_user_state(address)
+    token_prices = hyperliquid_utils.info.all_mids()
+    
+    return PortfolioBalance(
+        perp_total=float(perp_state['marginSummary']['accountValue']),
+        perp_available=float(perp_state['withdrawable']),
+        spot_total=_calculate_spot_balance(spot_state, token_prices)
+    )
+
+def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
+    """Format portfolio balance information as message lines."""
+    return [
+        f"<b>Total portfolio value: {fmt(balance.total)} USDC</b>",
+        "",
+        "<b>Perps positions:</b>",
+        f"Total balance: {fmt(balance.perp_total)} USDC", 
+        f"Available balance: {fmt(balance.perp_available)} USDC",
+    ]
+
 async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handler for getting current portfolio positions."""
     try:
+        balance = _get_portfolio_balance()
+        message_lines = _format_portfolio_message(balance)
+        
         all_mids = hyperliquid_utils.info.all_mids()
-        address = hyperliquid_utils.address
-        perp_user_state = hyperliquid_utils.info.user_state(address)
-        spot_user_state = hyperliquid_utils.info.spot_user_state(address)
-        token_prices = _get_token_prices()
-
-        perp_balance = float(perp_user_state['marginSummary']['accountValue'])
-        available_balance = float(perp_user_state['withdrawable'])
-
-        spot_balance = sum(
-            float(balance['total']) * token_prices.get(balance['coin'], 0.0)
-            for balance in spot_user_state.get('balances', [])
-        )
-
-        total_portfolio = perp_balance + spot_balance
-
-        perp_message_lines = [
-            f"<b>Total portfolio value: {fmt(total_portfolio)} USDC</b>",
-            "",
-            "<b>Perps positions:</b>",
-            f"Total balance: {fmt(perp_balance)} USDC",
-            f"Available balance: {fmt(available_balance)} USDC",
-        ]
-
+        perp_user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
         tablefmt = simple_separated_format('  ')
         if perp_user_state["assetPositions"]:
             total_pnl = sum(
                 float(asset_position['position']['unrealizedPnl'])
                 for asset_position in perp_user_state["assetPositions"]
             )
-            perp_message_lines.append(f"Unrealized profit: {fmt(total_pnl)} USDC")
-            await telegram_utils.reply(update, '\n'.join(perp_message_lines), parse_mode=ParseMode.HTML)
+            message_lines.append(f"Unrealized profit: {fmt(total_pnl)} USDC")
+            await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
             sorted_positions = sorted(
                 perp_user_state["assetPositions"],
@@ -121,14 +145,18 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
                 await telegram_utils.reply(update, '\n'.join(coin_message_lines), parse_mode=ParseMode.HTML)
         else:
-            await telegram_utils.reply(update, '\n'.join(perp_message_lines), parse_mode=ParseMode.HTML)
+            await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
-        spot_messages = await spot_positions_messages(tablefmt, spot_user_state)
+        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address))
         if len(spot_messages) > 0:
             await telegram_utils.reply(update, '\n'.join(spot_messages), parse_mode=ParseMode.HTML)
 
     except Exception as e:
-        await telegram_utils.reply(update, f"Failed to fetch positions: {str(e)}")
+        logger.error(f"Error getting positions: {str(e)}")
+        await telegram_utils.reply_text(
+            update,
+            "Error getting positions. Please try again later."
+        )
 
 async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
