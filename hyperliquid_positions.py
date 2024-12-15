@@ -11,27 +11,40 @@ from logging_utils import logger
 async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         all_mids = hyperliquid_utils.info.all_mids()
-        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-        total_balance = float(user_state['marginSummary']['accountValue'])
-        available_balance = float(user_state['withdrawable'])
+        address = hyperliquid_utils.address
+        perp_user_state = hyperliquid_utils.info.user_state(address)
+        spot_user_state = hyperliquid_utils.info.spot_user_state(address)
+        token_prices = _get_token_prices()
+
+        perp_balance = float(perp_user_state['marginSummary']['accountValue'])
+        available_balance = float(perp_user_state['withdrawable'])
+
+        spot_balance = sum(
+            float(balance['total']) * token_prices.get(balance['coin'], 0.0)
+            for balance in spot_user_state.get('balances', [])
+        )
+
+        total_portfolio = perp_balance + spot_balance
 
         perp_message_lines = [
+            f"<b>Total portfolio value: {fmt(total_portfolio)} USDC</b>",
+            "",
             "<b>Perps positions:</b>",
-            f"Total balance: {fmt(total_balance)} USDC",
+            f"Total balance: {fmt(perp_balance)} USDC",
             f"Available balance: {fmt(available_balance)} USDC",
         ]
 
         tablefmt = simple_separated_format('  ')
-        if user_state["assetPositions"]:
+        if perp_user_state["assetPositions"]:
             total_pnl = sum(
                 float(asset_position['position']['unrealizedPnl'])
-                for asset_position in user_state["assetPositions"]
+                for asset_position in perp_user_state["assetPositions"]
             )
             perp_message_lines.append(f"Unrealized profit: {fmt(total_pnl)} USDC")
             await telegram_utils.reply(update, '\n'.join(perp_message_lines), parse_mode=ParseMode.HTML)
 
             sorted_positions = sorted(
-                user_state["assetPositions"],
+                perp_user_state["assetPositions"],
                 key=lambda x: float(x['position']['positionValue']),
                 reverse=True
             )
@@ -110,7 +123,7 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         else:
             await telegram_utils.reply(update, '\n'.join(perp_message_lines), parse_mode=ParseMode.HTML)
 
-        spot_messages = await spot_positions_messages(tablefmt)
+        spot_messages = await spot_positions_messages(tablefmt, spot_user_state)
         if len(spot_messages) > 0:
             await telegram_utils.reply(update, '\n'.join(spot_messages), parse_mode=ParseMode.HTML)
 
@@ -119,26 +132,38 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-        total_balance = float(user_state['marginSummary']['accountValue'])
-        available_balance = float(user_state['withdrawable'])
+        perp_user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+        spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
+        token_prices = _get_token_prices()
+        
+        perp_balance = float(perp_user_state['marginSummary']['accountValue'])
+        available_balance = float(perp_user_state['withdrawable'])
+
+        spot_balance = sum(
+            float(balance['total']) * token_prices.get(balance['coin'], 0.0)
+            for balance in spot_user_state.get('balances', [])
+        )
+
+        total_portfolio = perp_balance + spot_balance
 
         message_lines = [
+            f"<b>Total portfolio value: {fmt(total_portfolio)} USDC</b>",
+            "",
             "<b>Perps positions:</b>",
-            f"Total balance: {fmt(total_balance)} USDC",
+            f"Total balance: {fmt(perp_balance)} USDC",
             f"Available balance: {fmt(available_balance)} USDC",
         ]
 
         tablefmt = simple_separated_format(' ')
-        if user_state["assetPositions"]:
+        if perp_user_state["assetPositions"]:
             total_pnl = sum(
                 float(asset_position['position']['unrealizedPnl'])
-                for asset_position in user_state["assetPositions"]
+                for asset_position in perp_user_state["assetPositions"]
             )
             message_lines.append(f"Unrealized profit: {fmt(total_pnl)} USDC")
 
             sorted_positions = sorted(
-                user_state["assetPositions"],
+                perp_user_state["assetPositions"],
                 key=lambda x: float(x['position']['positionValue']),
                 reverse=True
             )
@@ -161,7 +186,7 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
             message_lines.append(f"<pre>{table}</pre>")
 
-        spot_messages = await spot_positions_messages(tablefmt)
+        spot_messages = await spot_positions_messages(tablefmt, spot_user_state)
         message_lines += spot_messages
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
@@ -196,9 +221,9 @@ def _get_token_prices():
     return token_prices
 
 
-async def spot_positions_messages(tablefmt):
+async def spot_positions_messages(tablefmt, spot_user_state):
     """Generate messages for spot positions, sorted by USD value."""
-    spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
+
     if not spot_user_state['balances']:
         return []
 
