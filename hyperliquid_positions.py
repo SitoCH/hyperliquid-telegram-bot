@@ -32,7 +32,7 @@ def _get_portfolio_balance() -> PortfolioBalance:
     address = hyperliquid_utils.address
     perp_state = hyperliquid_utils.info.user_state(address)
     spot_state = hyperliquid_utils.info.spot_user_state(address)
-    token_prices = hyperliquid_utils.info.all_mids()
+    token_prices = _get_token_prices()
     
     return PortfolioBalance(
         perp_total=float(perp_state['marginSummary']['accountValue']),
@@ -43,8 +43,8 @@ def _get_portfolio_balance() -> PortfolioBalance:
 def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
     """Format portfolio balance information as message lines."""
     return [
-        f"<b>Total portfolio value: {fmt(balance.total)} USDC</b>",
-        "",
+        "<b>Portfolio:</b>",
+        f"Total balance: {fmt(balance.total)} USDC",
         "<b>Perps positions:</b>",
         f"Total balance: {fmt(balance.perp_total)} USDC", 
         f"Available balance: {fmt(balance.perp_available)} USDC",
@@ -175,8 +175,8 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         total_portfolio = perp_balance + spot_balance
 
         message_lines = [
-            f"<b>Total portfolio value: {fmt(total_portfolio)} USDC</b>",
-            "",
+            "<b>Portfolio:</b>",
+            f"Total balance: {fmt(total_portfolio)} USDC",
             "<b>Perps positions:</b>",
             f"Total balance: {fmt(perp_balance)} USDC",
             f"Available balance: {fmt(available_balance)} USDC",
