@@ -111,22 +111,43 @@ class BaseStrategy(ABC):
         top_crypto_symbols = {coin["symbol"] for coin in top_cryptos}
         allocation_data = []
         
+        initial_targets = {}
+        valid_coins = []
+        skipped_value = 0.0
+        
         for coin in top_cryptos:
             symbol = coin["symbol"]
             rel_market_cap_pct = (coin["market_cap"] / total_market_cap) * 100
             target_value = (rel_market_cap_pct / 100) * tradeable_balance
-            position_value = position_values.get(symbol, 0.0)
             
-            allocation_data.append(AllocationData(
-                name=coin["name"],
-                symbol=symbol,
-                target_value=target_value,
-                current_value=position_value,
-                difference=target_value - position_value,
-                market_cap=coin["market_cap"],
-                price_change_1y=coin.get("price_change_percentage_1y_in_currency")
-            ))
-
+            if target_value < 10.0:
+                logger.info(f"Skipping {symbol}: target value {fmt(target_value)} USDC is below minimum")
+                skipped_value += target_value
+                continue
+                
+            valid_coins.append(coin)
+            initial_targets[symbol] = target_value
+            
+        if skipped_value > 0 and valid_coins:
+            valid_total = sum(initial_targets.values())
+            redistribution_ratio = (valid_total + skipped_value) / valid_total if valid_total > 0 else 0
+            
+            for coin in valid_coins:
+                symbol = coin["symbol"]
+                position_value = position_values.get(symbol, 0.0)
+                target_value = initial_targets[symbol] * redistribution_ratio
+                
+                allocation_data.append(AllocationData(
+                    name=coin["name"],
+                    symbol=symbol,
+                    target_value=target_value,
+                    current_value=position_value,
+                    difference=target_value - position_value,
+                    market_cap=coin["market_cap"],
+                    price_change_1y=coin.get("price_change_percentage_1y_in_currency")
+                ))
+        
+        # Process other positions as before
         other_positions = []
         for symbol, value in position_values.items():
             if symbol not in top_crypto_symbols:
