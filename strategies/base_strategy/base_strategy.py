@@ -355,9 +355,20 @@ class BaseStrategy(ABC):
 
             total_market_cap = sum(coin["market_cap"] for coin in top_cryptos)
             usdc_balance = float(user_state["crossMarginSummary"]["totalRawUsd"])
-            tradeable_balance = total_account_value - usdc_target_balance
+            
+            # Calculate available balance after keeping target USDC
+            available_usdc = max(0, usdc_balance - usdc_target_balance)
+            if available_usdc < 10.0:  # Minimum amount to trade
+                await telegram_utils.reply(
+                    update, 
+                    f"Insufficient balance for trading. Available: {fmt(available_usdc)} USDC after keeping {fmt(usdc_target_balance)} USDC as reserve"
+                )
+                return
+                
+            # Calculate tradeable balance using only available USDC
+            tradeable_balance = available_usdc * self.config.leverage
 
-            allocation_data, other_positions, usdc_difference = self.calculate_allocations(
+            allocation_data, other_positions, _ = self.calculate_allocations(
                 top_cryptos,
                 position_values,
                 tradeable_balance,
@@ -369,18 +380,19 @@ class BaseStrategy(ABC):
                     
             for allocation in allocation_data:
                 try:
-                    if allocation.difference < 10.0:
+                    if allocation.target_value < 10.0:  # Check target value instead of difference
                         logger.info(
-                            f"The order value for {allocation.symbol} is less than 10 USDC "
-                            f"({fmt(allocation.difference)} USDC) and can't be executed"
+                            f"The target value for {allocation.symbol} is less than 10 USDC "
+                            f"({fmt(allocation.target_value)} USDC) and can't be executed"
                         )
                         continue
 
                     exchange.update_leverage(self.config.leverage, allocation.symbol, False)
                     mid = float(all_mids[allocation.symbol])
                     sz_decimals = hyperliquid_utils.get_sz_decimals()
-                    sz = round(allocation.difference / mid, sz_decimals[allocation.symbol])
-                    logger.info(f"Need to buy {fmt(allocation.difference)} USDC worth of {allocation.symbol}: {sz} units")
+                    # Use target_value instead of difference for new positions
+                    sz = round(allocation.target_value / mid, sz_decimals[allocation.symbol])
+                    logger.info(f"Opening position for {allocation.symbol}: {sz} units (value: {fmt(allocation.target_value)} USDC)")
                     open_result = exchange.market_open(allocation.symbol, True, sz)
                     logger.info(open_result)
                 except Exception as e:
