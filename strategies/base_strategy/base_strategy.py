@@ -128,10 +128,13 @@ class BaseStrategy(ABC):
             valid_coins.append(coin)
             initial_targets[symbol] = target_value
             
-        if skipped_value > 0 and valid_coins:
-            valid_total = sum(initial_targets.values())
-            redistribution_ratio = (valid_total + skipped_value) / valid_total if valid_total > 0 else 0
-            
+        if valid_coins:
+            if skipped_value > 0:
+                valid_total = sum(initial_targets.values())
+                redistribution_ratio = (valid_total + skipped_value) / valid_total if valid_total > 0 else 0
+            else:
+                redistribution_ratio = 1.0
+
             for coin in valid_coins:
                 symbol = coin["symbol"]
                 position_value = position_values.get(symbol, 0.0)
