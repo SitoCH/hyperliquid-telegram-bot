@@ -28,11 +28,11 @@ async def check_profit_percentage(context: ContextTypes.DEFAULT_TYPE) -> None:
             
             pnl_percentage = (total_pnl / total_balance) * 100
             
-            if abs(pnl_percentage) > 30:
+            if abs(pnl_percentage) > 50:
                 alert_info = {
                     True: ("🚀", "profit"),
                     False: ("📉", "loss")
-                }[pnl_percentage > 30]
+                }[pnl_percentage > 50]
                 
                 message = [
                     f"{alert_info[0]} <b>Unrealized {alert_info[1]} alert</b> {alert_info[0]}",
