@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Tuple, ClassVar, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import requests
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
@@ -15,8 +15,53 @@ from utils import fmt
 
 @dataclass
 class BaseStrategyConfig:
+    """Configuration for base trading strategy.
+    
+    Attributes:
+        leverage: Trading leverage to use (1-10)
+        min_yearly_performance: Minimum acceptable yearly performance in percent
+        min_position_size: Minimum position size in USDC
+        min_usdc_balance: Minimum USDC balance to maintain
+        usdc_balance_percent: Percentage of total account value to keep as USDC
+        min_rebalance_difference: Minimum difference in USDC to trigger rebalance
+        drift_check_threshold: Minimum unrealized PnL to check position drifts
+        position_drift_threshold: Minimum position difference to trigger drift alert
+    """
     leverage: int
     min_yearly_performance: float = 15.0
+    min_position_size: float = 10.0
+    min_usdc_balance: float = 2.0
+    usdc_balance_percent: float = 0.01
+    min_rebalance_difference: float = 25.0
+    drift_check_threshold: float = 25.0
+    position_drift_threshold: float = 25.0
+    
+    def __post_init__(self):
+        """Validate configuration parameters."""
+        if not 1 <= self.leverage <= 10:
+            raise ValueError("Leverage must be between 1 and 10")
+        if self.min_yearly_performance < 0:
+            raise ValueError("Minimum yearly performance cannot be negative")
+        if self.min_position_size < 10.0:
+            raise ValueError("Minimum position size cannot be less than 10 USDC")
+        if self.min_usdc_balance < 0:
+            raise ValueError("Minimum USDC balance cannot be negative")
+        if not 0 < self.usdc_balance_percent < 1:
+            raise ValueError("USDC balance percentage must be between 0 and 1")
+    
+    @classmethod
+    def default(cls) -> 'BaseStrategyConfig':
+        """Create a configuration with default values."""
+        return cls(
+            leverage=3,
+            min_yearly_performance=15.0,
+            min_position_size=10.0,
+            min_usdc_balance=2.0,
+            usdc_balance_percent=0.01,
+            min_rebalance_difference=25.0,
+            drift_check_threshold=25.0,
+            position_drift_threshold=25.0
+        )
 
 
 @dataclass
@@ -45,9 +90,10 @@ class BaseStrategy(ABC):
     Provides common functionality for analyzing and rebalancing positions.
     """
     COINGECKO_URL: ClassVar[str] = "https://api.coingecko.com/api/v3/coins/markets"
-    MIN_USDC_BALANCE: ClassVar[float] = 2.0
-    USDC_BALANCE_PERCENT: ClassVar[float] = 0.01
     _config: BaseStrategyConfig
+
+    def __init__(self, config: Optional[BaseStrategyConfig] = None):
+        self._config = config or BaseStrategyConfig.default()
 
     @property
     def config(self) -> BaseStrategyConfig:
@@ -92,8 +138,8 @@ class BaseStrategy(ABC):
         usdc_balance = float(user_state["crossMarginSummary"]["totalRawUsd"])
         total_account_value = sum(position_values.values()) + usdc_balance * leverage
         usdc_target_balance = max(
-            total_account_value * self.USDC_BALANCE_PERCENT / leverage,
-            self.MIN_USDC_BALANCE,
+            total_account_value * self.config.usdc_balance_percent / leverage,
+            self.config.min_usdc_balance,
         )
         return position_values, total_account_value, usdc_target_balance
 
@@ -120,7 +166,7 @@ class BaseStrategy(ABC):
             rel_market_cap_pct = (coin["market_cap"] / total_market_cap) * 100
             target_value = (rel_market_cap_pct / 100) * tradeable_balance
             
-            if target_value < 10.0:
+            if target_value < self.config.min_position_size:
                 logger.info(f"Skipping {symbol}: target value {fmt(target_value)} USDC is below minimum")
                 skipped_value += target_value
                 continue
@@ -256,7 +302,7 @@ class BaseStrategy(ABC):
                     for asset_position in user_state["assetPositions"]
                 )
 
-                if unrealized_pnl < 25.0:
+                if unrealized_pnl < self.config.drift_check_threshold:
                     return
 
             cryptos, all_mids, meta = self.get_strategy_params()
@@ -280,7 +326,7 @@ class BaseStrategy(ABC):
             )
 
             for allocation in allocation_data:
-                if abs(allocation.difference) > 25.0:
+                if abs(allocation.difference) > self.config.position_drift_threshold:
                     emoji = "🔼" if allocation.difference > 0.0 else "🔽"
                     message = [
                         f"{emoji} <b>Coin difference alert</b> {emoji}",
@@ -382,7 +428,7 @@ class BaseStrategy(ABC):
             
             # Calculate available balance after keeping target USDC
             available_usdc = max(0, usdc_balance - usdc_target_balance)
-            if available_usdc < 10.0:  # Minimum amount to trade
+            if available_usdc < self.config.min_position_size:  # Minimum amount to trade
                 await telegram_utils.reply(
                     update, 
                     f"Insufficient balance for trading. Available: {fmt(available_usdc)} USDC after keeping {fmt(usdc_target_balance)} USDC as reserve"
@@ -404,7 +450,7 @@ class BaseStrategy(ABC):
                     
             for allocation in allocation_data:
                 try:
-                    if allocation.target_value < 10.0:  # Check target value instead of difference
+                    if allocation.target_value < self.config.min_position_size:  # Check target value instead of difference
                         logger.info(
                             f"The target value for {allocation.symbol} is less than 10 USDC "
                             f"({fmt(allocation.target_value)} USDC) and can't be executed"
