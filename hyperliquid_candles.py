@@ -68,8 +68,8 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     try:
         now = int(time.time() * 1000)
         candles_5m = hyperliquid_utils.info.candles_snapshot(coin, "5m", now - 1 * 86400000, now)
-        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 5 * 86400000, now)
-        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 10 * 86400000, now)
+        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 7 * 86400000, now)
+        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 14 * 86400000, now)
 
         local_tz = get_localzone()
         df_5m = prepare_dataframe(candles_5m, local_tz)
@@ -96,6 +96,72 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     df[["c", "h", "l", "o", "v"]] = df[["c", "h", "l", "o", "v"]].astype(float)
     df["n"] = df["n"].astype(int)
     return df
+
+
+def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, Any]:
+    # Calculate volume and price patterns using all available data
+    volume_sma = df['v'].rolling(window=len(df)).mean()
+    price_sma = df['c'].rolling(window=len(df)).mean()
+    
+    # Calculate price trends and momentum with shorter windows for more sensitivity
+    price_trend = df['c'].diff().rolling(window=10).mean()
+    volume_trend = df['v'].diff().rolling(window=10).mean()
+    price_momentum = df['c'].pct_change().rolling(window=10).std()
+    
+    # Current conditions
+    curr_price = df['c'].iloc[-1]
+    curr_volume = df['v'].iloc[-1]
+    is_high_volume = curr_volume > volume_sma.iloc[-1]
+    price_above_avg = curr_price > price_sma.iloc[-1]
+    
+    # Get recent trends (use last 5 periods)
+    recent_price_trend = price_trend.iloc[-5:].mean()
+    recent_volume_trend = volume_trend.iloc[-5:].mean()
+    recent_momentum = price_momentum.iloc[-5:].mean()
+    
+    # Phase detection with more precise conditions
+    phase = "Unknown"
+    
+    # Distribution Phase (high prices + weakening momentum)
+    if (price_above_avg and 
+        recent_volume_trend < 0 and 
+        recent_momentum < price_momentum.mean()):
+        phase = "Distribution"
+    
+    # Markdown Phase (falling prices + high volume)
+    elif (not price_above_avg and 
+          recent_price_trend < 0 and 
+          is_high_volume):
+        phase = "Markdown"
+    
+    # Accumulation Phase (low prices + increasing volume)
+    elif (not price_above_avg and 
+          recent_volume_trend > 0 and 
+          recent_momentum > price_momentum.mean()):
+        phase = "Accumulation"
+    
+    # Markup Phase (rising prices + strong volume)
+    elif (price_above_avg and 
+          recent_price_trend > 0 and 
+          is_high_volume):
+        phase = "Markup"
+    
+    # Default phase detection if no clear pattern
+    else:
+        if price_above_avg and recent_price_trend > 0:
+            phase = "Markup?"
+        elif price_above_avg and recent_price_trend < 0:
+            phase = "Distribution?"
+        elif not price_above_avg and recent_price_trend < 0:
+            phase = "Markdown?"
+        elif not price_above_avg and recent_price_trend > 0:
+            phase = "Accumulation?"
+    
+    return {
+        "wyckoff_phase": phase,
+        "volume_trend": "high" if is_high_volume else "low",
+        "price_pattern": "trending" if abs(recent_price_trend) > price_trend.std() else "ranging"
+    }
 
 
 def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
@@ -133,6 +199,9 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     # EMA (Exponential Moving Average)
     df["EMA"] = ta.ema(df["c"], length=length)
 
+    # Add Wyckoff analysis
+    detect_wyckoff_distribution(df)
+    
     return df[["Aroon_Flip_Detected", "SuperTrend_Flip_Detected", "VWAP_Flip_Detected"]].any(axis=1).iloc[-1]
 
 
@@ -183,19 +252,36 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
 
         macd_hist_colors = df_plot['MACD_Hist'].apply(determine_color).values
 
+        # Calculate Wyckoff levels - find significant horizontal levels
+        price_clusters = pd.concat([
+            df_plot['High'].rolling(5).mean(),
+            df_plot['Low'].rolling(5).mean()
+        ]).value_counts(bins=50)
+        
+        # Get the two most significant price levels
+        significant_levels = price_clusters.nlargest(2).index
+        resistance_level = float(significant_levels[0].right)  # Upper level
+        support_level = float(significant_levels[1].left)      # Lower level
+        
+        # Create horizontal lines at these levels
+        resistance_line = pd.Series([resistance_level] * len(df_plot), index=df_plot.index)
+        support_line = pd.Series([support_level] * len(df_plot), index=df_plot.index)
+
         mpf.plot(ha_df,
-                 type='candle',
-                 ax=ax[0],
-                 volume=False,
-                 axtitle=title,
-                 style='charles',
-                 addplot=[
-                     mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', label='SuperTrend', width=0.75),
-                     mpf.make_addplot(df_plot['SuperTrend_Red'], ax=ax[0], color='red', width=0.75),
-                     mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='blue', label='VWAP', width=0.75),
-                     mpf.make_addplot(df_plot['EMA'], ax=ax[0], color='orange', label='EMA', width=0.75),
-                     mpf.make_addplot(df_plot['MACD_Hist'], type='bar', width=0.7, color=macd_hist_colors, ax=ax[1], alpha=0.5, secondary_y=False)
-                 ])
+                type='candle',
+                ax=ax[0],
+                volume=False,
+                axtitle=title,
+                style='charles',
+                addplot=[
+                    mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', label='SuperTrend', width=0.75),
+                    mpf.make_addplot(df_plot['SuperTrend_Red'], ax=ax[0], color='red', width=0.75),
+                    mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='blue', label='VWAP', width=0.75),
+                    mpf.make_addplot(df_plot['EMA'], ax=ax[0], color='orange', label='EMA', width=0.75),
+                    mpf.make_addplot(resistance_line, ax=ax[0], color='purple', width=1, label='Wyckoff Resistance', linestyle='--'),
+                    mpf.make_addplot(support_line, ax=ax[0], color='purple', width=1, label='Wyckoff Support', linestyle=':'),
+                    mpf.make_addplot(df_plot['MACD_Hist'], type='bar', width=0.7, color=macd_hist_colors, ax=ax[1], alpha=0.5, secondary_y=False)
+                ])
 
         ax[2].plot(df_plot.index, df_plot['Aroon_Up'], label='Aroon Upper', color='green')
         ax[2].plot(df_plot.index, df_plot['Aroon_Down'], label='Aroon Lower', color='red')
@@ -207,7 +293,7 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
         ax[0].legend(loc='upper left')
 
         plt.tight_layout()
-        plt.savefig(buf, format='png')
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
         buf.seek(0)
         plt.close(fig)
         return buf
@@ -246,7 +332,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
         "4h indicators:",
         f"<pre>{table_4h}</pre>",
     ]
-
+    
     await telegram_utils.send("\n".join(message_lines), parse_mode=ParseMode.HTML)
 
     for buf in charts:
@@ -259,7 +345,7 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
     vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
 
-    return {
+    results = {
         "aroon_up_prev": aroon_up_prev,
         "aroon_down_prev": aroon_down_prev,
         "aroon_up": aroon_up,
@@ -275,24 +361,41 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
         "vwap_trend_prev": "uptrend" if mid > vwap_prev else "downtrend",
         "vwap_trend": "uptrend" if mid > vwap else "downtrend",
     }
+    
+    # Add Wyckoff results
+    wyckoff_data = detect_wyckoff_distribution(df)
+    results.update({
+        "wyckoff_phase": wyckoff_data['wyckoff_phase'],
+        "wyckoff_volume": wyckoff_data['volume_trend'],
+        "wyckoff_pattern": wyckoff_data['price_pattern']
+    })
+    
+    return results
 
 
 def format_table(results: Dict[str, Any]) -> str:
+    table_data = [
+        ["Aroon: ", "", ""],
+        ["Trend ", results["aroon_trend_prev"], results["aroon_trend"]],
+        ["Up ", fmt(results["aroon_up_prev"]), fmt(results["aroon_up"])],
+        ["Down ", fmt(results["aroon_down_prev"]), fmt(results["aroon_down"])],
+        ["", "", ""],
+        ["Supertrend: ", "", ""],
+        ["Trend ", results["supertrend_trend_prev"], results["supertrend_trend"]],
+        ["Value ", fmt_price(results["supertrend_prev"]), fmt_price(results["supertrend"])],
+        ["", "", ""],
+        ["VWAP: ", "", ""],
+        ["Trend ", results["vwap_trend_prev"], results["vwap_trend"]],
+        ["Value ", fmt_price(results["vwap_prev"]), fmt_price(results["vwap"])],
+        ["", "", ""],
+        ["Wyckoff: ", "", ""],
+        ["Phase ", "", results["wyckoff_phase"]],
+        ["Volume ", "", results["wyckoff_volume"]],
+        ["Pattern ", "", results["wyckoff_pattern"]]
+    ]
+    
     return tabulate(
-        [
-            ["Aroon: ", "", ""],
-            ["Trend ", results["aroon_trend_prev"], results["aroon_trend"]],
-            ["Up ", fmt(results["aroon_up_prev"]), fmt(results["aroon_up"])],
-            ["Down ", fmt(results["aroon_down_prev"]), fmt(results["aroon_down"])],
-            ["", "", ""],
-            ["Supertrend: ", "", ""],
-            ["Trend ", results["supertrend_trend_prev"], results["supertrend_trend"]],
-            ["Value ", fmt_price(results["supertrend_prev"]), fmt_price(results["supertrend"])],
-            ["", "", ""],
-            ["VWAP: ", "", ""],
-            ["Trend ", results["vwap_trend_prev"], results["vwap_trend"]],
-            ["Value ", fmt_price(results["vwap_prev"]), fmt_price(results["vwap"])],
-        ],
+        table_data,
         headers=["", "Previous", "Current"],
         tablefmt=simple_separated_format(" "),
         colalign=("right", "right", "right"),
