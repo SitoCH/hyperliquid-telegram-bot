@@ -132,9 +132,9 @@ def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, str]:
     price_range = price_std.iloc[-1]
     
     # More precise condition checks
-    is_high_volume = curr_volume > volume_sma.iloc[-1] * 1.2  # 20% above average
-    price_above_avg = curr_price > avg_price
-    strong_trend = abs(price_trend.iloc[-1]) > price_range * 0.1  # 10% of range
+    is_high_volume = curr_volume > volume_sma.iloc[-1] * 1.1
+    price_above_avg = curr_price > (avg_price + atr * 0.2)
+    strong_trend = abs(price_trend.iloc[-1]) > price_range * 0.08
     momentum_shift = momentum.iloc[-1] * 100  # Convert to percentage
     
     # Phase detection with improved conditions
@@ -226,16 +226,24 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     df["VWAP"] = ta.vwap(df["h"], df["l"], df["c"], df["v"])
     df["VWAP_Flip_Detected"] = (mid > df["VWAP"].iloc[-2]) & (mid <= df["VWAP"].iloc[-1]) | (mid < df["VWAP"].iloc[-2]) & (mid >= df["VWAP"].iloc[-1])
 
-    # MACD with standard settings
+    # MACD
     macd = ta.macd(df["c"], fast=12, slow=26, signal=9)
-    if macd is not None:
+    if macd is not None and not macd["MACD_12_26_9"].isna().all():
         df["MACD"] = macd["MACD_12_26_9"]
         df["MACD_Signal"] = macd["MACDs_12_26_9"]
         df["MACD_Hist"] = macd["MACDh_12_26_9"]
     else:
-        df["MACD"] = float('nan')
-        df["MACD_Signal"] = float('nan')
-        df["MACD_Hist"] = float('nan')
+        # Use zeros instead of NaN for better chart rendering
+        df["MACD"] = 0.0
+        df["MACD_Signal"] = 0.0
+        df["MACD_Hist"] = 0.0
+        logger.warning("MACD calculation failed, using zeros")
+
+    if "SuperTrend_Flip_Detected" in df.columns:
+        # Only consider flips with significant price movement (>0.5% from SuperTrend)
+        price_deviation = abs(df["c"] - df["SuperTrend"]) / df["SuperTrend"] * 100
+        significant_move = price_deviation > 0.5
+        df["SuperTrend_Flip_Detected"] = df["SuperTrend_Flip_Detected"] & significant_move & df["Volume_Confirm"]
 
     # EMA with longer period for better trend following
     df["EMA"] = ta.ema(df["c"], length=ema_length)
@@ -360,8 +368,9 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
 
         ha_df = heikin_ashi(df_plot)
 
-        strong_positive_threshold = df_plot['MACD_Hist'].max() * 0.5
-        strong_negative_threshold = df_plot['MACD_Hist'].min() * 0.5
+        df_plot['MACD_Hist'] = df_plot['MACD_Hist'].fillna(0)
+        strong_positive_threshold = max(df_plot['MACD_Hist'].max() * 0.4, 0.000001)
+        strong_negative_threshold = min(df_plot['MACD_Hist'].min() * 0.4, -0.000001)
 
         def determine_color(value: float) -> str:
             if value >= strong_positive_threshold:
@@ -394,7 +403,7 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
                 type='candle',
                 ax=ax[0],
                 volume=False,
-                axtitle=title_with_price,  # Use updated title
+                axtitle=title_with_price,
                 style='charles',
                 addplot=[
                     mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', label='SuperTrend', width=0.75),
