@@ -105,8 +105,16 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
 
 
 def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, str]:
-    # Get ATR from the dataframe
-    atr: float = df['ATR'].iloc[-1]
+    # Get ATR from the dataframe with safety check
+    atr: float = df.get('ATR', pd.Series([0.0])).iloc[-1]
+    if atr == 0 or pd.isna(atr):
+        return {
+            "wyckoff_phase": "Unknown",
+            "volume_trend": "unknown",
+            "price_pattern": "unknown",
+            "volatility": "unknown"
+        }
+    
     price_volatility = atr / df['c'].iloc[-1]  # Normalized volatility
     
     # Calculate patterns using ATR-adjusted thresholds
@@ -185,20 +193,33 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
 
-    # ATR calculation
-    df["ATR"] = ta.atr(df["h"], df["l"], df["c"], length=atr_length)
+    # ATR calculation with error handling
+    atr_calc = ta.atr(df["h"], df["l"], df["c"], length=atr_length)
+    if atr_calc is not None:
+        df["ATR"] = atr_calc
+    else:
+        df["ATR"] = pd.Series([0.0] * len(df), index=df.index)
+        logger.warning("ATR calculation failed, using fallback values")
 
-    # SuperTrend with optimized settings
+    # Calculate Volume confirmation first
+    df["Volume_SMA"] = df["v"].rolling(window=vol_length).mean()
+    df["Volume_Confirm"] = df["v"] > df["Volume_SMA"]
+
+    # Then handle SuperTrend with optimized settings and error handling
     supertrend = ta.supertrend(df["h"], df["l"], df["c"], length=st_length, multiplier=3.5)
-    df["SuperTrend"] = supertrend[f"SUPERT_{st_length}_3.5"]
-    
+    if supertrend is not None and len(df) > st_length:
+        df["SuperTrend"] = supertrend[f"SUPERT_{st_length}_3.5"]
+        df["SuperTrend_Flip_Detected"] = (
+            supertrend[f"SUPERTd_{st_length}_3.5"].diff().abs() == 1) & df["Volume_Confirm"]
+    else:
+        df["SuperTrend"] = df["c"]  # Use close price as fallback
+        df["SuperTrend_Flip_Detected"] = False
+        logger.warning(f"Insufficient data for SuperTrend calculation (needed >{st_length} points, got {len(df)})")
+
     # Volume confirmation using longer period
     df["Volume_SMA"] = df["v"].rolling(window=vol_length).mean()
     df["Volume_Confirm"] = df["v"] > df["Volume_SMA"]
     
-    df["SuperTrend_Flip_Detected"] = (
-        supertrend[f"SUPERTd_{st_length}_3.5"].diff().abs() == 1) & df["Volume_Confirm"]
-
     # Use shorter length for VWAP
     df["VWAP"] = ta.vwap(df["h"], df["l"], df["c"], df["v"])
     df["VWAP_Flip_Detected"] = (mid > df["VWAP"].iloc[-2]) & (mid <= df["VWAP"].iloc[-1]) | (mid < df["VWAP"].iloc[-2]) & (mid >= df["VWAP"].iloc[-1])
