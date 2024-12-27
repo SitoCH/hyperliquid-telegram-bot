@@ -67,9 +67,9 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
-        candles_5m = hyperliquid_utils.info.candles_snapshot(coin, "5m", now - 1 * 86400000, now)
-        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 7 * 86400000, now)
-        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 14 * 86400000, now)
+        candles_5m = hyperliquid_utils.info.candles_snapshot(coin, "5m", now - 6 * 86400000, now)
+        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 50 * 86400000, now)
+        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 120 * 86400000, now)
 
         local_tz = get_localzone()
         df_5m = prepare_dataframe(candles_5m, local_tz)
@@ -103,10 +103,9 @@ def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, Any]:
     volume_sma = df['v'].rolling(window=len(df)).mean()
     price_sma = df['c'].rolling(window=len(df)).mean()
     
-    # Calculate price trends and momentum with shorter windows for more sensitivity
-    price_trend = df['c'].diff().rolling(window=10).mean()
-    volume_trend = df['v'].diff().rolling(window=10).mean()
-    price_momentum = df['c'].pct_change().rolling(window=10).std()
+    price_trend = df['c'].diff().rolling(window=50).mean()
+    volume_trend = df['v'].diff().rolling(window=50).mean()
+    price_momentum = df['c'].pct_change().rolling(window=50).std()
     
     # Current conditions
     curr_price = df['c'].iloc[-1]
@@ -228,6 +227,49 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
 def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> List[io.BytesIO]:
     chart_buffers = []
 
+    def find_significant_levels(df: pd.DataFrame, n_levels: int = 2) -> tuple[list[float], list[float]]:
+        """Find significant support and resistance levels using price action"""
+        # Get local highs and lows
+        highs = df['High'].values
+        lows = df['Low'].values
+        
+        # Calculate price clusters with a small tolerance (0.2%)
+        tolerance = df['Close'].mean() * 0.002
+        
+        # Find resistance levels (from highs)
+        resistance_points = {}
+        for price in highs:
+            nearby_prices = [p for p in resistance_points.keys() if abs(p - price) <= tolerance]
+            if nearby_prices:
+                # Add to existing cluster
+                main_price = nearby_prices[0]
+                resistance_points[main_price] = resistance_points[main_price] + 1
+            else:
+                # Create new cluster
+                resistance_points[price] = 1
+        
+        # Find support levels (from lows)
+        support_points = {}
+        for price in lows:
+            nearby_prices = [p for p in support_points.keys() if abs(p - price) <= tolerance]
+            if nearby_prices:
+                # Add to existing cluster
+                main_price = nearby_prices[0]
+                support_points[main_price] = support_points[main_price] + 1
+            else:
+                # Create new cluster
+                support_points[price] = 1
+        
+        # Get most significant levels
+        resistance_levels = sorted(
+            [price for price, count in sorted(resistance_points.items(), key=lambda x: x[1], reverse=True)[:n_levels]]
+        )
+        support_levels = sorted(
+            [price for price, count in sorted(support_points.items(), key=lambda x: x[1], reverse=True)[:n_levels]]
+        )
+        
+        return resistance_levels, support_levels
+
     def save_to_buffer(df_plot: pd.DataFrame, title: str) -> io.BytesIO:
         buf = io.BytesIO()
         fig, ax = plt.subplots(3, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1, 1]})
@@ -252,20 +294,20 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
 
         macd_hist_colors = df_plot['MACD_Hist'].apply(determine_color).values
 
-        # Calculate Wyckoff levels - find significant horizontal levels
-        price_clusters = pd.concat([
-            df_plot['High'].rolling(5).mean(),
-            df_plot['Low'].rolling(5).mean()
-        ]).value_counts(bins=50)
+        # Find significant price levels
+        resistance_levels, support_levels = find_significant_levels(df_plot)
         
-        # Get the two most significant price levels
-        significant_levels = price_clusters.nlargest(2).index
-        resistance_level = float(significant_levels[0].right)  # Upper level
-        support_level = float(significant_levels[1].left)      # Lower level
+        # Create horizontal lines for each level
+        level_lines = []
+        for level in resistance_levels:
+            line = pd.Series([level] * len(df_plot), index=df_plot.index)
+            level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=1, 
+                                              label=f'R {fmt_price(level)}', linestyle='--'))
         
-        # Create horizontal lines at these levels
-        resistance_line = pd.Series([resistance_level] * len(df_plot), index=df_plot.index)
-        support_line = pd.Series([support_level] * len(df_plot), index=df_plot.index)
+        for level in support_levels:
+            line = pd.Series([level] * len(df_plot), index=df_plot.index)
+            level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=1, 
+                                              label=f'S {fmt_price(level)}', linestyle=':'))
 
         mpf.plot(ha_df,
                 type='candle',
@@ -278,8 +320,7 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
                     mpf.make_addplot(df_plot['SuperTrend_Red'], ax=ax[0], color='red', width=0.75),
                     mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='blue', label='VWAP', width=0.75),
                     mpf.make_addplot(df_plot['EMA'], ax=ax[0], color='orange', label='EMA', width=0.75),
-                    mpf.make_addplot(resistance_line, ax=ax[0], color='purple', width=1, label='Wyckoff Resistance', linestyle='--'),
-                    mpf.make_addplot(support_line, ax=ax[0], color='purple', width=1, label='Wyckoff Support', linestyle=':'),
+                    *level_lines,
                     mpf.make_addplot(df_plot['MACD_Hist'], type='bar', width=0.7, color=macd_hist_colors, ax=ax[1], alpha=0.5, secondary_y=False)
                 ])
 
