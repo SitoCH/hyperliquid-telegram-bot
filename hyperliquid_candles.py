@@ -80,15 +80,20 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         df_1d = prepare_dataframe(candles_1d, local_tz)
 
         mid = float(all_mids[coin])
-        apply_indicators(df_15m, mid)
-        flip_on_1h = apply_indicators(df_1h, mid)
-        flip_on_4h = apply_indicators(df_4h, mid)
-        flip_on_1d = apply_indicators(df_1d, mid)
+        # Apply indicators but only store flip results for 1h and 4h
+        apply_indicators(df_15m, mid)  # 15m indicators but no flip detection
+        st_flip_1h, wyckoff_flip_1h = apply_indicators(df_1h, mid)
+        st_flip_4h, wyckoff_flip_4h = apply_indicators(df_4h, mid)
+        apply_indicators(df_1d, mid)  # 1d indicators but no flip detection
         
-        flip_on_4h = flip_on_4h and 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
-        flip_on_1d = flip_on_1d and 'T' in df_1d.columns and df_1d["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=4)
+        # Check if 4h candle is recent enough
+        is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
+        
+        # Determine if we should notify based on either SuperTrend or Wyckoff flips
+        flip_on_1h = st_flip_1h or wyckoff_flip_1h
+        flip_on_4h = (st_flip_4h or wyckoff_flip_4h) and is_4h_recent
 
-        if always_notify or flip_on_1h or flip_on_4h or flip_on_1d:
+        if always_notify or flip_on_1h or flip_on_4h:
             await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin)
     except Exception as e:
         logger.critical(e, exc_info=True)
@@ -104,16 +109,17 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     return df
 
 
-def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, str]:
+def detect_wyckoff_phase(df: pd.DataFrame) -> None:
+    """Analyze and store Wyckoff phase data directly in the dataframe"""
     # Get ATR with safety checks
     atr: float = df.get('ATR', pd.Series([0.0])).iloc[-1]
     if atr == 0 or pd.isna(atr):
-        return {
-            "wyckoff_phase": "Unknown",
-            "volume_trend": "unknown",
-            "price_pattern": "unknown",
-            "volatility": "unknown"
-        }
+        df['wyckoff_phase'] = "Unknown"
+        df['uncertain_phase'] = True
+        df['wyckoff_volume'] = "unknown"
+        df['wyckoff_pattern'] = "unknown"
+        df['wyckoff_volatility'] = "unknown"
+        return
     
     # Calculate core metrics with longer windows for stability
     lookback = min(50, len(df) - 1)  # Use shorter window if not enough data
@@ -138,6 +144,7 @@ def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, str]:
     momentum_shift = momentum.iloc[-1] * 100  # Convert to percentage
     
     # Phase detection with improved conditions
+    uncertain_phase = False
     if (price_above_avg and 
         momentum_shift < -0.5 and  # Declining momentum
         curr_price > avg_price + price_range and
@@ -164,25 +171,30 @@ def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, str]:
     else:
         # More specific uncertain states
         if price_above_avg and momentum_shift > 0:
+            uncertain_phase = True
             phase = "Uncertain markup"
         elif price_above_avg and momentum_shift < 0:
+            uncertain_phase = True
             phase = "Uncertain distribution"
         elif not price_above_avg and momentum_shift < 0:
+            uncertain_phase = True
             phase = "Uncertain markdown"
         elif not price_above_avg and momentum_shift > 0:
+            uncertain_phase = True
             phase = "Uncertain accumulation"
         else:
             phase = "Ranging"
     
-    return {
-        "wyckoff_phase": phase,
-        "volume_trend": "high" if is_high_volume else "low",
-        "price_pattern": "trending" if strong_trend else "ranging",
-        "volatility": "high" if price_range > atr else "normal"
-    }
+    # Instead of returning, store in dataframe
+    df['wyckoff_phase'] = phase
+    df['uncertain_phase'] = uncertain_phase
+    df['wyckoff_volume'] = "high" if is_high_volume else "low"
+    df['wyckoff_pattern'] = "trending" if strong_trend else "ranging"
+    df['wyckoff_volatility'] = "high" if price_range > atr else "normal"
 
 
-def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
+def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
+    """Apply indicators and return (supertrend_flip, wyckoff_flip)"""
     # SuperTrend: shorter for faster response
     st_length = 10
     # ATR: standard setting
@@ -248,10 +260,19 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
     # EMA with longer period for better trend following
     df["EMA"] = ta.ema(df["c"], length=ema_length)
 
-    # Add Wyckoff analysis
-    detect_wyckoff_distribution(df)
+    # Wyckoff analysis
+    detect_wyckoff_phase(df)
+
+    # Create a shifted version for previous state
+    df_prev = df.shift(1)
+    detect_wyckoff_phase(df_prev)
     
-    return df["SuperTrend_Flip_Detected"].iloc[-1]
+    wyckoff_flip = (
+        df['wyckoff_phase'].iloc[-1] != df_prev['wyckoff_phase'].iloc[-1] and
+        not df['uncertain_phase'].iloc[-1]
+    )
+    
+    return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
 
 
 def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
@@ -500,7 +521,7 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
     vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
 
-    results = {
+    return {
         "supertrend_prev": supertrend_prev,
         "supertrend": supertrend,
         "supertrend_trend_prev": "uptrend" if df["SuperTrend"].shift().gt(0).iloc[-2] else "downtrend",
@@ -509,17 +530,10 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
         "vwap": vwap,
         "vwap_trend_prev": "uptrend" if mid > vwap_prev else "downtrend",
         "vwap_trend": "uptrend" if mid > vwap else "downtrend",
+        "wyckoff_phase": df['wyckoff_phase'].iloc[-1],
+        "wyckoff_volume": df['wyckoff_volume'].iloc[-1],
+        "wyckoff_pattern": df['wyckoff_pattern'].iloc[-1]
     }
-    
-    # Add Wyckoff results
-    wyckoff_data = detect_wyckoff_distribution(df)
-    results.update({
-        "wyckoff_phase": wyckoff_data['wyckoff_phase'],
-        "wyckoff_volume": wyckoff_data['volume_trend'],
-        "wyckoff_pattern": wyckoff_data['price_pattern']
-    })
-    
-    return results
 
 
 def format_table(results: Dict[str, Any]) -> str:
