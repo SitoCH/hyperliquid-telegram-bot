@@ -348,14 +348,19 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
         return buf
 
     df_5m_plot = df_5m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    from_time = df_5m_plot['t'].max() - pd.Timedelta(hours=6)
+    # Show last 12 hours for 5m chart (144 candles)
+    from_time = df_5m_plot['t'].max() - pd.Timedelta(hours=12)
     df_5m_plot = df_5m_plot.loc[df_5m_plot['t'] >= from_time]
 
     df_1h_plot = df_1h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    from_time = df_1h_plot['t'].max() - pd.Timedelta(hours=36)
+    # Show last 3 days for 1h chart (72 candles)
+    from_time = df_1h_plot['t'].max() - pd.Timedelta(days=3)
     df_1h_plot = df_1h_plot.loc[df_1h_plot['t'] >= from_time]
 
     df_4h_plot = df_4h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+    # Show last 20 days for 4h chart (120 candles)
+    from_time = df_4h_plot['t'].max() - pd.Timedelta(days=20)
+    df_4h_plot = df_4h_plot.loc[df_4h_plot['t'] >= from_time]
 
     chart_buffers.append(save_to_buffer(df_5m_plot, f"{coin} - 5M Chart"))
     chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart"))
