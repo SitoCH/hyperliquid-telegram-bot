@@ -164,15 +164,15 @@ def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, str]:
     else:
         # More specific uncertain states
         if price_above_avg and momentum_shift > 0:
-            phase = "Markup?"
+            phase = "Uncertain markup"
         elif price_above_avg and momentum_shift < 0:
-            phase = "Distribution?"
+            phase = "Uncertain distribution"
         elif not price_above_avg and momentum_shift < 0:
-            phase = "Markdown?"
+            phase = "Uncertain markdown"
         elif not price_above_avg and momentum_shift > 0:
-            phase = "Accumulation?"
+            phase = "Uncertain accumulation"
         else:
-            phase = "Ranging"  # New state for sideways movement
+            phase = "Ranging"
     
     return {
         "wyckoff_phase": phase,
@@ -457,21 +457,43 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
     table_4h = format_table(results_4h)
     table_1d = format_table(results_1d)
 
-    message_lines = [
-        f"<b>Indicators for {coin}</b>",
+    # Send header
+    await telegram_utils.send(
+        f"<b>Indicators for {coin}</b>\n"
         f"Market price: {fmt_price(mid)} USDC",
-        "1h indicators:",
-        f"<pre>{table_1h}</pre>",
-        "4h indicators:",
-        f"<pre>{table_4h}</pre>",
-        "1d indicators:",
-        f"<pre>{table_1d}</pre>",
-    ]
-    
-    await telegram_utils.send("\n".join(message_lines), parse_mode=ParseMode.HTML)
+        parse_mode=ParseMode.HTML
+    )
 
-    for buf in charts:
-        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=buf)
+    # Send 15m chart
+    await telegram_utils.send(
+        "15m indicators:",
+        parse_mode=ParseMode.HTML
+    )
+    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[0])
+
+    # Send 1h data and chart
+    await telegram_utils.send(
+        "1h indicators:\n"
+        f"<pre>{table_1h}</pre>",
+        parse_mode=ParseMode.HTML
+    )
+    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[1])
+
+    # Send 4h data and chart
+    await telegram_utils.send(
+        "4h indicators:\n"
+        f"<pre>{table_4h}</pre>",
+        parse_mode=ParseMode.HTML
+    )
+    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[2])
+
+    # Send 1d data and chart
+    await telegram_utils.send(
+        "1d indicators:\n"
+        f"<pre>{table_1d}</pre>",
+        parse_mode=ParseMode.HTML
+    )
+    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[3])
 
 
 def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
