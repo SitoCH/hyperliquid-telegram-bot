@@ -375,10 +375,6 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
         buf = io.BytesIO()
         fig, ax = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
 
-        # Get current price from last close
-        current_price = fmt_price(df_plot['Close'].iloc[-1])
-        title_with_price = f"{title} ({current_price} USDC)"
-
         df_plot['SuperTrend_Green'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] > row['SuperTrend'] else float('nan'), axis=1)
         df_plot['SuperTrend_Red'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] <= row['SuperTrend'] else float('nan'), axis=1)
 
@@ -415,11 +411,17 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
             level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=1, 
                                               label=f'S {fmt_price(level)}', linestyle=':'))
 
+        # Add current price line
+        current_price_line = pd.Series([df_plot['Close'].iloc[-1]] * len(df_plot), index=df_plot.index)
+        level_lines.append(mpf.make_addplot(current_price_line, ax=ax[0], color='grey', width=0.5, 
+                                          label=f'Current {fmt_price(df_plot["Close"].iloc[-1])}', 
+                                          linestyle='-', alpha=0.5))
+
         mpf.plot(ha_df,
                 type='candle',
                 ax=ax[0],
                 volume=False,
-                axtitle=title_with_price,
+                axtitle=title,
                 style='charles',
                 addplot=[
                     mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', label='SuperTrend', width=0.75),
