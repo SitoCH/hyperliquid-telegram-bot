@@ -105,7 +105,7 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
 
 
 def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, str]:
-    # Get ATR from the dataframe with safety check
+    # Get ATR with safety checks
     atr: float = df.get('ATR', pd.Series([0.0])).iloc[-1]
     if atr == 0 or pd.isna(atr):
         return {
@@ -115,68 +115,70 @@ def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, str]:
             "volatility": "unknown"
         }
     
-    price_volatility = atr / df['c'].iloc[-1]  # Normalized volatility
+    # Calculate core metrics with longer windows for stability
+    lookback = min(50, len(df) - 1)  # Use shorter window if not enough data
+    volume_sma = df['v'].rolling(window=lookback).mean()
+    price_sma = df['c'].rolling(window=lookback).mean()
+    price_std = df['c'].rolling(window=lookback).std()
     
-    # Calculate patterns using ATR-adjusted thresholds
-    volume_sma = df['v'].rolling(window=len(df)).mean()
-    price_sma = df['c'].rolling(window=len(df)).mean()
+    # Calculate momentum and trends
+    price_trend = df['c'].diff().rolling(window=20).mean()
+    momentum = df['c'].pct_change(periods=5).rolling(window=10).mean()
     
-    # Use ATR for trend detection
-    price_trend = df['c'].diff().rolling(window=50).mean()
-    is_trending = bool(abs(price_trend.iloc[-1]) > atr)
-    
-    # Current conditions with ATR context
+    # Current market conditions
     curr_price = df['c'].iloc[-1]
     curr_volume = df['v'].iloc[-1]
-    is_high_volume = bool(curr_volume > volume_sma.iloc[-1])
-    price_above_avg = bool(curr_price > price_sma.iloc[-1])
+    avg_price = price_sma.iloc[-1]
+    price_range = price_std.iloc[-1]
     
-    # Get recent trends with ATR scaling
-    volatility_adjusted_momentum = df['c'].pct_change().rolling(window=50).std() / price_volatility
+    # More precise condition checks
+    is_high_volume = curr_volume > volume_sma.iloc[-1] * 1.2  # 20% above average
+    price_above_avg = curr_price > avg_price
+    strong_trend = abs(price_trend.iloc[-1]) > price_range * 0.1  # 10% of range
+    momentum_shift = momentum.iloc[-1] * 100  # Convert to percentage
     
-    # Phase detection with ATR-adjusted conditions
-    phase = "Unknown"
-    
-    # Distribution Phase - high prices with declining momentum relative to ATR
+    # Phase detection with improved conditions
     if (price_above_avg and 
-        volatility_adjusted_momentum.iloc[-1] < volatility_adjusted_momentum.mean() and
-        curr_price > price_sma.iloc[-1] + atr):
+        momentum_shift < -0.5 and  # Declining momentum
+        curr_price > avg_price + price_range and
+        not is_high_volume):  # Low volume at highs
         phase = "Distribution"
     
-    # Markdown Phase - falling prices beyond ATR range
     elif (not price_above_avg and 
-          price_trend.iloc[-1] < -atr and 
-          is_high_volume):
+          price_trend.iloc[-1] < -atr/2 and 
+          is_high_volume):  # High volume on downtrend
         phase = "Markdown"
     
-    # Accumulation Phase - low prices with increasing momentum
     elif (not price_above_avg and 
-          volatility_adjusted_momentum.iloc[-1] > volatility_adjusted_momentum.mean() and
-          curr_price < price_sma.iloc[-1] - atr):
+          momentum_shift > 0.5 and  # Rising momentum
+          curr_price < avg_price - price_range and
+          is_high_volume):  # High volume at lows
         phase = "Accumulation"
     
-    # Markup Phase - rising prices beyond ATR range
     elif (price_above_avg and 
-          price_trend.iloc[-1] > atr and 
-          is_high_volume):
+          price_trend.iloc[-1] > atr/2 and 
+          is_high_volume and
+          momentum_shift > 0):  # Strong uptrend with volume
         phase = "Markup"
     
-    # Default phase detection with ATR context
     else:
-        if price_above_avg and price_trend.iloc[-1] > atr/2:
+        # More specific uncertain states
+        if price_above_avg and momentum_shift > 0:
             phase = "Markup?"
-        elif price_above_avg and price_trend.iloc[-1] < -atr/2:
+        elif price_above_avg and momentum_shift < 0:
             phase = "Distribution?"
-        elif not price_above_avg and price_trend.iloc[-1] < -atr/2:
+        elif not price_above_avg and momentum_shift < 0:
             phase = "Markdown?"
-        elif not price_above_avg and price_trend.iloc[-1] > atr/2:
+        elif not price_above_avg and momentum_shift > 0:
             phase = "Accumulation?"
+        else:
+            phase = "Ranging"  # New state for sideways movement
     
     return {
         "wyckoff_phase": phase,
         "volume_trend": "high" if is_high_volume else "low",
-        "price_pattern": "trending" if is_trending else "ranging",
-        "volatility": "high" if price_volatility > df['ATR'].mean() / df['c'].mean() else "normal"
+        "price_pattern": "trending" if strong_trend else "ranging",
+        "volatility": "high" if price_range > atr else "normal"
     }
 
 
