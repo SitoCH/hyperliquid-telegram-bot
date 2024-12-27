@@ -172,16 +172,16 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
         # More specific uncertain states
         if price_above_avg and momentum_shift > 0:
             uncertain_phase = True
-            phase = "Uncertain markup"
+            phase = "Unclear markup"
         elif price_above_avg and momentum_shift < 0:
             uncertain_phase = True
-            phase = "Uncertain distribution"
+            phase = "Unclear distribution"
         elif not price_above_avg and momentum_shift < 0:
             uncertain_phase = True
-            phase = "Uncertain markdown"
+            phase = "Unclear markdown"
         elif not price_above_avg and momentum_shift > 0:
             uncertain_phase = True
-            phase = "Uncertain accumulation"
+            phase = "Unclear accumulation"
         else:
             phase = "Ranging"
     
@@ -260,15 +260,10 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
     # EMA with longer period for better trend following
     df["EMA"] = ta.ema(df["c"], length=ema_length)
 
-    # Wyckoff analysis
     detect_wyckoff_phase(df)
-
-    # Create a shifted version for previous state
-    df_prev = df.shift(1)
-    detect_wyckoff_phase(df_prev)
     
     wyckoff_flip = (
-        df['wyckoff_phase'].iloc[-1] != df_prev['wyckoff_phase'].iloc[-1] and
+        df['wyckoff_phase'].iloc[-1] != df['wyckoff_phase'].iloc[-2] and
         not df['uncertain_phase'].iloc[-1]
     )
     
@@ -530,8 +525,11 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
         "vwap": vwap,
         "vwap_trend_prev": "uptrend" if mid > vwap_prev else "downtrend",
         "vwap_trend": "uptrend" if mid > vwap else "downtrend",
+        "wyckoff_phase_prev": df['wyckoff_phase'].shift(1).iloc[-1],
         "wyckoff_phase": df['wyckoff_phase'].iloc[-1],
+        "wyckoff_volume_prev": df['wyckoff_volume'].shift(1).iloc[-1],
         "wyckoff_volume": df['wyckoff_volume'].iloc[-1],
+        "wyckoff_pattern_prev": df['wyckoff_pattern'].shift(1).iloc[-1],
         "wyckoff_pattern": df['wyckoff_pattern'].iloc[-1]
     }
 
@@ -547,9 +545,9 @@ def format_table(results: Dict[str, Any]) -> str:
         ["Value ", fmt_price(results["vwap_prev"]), fmt_price(results["vwap"])],
         ["", "", ""],
         ["Wyckoff: ", "", ""],
-        ["Phase ", "", results["wyckoff_phase"]],
-        ["Volume ", "", results["wyckoff_volume"]],
-        ["Pattern ", "", results["wyckoff_pattern"]]
+        ["Phase ", results["wyckoff_phase_prev"], results["wyckoff_phase"]],
+        ["Volume ", results["wyckoff_volume_prev"], results["wyckoff_volume"]],
+        ["Pattern ", results["wyckoff_pattern_prev"], results["wyckoff_pattern"]]
     ]
     
     return tabulate(
