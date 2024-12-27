@@ -2,11 +2,12 @@ import os
 import io
 import time
 from tzlocal import get_localzone
-from typing import Set, List, Dict, Any, Optional, cast
+from typing import Set, List, Dict, Any, Optional, cast, Tuple
 import pandas as pd  # type: ignore[import]
 import pandas_ta as ta  # type: ignore[import]
 import matplotlib.pyplot as plt
 import mplfinance as mpf  # type: ignore[import]
+import numpy as np  # type: ignore[import]
 
 from tabulate import tabulate, simple_separated_format
 from telegram import Update, Message, CallbackQuery
@@ -98,68 +99,71 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     return df
 
 
-def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, Any]:
-    # Calculate volume and price patterns using all available data
+def detect_wyckoff_distribution(df: pd.DataFrame) -> Dict[str, str]:
+    # Get ATR from the dataframe
+    atr: float = df['ATR'].iloc[-1]
+    price_volatility = atr / df['c'].iloc[-1]  # Normalized volatility
+    
+    # Calculate patterns using ATR-adjusted thresholds
     volume_sma = df['v'].rolling(window=len(df)).mean()
     price_sma = df['c'].rolling(window=len(df)).mean()
     
+    # Use ATR for trend detection
     price_trend = df['c'].diff().rolling(window=50).mean()
-    volume_trend = df['v'].diff().rolling(window=50).mean()
-    price_momentum = df['c'].pct_change().rolling(window=50).std()
+    is_trending = bool(abs(price_trend.iloc[-1]) > atr)
     
-    # Current conditions
+    # Current conditions with ATR context
     curr_price = df['c'].iloc[-1]
     curr_volume = df['v'].iloc[-1]
-    is_high_volume = curr_volume > volume_sma.iloc[-1]
-    price_above_avg = curr_price > price_sma.iloc[-1]
+    is_high_volume = bool(curr_volume > volume_sma.iloc[-1])
+    price_above_avg = bool(curr_price > price_sma.iloc[-1])
     
-    # Get recent trends (use last 5 periods)
-    recent_price_trend = price_trend.iloc[-5:].mean()
-    recent_volume_trend = volume_trend.iloc[-5:].mean()
-    recent_momentum = price_momentum.iloc[-5:].mean()
+    # Get recent trends with ATR scaling
+    volatility_adjusted_momentum = df['c'].pct_change().rolling(window=50).std() / price_volatility
     
-    # Phase detection with more precise conditions
+    # Phase detection with ATR-adjusted conditions
     phase = "Unknown"
     
-    # Distribution Phase (high prices + weakening momentum)
+    # Distribution Phase - high prices with declining momentum relative to ATR
     if (price_above_avg and 
-        recent_volume_trend < 0 and 
-        recent_momentum < price_momentum.mean()):
+        volatility_adjusted_momentum.iloc[-1] < volatility_adjusted_momentum.mean() and
+        curr_price > price_sma.iloc[-1] + atr):
         phase = "Distribution"
     
-    # Markdown Phase (falling prices + high volume)
+    # Markdown Phase - falling prices beyond ATR range
     elif (not price_above_avg and 
-          recent_price_trend < 0 and 
+          price_trend.iloc[-1] < -atr and 
           is_high_volume):
         phase = "Markdown"
     
-    # Accumulation Phase (low prices + increasing volume)
+    # Accumulation Phase - low prices with increasing momentum
     elif (not price_above_avg and 
-          recent_volume_trend > 0 and 
-          recent_momentum > price_momentum.mean()):
+          volatility_adjusted_momentum.iloc[-1] > volatility_adjusted_momentum.mean() and
+          curr_price < price_sma.iloc[-1] - atr):
         phase = "Accumulation"
     
-    # Markup Phase (rising prices + strong volume)
+    # Markup Phase - rising prices beyond ATR range
     elif (price_above_avg and 
-          recent_price_trend > 0 and 
+          price_trend.iloc[-1] > atr and 
           is_high_volume):
         phase = "Markup"
     
-    # Default phase detection if no clear pattern
+    # Default phase detection with ATR context
     else:
-        if price_above_avg and recent_price_trend > 0:
+        if price_above_avg and price_trend.iloc[-1] > atr/2:
             phase = "Markup?"
-        elif price_above_avg and recent_price_trend < 0:
+        elif price_above_avg and price_trend.iloc[-1] < -atr/2:
             phase = "Distribution?"
-        elif not price_above_avg and recent_price_trend < 0:
+        elif not price_above_avg and price_trend.iloc[-1] < -atr/2:
             phase = "Markdown?"
-        elif not price_above_avg and recent_price_trend > 0:
+        elif not price_above_avg and price_trend.iloc[-1] > atr/2:
             phase = "Accumulation?"
     
     return {
         "wyckoff_phase": phase,
         "volume_trend": "high" if is_high_volume else "low",
-        "price_pattern": "trending" if abs(recent_price_trend) > price_trend.std() else "ranging"
+        "price_pattern": "trending" if is_trending else "ranging",
+        "volatility": "high" if price_volatility > df['ATR'].mean() / df['c'].mean() else "normal"
     }
 
 
@@ -168,6 +172,9 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> bool:
 
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
+
+    # Add ATR calculation first, as it's used by other functions
+    df["ATR"] = ta.atr(df["h"], df["l"], df["c"], length=14)
 
     # Aroon Indicator
     aroon = ta.aroon(df["h"], df["l"], length=length)
@@ -227,17 +234,18 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
 def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> List[io.BytesIO]:
     chart_buffers = []
 
-    def find_significant_levels(df: pd.DataFrame, n_levels: int = 2) -> tuple[list[float], list[float]]:
-        """Find significant support and resistance levels using price action"""
+    def find_significant_levels(df: pd.DataFrame, n_levels: int = 2) -> Tuple[List[float], List[float]]:
+        """Find significant support and resistance levels using price action and ATR"""
         # Get local highs and lows
         highs = df['High'].values
         lows = df['Low'].values
         
-        # Calculate price clusters with a small tolerance (0.2%)
-        tolerance = df['Close'].mean() * 0.002
+        # Use ATR for dynamic tolerance
+        atr: float = df['ATR'].iloc[-1]
+        tolerance = atr * 0.5  # Half ATR for price clustering
         
         # Find resistance levels (from highs)
-        resistance_points = {}
+        resistance_points: Dict[float, int] = {}
         for price in highs:
             nearby_prices = [p for p in resistance_points.keys() if abs(p - price) <= tolerance]
             if nearby_prices:
@@ -249,7 +257,7 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
                 resistance_points[price] = 1
         
         # Find support levels (from lows)
-        support_points = {}
+        support_points: Dict[float, int] = {}
         for price in lows:
             nearby_prices = [p for p in support_points.keys() if abs(p - price) <= tolerance]
             if nearby_prices:
@@ -435,6 +443,7 @@ def format_table(results: Dict[str, Any]) -> str:
         ["Pattern ", "", results["wyckoff_pattern"]]
     ]
     
+
     return tabulate(
         table_data,
         headers=["", "Previous", "Current"],
