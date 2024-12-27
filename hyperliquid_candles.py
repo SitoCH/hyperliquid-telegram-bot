@@ -68,19 +68,19 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
-        candles_5m = hyperliquid_utils.info.candles_snapshot(coin, "5m", now - 6 * 86400000, now)
+        candles_15m = hyperliquid_utils.info.candles_snapshot(coin, "15m", now - 10 * 86400000, now)
         candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 50 * 86400000, now)
         candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 120 * 86400000, now)
         candles_1d = hyperliquid_utils.info.candles_snapshot(coin, "1d", now - 240 * 86400000, now)  # Last year
 
         local_tz = get_localzone()
-        df_5m = prepare_dataframe(candles_5m, local_tz)
+        df_15m = prepare_dataframe(candles_15m, local_tz)
         df_1h = prepare_dataframe(candles_1h, local_tz)
         df_4h = prepare_dataframe(candles_4h, local_tz)
         df_1d = prepare_dataframe(candles_1d, local_tz)
 
         mid = float(all_mids[coin])
-        apply_indicators(df_5m, mid)
+        apply_indicators(df_15m, mid)
         flip_on_1h = apply_indicators(df_1h, mid)
         flip_on_4h = apply_indicators(df_4h, mid)
         flip_on_1d = apply_indicators(df_1d, mid)
@@ -89,7 +89,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         flip_on_1d = flip_on_1d and 'T' in df_1d.columns and df_1d["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=4)
 
         if always_notify or flip_on_1h or flip_on_4h or flip_on_1d:
-            await send_trend_change_message(context, mid, df_5m, df_1h, df_4h, df_1d, coin)
+            await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin)
     except Exception as e:
         logger.critical(e, exc_info=True)
         await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
@@ -274,7 +274,7 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
     return ha_df
 
 
-def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> List[io.BytesIO]:
+def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> List[io.BytesIO]:
     chart_buffers = []
 
     def find_significant_levels(df: pd.DataFrame, n_levels: int = 2) -> Tuple[List[float], List[float]]:
@@ -328,7 +328,7 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
         # Score calculation with volume, touch count, and recency
         min_touches = 3  # Minimum number of touches to consider a level significant
         
-        def score_level(price: float, data: Dict[str, float], max_time: float) -> float:
+        def score_level(data: Dict[str, float], max_time: float) -> float:
             if data['count'] < min_touches:
                 return 0
             volume_score = data['volume'] / max(vol for vol in volumes)
@@ -341,15 +341,15 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
         
         resistance_levels = sorted(
             [price for price, data in resistance_points.items() 
-             if score_level(price, data, max_time) > 0],
-            key=lambda p: score_level(p, resistance_points[p], max_time),
+             if score_level(data, max_time) > 0],
+            key=lambda p: score_level(resistance_points[p], max_time),
             reverse=True
         )[:n_levels]
         
         support_levels = sorted(
             [price for price, data in support_points.items() 
-             if score_level(price, data, max_time) > 0],
-            key=lambda p: score_level(p, support_points[p], max_time),
+             if score_level(data, max_time) > 0],
+            key=lambda p: score_level(support_points[p], max_time),
             reverse=True
         )[:n_levels]
         
@@ -422,27 +422,23 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
         plt.close(fig)
         return buf
 
-    df_5m_plot = df_5m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    # Show last 12 hours for 5m chart (144 candles)
-    from_time = df_5m_plot['t'].max() - pd.Timedelta(hours=12)
-    df_5m_plot = df_5m_plot.loc[df_5m_plot['t'] >= from_time]
+    df_15m_plot = df_15m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+    from_time = df_15m_plot['t'].max() - pd.Timedelta(hours=36)
+    df_15m_plot = df_15m_plot.loc[df_15m_plot['t'] >= from_time]
 
     df_1h_plot = df_1h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    # Show last 3 days for 1h chart (72 candles)
     from_time = df_1h_plot['t'].max() - pd.Timedelta(days=3)
     df_1h_plot = df_1h_plot.loc[df_1h_plot['t'] >= from_time]
 
     df_4h_plot = df_4h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    # Show last 20 days for 4h chart (120 candles)
     from_time = df_4h_plot['t'].max() - pd.Timedelta(days=20)
     df_4h_plot = df_4h_plot.loc[df_4h_plot['t'] >= from_time]
 
     df_1d_plot = df_1d.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    # Show last 180 days for 1d chart
     from_time = df_1d_plot['t'].max() - pd.Timedelta(days=180)
     df_1d_plot = df_1d_plot.loc[df_1d_plot['t'] >= from_time]
 
-    chart_buffers.append(save_to_buffer(df_5m_plot, f"{coin} - 5M Chart"))
+    chart_buffers.append(save_to_buffer(df_15m_plot, f"{coin} - 15M Chart"))
     chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart"))
     chart_buffers.append(save_to_buffer(df_4h_plot, f"{coin} - 4H Chart"))
     chart_buffers.append(save_to_buffer(df_1d_plot, f"{coin} - 1D Chart"))
@@ -450,8 +446,8 @@ def generate_chart(df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame
     return chart_buffers
 
 
-async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_5m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> None:
-    charts = generate_chart(df_5m, df_1h, df_4h, df_1d, coin)
+async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> None:
+    charts = generate_chart(df_15m, df_1h, df_4h, df_1d, coin)
 
     results_1h = get_ta_results(df_1h, mid)
     results_4h = get_ta_results(df_4h, mid)
