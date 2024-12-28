@@ -1,3 +1,4 @@
+from typing import Dict, Any, List, Optional, Union
 from logging_utils import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
@@ -5,7 +6,7 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt, px_round, fmt_price
 
-EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT = range(5)
+EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT, SELECTING_LEVERAGE = range(6)
 
 
 async def enter_long(update: Update, context: CallbackContext) -> int:
@@ -20,16 +21,18 @@ async def enter_short(update: Update, context: CallbackContext) -> int:
     return SELECTING_COIN
 
 
-def ger_price_estimate(mid, decrease, percentage) -> str:
+def ger_price_estimate(mid: float, decrease: bool, percentage: float) -> str:
     return fmt_price(mid * (1.0 - percentage / 100.0) if decrease else mid * (1.0 + percentage / 100.0))
 
 
-async def selected_amount(update: Update, context: CallbackContext) -> int:
+async def selected_amount(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     query = update.callback_query
+    if not query:
+        return ConversationHandler.END
     await query.answer()
 
     amount = query.data
-    if amount == 'cancel':
+    if not amount or amount == 'cancel':
         await query.edit_message_text(text=OPERATION_CANCELLED)
         return ConversationHandler.END
 
@@ -37,6 +40,51 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
         context.user_data["amount"] = float(amount)
     except ValueError:
         await query.edit_message_text("Invalid amount.")
+        return ConversationHandler.END
+
+    coin = context.user_data.get("selected_coin", "")
+    try:
+        meta: List[Dict[str, Any]] = hyperliquid_utils.info.meta()
+        asset_info_map = {
+            info["name"]: int(info["maxLeverage"])
+            for info in meta.get("universe", [])
+        }
+            
+        max_leverage = asset_info_map.get(coin, 1)
+        suggested_leverages = [l for l in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30] if l <= max_leverage]
+
+        keyboard = [
+            [InlineKeyboardButton(f"{leverage}x", callback_data=str(leverage))]
+            for leverage in suggested_leverages
+        ]
+        keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "Please select the leverage to use:",
+            reply_markup=reply_markup
+        )
+        
+        return SELECTING_LEVERAGE
+        
+    except Exception as e:
+        logger.error(f"Error processing metadata for coin {coin}: {str(e)}")
+        await query.edit_message_text("Error: Could not process coin metadata. Please try again.")
+        return ConversationHandler.END
+
+
+async def selected_leverage(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    leverage = query.data
+    if leverage == 'cancel':
+        await query.edit_message_text(text=OPERATION_CANCELLED)
+        return ConversationHandler.END
+
+    try:
+        context.user_data["leverage"] = int(leverage)
+    except ValueError:
+        await query.edit_message_text("Invalid leverage.")
         return ConversationHandler.END
 
     coin = context.user_data["selected_coin"]
@@ -58,7 +106,7 @@ async def selected_amount(update: Update, context: CallbackContext) -> int:
     return SELECTING_STOP_LOSS
 
 
-async def selected_stop_loss(update: Update, context: CallbackContext) -> int:
+async def selected_stop_loss(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     query = update.callback_query
     await query.answer()
 
@@ -77,6 +125,8 @@ async def selected_stop_loss(update: Update, context: CallbackContext) -> int:
         [InlineKeyboardButton(f"{take_profit}% (~{ger_price_estimate(mid, not is_long, take_profit)} USDC)", callback_data=str(take_profit))]
         for take_profit in [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
     ]
+    
+    keyboard.append([InlineKeyboardButton("Maximum", callback_data='100.0')])
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
@@ -87,7 +137,7 @@ async def selected_stop_loss(update: Update, context: CallbackContext) -> int:
     return SELECTING_TAKE_PROFIT
 
 
-async def selected_coin(update: Update, context: CallbackContext) -> int:
+async def selected_coin(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     query = update.callback_query
     await query.answer()
 
@@ -115,24 +165,36 @@ async def selected_coin(update: Update, context: CallbackContext) -> int:
     return SELECTING_AMOUNT
 
 
-async def selected_take_profit(update: Update, context: CallbackContext) -> int:
+async def selected_take_profit(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     query = update.callback_query
+    if not query:
+        return ConversationHandler.END
     await query.answer()
 
-    if query.data == 'cancel':
+    if not query.data or query.data == 'cancel':
         await query.edit_message_text(text=OPERATION_CANCELLED)
         return ConversationHandler.END
 
-    take_profit_percentage = float(query.data)
+    try:
+        take_profit_percentage = float(query.data)
+    except ValueError:
+        await query.edit_message_text("Invalid take profit value.")
+        return ConversationHandler.END
 
     amount = context.user_data.get('amount')
     if not amount:
         await query.edit_message_text("Error: No amount selected. Please restart the process.")
         return ConversationHandler.END
 
-    stop_loss_percentage = float(context.user_data.get('stop_loss'))
-    if not stop_loss_percentage:
+    stop_loss = context.user_data.get('stop_loss')
+    if not stop_loss:
         await query.edit_message_text("Error: No stop loss selected. Please restart the process.")
+        return ConversationHandler.END
+    
+    try:
+        stop_loss_percentage = float(stop_loss)
+    except ValueError:
+        await query.edit_message_text("Invalid stop loss value.")
         return ConversationHandler.END
 
 
@@ -148,7 +210,7 @@ async def selected_take_profit(update: Update, context: CallbackContext) -> int:
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             available_balance = float(user_state['withdrawable'])
             balance_to_use = available_balance * amount / 100.0
-            leverage = hyperliquid_utils.get_leverage(user_state, selected_coin)
+            leverage = context.user_data.get('leverage', 1)
             exchange.update_leverage(leverage, selected_coin, False)
             mid = float(hyperliquid_utils.info.all_mids()[selected_coin])
             sz_decimals = hyperliquid_utils.get_sz_decimals()
@@ -173,31 +235,42 @@ async def selected_take_profit(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
-async def place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, stop_loss_percentage: float, take_profit_percentage: float):
+async def place_stop_loss_and_take_profit_orders(
+    exchange: Any, 
+    selected_coin: str, 
+    is_long: bool, 
+    sz: float, 
+    mid: float, 
+    stop_loss_percentage: float, 
+    take_profit_percentage: float
+) -> None:
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-    liquidation_px = float(hyperliquid_utils.get_liquidation_px_str(user_state, selected_coin))
 
-    if liquidation_px > 0.0:
-        liquidation_trigger_px = liquidation_px * (1.005 if is_long else 0.995)
-        user_trigger_px = mid * (1.0 - stop_loss_percentage / 100.0) if is_long else mid * (1.0 + stop_loss_percentage / 100.0)
-        sl_trigger_px = max(liquidation_trigger_px, user_trigger_px) if is_long else min(liquidation_trigger_px, user_trigger_px)
-    else:
-        sl_trigger_px = mid * 0.98 if is_long else mid * 1.02
+    if stop_loss_percentage < 100:
+        liquidation_px = float(hyperliquid_utils.get_liquidation_px_str(user_state, selected_coin))
 
-    sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
-    sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
-    sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
-    logger.info(sl_order_result)
+        if liquidation_px > 0.0:
+            liquidation_trigger_px = liquidation_px * (1.005 if is_long else 0.995)
+            user_trigger_px = mid * (1.0 - stop_loss_percentage / 100.0) if is_long else mid * (1.0 + stop_loss_percentage / 100.0)
+            sl_trigger_px = max(liquidation_trigger_px, user_trigger_px) if is_long else min(liquidation_trigger_px, user_trigger_px)
+        else:
+            sl_trigger_px = mid * 0.98 if is_long else mid * 1.02
 
-
-    tp_trigger_px = mid * (1.0 + take_profit_percentage / 100.0) if is_long else mid * (1.0 - take_profit_percentage / 100.0)
-    tp_limit_px = tp_trigger_px * 1.02 if is_long else tp_trigger_px * 0.98
-    tp_order_type = {"trigger": {"triggerPx": px_round(tp_trigger_px), "isMarket": True, "tpsl": "tp"}}
-    tp_order_result = exchange.order(selected_coin, not is_long, sz, px_round(tp_limit_px), tp_order_type, reduce_only=True)
-    logger.info(tp_order_result)
+        sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
+        sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
+        sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
+        logger.info(sl_order_result)
 
 
-async def exit_all_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if take_profit_percentage < 100:
+        tp_trigger_px = mid * (1.0 + take_profit_percentage / 100.0) if is_long else mid * (1.0 - take_profit_percentage / 100.0)
+        tp_limit_px = tp_trigger_px * 1.02 if is_long else tp_trigger_px * 0.98
+        tp_order_type = {"trigger": {"triggerPx": px_round(tp_trigger_px), "isMarket": True, "tpsl": "tp"}}
+        tp_order_result = exchange.order(selected_coin, not is_long, sz, px_round(tp_limit_px), tp_order_type, reduce_only=True)
+        logger.info(tp_order_result)
+
+
+async def exit_all_positions(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> None:
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     try:
         exchange = hyperliquid_utils.get_exchange()
@@ -212,7 +285,7 @@ async def exit_all_positions(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(text=f"Failed to exit all positions: {str(e)}")
 
 
-async def exit_position(update: Update, context: CallbackContext) -> int:
+async def exit_position(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     coins = sorted({asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])})
 
@@ -223,11 +296,11 @@ async def exit_position(update: Update, context: CallbackContext) -> int:
     keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await telegram_utils.reply(update, 'Choose a coin to sell:')
+    await update.message.reply_text('Choose a coin to sell:', reply_markup=reply_markup)
     return EXIT_CHOOSING
 
 
-async def exit_selected_coin(update: Update, context: CallbackContext) -> int:
+async def exit_selected_coin(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     query = update.callback_query
     await query.answer()
 

@@ -9,7 +9,7 @@ from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandl
 
 from hyperliquid_candles import SELECTING_COIN_FOR_TA, analyze_candles, execute_ta, selected_coin_for_ta
 from hyperliquid_orders import get_open_orders
-from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, enter_long, enter_short, exit_all_positions, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit
+from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_LEVERAGE, enter_long, enter_short, exit_all_positions, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit, selected_leverage
 from hyperliquid_utils import hyperliquid_utils
 from hyperliquid_positions import get_positions, get_overview
 from hyperliquid_alerts import check_profit_percentage
@@ -66,9 +66,10 @@ class HyperliquidBot:
                 entry_points=[CommandHandler('long', enter_long)],
                 states={
                     SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+                    SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
+                    SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
                     SELECTING_STOP_LOSS: [CallbackQueryHandler(selected_stop_loss)],
-                    SELECTING_TAKE_PROFIT: [CallbackQueryHandler(selected_take_profit)],
-                    SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)]
+                    SELECTING_TAKE_PROFIT: [CallbackQueryHandler(selected_take_profit)]
                 },
                 fallbacks=[CommandHandler('cancel', conversation_cancel)]
             )
@@ -78,9 +79,10 @@ class HyperliquidBot:
                 entry_points=[CommandHandler('short', enter_short)],
                 states={
                     SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+                    SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
+                    SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
                     SELECTING_STOP_LOSS: [CallbackQueryHandler(selected_stop_loss)],
-                    SELECTING_TAKE_PROFIT: [CallbackQueryHandler(selected_take_profit)],
-                    SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)]
+                    SELECTING_TAKE_PROFIT: [CallbackQueryHandler(selected_take_profit)]
                 },
                 fallbacks=[CommandHandler('cancel', conversation_cancel)]
             )
