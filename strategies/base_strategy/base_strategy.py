@@ -338,8 +338,8 @@ class BaseStrategy(ABC):
                     await telegram_utils.send('\n'.join(message), parse_mode=ParseMode.HTML)
 
         except Exception as e:
-            logger.error(f"Error checking differences: {str(e)}")
-            await telegram_utils.send(f"Error checking differences: {str(e)}")
+            logger.error(f"Error checking allocation drifts: {str(e)}", exc_info=True)
+            await telegram_utils.send(f"Error checking allocation drifts: {str(e)}")
 
     async def display_crypto_info(
         self,
