@@ -5,7 +5,7 @@ import os
 import random
 
 from logging_utils import logger
-from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandler
+from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandler, MessageHandler, filters
 
 from hyperliquid_candles import SELECTING_COIN_FOR_TA, analyze_candles, execute_ta, selected_coin_for_ta
 from hyperliquid_orders import get_open_orders
@@ -68,8 +68,8 @@ class HyperliquidBot:
                     SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
                     SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
                     SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
-                    SELECTING_STOP_LOSS: [CallbackQueryHandler(selected_stop_loss)],
-                    SELECTING_TAKE_PROFIT: [CallbackQueryHandler(selected_take_profit)]
+                    SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
+                    SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
                 },
                 fallbacks=[CommandHandler('cancel', conversation_cancel)]
             )
@@ -81,8 +81,8 @@ class HyperliquidBot:
                     SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
                     SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
                     SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
-                    SELECTING_STOP_LOSS: [CallbackQueryHandler(selected_stop_loss)],
-                    SELECTING_TAKE_PROFIT: [CallbackQueryHandler(selected_take_profit)]
+                    SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
+                    SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
                 },
                 fallbacks=[CommandHandler('cancel', conversation_cancel)]
             )
