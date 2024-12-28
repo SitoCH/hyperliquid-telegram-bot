@@ -68,10 +68,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
-        candles_15m = hyperliquid_utils.info.candles_snapshot(coin, "15m", now - 25 * 86400000, now)
-        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 75 * 86400000, now)
-        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 200 * 86400000, now)
-        candles_1d = hyperliquid_utils.info.candles_snapshot(coin, "1d", now - 300 * 86400000, now)  # Last year
+        candles_15m = hyperliquid_utils.info.candles_snapshot(coin, "15m", now - 50 * 86400000, now)
+        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 100 * 86400000, now)
+        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 250 * 86400000, now)
+        candles_1d = hyperliquid_utils.info.candles_snapshot(coin, "1d", now - 400 * 86400000, now)  # Last year
 
         local_tz = get_localzone()
         df_15m = prepare_dataframe(candles_15m, local_tz)
@@ -121,71 +121,72 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
         df['wyckoff_volatility'] = "unknown"
         return
     
-    # Calculate core metrics
-    lookback = min(50, len(df) - 1)
+    # Calculate core metrics with longer lookback
+    lookback = len(df) - 1
     volume_sma = df['v'].rolling(window=lookback).mean()
     price_sma = df['c'].rolling(window=lookback).mean()
     price_std = df['c'].rolling(window=lookback).std()
     
-    # Calculate momentum indicators
-    price_trend = df['c'].diff().rolling(window=20).mean()
-    momentum = df['c'].pct_change(periods=5).rolling(window=10).mean()
+    # Enhanced momentum indicators
+    momentum = df['c'].pct_change(periods=10).rolling(window=20).mean() 
+    volume_trend = df['v'].pct_change().rolling(window=20).mean()
     
-    # Current market conditions
+    # Current market conditions with volatility
     curr_price = df['c'].iloc[-1]
     curr_volume = df['v'].iloc[-1]
     avg_price = price_sma.iloc[-1]
-    price_range = price_std.iloc[-1]
+    price_std_last = price_std.iloc[-1]
+    volatility = price_std / avg_price
     
-    # Market condition checks
-    is_high_volume = curr_volume > volume_sma.iloc[-1] * 1.1
-    price_above_avg = curr_price > (avg_price + atr * 0.2)
-    momentum_shift = momentum.iloc[-1] * 100
+    # Enhanced market condition checks
+    is_high_volume = (curr_volume > volume_sma.iloc[-1] * 1.2) and (volume_trend.iloc[-1] > 0)
+    price_strength = (curr_price - avg_price) / (price_std_last + 1e-8)
+    momentum_strength = momentum.iloc[-1] * 100
     
-    # Phase detection
+    # Phase detection using scalar values
     uncertain_phase = False
     
-    if price_above_avg and momentum_shift < -0.5:
-        if curr_price > avg_price + price_range:
+    if price_strength > 1.5:  # Strong bullish deviation
+        if momentum_strength < -1.0 and is_high_volume:
             phase = "Distribution"
         else:
             uncertain_phase = True
-            phase = "Unclear distribution"
+            phase = "Unclear dist."
     
-    elif not price_above_avg and price_trend.iloc[-1] < -atr*0.5:
-        if is_high_volume:
-            phase = "Markdown"
-        else:
-            uncertain_phase = True
-            phase = "Unclear markdown"
-    
-    elif not price_above_avg and momentum_shift > 0.5:
-        if curr_price < avg_price - price_range:
+    elif price_strength < -1.5:  # Strong bearish deviation
+        if momentum_strength > 1.0 and is_high_volume:
             phase = "Accumulation"
         else:
             uncertain_phase = True
-            phase = "Unclear accumulation"
+            phase = "Unclear accum."
     
-    elif price_above_avg and price_trend.iloc[-1] > atr*0.5:
-        if is_high_volume:
-            phase = "Markup"
-        else:
-            uncertain_phase = True
-            phase = "Unclear markup"
-    
-    else:
-        if abs(momentum_shift) < 0.3 and abs(price_trend.iloc[-1]) < atr * 0.3:
+    elif -0.5 <= price_strength <= 0.5:  # Neutral zone
+        if abs(momentum_strength) < 0.5 and volatility.iloc[-1] < volatility.mean():
             phase = "Ranging"
         else:
             uncertain_phase = True
-            phase = price_above_avg and "Unclear markup" or "Unclear accumulation"
+            phase = "Unclear ranging"
+    
+    else:  # Transitional zones
+        if price_strength > 0:
+            if is_high_volume and momentum_strength > 0:
+                phase = "Markup"
+            else:
+                uncertain_phase = True
+                phase = "Unclear markup"
+        else:
+            if is_high_volume and momentum_strength < 0:
+                phase = "Markdown"
+            else:
+                uncertain_phase = True
+                phase = "Unclear markdown"
     
     # Store results
-    df['wyckoff_phase'] = phase
-    df['uncertain_phase'] = uncertain_phase
-    df['wyckoff_volume'] = "high" if is_high_volume else "low"
-    df['wyckoff_pattern'] = "trending" if abs(price_trend.iloc[-1]) > atr * 0.3 else "ranging"
-    df['wyckoff_volatility'] = "high" if price_range > atr else "normal"
+    df.loc[:, 'wyckoff_phase'] = phase
+    df.loc[:, 'uncertain_phase'] = uncertain_phase
+    df.loc[:, 'wyckoff_volume'] = "high" if is_high_volume else "low"
+    df.loc[:, 'wyckoff_pattern'] = "trending" if abs(momentum_strength) > 1.0 else "ranging"
+    df.loc[:, 'wyckoff_volatility'] = "high" if volatility.iloc[-1] > volatility.mean() else "normal"
 
 
 def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
@@ -289,79 +290,104 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
     chart_buffers = []
 
     def find_significant_levels(df: pd.DataFrame, n_levels: int = 3) -> Tuple[List[float], List[float]]:  # Changed default from 2 to 3
-        """Find significant support and resistance levels using price action, volume, and ATR"""
+        """Enhanced support and resistance detection with volume profile and price clusters"""
         highs = df['High'].values
         lows = df['Low'].values
         volumes = df['Volume'].values
-        timestamps = np.arange(len(df))  # For recency bias
+        closes = df['Close'].values
+        timestamps = np.arange(len(df))
         
-        # Use ATR with adaptive scaling based on price volatility
+        # Dynamic tolerance based on volatility
         atr: float = df['ATR'].iloc[-1]
-        volatility_scale = np.log1p(df['Close'].std() / df['Close'].mean())  # Normalized and dampened
-        tolerance = atr * volatility_scale * 0.35  # Scale base tolerance by volatility
+        volatility_scale = np.log1p(df['Close'].std() / df['Close'].mean())
+        base_tolerance = atr * volatility_scale * 0.35
         
-        # Find resistance levels (from highs)
-        resistance_points: Dict[float, Dict[str, float]] = {}
-        for idx, (price, vol) in enumerate(zip(highs, volumes)):
-            nearby_prices = [p for p in resistance_points.keys() if abs(p - price) <= tolerance]
-            if nearby_prices:
-                # Add to existing cluster with volume and recency weighting
-                main_price = nearby_prices[0]
-                resistance_points[main_price]['count'] += 1
-                resistance_points[main_price]['volume'] += vol
-                resistance_points[main_price]['recency'] = max(resistance_points[main_price]['recency'], timestamps[idx])
+        # Price-volume profile
+        price_steps = 100
+        volume_profile = np.zeros(price_steps)
+        
+        for price, vol in zip(closes, volumes):
+            idx = int((price - df['Low'].min()) / (df['High'].max() - df['Low'].min()) * (price_steps - 1))
+            volume_profile[idx] += vol
+        
+        # Smooth volume profile
+        volume_profile = np.convolve(volume_profile, np.ones(5)/5, mode='same')
+        
+        def cluster_points(points: np.ndarray, volumes: np.ndarray, timestamps: np.ndarray) -> Dict[float, Dict[str, float]]:
+            clusters: Dict[float, Dict[str, float]] = {}
+            
+            for idx, price in enumerate(points):
+                # Dynamic tolerance based on price level
+                local_tolerance = base_tolerance * (1 + abs(price - np.mean(points)) / np.std(points))
+                nearby_prices = [p for p in clusters.keys() if abs(p - price) <= local_tolerance]
+                
+                if nearby_prices:
+                    main_price = nearby_prices[0]
+                    weight = volumes[idx] * (0.7 + 0.3 * (timestamps[idx] / len(timestamps)))
+                    clusters[main_price]['weight'] += weight
+                    clusters[main_price]['count'] += 1
+                    clusters[main_price]['vol_sum'] += volumes[idx]
+                    clusters[main_price]['price'] = (clusters[main_price]['price'] * clusters[main_price]['count'] + price) / (clusters[main_price]['count'] + 1)
+                else:
+                    clusters[price] = {
+                        'weight': volumes[idx] * (0.7 + 0.3 * (timestamps[idx] / len(timestamps))),
+                        'count': 1,
+                        'vol_sum': volumes[idx],
+                        'price': price
+                    }
+            
+            return clusters
+        
+        resistance_clusters = cluster_points(highs, volumes, timestamps)
+        support_clusters = cluster_points(lows, volumes, timestamps)
+        
+        # Score and filter levels
+        def score_level(cluster: Dict[str, float], max_vol: float) -> float:
+            # Volume importance (35%)
+            volume_score = (cluster['vol_sum'] / max_vol) * 0.35
+            
+            # Touch count importance (25%)
+            # Logarithmic scaling to reduce the impact of very high touch counts
+            touch_score = np.log1p(cluster['count']) / np.log1p(10) * 0.25  # cap at 10 touches
+            
+            # Recency weight (20%)
+            # Higher weight for more recent activity
+            weight_score = (cluster['weight'] / max(c['weight'] for c in resistance_clusters.values())) * 0.20
+            
+            # Price deviation from current price (10%)
+            # Lower score for levels too far from current price
+            price_deviation = abs(cluster['price'] - df['Close'].iloc[-1]) / df['Close'].iloc[-1]
+            proximity_score = (1 - min(price_deviation, 0.1) / 0.1) * 0.10  # max 10% deviation
+            
+            # Cluster density (10%)
+            # Higher score for tighter clusters
+            if cluster['count'] > 1:
+                density = cluster['vol_sum'] / (cluster['count'] * price_deviation + 1e-8)
+                density_score = min(density / (max_vol / 10), 1.0) * 0.10
             else:
-                # Create new cluster
-                resistance_points[price] = {
-                    'count': 1,
-                    'volume': vol,
-                    'recency': timestamps[idx]
-                }
-        
-        # Find support levels (from lows)
-        support_points: Dict[float, Dict[str, float]] = {}
-        for idx, (price, vol) in enumerate(zip(lows, volumes)):
-            nearby_prices = [p for p in support_points.keys() if abs(p - price) <= tolerance]
-            if nearby_prices:
-                # Add to existing cluster with volume and recency weighting
-                main_price = nearby_prices[0]
-                support_points[main_price]['count'] += 1
-                support_points[main_price]['volume'] += vol
-                support_points[main_price]['recency'] = max(support_points[main_price]['recency'], timestamps[idx])
-            else:
-                # Create new cluster
-                support_points[price] = {
-                    'count': 1,
-                    'volume': vol,
-                    'recency': timestamps[idx]
-                }
-        
-        # Score calculation with volume, touch count, and recency
-        min_touches = 3  # Minimum number of touches to consider a level significant
-        
-        def score_level(data: Dict[str, float], max_time: float) -> float:
-            if data['count'] < min_touches:
-                return 0
-            volume_score = data['volume'] / max(vol for vol in volumes)
-            recency_score = data['recency'] / max_time
-            touch_score = min(data['count'] / 10, 1.0)  # Cap at 10 touches
-            return (volume_score * 0.4) + (recency_score * 0.3) + (touch_score * 0.3)
-        
-        # Get most significant levels based on scoring
-        max_time = float(len(df) - 1)
+                density_score = 0
+                
+            total_score = volume_score + touch_score + weight_score + proximity_score + density_score
+            
+            # Additional multipliers for special conditions
+            if cluster['count'] >= 3 and cluster['vol_sum'] > max_vol * 0.1:
+                total_score *= 1.2  # 20% bonus for strong levels
+            if price_deviation < 0.02:  # Within 2% of current price
+                total_score *= 1.1  # 10% bonus for nearby levels
+                
+            return total_score
+
+        max_vol = max(volumes.sum(), 1)
         
         resistance_levels = sorted(
-            [price for price, data in resistance_points.items() 
-             if score_level(data, max_time) > 0],
-            key=lambda p: score_level(resistance_points[p], max_time),
+            [cluster['price'] for cluster in resistance_clusters.values()
+             if score_level(cluster, max_vol) > 0.2],  # Increased threshold
             reverse=True
         )[:n_levels]
         
         support_levels = sorted(
-            [price for price, data in support_points.items() 
-             if score_level(data, max_time) > 0],
-            key=lambda p: score_level(support_points[p], max_time),
-            reverse=True
+            [cluster['price'] for cluster in support_clusters.values()
+             if score_level(cluster, max_vol) > 0.2],  # Increased threshold
         )[:n_levels]
         
         return sorted(resistance_levels), sorted(support_levels)
@@ -406,11 +432,14 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
             level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=1, 
                                               label=f'S {fmt_price(level)}', linestyle=':'))
 
-        # Add current price line
-        current_price_line = pd.Series([df_plot['Close'].iloc[-1]] * len(df_plot), index=df_plot.index)
-        level_lines.append(mpf.make_addplot(current_price_line, ax=ax[0], color='grey', width=0.5, 
-                                          label=f'Current {fmt_price(df_plot["Close"].iloc[-1])}', 
-                                          linestyle='-', alpha=0.5))
+        # Add current price line using Heikin-Ashi color
+        current_price = df_plot['Close'].iloc[-1]
+        is_ha_bullish = ha_df['Close'].iloc[-1] >= ha_df['Open'].iloc[-1]  # Use Heikin-Ashi values
+        current_price_color = 'green' if is_ha_bullish else 'red'
+        current_price_line = pd.Series([current_price] * len(df_plot), index=df_plot.index)
+        level_lines.append(mpf.make_addplot(current_price_line, ax=ax[0], color=current_price_color, width=0.5, 
+                                          label=f'Current {fmt_price(current_price)}', 
+                                          linestyle=':', alpha=0.8))
 
         mpf.plot(ha_df,
                 type='candle',
