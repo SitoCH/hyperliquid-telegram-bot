@@ -38,7 +38,7 @@ class FixedTokenStrategy(BaseStrategy):
             "price_change_percentage": "24h,30d,1y",
         }
         
-        cryptos = super().fetch_cryptos(params, page_count=2)
+        cryptos = hyperliquid_utils.fetch_cryptos(params, page_count=2)
         all_mids = hyperliquid_utils.info.all_mids()
         meta = hyperliquid_utils.info.meta()
         

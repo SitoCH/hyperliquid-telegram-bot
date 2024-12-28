@@ -52,6 +52,7 @@ class HyperliquidBot:
 
             next_hour = datetime.datetime.now().replace(minute=1, second=0, microsecond=0) + datetime.timedelta(hours=1)
             telegram_utils.run_repeating(analyze_candles, interval=datetime.timedelta(hours=1.0), first=next_hour)
+            # telegram_utils.run_once(analyze_candles)
 
             sell_conv_handler = ConversationHandler(
                 entry_points=[CommandHandler('exit', exit_position)],

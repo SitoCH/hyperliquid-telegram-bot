@@ -49,7 +49,7 @@ class EtfStrategy(BaseStrategy):
         if self._etf_config.category:
             params["category"] = self._etf_config.category
         
-        cryptos = super().fetch_cryptos(params)
+        cryptos = hyperliquid_utils.fetch_cryptos(params)
         all_mids = hyperliquid_utils.info.all_mids()
         meta = hyperliquid_utils.info.meta()
         

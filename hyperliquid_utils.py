@@ -1,5 +1,6 @@
 import os
-from typing import List
+import requests
+from typing import List, Set, Dict, Any, ClassVar
 
 import eth_account
 from eth_account.signers.local import LocalAccount
@@ -15,6 +16,8 @@ from telegram_utils import telegram_utils
 
 
 class HyperliquidUtils:
+
+    COINGECKO_URL: ClassVar[str] = "https://api.coingecko.com/api/v3/coins/markets"
 
     def __init__(self):
 
@@ -122,5 +125,32 @@ class HyperliquidUtils:
         keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
         return InlineKeyboardMarkup(keyboard)
 
+    def get_hyperliquid_symbol(self, symbol: str) -> str:
+        """Convert standard symbol to Hyperliquid format if needed."""
+        symbol_mapping = {
+            "SHIB": "kSHIB",
+            "PEPE": "kPEPE",
+            "FLOKI": "kFLOKI",
+            "BONK": "kBONK"
+        }
+        return symbol_mapping.get(symbol, symbol)
+
+    def fetch_cryptos(self, params: Dict[str, Any], page_count: int = 1) -> List[Dict]:
+        """Fetch crypto data from CoinGecko API with configurable pagination."""
+        all_cryptos = []
+        try:
+            for page in range(1, page_count + 1):
+                params["page"] = page
+                response = requests.get(self.COINGECKO_URL, params=params)
+                response.raise_for_status()
+                cryptos = response.json()
+                all_cryptos.extend(cryptos)
+
+            for crypto in all_cryptos:
+                crypto["symbol"] = self.get_hyperliquid_symbol(crypto["symbol"].upper())
+            return all_cryptos
+        except requests.RequestException as e:
+            logger.error(f"Error fetching crypto data: {e}")
+            return []
 
 hyperliquid_utils = HyperliquidUtils()

@@ -89,7 +89,6 @@ class BaseStrategy(ABC):
     Base class for implementing trading strategies.
     Provides common functionality for analyzing and rebalancing positions.
     """
-    COINGECKO_URL: ClassVar[str] = "https://api.coingecko.com/api/v3/coins/markets"
     _config: BaseStrategyConfig
 
     def __init__(self, config: Optional[BaseStrategyConfig] = None):
@@ -98,34 +97,6 @@ class BaseStrategy(ABC):
     @property
     def config(self) -> BaseStrategyConfig:
         return self._config
-
-    def get_hyperliquid_symbol(self, symbol: str) -> str:
-        """Convert standard symbol to Hyperliquid format if needed."""
-        symbol_mapping = {
-            "SHIB": "kSHIB",
-            "PEPE": "kPEPE",
-            "FLOKI": "kFLOKI",
-            "BONK": "kBONK"
-        }
-        return symbol_mapping.get(symbol, symbol)
-
-    def fetch_cryptos(self, params: Dict[str, Any], page_count: int = 1) -> List[Dict]:
-        """Fetch crypto data from CoinGecko API with configurable pagination."""
-        all_cryptos = []
-        try:
-            for page in range(1, page_count + 1):
-                params["page"] = page
-                response = requests.get(self.COINGECKO_URL, params=params)
-                response.raise_for_status()
-                cryptos = response.json()
-                all_cryptos.extend(cryptos)
-
-            for crypto in all_cryptos:
-                crypto["symbol"] = self.get_hyperliquid_symbol(crypto["symbol"].upper())
-            return all_cryptos
-        except requests.RequestException as e:
-            logger.error(f"Error fetching crypto data: {e}")
-            return []
 
     def calculate_account_values(
         self, user_state: Dict, leverage: int
