@@ -121,19 +121,15 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
         df['wyckoff_volatility'] = "unknown"
         return
     
-    # Calculate core metrics with longer windows for better stability
-    lookback = min(100, len(df) - 1)  # Increased from 50 to 100 for more historical context
+    # Calculate core metrics
+    lookback = min(50, len(df) - 1)
     volume_sma = df['v'].rolling(window=lookback).mean()
     price_sma = df['c'].rolling(window=lookback).mean()
     price_std = df['c'].rolling(window=lookback).std()
     
-    # Calculate momentum with longer periods
-    price_trend = df['c'].diff().rolling(window=30).mean()  # Increased from 20 to 30
-    momentum = df['c'].pct_change(periods=10).rolling(window=20).mean()  # Increased from 5/10 to 10/20
-    
-    # Additional trend strength indicators
-    long_term_trend = df['c'].diff().rolling(window=50).mean()  # New longer-term trend indicator
-    volume_trend = df['v'].diff().rolling(window=30).mean()  # Volume trend indicator
+    # Calculate momentum indicators
+    price_trend = df['c'].diff().rolling(window=20).mean()
+    momentum = df['c'].pct_change(periods=5).rolling(window=10).mean()
     
     # Current market conditions
     curr_price = df['c'].iloc[-1]
@@ -141,69 +137,55 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
     avg_price = price_sma.iloc[-1]
     price_range = price_std.iloc[-1]
     
-    # Enhanced condition checks
-    is_high_volume = curr_volume > volume_sma.iloc[-1] * 1.2  # Increased threshold from 1.1 to 1.2
-    price_above_avg = curr_price > (avg_price + atr * 0.3)  # Increased threshold from 0.2 to 0.3
-    strong_trend = abs(price_trend.iloc[-1]) > price_range * 0.1  # Increased from 0.08 to 0.1
+    # Market condition checks
+    is_high_volume = curr_volume > volume_sma.iloc[-1] * 1.1
+    price_above_avg = curr_price > (avg_price + atr * 0.2)
     momentum_shift = momentum.iloc[-1] * 100
     
-    # Additional trend confirmation
-    trend_strength = abs(long_term_trend.iloc[-1]) / atr
-    volume_confirmation = (volume_trend.iloc[-1] > 0) == (price_trend.iloc[-1] > 0)
-    
-    # Enhanced phase detection
+    # Phase detection
     uncertain_phase = False
-    if (price_above_avg and 
-        momentum_shift < -0.8 and  # More strict momentum threshold
-        curr_price > avg_price + price_range * 1.2 and  # Increased range requirement
-        not is_high_volume and
-        trend_strength > 0.5):  # New trend strength check
-        phase = "Distribution"
     
-    elif (not price_above_avg and 
-          price_trend.iloc[-1] < -atr*0.7 and  # Increased threshold
-          is_high_volume and
-          volume_confirmation):  # New volume confirmation
-        phase = "Markdown"
-    
-    elif (not price_above_avg and 
-          momentum_shift > 0.8 and  # More strict momentum threshold
-          curr_price < avg_price - price_range * 1.2 and  # Increased range requirement
-          is_high_volume and
-          volume_confirmation):
-        phase = "Accumulation"
-    
-    elif (price_above_avg and 
-          price_trend.iloc[-1] > atr*0.7 and  # Increased threshold
-          is_high_volume and
-          momentum_shift > 0 and
-          trend_strength > 0.5 and
-          volume_confirmation):
-        phase = "Markup"
-    
-    else:
-        # More specific uncertain states with trend strength consideration
-        if price_above_avg and momentum_shift > 0 and trend_strength > 0.3:
-            uncertain_phase = True
-            phase = "Unclear markup"
-        elif price_above_avg and momentum_shift < 0 and trend_strength > 0.3:
+    if price_above_avg and momentum_shift < -0.5:
+        if curr_price > avg_price + price_range:
+            phase = "Distribution"
+        else:
             uncertain_phase = True
             phase = "Unclear distribution"
-        elif not price_above_avg and momentum_shift < 0 and trend_strength > 0.3:
+    
+    elif not price_above_avg and price_trend.iloc[-1] < -atr*0.5:
+        if is_high_volume:
+            phase = "Markdown"
+        else:
             uncertain_phase = True
             phase = "Unclear markdown"
-        elif not price_above_avg and momentum_shift > 0 and trend_strength > 0.3:
+    
+    elif not price_above_avg and momentum_shift > 0.5:
+        if curr_price < avg_price - price_range:
+            phase = "Accumulation"
+        else:
             uncertain_phase = True
             phase = "Unclear accumulation"
-        else:
-            phase = "Ranging"
     
-    # Store in dataframe
+    elif price_above_avg and price_trend.iloc[-1] > atr*0.5:
+        if is_high_volume:
+            phase = "Markup"
+        else:
+            uncertain_phase = True
+            phase = "Unclear markup"
+    
+    else:
+        if abs(momentum_shift) < 0.3 and abs(price_trend.iloc[-1]) < atr * 0.3:
+            phase = "Ranging"
+        else:
+            uncertain_phase = True
+            phase = price_above_avg and "Unclear markup" or "Unclear accumulation"
+    
+    # Store results
     df['wyckoff_phase'] = phase
     df['uncertain_phase'] = uncertain_phase
     df['wyckoff_volume'] = "high" if is_high_volume else "low"
-    df['wyckoff_pattern'] = "trending" if (strong_trend and volume_confirmation) else "ranging"
-    df['wyckoff_volatility'] = "high" if price_range > atr * 1.2 else "normal"  # Increased threshold
+    df['wyckoff_pattern'] = "trending" if abs(price_trend.iloc[-1]) > atr * 0.3 else "ranging"
+    df['wyckoff_volatility'] = "high" if price_range > atr else "normal"
 
 
 def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
