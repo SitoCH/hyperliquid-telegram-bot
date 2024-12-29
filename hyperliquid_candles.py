@@ -192,21 +192,21 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
             phase = "Distribution"
         else:
             uncertain_phase = True
-            phase = "Unclear dist."
+            phase = "~ distribution"
     
     elif price_strength < -1.5:  # Strong bearish deviation
         if momentum_strength > 1.0 and is_high_volume:
             phase = "Accumulation"
         else:
             uncertain_phase = True
-            phase = "Unclear accum."
+            phase = "~ accumulation"
     
     elif -0.5 <= price_strength <= 0.5:  # Neutral zone
         if abs(momentum_strength) < 0.5 and volatility.iloc[-1] < volatility.mean():
             phase = "Ranging"
         else:
             uncertain_phase = True
-            phase = "Unclear ranging"
+            phase = "~ ranging"
     
     else:  # Transitional zones
         if price_strength > 0:
@@ -214,13 +214,13 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
                 phase = "Markup"
             else:
                 uncertain_phase = True
-                phase = "Unclear markup"
+                phase = "~ markup"
         else:
             if is_high_volume and momentum_strength < 0:
                 phase = "Markdown"
             else:
                 uncertain_phase = True
-                phase = "Unclear markdown"
+                phase = "~ markdown"
     
     # Store results
     df.loc[:, 'wyckoff_phase'] = phase
