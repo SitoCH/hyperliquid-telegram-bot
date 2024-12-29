@@ -64,6 +64,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
         
     for coin in coins_to_analyze:
         await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
+        time.sleep(10)
 
 async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
     """Get the set of coins to analyze based on configuration."""
@@ -73,22 +74,26 @@ async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
     configured_coins = os.getenv("HTB_COINS_TO_ANALYZE", "").split(",")
     coins_to_analyze.update(coin for coin in configured_coins if coin and coin in all_mids)
     
-    # Add coins from configured category
-    if category := os.getenv("HTB_CATEGORY_TO_ANALYZE"):
-        params = {
-            "vs_currency": "usd",
-            "order": "market_cap_desc",
-            "per_page": 25,
-            "sparkline": "false",
-            "category": category,
-            "price_change_percentage": "24h,30d,1y",
-        }
-        
-        cryptos = hyperliquid_utils.fetch_cryptos(params)
-        coins_to_analyze.update(
-            crypto["symbol"] for crypto in cryptos 
-            if crypto["symbol"] in all_mids
-        )
+    # Add coins from configured categories
+    if categories := os.getenv("HTB_CATEGORIES_TO_ANALYZE"):
+        for category in categories.split(","):
+            if not category.strip():
+                continue
+                
+            params = {
+                "vs_currency": "usd",
+                "order": "market_cap_desc",
+                "per_page": 25,
+                "sparkline": "false",
+                "category": category.strip(),
+                "price_change_percentage": "24h,30d,1y",
+            }
+            
+            cryptos = hyperliquid_utils.fetch_cryptos(params)
+            coins_to_analyze.update(
+                crypto["symbol"] for crypto in cryptos 
+                if crypto["symbol"] in all_mids
+            )
     
     # Add coins with open orders if configured
     if os.getenv('HTB_ANALYZE_COINS_WITH_OPEN_ORDERS', 'False') == 'True':
@@ -107,7 +112,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         candles_15m = hyperliquid_utils.info.candles_snapshot(coin, "15m", now - 50 * 86400000, now)
         candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 100 * 86400000, now)
         candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 250 * 86400000, now)
-        candles_1d = hyperliquid_utils.info.candles_snapshot(coin, "1d", now - 400 * 86400000, now)  # Last year
+        candles_1d = hyperliquid_utils.info.candles_snapshot(coin, "1d", now - 400 * 86400000, now)
 
         local_tz = get_localzone()
         df_15m = prepare_dataframe(candles_15m, local_tz)

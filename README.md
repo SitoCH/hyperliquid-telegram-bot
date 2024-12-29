@@ -55,7 +55,7 @@ docker-compose up -d
 |----------|-------------|---------|---------|
 | HTB_COINS_TO_ANALYZE | Coins to analyze hourly | "BTC,ETH" | None |
 | HTB_ANALYZE_COINS_WITH_OPEN_ORDERS | Include coins with open orders in analysis | "True" | False |
-| HTB_CATEGORY_TO_ANALYZE | CoinGecko category to analyze (e.g., "layer-1", "defi") | "layer-1" | None |
+| HTB_CATEGORIES_TO_ANALYZE | CoinGecko categories to analyze (comma-separated) | "layer-1,defi" | None |
 
 ## Trading Strategies
 
