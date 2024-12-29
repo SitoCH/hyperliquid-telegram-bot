@@ -109,10 +109,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
-        candles_15m = hyperliquid_utils.info.candles_snapshot(coin, "15m", now - 50 * 86400000, now)
-        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 100 * 86400000, now)
-        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 250 * 86400000, now)
-        candles_1d = hyperliquid_utils.info.candles_snapshot(coin, "1d", now - 400 * 86400000, now)
+        candles_15m = hyperliquid_utils.info.candles_snapshot(coin, "15m", now - 125 * 86400000, now)
+        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 250 * 86400000, now)
+        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 500 * 86400000, now)
+        candles_1d = hyperliquid_utils.info.candles_snapshot(coin, "1d", now - 750 * 86400000, now)
 
         local_tz = get_localzone()
         df_15m = prepare_dataframe(candles_15m, local_tz)
