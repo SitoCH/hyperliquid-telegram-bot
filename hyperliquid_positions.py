@@ -207,28 +207,10 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
+        balance = _get_portfolio_balance()
+        message_lines = _format_portfolio_message(balance)
+
         perp_user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-        spot_user_state = hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address)
-        token_prices = _get_token_prices()
-        
-        perp_balance = float(perp_user_state['marginSummary']['accountValue'])
-        available_balance = float(perp_user_state['withdrawable'])
-
-        spot_balance = sum(
-            float(balance['total']) * token_prices.get(balance['coin'], 0.0)
-            for balance in spot_user_state.get('balances', [])
-        )
-
-        total_portfolio = perp_balance + spot_balance
-
-        message_lines = [
-            "<b>Portfolio:</b>",
-            f"Total balance: {fmt(total_portfolio)} USDC",
-            "<b>Perps positions:</b>",
-            f"Total balance: {fmt(perp_balance)} USDC",
-            f"Available balance: {fmt(available_balance)} USDC",
-        ]
-
         tablefmt = simple_separated_format(' ')
         if perp_user_state["assetPositions"]:
             total_pnl = sum(
@@ -236,6 +218,7 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 for asset_position in perp_user_state["assetPositions"]
             )
             message_lines.append(f"Unrealized profit: {fmt(total_pnl)} USDC")
+            message_lines.append("")
 
             sorted_positions = sorted(
                 perp_user_state["assetPositions"],
@@ -261,7 +244,7 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
             message_lines.append(f"<pre>{table}</pre>")
 
-        spot_messages = await spot_positions_messages(tablefmt, spot_user_state)
+        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address))
         message_lines += spot_messages
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
@@ -340,6 +323,7 @@ async def spot_positions_messages(tablefmt, spot_user_state):
     )
     
     return [
+        "",
         "<b>Spot positions:</b>",
         f"<pre>{table}</pre>"
     ]
