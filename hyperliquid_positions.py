@@ -4,6 +4,7 @@ from tabulate import simple_separated_format, tabulate
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
+import requests
 
 from hyperliquid_utils import hyperliquid_utils
 from telegram_utils import telegram_utils
@@ -15,10 +16,11 @@ class PortfolioBalance:
     perp_total: float
     perp_available: float 
     spot_total: float
+    stacked_total: float
     
     @property
     def total(self) -> float:
-        return self.perp_total + self.spot_total
+        return self.perp_total + self.spot_total + self.stacked_total
         
 def _calculate_spot_balance(spot_state: Dict[str, Any], token_prices: Dict[str, float]) -> float:
     """Calculate total spot balance from user state and token prices."""
@@ -27,28 +29,73 @@ def _calculate_spot_balance(spot_state: Dict[str, Any], token_prices: Dict[str, 
         for balance in spot_state.get('balances', [])
     )
 
+def _calculate_stacked_balance(delegator_info: Dict[str, float], token_prices: Dict[str, float]) -> float:
+    """Calculate total stacked balance from delegator info and token prices."""
+    hype_price = token_prices.get("HYPE", 0.0)
+    
+    delegated_value = delegator_info["delegated"] * hype_price
+    undelegated_value = delegator_info["undelegated"] * hype_price
+    pending_value = delegator_info["pending_withdrawal"] * hype_price
+    
+    return delegated_value + undelegated_value + pending_value
+
+def _get_delegator_summary(address: str) -> Dict[str, float]:
+    """Get delegator summary information for an address."""
+    response = requests.post(
+        "https://api-ui.hyperliquid.xyz/info",
+        json={"type": "delegatorSummary", "user": address}
+    ).json()
+    
+    return {
+        "delegated": float(response.get("delegated", "0.0")),
+        "undelegated": float(response.get("undelegated", "0.0")),
+        "pending_withdrawal": float(response.get("totalPendingWithdrawal", "0.0"))
+    }
+
 def _get_portfolio_balance() -> PortfolioBalance:
     """Get current portfolio balance information."""
     address = hyperliquid_utils.address
     perp_state = hyperliquid_utils.info.user_state(address)
     spot_state = hyperliquid_utils.info.spot_user_state(address)
     token_prices = _get_token_prices()
+    delegator_info = _get_delegator_summary(address)
     
     return PortfolioBalance(
         perp_total=float(perp_state['marginSummary']['accountValue']),
         perp_available=float(perp_state['withdrawable']),
-        spot_total=_calculate_spot_balance(spot_state, token_prices)
+        spot_total=_calculate_spot_balance(spot_state, token_prices),
+        stacked_total=_calculate_stacked_balance(delegator_info, token_prices),
     )
 
 def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
     """Format portfolio balance information as message lines."""
-    return [
+    message = [
         "<b>Portfolio:</b>",
         f"Total balance: {fmt(balance.total)} USDC",
+    ]
+     
+    if balance.spot_total > 0:
+        message.extend([
+        "",
+        "<b>Spot positions:</b>",
+        f"Total balance: {fmt(balance.spot_total)} USDC", 
+        ])
+
+    if balance.stacked_total > 0:
+        message.extend([
+        "",
+        "<b>Stacked positions:</b>",
+        f"Total balance: {fmt(balance.stacked_total)} USDC", 
+        ])
+
+    message.extend([
+        "",
         "<b>Perps positions:</b>",
         f"Total balance: {fmt(balance.perp_total)} USDC", 
         f"Available balance: {fmt(balance.perp_available)} USDC",
-    ]
+    ])
+
+    return message
 
 async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handler for getting current portfolio positions."""
