@@ -118,21 +118,22 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
 
     try:
         stop_loss_price = float(stop_loss)
-        if stop_loss_price <= 0:
-            await update.message.reply_text("Price must be greater than 0.")
+        if stop_loss_price < 0:
+            await update.message.reply_text("Price must be zero or greater.")
             return SELECTING_STOP_LOSS
 
-        # Validate stop loss price based on position direction
-        coin = context.user_data["selected_coin"]
-        mid = float(hyperliquid_utils.info.all_mids()[coin])
-        is_long = context.user_data["enter_mode"] == "long"
-        
-        if is_long and stop_loss_price >= mid:
-            await update.message.reply_text("Stop loss price must be below current market price for long positions.")
-            return SELECTING_STOP_LOSS
-        elif not is_long and stop_loss_price <= mid:
-            await update.message.reply_text("Stop loss price must be above current market price for short positions.")
-            return SELECTING_STOP_LOSS
+        # Only validate stop loss price if it's not zero
+        if stop_loss_price > 0:
+            coin = context.user_data["selected_coin"]
+            mid = float(hyperliquid_utils.info.all_mids()[coin])
+            is_long = context.user_data["enter_mode"] == "long"
+            
+            if is_long and stop_loss_price >= mid:
+                await update.message.reply_text("Stop loss price must be below current market price for long positions.")
+                return SELECTING_STOP_LOSS
+            elif not is_long and stop_loss_price <= mid:
+                await update.message.reply_text("Stop loss price must be above current market price for short positions.")
+                return SELECTING_STOP_LOSS
 
         context.user_data["stop_loss_price"] = stop_loss_price
     except ValueError:
@@ -276,19 +277,23 @@ async def place_stop_loss_and_take_profit_orders(
 ) -> None:
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
 
-    if stop_loss_price > 0:
-        liquidation_px = float(hyperliquid_utils.get_liquidation_px_str(user_state, selected_coin))
-
-        if liquidation_px > 0.0:
-            liquidation_trigger_px = liquidation_px * (1.0025 if is_long else 0.9975)
-            sl_trigger_px = max(liquidation_trigger_px, stop_loss_price) if is_long else min(liquidation_trigger_px, stop_loss_price)
-        else:
+    liquidation_px = float(hyperliquid_utils.get_liquidation_px_str(user_state, selected_coin))
+    if liquidation_px > 0.0:
+        liquidation_trigger_px = liquidation_px * (1.0025 if is_long else 0.9975)
+        
+        # Use liquidation-based stop loss if stop_loss_price is 0 or if it would trigger after liquidation
+        if stop_loss_price == 0 or (is_long and stop_loss_price < liquidation_trigger_px) or (not is_long and stop_loss_price > liquidation_trigger_px):
+            sl_trigger_px = liquidation_trigger_px
+            sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
+            sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
+            sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
+            logger.info(sl_order_result)
+        elif stop_loss_price > 0:  # Only place custom stop loss if it's not zero and would trigger before liquidation
             sl_trigger_px = stop_loss_price
-
-        sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
-        sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
-        sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
-        logger.info(sl_order_result)
+            sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
+            sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
+            sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
+            logger.info(sl_order_result)
 
     if take_profit_price > 0:
         tp_trigger_px = take_profit_price
