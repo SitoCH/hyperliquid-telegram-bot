@@ -271,9 +271,18 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
     df["Volume_SMA"] = df["v"].rolling(window=vol_length).mean()
     df["Volume_Confirm"] = df["v"] > df["Volume_SMA"]
     
-    # Use shorter length for VWAP
+    # Use shorter length for VWAP with safety checks
     df["VWAP"] = ta.vwap(df["h"], df["l"], df["c"], df["v"])
-    df["VWAP_Flip_Detected"] = (mid > df["VWAP"].iloc[-2]) & (mid <= df["VWAP"].iloc[-1]) | (mid < df["VWAP"].iloc[-2]) & (mid >= df["VWAP"].iloc[-1])
+    
+    # Add safety check for VWAP flip detection
+    if len(df["VWAP"].dropna()) >= 2:  # Ensure we have at least 2 valid VWAP values
+        df["VWAP_Flip_Detected"] = (
+            ((mid > df["VWAP"].iloc[-2]) & (mid <= df["VWAP"].iloc[-1])) | 
+            ((mid < df["VWAP"].iloc[-2]) & (mid >= df["VWAP"].iloc[-1]))
+        )
+    else:
+        df["VWAP_Flip_Detected"] = False
+        logger.warning("Insufficient data for VWAP flip detection")
 
     # MACD
     macd = ta.macd(df["c"], fast=12, slow=26, signal=9)
@@ -299,10 +308,15 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
 
     detect_wyckoff_phase(df)
     
-    wyckoff_flip = (
-        df['wyckoff_phase'].iloc[-1] != df['wyckoff_phase'].iloc[-2] and
-        not df['uncertain_phase'].iloc[-1]
-    )
+    # Add safety check for Wyckoff flip detection
+    if len(df['wyckoff_phase']) >= 2:
+        wyckoff_flip = (
+            df['wyckoff_phase'].iloc[-1] != df['wyckoff_phase'].iloc[-2] and
+            not df['uncertain_phase'].iloc[-1]
+        )
+    else:
+        wyckoff_flip = False
+        logger.warning("Insufficient data for Wyckoff flip detection")
     
     return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
 
@@ -580,8 +594,36 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
 
 
 def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
+    # Check if we have enough data points
+    if len(df["SuperTrend"]) < 2 or len(df["VWAP"]) < 2:
+        logger.warning("Insufficient data for technical analysis results")
+        return {
+            "supertrend_prev": 0,
+            "supertrend": 0,
+            "supertrend_trend_prev": "unknown",
+            "supertrend_trend": "unknown",
+            "vwap_prev": 0,
+            "vwap": 0,
+            "vwap_trend_prev": "unknown",
+            "vwap_trend": "unknown",
+            "wyckoff_phase_prev": "unknown",
+            "wyckoff_phase": "unknown",
+            "wyckoff_volume_prev": "unknown",
+            "wyckoff_volume": "unknown",
+            "wyckoff_pattern_prev": "unknown",
+            "wyckoff_pattern": "unknown"
+        }
+
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
     vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
+
+    # Safety check for phase columns
+    phase_prev = df['wyckoff_phase'].shift(1).iloc[-1] if 'wyckoff_phase' in df.columns else "unknown"
+    phase = df['wyckoff_phase'].iloc[-1] if 'wyckoff_phase' in df.columns else "unknown"
+    volume_prev = df['wyckoff_volume'].shift(1).iloc[-1] if 'wyckoff_volume' in df.columns else "unknown"
+    volume = df['wyckoff_volume'].iloc[-1] if 'wyckoff_volume' in df.columns else "unknown"
+    pattern_prev = df['wyckoff_pattern'].shift(1).iloc[-1] if 'wyckoff_pattern' in df.columns else "unknown"
+    pattern = df['wyckoff_pattern'].iloc[-1] if 'wyckoff_pattern' in df.columns else "unknown"
 
     return {
         "supertrend_prev": supertrend_prev,
@@ -592,12 +634,12 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
         "vwap": vwap,
         "vwap_trend_prev": "uptrend" if mid > vwap_prev else "downtrend",
         "vwap_trend": "uptrend" if mid > vwap else "downtrend",
-        "wyckoff_phase_prev": df['wyckoff_phase'].shift(1).iloc[-1],
-        "wyckoff_phase": df['wyckoff_phase'].iloc[-1],
-        "wyckoff_volume_prev": df['wyckoff_volume'].shift(1).iloc[-1],
-        "wyckoff_volume": df['wyckoff_volume'].iloc[-1],
-        "wyckoff_pattern_prev": df['wyckoff_pattern'].shift(1).iloc[-1],
-        "wyckoff_pattern": df['wyckoff_pattern'].iloc[-1]
+        "wyckoff_phase_prev": phase_prev,
+        "wyckoff_phase": phase,
+        "wyckoff_volume_prev": volume_prev,
+        "wyckoff_volume": volume,
+        "wyckoff_pattern_prev": pattern_prev,
+        "wyckoff_pattern": pattern
     }
 
 
