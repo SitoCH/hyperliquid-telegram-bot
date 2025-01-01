@@ -188,44 +188,43 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
     strong_dev_threshold = 1.2 
     neutral_zone_threshold = 0.4
     momentum_threshold = 0.8
-    
-    # Phase detection using adjusted thresholds
+
     uncertain_phase = False
     
     if price_strength > strong_dev_threshold:
         if momentum_strength < -momentum_threshold and is_high_volume:
-            phase = "Distribution"
+            phase = "dist."
         else:
             uncertain_phase = True
-            phase = "~ distribution"
+            phase = "~ dist."
     
     elif price_strength < -strong_dev_threshold:
         if momentum_strength > momentum_threshold and is_high_volume:
-            phase = "Accumulation"
+            phase = "acc."
         else:
             uncertain_phase = True
-            phase = "~ accumulation"
+            phase = "~ acc."
     
     elif -neutral_zone_threshold <= price_strength <= neutral_zone_threshold:
         if abs(momentum_strength) < momentum_threshold and volatility.iloc[-1] < volatility.mean():
-            phase = "Ranging"
+            phase = "rang."
         else:
             uncertain_phase = True
-            phase = "~ ranging"
+            phase = "~ rang."
     
     else:  # Transitional zones
         if price_strength > 0:
             if is_high_volume and momentum_strength > momentum_threshold:
-                phase = "Markup"
+                phase = "markup"
             else:
                 uncertain_phase = True
-                phase = "~ markup"
+                phase = "~ mrkp"
         else:
             if is_high_volume and momentum_strength < -momentum_threshold:
-                phase = "Markdown"
+                phase = "markdown"
             else:
                 uncertain_phase = True
-                phase = "~ markdown"
+                phase = "~ mrkdwn"
     
     # Store results
     df.loc[:, 'wyckoff_phase'] = phase
