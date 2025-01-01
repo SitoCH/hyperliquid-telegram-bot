@@ -76,20 +76,17 @@ def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
      
     if balance.spot_total > 0:
         message.extend([
-        "",
         "<b>Spot positions:</b>",
         f"Total balance: {fmt(balance.spot_total)} USDC", 
         ])
 
     if balance.stacked_total > 0:
         message.extend([
-        "",
         "<b>Stacked positions:</b>",
         f"Total balance: {fmt(balance.stacked_total)} USDC", 
         ])
 
     message.extend([
-        "",
         "<b>Perps positions:</b>",
         f"Total balance: {fmt(balance.perp_total)} USDC", 
         f"Available balance: {fmt(balance.perp_available)} USDC",
