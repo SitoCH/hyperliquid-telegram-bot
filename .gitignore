@@ -9,6 +9,7 @@ _build
 docs/_static/pypi.svg
 .tox
 __pycache__
+test-results.xml
 
 # Packaging artifacts
 black.egg-info
