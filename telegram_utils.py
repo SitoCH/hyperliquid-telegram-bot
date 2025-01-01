@@ -1,6 +1,7 @@
 import os
 import sys
 import datetime
+import logging
 from typing import Any, cast, Tuple, List, Sequence
 
 from telegram import (
@@ -64,10 +65,14 @@ class TelegramUtils:
         resize_keyboard=True,
     )
 
-    def __init__(self):
-        telegram_token = os.environ["HTB_TOKEN"]
-        self.telegram_chat_id = os.environ["HTB_CHAT_ID"]
-
+    def __init__(self):  
+        telegram_token = os.environ.get("HTB_TOKEN")
+        self.telegram_chat_id = os.environ.get("HTB_CHAT_ID")
+        
+        if not telegram_token or not self.telegram_chat_id:
+            logging.error("Missing required environment variables: HTB_TOKEN and / or HTB_CHAT_ID")
+            return
+            
         self.telegram_app = Application.builder().token(telegram_token).build()
 
     def add_buttons(self, buttons: List[str], row_index: int = 0) -> None:
@@ -97,10 +102,16 @@ class TelegramUtils:
 
 
     async def send(self, message: str, parse_mode: ODVInput[str] = None):
+        if not self.telegram_app:
+            logging.error("Telegram app not initialized - missing environment variables")
+            return
         await self.telegram_app.bot.send_message(text=message, parse_mode=parse_mode, chat_id=self.telegram_chat_id)
 
 
     def send_and_exit(self, message: str):
+        if not self.telegram_app:
+            logging.error("Telegram app not initialized - missing environment variables")
+            return
         self.telegram_app.job_queue.run_once(
             self.send_message_and_exit,
             when=0.25,
@@ -110,6 +121,9 @@ class TelegramUtils:
         )
 
     def queue_send(self, message: str):
+        if not self.telegram_app:
+            logging.error("Telegram app not initialized - missing environment variables")
+            return
         self.telegram_app.job_queue.run_once(
             self.send_message, when=0.25, job_kwargs={'misfire_grace_time': 60}, data=message, chat_id=self.telegram_chat_id
         )
@@ -129,9 +143,15 @@ class TelegramUtils:
         sys.exit()
 
     def add_handler(self, handler: BaseHandler[Any, CCT, Any], group: int = 0) -> None:
+        if not self.telegram_app:
+            logging.error("Telegram app not initialized - missing environment variables")
+            return
         self.telegram_app.add_handler(handler, group)
 
     def run_once(self, callback: JobCallback[CCT]):
+        if not self.telegram_app:
+            logging.error("Telegram app not initialized - missing environment variables")
+            return
         self.telegram_app.job_queue.run_once(
             callback, when=0.25, job_kwargs={'misfire_grace_time': 60}, chat_id=self.telegram_chat_id
         )
@@ -144,11 +164,18 @@ class TelegramUtils:
             Union[float, datetime.timedelta, datetime.datetime, datetime.time]
         ] = None,
     ) -> None:
+        if not self.telegram_app:
+            logging.error("Telegram app not initialized - missing environment variables")
+            return
         self.telegram_app.job_queue.run_repeating(
             callback, interval=interval, first=first
         )
 
     def run_polling(self, shutdown):
+        if not self.telegram_app:
+            logging.error("Telegram app not initialized - missing environment variables")
+            return
+            
         self.telegram_app.post_shutdown = shutdown
         self.telegram_app.job_queue.run_once(
             self.send_message,
