@@ -344,26 +344,46 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
 def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> List[io.BytesIO]:
     chart_buffers = []
 
-    def find_significant_levels(df: pd.DataFrame, n_levels: int = 3) -> Tuple[List[float], List[float]]:  # Changed default from 2 to 3
-        """Enhanced support and resistance detection with volume profile and price clusters"""
-        highs = df['High'].values
-        lows = df['Low'].values
-        volumes = df['Volume'].values
-        closes = df['Close'].values
-        timestamps = np.arange(len(df))
+    def find_significant_levels(df: pd.DataFrame, n_levels: int = 3) -> Tuple[List[float], List[float]]:
+        """Enhanced support and resistance detection with dynamic lookback period"""
+        current_price = df['Close'].iloc[-1]
         
-        # Dynamic tolerance based on volatility
-        atr: float = df['ATR'].iloc[-1]
-        volatility_scale = np.log1p(df['Close'].std() / df['Close'].mean())
-        base_tolerance = atr * volatility_scale * 0.35
+        # Dynamic lookback based on timeframe
+        timeframe_hours = (df.index[-1] - df.index[-2]).total_seconds() / 3600
+        if timeframe_hours <= 1:  # 1h or less
+            lookback = 200  # About 8 days for 1h
+        elif timeframe_hours <= 4:  # 4h
+            lookback = 180  # About 30 days for 4h
+        else:  # daily
+            lookback = 150  # About 5 months for daily
+            
+        # Use dynamic recent data points
+        recent_df = df.iloc[-lookback:]
+        highs = recent_df['High'].values
+        lows = recent_df['Low'].values
+        volumes = recent_df['Volume'].values
+        closes = recent_df['Close'].values
+        timestamps = np.arange(len(recent_df))
         
-        # Price-volume profile
+        # Dynamic tolerance based on recent volatility
+        atr: float = recent_df['ATR'].iloc[-1]
+        recent_volatility = recent_df['Close'].std() / recent_df['Close'].mean()
+        base_tolerance = atr * np.log1p(recent_volatility) * 0.35
+        
+        # Price range limits based on current price
+        max_deviation = 0.15  # 15% from current price
+        min_price = current_price * (1 - max_deviation)
+        max_price = current_price * (1 + max_deviation)
+        
+        # Price-volume profile with tighter range
         price_steps = 100
         volume_profile = np.zeros(price_steps)
         
         for price, vol in zip(closes, volumes):
-            idx = int((price - df['Low'].min()) / (df['High'].max() - df['Low'].min()) * (price_steps - 1))
-            volume_profile[idx] += vol
+            if min_price <= price <= max_price:
+                idx = int((price - min_price) / (max_price - min_price) * (price_steps - 1))
+                if 0 <= idx < price_steps:
+                    volume_profile[idx] += vol
         
         # Smooth volume profile
         volume_profile = np.convolve(volume_profile, np.ones(5)/5, mode='same')
@@ -372,20 +392,33 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
             clusters: Dict[float, Dict[str, float]] = {}
             
             for idx, price in enumerate(points):
-                # Dynamic tolerance based on price level
-                local_tolerance = base_tolerance * (1 + abs(price - np.mean(points)) / np.std(points))
+                # Skip prices outside our range of interest
+                if not min_price <= price <= max_price:
+                    continue
+                    
+                # Dynamic tolerance based on price level and distance from current price
+                price_deviation = abs(price - current_price) / current_price
+                local_tolerance = base_tolerance * (1 + price_deviation)
+                
                 nearby_prices = [p for p in clusters.keys() if abs(p - price) <= local_tolerance]
+                
+                # Exponential decay for older points
+                recency_weight = np.exp(timestamps[idx] / len(timestamps) - 1)
                 
                 if nearby_prices:
                     main_price = nearby_prices[0]
-                    weight = volumes[idx] * (0.7 + 0.3 * (timestamps[idx] / len(timestamps)))
+                    weight = volumes[idx] * recency_weight
                     clusters[main_price]['weight'] += weight
                     clusters[main_price]['count'] += 1
                     clusters[main_price]['vol_sum'] += volumes[idx]
-                    clusters[main_price]['price'] = (clusters[main_price]['price'] * clusters[main_price]['count'] + price) / (clusters[main_price]['count'] + 1)
+                    # Weighted average favoring recent prices
+                    clusters[main_price]['price'] = (
+                        clusters[main_price]['price'] * 0.7 +
+                        price * 0.3
+                    )
                 else:
                     clusters[price] = {
-                        'weight': volumes[idx] * (0.7 + 0.3 * (timestamps[idx] / len(timestamps))),
+                        'weight': volumes[idx] * recency_weight,
                         'count': 1,
                         'vol_sum': volumes[idx],
                         'price': price
