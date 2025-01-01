@@ -17,96 +17,100 @@ from hyperliquid_events import on_user_events
 from telegram_utils import conversation_cancel, telegram_utils
 from utils import exchange_enabled
 
-class HyperliquidBot:
-    def __init__(self):
-        hyperliquid_utils.info.subscribe(
-            {"type": "userEvents", "user": hyperliquid_utils.address}, on_user_events
-        )
 
-        telegram_utils.add_handler(CommandHandler("start", self.start))
-        telegram_utils.add_handler(CommandHandler(telegram_utils.overview_command, get_overview))
-        telegram_utils.add_handler(CommandHandler("positions", get_positions))
-        telegram_utils.add_handler(CommandHandler("orders", get_open_orders))
-        telegram_utils.add_handler(CommandHandler(telegram_utils.exit_all_command, exit_all_positions))
-        ta_conv_handler = ConversationHandler(
-            entry_points=[CommandHandler(telegram_utils.ta_command, execute_ta)],
+def main() -> None:
+    hyperliquid_utils.info.subscribe(
+        {"type": "userEvents", "user": hyperliquid_utils.address}, on_user_events
+    )
+    
+    telegram_utils.add_handler(CommandHandler("start", start))
+    telegram_utils.add_handler(CommandHandler(telegram_utils.overview_command, get_overview))
+    telegram_utils.add_handler(CommandHandler("positions", get_positions))
+    telegram_utils.add_handler(CommandHandler("orders", get_open_orders))
+    telegram_utils.add_handler(CommandHandler(telegram_utils.exit_all_command, exit_all_positions))
+    ta_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler(telegram_utils.ta_command, execute_ta)],
+        states={
+            SELECTING_COIN_FOR_TA: [CallbackQueryHandler(selected_coin_for_ta)]
+        },
+        fallbacks=[CommandHandler('cancel', conversation_cancel)]
+    )
+    telegram_utils.add_handler(ta_conv_handler)
+
+    telegram_utils.run_repeating(
+        check_profit_percentage,
+        interval=datetime.timedelta(minutes=random.randint(50, 70))
+    )
+
+    if exchange_enabled:
+        strategy_name = os.environ.get("HTB_STRATEGY")
+        if strategy_name is not None:
+            strategy = load_strategy(strategy_name)
+            if strategy:
+                telegram_utils.run_once(strategy.init_strategy)
+            logger.info(f'Exchange order enabled and loaded the strategy "{strategy_name}"')
+
+        next_hour = datetime.datetime.now().replace(minute=1, second=0, microsecond=0) + datetime.timedelta(hours=1)
+        telegram_utils.run_repeating(analyze_candles, interval=datetime.timedelta(hours=1.0), first=next_hour)
+        # telegram_utils.run_once(analyze_candles)
+
+        sell_conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('exit', exit_position)],
             states={
-                SELECTING_COIN_FOR_TA: [CallbackQueryHandler(selected_coin_for_ta)]
+                EXIT_CHOOSING: [CallbackQueryHandler(exit_selected_coin)]
             },
             fallbacks=[CommandHandler('cancel', conversation_cancel)]
         )
-        telegram_utils.add_handler(ta_conv_handler)
+        telegram_utils.add_handler(sell_conv_handler)
 
-        telegram_utils.run_repeating(
-            check_profit_percentage,
-            interval=datetime.timedelta(minutes=random.randint(50, 70))
+        enter_long_conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('long', enter_long)],
+            states={
+                SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+                SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
+                SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
+                SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
+                SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
+            },
+            fallbacks=[CommandHandler('cancel', conversation_cancel)]
         )
+        telegram_utils.add_handler(enter_long_conv_handler)
 
-        if exchange_enabled:
-            strategy_name = os.environ.get("HTB_STRATEGY")
-            if strategy_name is not None:
-                strategy = self.load_strategy(strategy_name)
-                if strategy:
-                    telegram_utils.run_once(strategy.init_strategy)
-                logger.info(f'Exchange order enabled and loaded the strategy "{strategy_name}"')
+        enter_short_conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('short', enter_short)],
+            states={
+                SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+                SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
+                SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
+                SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
+                SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
+            },
+            fallbacks=[CommandHandler('cancel', conversation_cancel)]
+        )
+        telegram_utils.add_handler(enter_short_conv_handler)
 
-            next_hour = datetime.datetime.now().replace(minute=1, second=0, microsecond=0) + datetime.timedelta(hours=1)
-            telegram_utils.run_repeating(analyze_candles, interval=datetime.timedelta(hours=1.0), first=next_hour)
-            # telegram_utils.run_once(analyze_candles)
+    else:
+        logger.info('Exchange orders disabled')
 
-            sell_conv_handler = ConversationHandler(
-                entry_points=[CommandHandler('exit', exit_position)],
-                states={
-                    EXIT_CHOOSING: [CallbackQueryHandler(exit_selected_coin)]
-                },
-                fallbacks=[CommandHandler('cancel', conversation_cancel)]
-            )
-            telegram_utils.add_handler(sell_conv_handler)
+    telegram_utils.run_polling(shutdown)
+    #await telegram_utils.stop()
 
-            enter_long_conv_handler = ConversationHandler(
-                entry_points=[CommandHandler('long', enter_long)],
-                states={
-                    SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
-                    SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
-                    SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
-                    SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
-                    SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
-                },
-                fallbacks=[CommandHandler('cancel', conversation_cancel)]
-            )
-            telegram_utils.add_handler(enter_long_conv_handler)
+def load_strategy(strategy_name):
+    module_name = f"strategies.{strategy_name}.{strategy_name}"
+    try:
+        strategy_module = importlib.import_module(module_name)
+        strategy_class = getattr(strategy_module, strategy_name.title().replace('_', ''))
+        return strategy_class()
+    except (ModuleNotFoundError, AttributeError) as e:
+        logger.critical(e, exc_info=True)
+        return None
 
-            enter_short_conv_handler = ConversationHandler(
-                entry_points=[CommandHandler('short', enter_short)],
-                states={
-                    SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
-                    SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
-                    SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
-                    SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
-                    SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
-                },
-                fallbacks=[CommandHandler('cancel', conversation_cancel)]
-            )
-            telegram_utils.add_handler(enter_short_conv_handler)
+async def start(update, context):
+    await telegram_utils.reply(update, "Welcome! Click the button below to check the account's positions.")
 
-        else:
-            logger.info('Exchange orders disabled')
-
-        telegram_utils.run_polling()
-
-    def load_strategy(self, strategy_name):
-        module_name = f"strategies.{strategy_name}.{strategy_name}"
-        try:
-            strategy_module = importlib.import_module(module_name)
-            strategy_class = getattr(strategy_module, strategy_name.title().replace('_', ''))
-            return strategy_class()
-        except (ModuleNotFoundError, AttributeError) as e:
-            logger.critical(e, exc_info=True)
-            return None
-
-    async def start(self, update, context):
-        await telegram_utils.reply(update, "Welcome! Click the button below to check the account's positions.")
+async def shutdown(application):
+    logger.info("Shutting down Hyperliquid Telegram bot...")
+    os._exit(0)
 
 if __name__ == "__main__":
-    bot = HyperliquidBot()
-    sys.exit()
+    main()

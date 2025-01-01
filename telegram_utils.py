@@ -148,7 +148,8 @@ class TelegramUtils:
             callback, interval=interval, first=first
         )
 
-    def run_polling(self):
+    def run_polling(self, shutdown):
+        self.telegram_app.post_shutdown = shutdown
         self.telegram_app.job_queue.run_once(
             self.send_message,
             when=0.25,
