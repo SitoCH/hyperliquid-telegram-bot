@@ -25,9 +25,14 @@ class HyperliquidUtils:
         user_vault = os.environ.get("HTB_USER_VAULT")
         self.address = user_vault if user_vault is not None else user_wallet
 
-        self.info = Info(constants.MAINNET_API_URL)
-        self.info.ws_manager.ws.on_error = self.on_websocket_error
-        self.info.ws_manager.ws.on_close = self.on_websocket_close
+        self.info = Info(constants.MAINNET_API_URL, True)
+
+    def init_websocket(self):
+        """Initialize WebSocket connection for live data."""
+        self.info = Info(constants.MAINNET_API_URL, False)
+        if hasattr(self.info, 'ws_manager') and self.info.ws_manager:
+            self.info.ws_manager.ws.on_error = self.on_websocket_error
+            self.info.ws_manager.ws.on_close = self.on_websocket_close
 
     def on_websocket_error(self, ws, error):
         logger.error(f"Websocket error: {error}")

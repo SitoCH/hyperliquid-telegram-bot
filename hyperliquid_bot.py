@@ -19,6 +19,8 @@ from utils import exchange_enabled
 
 
 def main() -> None:
+    hyperliquid_utils.init_websocket()
+
     hyperliquid_utils.info.subscribe(
         {"type": "userEvents", "user": hyperliquid_utils.address}, on_user_events
     )
