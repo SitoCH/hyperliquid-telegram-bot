@@ -447,7 +447,11 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
         
         return sorted(resistance_levels), sorted(support_levels)
 
-    def save_to_buffer(df_plot: pd.DataFrame, title: str) -> io.BytesIO:
+    def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta) -> io.BytesIO:
+
+        from_time = df['t'].max() - chart_image_time_delta
+        df_plot = df.loc[df['t'] >= from_time]
+
         buf = io.BytesIO()
         fig, ax = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
 
@@ -473,7 +477,7 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
         macd_hist_colors = df_plot['MACD_Hist'].apply(determine_color).values
 
         # Find significant price levels
-        resistance_levels, support_levels = find_significant_levels(df_plot)
+        resistance_levels, support_levels = find_significant_levels(df)
         
         # Create horizontal lines for each level
         level_lines = []
@@ -520,25 +524,16 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
         return buf
 
     df_15m_plot = df_15m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    from_time = df_15m_plot['t'].max() - pd.Timedelta(hours=36)
-    df_15m_plot = df_15m_plot.loc[df_15m_plot['t'] >= from_time]
+    chart_buffers.append(save_to_buffer(df_15m_plot, f"{coin} - 15M Chart", pd.Timedelta(hours=36)))
 
     df_1h_plot = df_1h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    from_time = df_1h_plot['t'].max() - pd.Timedelta(days=3)
-    df_1h_plot = df_1h_plot.loc[df_1h_plot['t'] >= from_time]
+    chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart", pd.Timedelta(days=3)))
 
     df_4h_plot = df_4h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    from_time = df_4h_plot['t'].max() - pd.Timedelta(days=20)
-    df_4h_plot = df_4h_plot.loc[df_4h_plot['t'] >= from_time]
+    chart_buffers.append(save_to_buffer(df_4h_plot, f"{coin} - 4H Chart", pd.Timedelta(days=20)))
 
     df_1d_plot = df_1d.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    from_time = df_1d_plot['t'].max() - pd.Timedelta(days=180)
-    df_1d_plot = df_1d_plot.loc[df_1d_plot['t'] >= from_time]
-
-    chart_buffers.append(save_to_buffer(df_15m_plot, f"{coin} - 15M Chart"))
-    chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart"))
-    chart_buffers.append(save_to_buffer(df_4h_plot, f"{coin} - 4H Chart"))
-    chart_buffers.append(save_to_buffer(df_1d_plot, f"{coin} - 1D Chart"))
+    chart_buffers.append(save_to_buffer(df_1d_plot, f"{coin} - 1D Chart", pd.Timedelta(days=180)))
 
     return chart_buffers
 
