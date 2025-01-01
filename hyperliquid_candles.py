@@ -617,12 +617,12 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
     vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
 
-    # Safety check for phase columns
-    phase_prev = df['wyckoff_phase'].shift(1).iloc[-1] if 'wyckoff_phase' in df.columns else "unknown"
+    # Correctly get previous values by accessing index -2
+    phase_prev = df['wyckoff_phase'].iloc[-2] if 'wyckoff_phase' in df.columns else "unknown"
     phase = df['wyckoff_phase'].iloc[-1] if 'wyckoff_phase' in df.columns else "unknown"
-    volume_prev = df['wyckoff_volume'].shift(1).iloc[-1] if 'wyckoff_volume' in df.columns else "unknown"
+    volume_prev = df['wyckoff_volume'].iloc[-2] if 'wyckoff_volume' in df.columns else "unknown"
     volume = df['wyckoff_volume'].iloc[-1] if 'wyckoff_volume' in df.columns else "unknown"
-    pattern_prev = df['wyckoff_pattern'].shift(1).iloc[-1] if 'wyckoff_pattern' in df.columns else "unknown"
+    pattern_prev = df['wyckoff_pattern'].iloc[-2] if 'wyckoff_pattern' in df.columns else "unknown"
     pattern = df['wyckoff_pattern'].iloc[-1] if 'wyckoff_pattern' in df.columns else "unknown"
 
     return {
