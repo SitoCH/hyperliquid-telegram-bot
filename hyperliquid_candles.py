@@ -398,39 +398,63 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
         
         # Score and filter levels
         def score_level(cluster: Dict[str, float], max_vol: float) -> float:
-            # Volume importance (35%)
-            volume_score = (cluster['vol_sum'] / max_vol) * 0.35
+            """
+            Score a price level based on multiple weighted factors.
+            Returns a score between 0 and 1.
+            """
+            current_price = df['Close'].iloc[-1]
+            
+            # Volume importance (30%)
+            volume_ratio = cluster['vol_sum'] / max_vol
+            volume_score = min(volume_ratio * 1.5, 1.0) * 0.30
             
             # Touch count importance (25%)
-            # Logarithmic scaling to reduce the impact of very high touch counts
-            touch_score = np.log1p(cluster['count']) / np.log1p(10) * 0.25  # cap at 10 touches
+            # Logarithmic scaling with diminishing returns after 5 touches
+            touch_count = cluster['count']
+            touch_score = (1 - 1/(1 + np.log1p(touch_count))) * 0.25
             
             # Recency weight (20%)
             # Higher weight for more recent activity
-            weight_score = (cluster['weight'] / max(c['weight'] for c in resistance_clusters.values())) * 0.20
+            max_weight = max(c['weight'] for c in resistance_clusters.values())
+            recency_score = (cluster['weight'] / max_weight) * 0.20
             
-            # Price deviation from current price (10%)
-            # Lower score for levels too far from current price
-            price_deviation = abs(cluster['price'] - df['Close'].iloc[-1]) / df['Close'].iloc[-1]
-            proximity_score = (1 - min(price_deviation, 0.1) / 0.1) * 0.10  # max 10% deviation
+            # Price proximity (15%)
+            # Exponential decay for prices further from current price
+            price_deviation = abs(cluster['price'] - current_price) / current_price
+            proximity_score = np.exp(-5 * price_deviation) * 0.15
             
             # Cluster density (10%)
-            # Higher score for tighter clusters
-            if cluster['count'] > 1:
-                density = cluster['vol_sum'] / (cluster['count'] * price_deviation + 1e-8)
-                density_score = min(density / (max_vol / 10), 1.0) * 0.10
+            # Tighter clusters get higher scores
+            if touch_count > 1:
+                price_range = price_deviation * current_price
+                density = cluster['vol_sum'] / (price_range * touch_count + 1e-8)
+                density_score = min(density / (max_vol * 0.1), 1.0) * 0.10
             else:
                 density_score = 0
-                
-            total_score = volume_score + touch_score + weight_score + proximity_score + density_score
             
-            # Additional multipliers for special conditions
-            if cluster['count'] >= 3 and cluster['vol_sum'] > max_vol * 0.1:
-                total_score *= 1.2  # 20% bonus for strong levels
-            if price_deviation < 0.02:  # Within 2% of current price
-                total_score *= 1.1  # 10% bonus for nearby levels
-                
-            return total_score
+            # Calculate base score
+            base_score = volume_score + touch_score + recency_score + proximity_score + density_score
+            
+            # Multipliers for special conditions
+            multiplier = 1.0
+            
+            # Strong level bonus (multiple touches with high volume)
+            if touch_count >= 3 and volume_ratio > 0.15:
+                multiplier *= 1.25
+            
+            # Recent activity bonus
+            if cluster['weight'] > max_weight * 0.8:
+                multiplier *= 1.15
+            
+            # Near current price bonus
+            if price_deviation < 0.01:  # Within 1% of current price
+                multiplier *= 1.2
+            
+            # Penalize very distant levels
+            if price_deviation > 0.1:  # More than 10% away
+                multiplier *= 0.8
+            
+            return min(base_score * multiplier, 1.0)
 
         max_vol = max(volumes.sum(), 1)
         
