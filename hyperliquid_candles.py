@@ -474,17 +474,25 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
     def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta) -> io.BytesIO:
 
         from_time = df['t'].max() - chart_image_time_delta
-        df_plot = df.loc[df['t'] >= from_time]
+
+        df_plot = df.loc[df['t'] >= from_time].copy()
 
         buf = io.BytesIO()
         fig, ax = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
 
-        df_plot['SuperTrend_Green'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] > row['SuperTrend'] else float('nan'), axis=1)
-        df_plot['SuperTrend_Red'] = df_plot.apply(lambda row: row['SuperTrend'] if row['Close'] <= row['SuperTrend'] else float('nan'), axis=1)
+        df_plot.loc[:, 'SuperTrend_Green'] = df_plot.apply(
+            lambda row: row['SuperTrend'] if row['Close'] > row['SuperTrend'] else float('nan'), 
+            axis=1
+        )
+        df_plot.loc[:, 'SuperTrend_Red'] = df_plot.apply(
+            lambda row: row['SuperTrend'] if row['Close'] <= row['SuperTrend'] else float('nan'), 
+            axis=1
+        )
 
         ha_df = heikin_ashi(df_plot)
 
-        df_plot['MACD_Hist'] = df_plot['MACD_Hist'].fillna(0)
+        df_plot.loc[:, 'MACD_Hist'] = df_plot['MACD_Hist'].fillna(0)
+        
         strong_positive_threshold = max(df_plot['MACD_Hist'].max() * 0.4, 0.000001)
         strong_negative_threshold = min(df_plot['MACD_Hist'].min() * 0.4, -0.000001)
 
