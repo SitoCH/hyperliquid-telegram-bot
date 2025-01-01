@@ -4,6 +4,7 @@ from collections import defaultdict
 from hyperliquid_orders import (
     get_orders_from_hyperliquid,
     get_sl_tp_orders,
+    get_open_orders,
     format_orders,
     insert_order
 )
@@ -35,6 +36,49 @@ async def test_get_orders_from_hyperliquid(mock_hyperliquid_utils):
         assert "Take Profit Market" in result["BTC"]
         assert len(result["BTC"]["Stop Market"]) == 1
         assert len(result["BTC"]["Take Profit Market"]) == 1
+
+@pytest.mark.asyncio
+async def test_get_open_orders_with_none_liquidation():
+    update = MagicMock()
+    context = MagicMock()
+    
+    mock_user_state = {
+        "assetPositions": [{
+            "position": {
+                "coin": "BTC",
+                "szi": "1.0",
+                "entryPx": "40000",
+                "liquidationPx": None,
+                "leverage": {"value": "10"}
+            }
+        }]
+    }
+    
+    mock_all_mids = {"BTC": "41000"}
+    
+    with patch('hyperliquid_orders.hyperliquid_utils') as mock_hl_utils, \
+         patch('hyperliquid_orders.telegram_utils') as mock_tg_utils:
+        
+        # Configure mocks
+        mock_hl_utils.info.frontend_open_orders.return_value = []
+        mock_hl_utils.info.all_mids.return_value = mock_all_mids
+        mock_hl_utils.info.user_state.return_value = mock_user_state
+        mock_hl_utils.address = "test_address"
+        mock_tg_utils.reply = AsyncMock()
+        
+        # Execute the function
+        await get_open_orders(update, context)
+        
+        # Verify the call to reply
+        assert mock_tg_utils.reply.called
+        sent_message = mock_tg_utils.reply.call_args[0][1]
+        
+        # Verify contents
+        assert "BTC" in sent_message
+        assert "Entry" in sent_message
+        assert "Mode: long" in sent_message
+        assert "10x" in sent_message
+        assert "Liq." not in sent_message  # Verify liquidation price is not included
 
 def test_get_sl_tp_orders():
     order_types = {

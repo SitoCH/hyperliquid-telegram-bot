@@ -62,13 +62,15 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 table_orders = tp_orders + [["Current", all_mids[coin], ""]] + sl_orders
 
                 entry_px = float(position['entryPx'])
-                liquidation_px = float(position['liquidationPx'])
 
                 entry_distance = (entry_px / mid - 1) * 100
-                liq_distance = (liquidation_px / mid - 1) * 100
 
                 table_orders = insert_order(table_orders, ["Entry", entry_px, f"{fmt(entry_distance)}%"], is_long)
-                table_orders = insert_order(table_orders, ["Liq.", liquidation_px, f"{fmt(liq_distance)}%"], is_long)
+                
+                if position['liquidationPx'] is not None:
+                    liquidation_px = float(position['liquidationPx'])
+                    liq_distance = (liquidation_px / mid - 1) * 100
+                    table_orders = insert_order(table_orders, ["Liq.", liquidation_px, f"{fmt(liq_distance)}%"], is_long)
 
                 if not is_long:
                     table_orders.reverse()
@@ -87,6 +89,7 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
     except Exception as e:
+        logger.error(f"Failed to check orders: {str(e)}", exc_info=True)
         await telegram_utils.reply(update, f"Failed to check orders: {str(e)}")
 
 
