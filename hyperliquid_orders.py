@@ -25,6 +25,50 @@ def get_sl_tp_orders(order_types, is_long: bool):
     return sl_raw_orders, tp_raw_orders
 
 
+def format_position_info(position, mid):
+    is_long = float(position['szi']) > 0
+    entry_px = float(position['entryPx'])
+    entry_distance = (entry_px / mid - 1) * 100
+    
+    info = {
+        'is_long': is_long,
+        'mode': f"Mode: {'long' if is_long else 'short'}",
+        'leverage': f"Leverage: {position['leverage']['value']}x",
+        'entry': ["Entry", entry_px, f"{fmt(entry_distance)}%"]
+    }
+    
+    if position['liquidationPx'] is not None:
+        liquidation_px = float(position['liquidationPx'])
+        liq_distance = (liquidation_px / mid - 1) * 100
+        info['liquidation'] = ["Liq.", liquidation_px, f"{fmt(liq_distance)}%"]
+    
+    return info
+
+def create_price_table(mid, position_info, order_types):
+    is_long = position_info['is_long']
+    sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, is_long)
+    
+    percentage_calc = lambda triggerPx, mid: (triggerPx / mid - 1) * 100 if is_long else (1 - triggerPx / mid) * 100
+    
+    tp_orders = format_orders(tp_raw_orders, mid, percentage_calc)
+    sl_orders = format_orders(sl_raw_orders, mid, percentage_calc)
+    
+    table_orders = tp_orders + [["Current", mid, ""]] + sl_orders
+    table_orders = insert_order(table_orders, position_info['entry'], is_long)
+    
+    if 'liquidation' in position_info:
+        table_orders = insert_order(table_orders, position_info['liquidation'], is_long)
+    
+    if not is_long:
+        table_orders.reverse()
+    
+    return tabulate(
+        table_orders,
+        headers=["Size", "Trigger price", "Distance"],
+        tablefmt=simple_separated_format(' '),
+        colalign=("right", "right", "right")
+    )
+
 async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         grouped_data = await get_orders_from_hyperliquid()
@@ -32,14 +76,12 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
         message_lines = []
 
-        # Get all coins with positions
         coins_with_positions = {
             pos['position']['coin']: pos['position']
             for pos in user_state.get("assetPositions", [])
             if float(pos['position']['szi']) != 0
         }
 
-        # Combine coins from orders and positions
         all_coins = set(list(grouped_data.keys()) + list(coins_with_positions.keys()))
 
         for coin in sorted(all_coins):
@@ -47,40 +89,13 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             mid = float(all_mids[coin])
             position = coins_with_positions.get(coin)
             
-            # If we have a position for this coin
             if position:
-                is_long = float(position['szi']) > 0
-                message_lines.append(f"Mode: {'long' if is_long else 'short'}")
-                message_lines.append(f"Leverage: {position['leverage']['value']}x")
-
-                order_types = grouped_data.get(coin, {})
-                sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, is_long)
-
-                tp_orders = format_orders(tp_raw_orders, mid, percentage_format=lambda triggerPx, mid: (triggerPx / mid - 1) * 100)
-                sl_orders = format_orders(sl_raw_orders, mid, percentage_format=lambda triggerPx, mid: (1 - triggerPx / mid) * 100)
-
-                table_orders = tp_orders + [["Current", all_mids[coin], ""]] + sl_orders
-
-                entry_px = float(position['entryPx'])
-
-                entry_distance = (entry_px / mid - 1) * 100
-
-                table_orders = insert_order(table_orders, ["Entry", entry_px, f"{fmt(entry_distance)}%"], is_long)
+                position_info = format_position_info(position, mid)
+                message_lines.append(position_info['mode'])
+                message_lines.append(position_info['leverage'])
                 
-                if position['liquidationPx'] is not None:
-                    liquidation_px = float(position['liquidationPx'])
-                    liq_distance = (liquidation_px / mid - 1) * 100
-                    table_orders = insert_order(table_orders, ["Liq.", liquidation_px, f"{fmt(liq_distance)}%"], is_long)
-
-                if not is_long:
-                    table_orders.reverse()
-
-                table = tabulate(
-                    table_orders,
-                    headers=["Size", "Trigger price", "Distance"],
-                    tablefmt=simple_separated_format(' '),
-                    colalign=("right", "right", "right")
-                )
+                order_types = grouped_data.get(coin, {})
+                table = create_price_table(mid, position_info, order_types)
                 message_lines.append(f"<pre>{table}</pre>")
 
         if not message_lines:
