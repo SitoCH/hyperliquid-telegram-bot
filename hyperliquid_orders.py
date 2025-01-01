@@ -28,7 +28,7 @@ def get_sl_tp_orders(order_types, is_long: bool):
 def format_position_info(position, mid):
     is_long = float(position['szi']) > 0
     entry_px = float(position['entryPx'])
-    entry_distance = (entry_px / mid - 1) * 100
+    entry_distance = (entry_px / mid - 1) * (100 if is_long else -100)
     
     info = {
         'is_long': is_long,
@@ -39,7 +39,7 @@ def format_position_info(position, mid):
     
     if position['liquidationPx'] is not None:
         liquidation_px = float(position['liquidationPx'])
-        liq_distance = (liquidation_px / mid - 1) * 100
+        liq_distance = (liquidation_px / mid - 1) * (100 if is_long else -100)
         info['liquidation'] = ["Liq.", liquidation_px, f"{fmt(liq_distance)}%"]
     
     return info
@@ -48,7 +48,9 @@ def create_price_table(mid, position_info, order_types):
     is_long = position_info['is_long']
     sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, is_long)
     
-    percentage_calc = lambda triggerPx, mid: (triggerPx / mid - 1) * 100 if is_long else (1 - triggerPx / mid) * 100
+    def percentage_calc(triggerPx, mid):
+        price_ratio = float(triggerPx) / mid - 1
+        return price_ratio * 100 if is_long else -price_ratio * 100
     
     tp_orders = format_orders(tp_raw_orders, mid, percentage_calc)
     sl_orders = format_orders(sl_raw_orders, mid, percentage_calc)
