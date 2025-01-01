@@ -64,7 +64,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
         
     for coin in coins_to_analyze:
         await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
-        time.sleep(10)
+        time.sleep(5)
 
 async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
     """Get the set of coins to analyze based on configuration."""
