@@ -7,7 +7,7 @@ FROM ghcr.io/astral-sh/uv:latest AS uv
 FROM base AS builder
 WORKDIR /app
 
-COPY --from=uv /usr/local/bin/uv /usr/local/bin/uv
+COPY --from=uv /uv /bin/uv
 COPY pyproject.toml uv.lock ./
 
 RUN apt-get update && \
