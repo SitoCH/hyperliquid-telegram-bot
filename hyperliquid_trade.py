@@ -43,6 +43,13 @@ async def selected_amount(update: Update, context: Union[CallbackContext, Contex
         return ConversationHandler.END
 
     coin = context.user_data.get("selected_coin", "")
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+    current_leverage = hyperliquid_utils.get_leverage(user_state, coin)
+    if current_leverage is not None:
+        context.user_data["leverage"] = int(current_leverage)
+        await send_stop_loss_suggestions(query, context)
+        return SELECTING_STOP_LOSS
+
     try:
         meta: List[Dict[str, Any]] = hyperliquid_utils.info.meta()
         asset_info_map = {
@@ -87,6 +94,11 @@ async def selected_leverage(update: Update, context: Union[CallbackContext, Cont
         await query.edit_message_text("Invalid leverage.")
         return ConversationHandler.END
 
+    await send_stop_loss_suggestions(query, context)
+    return SELECTING_STOP_LOSS
+
+
+async def send_stop_loss_suggestions(query: Any, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> None:
     coin = context.user_data["selected_coin"]
     mid = float(hyperliquid_utils.info.all_mids()[coin])
     is_long = context.user_data["enter_mode"] == "long"
@@ -100,11 +112,10 @@ async def selected_leverage(update: Update, context: Union[CallbackContext, Cont
         f"Current market price: {fmt_price(mid)} USDC\n"
         f"Suggested stop losses:\n" + 
         "\n".join([f"• {sugg}" for sugg in suggestions]) +
-        "\n\nEnter your desired stop loss price in USDC:"
+        "\n\nEnter your desired stop loss price in USDC, or 'cancel' to stop:"
     )
     
     await query.edit_message_text(message)
-    return SELECTING_STOP_LOSS
 
 
 async def selected_stop_loss(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
@@ -153,7 +164,7 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
         f"Current market price: {fmt_price(mid)} USDC\n"
         f"Suggested take profits:\n" + 
         "\n".join(suggestions) +
-        "\n\nEnter your desired take profit price in USDC:"
+        "\n\nEnter your desired take profit price in USDC, or 'cancel' to stop:"
     )
     
     await update.message.reply_text(message)

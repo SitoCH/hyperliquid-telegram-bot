@@ -94,25 +94,11 @@ class HyperliquidUtils:
         return float(position['returnOnEquity']) if position else 0.0
 
 
-    def get_leverage(self, user_state, selected_coin) -> int:
+    def get_leverage(self, user_state, selected_coin) -> int | None:
         position = self._get_asset_position(user_state, selected_coin)
         if position:
             return int(position['leverage']['value'])
-
-        meta = self.info.meta()
-        asset_info = next(
-            (info for info in meta.get("universe", []) if info["name"] == selected_coin),
-            None
-        )
-        if asset_info:
-            max_leverage = int(asset_info["maxLeverage"])
-            if max_leverage > 20:
-                return 20
-            if max_leverage > 10:
-                return 15
-            if max_leverage > 5:
-                return 8
-        return 5
+        return None
 
 
     def get_coins_with_open_positions(self):
