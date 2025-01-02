@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 from datetime import datetime, timezone
-from technical_analysis.hyperliquid_candles import find_significant_levels
+from technical_analysis.significant_levels import find_significant_levels
 
 def test_find_significant_levels_with_single_data_point():
     # Create a DataFrame with just one data point
