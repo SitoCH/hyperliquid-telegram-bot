@@ -15,18 +15,16 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
         return
 
     # Process last two periods
-    for i in [-2, -1]:  # Process second-to-last and last period
-        # Use 50 candles up to the current period for calculation
+    for i in [-2, -1]:
         end_idx = i if i == -1 else -2
-        analysis_window = min(50, len(df[:end_idx]) - 1)
+        analysis_window = min(75, len(df[:end_idx]) - 1)
         recent_df = df[:end_idx].iloc[-analysis_window:]
         
-        # ...existing code for calculating indicators...
-        volume_sma = recent_df['v'].rolling(window=20).mean()
-        price_sma = recent_df['c'].rolling(window=20).mean()
-        price_std = recent_df['c'].rolling(window=20).std()
-        momentum = recent_df['c'].pct_change(periods=5).rolling(window=10).mean()
-        volume_trend = recent_df['v'].pct_change().rolling(window=10).mean()
+        volume_sma = recent_df['v'].rolling(window=30).mean()
+        price_sma = recent_df['c'].rolling(window=30).mean()
+        price_std = recent_df['c'].rolling(window=30).std()
+        momentum = recent_df['c'].pct_change(periods=7).rolling(window=15).mean()
+        volume_trend = recent_df['v'].pct_change().rolling(window=15).mean()
         
         # Current market conditions
         curr_price = recent_df['c'].iloc[-1]
@@ -40,14 +38,12 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
         price_strength = (curr_price - avg_price) / (price_std_last + 1e-8)
         momentum_strength = momentum.iloc[-1] * 100
 
-        # ...existing thresholds...
-        strong_dev_threshold = 1.2 
-        neutral_zone_threshold = 0.4
-        momentum_threshold = 0.8
+        strong_dev_threshold = 1.5 
+        neutral_zone_threshold = 0.5
+        momentum_threshold = 0.6
 
         uncertain_phase = False
         
-        # ...existing phase detection logic...
         if price_strength > strong_dev_threshold:
             if momentum_strength < -momentum_threshold and is_high_volume:
                 phase = "dist."
