@@ -367,7 +367,7 @@ class BaseStrategy(ABC):
                 update, "\n".join(message), parse_mode=ParseMode.HTML
             )
         except Exception as e:
-            logger.error(f"Error displaying crypto info: {str(e)}")
+            logger.error(f"Error displaying crypto info: {str(e)}", exc_info=True)
 
     async def analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Analyze current portfolio state and display information."""
