@@ -485,6 +485,8 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
     volume = df['wyckoff_volume'].iloc[-1] if 'wyckoff_volume' in df.columns else "unknown"
     pattern_prev = df['wyckoff_pattern'].iloc[-2] if 'wyckoff_pattern' in df.columns else "unknown"
     pattern = df['wyckoff_pattern'].iloc[-1] if 'wyckoff_pattern' in df.columns else "unknown"
+    effort_vs_result_prev = df['effort_vs_result'].iloc[-2] if 'effort_vs_result' in df.columns else "unknown"
+    effort_vs_result = df['effort_vs_result'].iloc[-1] if 'effort_vs_result' in df.columns else "unknown"
 
     return {
         "supertrend_prev": supertrend_prev,
@@ -500,7 +502,9 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
         "wyckoff_volume_prev": volume_prev,
         "wyckoff_volume": volume,
         "wyckoff_pattern_prev": pattern_prev,
-        "wyckoff_pattern": pattern
+        "wyckoff_pattern": pattern,
+        "wyckoff_effort_vs_result_prev": effort_vs_result_prev,
+        "wyckoff_effort_vs_result": effort_vs_result
     }
 
 
@@ -524,7 +528,9 @@ def format_table(results: Dict[str, Any]) -> str:
         ["Volume", "Prev.", results["wyckoff_volume_prev"]],
         ["","Cur.", results["wyckoff_volume"]],
         ["Pattern", "Prev.", results["wyckoff_pattern_prev"]],
-        ["","Cur.", results["wyckoff_pattern"]]
+        ["","Cur.", results["wyckoff_pattern"]],
+        ["Effort / result", "Prev.", results["wyckoff_effort_vs_result_prev"]],
+        ["","Cur.", results["wyckoff_effort_vs_result"]]
     ]
     
     return tabulate(
