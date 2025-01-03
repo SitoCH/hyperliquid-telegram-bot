@@ -47,7 +47,7 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
         return
 
     # Process last two periods
-    for i in [-2, -1]:
+    for i in [-3, -2, -1]:
         end_idx = i if i == -1 else -2
         full_df = df[:end_idx]
         short_term_window = min(MIN_PERIODS, len(full_df) - 1)

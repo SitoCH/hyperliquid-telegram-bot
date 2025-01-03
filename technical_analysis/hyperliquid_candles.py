@@ -123,20 +123,30 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         df_1d = prepare_dataframe(candles_1d, local_tz)
 
         mid = float(all_mids[coin])
-        # Apply indicators but only store flip results for 1h and 4h
-        apply_indicators(df_15m, mid)  # 15m indicators but no flip detection
-        st_flip_1h, wyckoff_flip_1h = apply_indicators(df_1h, mid)
-        st_flip_4h, wyckoff_flip_4h = apply_indicators(df_4h, mid)
-        apply_indicators(df_1d, mid)  # 1d indicators but no flip detection
+        # Apply indicators
+        apply_indicators(df_15m, mid)
+        _, wyckoff_flip_1h = apply_indicators(df_1h, mid)
+        _, wyckoff_flip_4h = apply_indicators(df_4h, mid)
+        apply_indicators(df_1d, mid)
         
         # Check if 4h candle is recent enough
         is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
         
-        # Determine if we should notify based on either SuperTrend or Wyckoff flips
-        flip_on_1h = st_flip_1h or wyckoff_flip_1h
-        flip_on_4h = (st_flip_4h or wyckoff_flip_4h) and is_4h_recent
+        # Check if 1h and 4h Wyckoff phases are coherent
+        wyckoff_coherent = (
+            'wyckoff_phase' in df_1h.columns and 
+            'wyckoff_phase' in df_4h.columns and 
+            df_1h['wyckoff_phase'].iloc[-1] == df_4h['wyckoff_phase'].iloc[-1] and
+            not df_1h['uncertain_phase'].iloc[-1] and 
+            not df_4h['uncertain_phase'].iloc[-1]
+        )
+        
+        # Only notify if we have coherent Wyckoff signals on both timeframes
+        should_notify = (wyckoff_coherent and 
+                        is_4h_recent and 
+                        (wyckoff_flip_1h or wyckoff_flip_4h))
 
-        if always_notify or flip_on_1h or flip_on_4h:
+        if always_notify or should_notify:
             await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin)
     except Exception as e:
         logger.critical(e, exc_info=True)
@@ -230,11 +240,40 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
 
     detect_wyckoff_phase(df)
     
-    # Add safety check for Wyckoff flip detection
-    if len(df['wyckoff_phase']) >= 2:
+    # Enhanced Wyckoff flip detection
+    if len(df['wyckoff_phase']) >= 3:  # Check at least 3 periods for confirmation
+        current_phase = df['wyckoff_phase'].iloc[-1]
+        prev_phase = df['wyckoff_phase'].iloc[-2]
+        older_phase = df['wyckoff_phase'].iloc[-3]
+        
+        # Define significant phase transitions
+        bullish_transitions = {
+            ('acc.', 'markup'): True,  # Accumulation to Markup
+            ('rang.', 'acc.'): True,   # Range to Accumulation
+            ('markdown', 'acc.'): True  # Markdown to Accumulation
+        }
+        
+        bearish_transitions = {
+            ('dist.', 'markdown'): True,  # Distribution to Markdown
+            ('rang.', 'dist.'): True,     # Range to Distribution
+            ('markup', 'dist.'): True     # Markup to Distribution
+        }
+        
+        # Check for confirmed phase change
         wyckoff_flip = (
-            df['wyckoff_phase'].iloc[-1] != df['wyckoff_phase'].iloc[-2] and
-            not df['uncertain_phase'].iloc[-1]
+            # Phase has changed
+            current_phase != prev_phase and 
+            # Not uncertain about current phase
+            not df['uncertain_phase'].iloc[-1] and 
+            # Previous phase was stable
+            prev_phase == older_phase and
+            # Volume confirms the move
+            df['wyckoff_volume'].iloc[-1] == 'high' and
+            # Pattern shows trending behavior
+            df['wyckoff_pattern'].iloc[-1] == 'trending' and
+            # Check if it's a significant transition
+            ((prev_phase, current_phase) in bullish_transitions or 
+             (prev_phase, current_phase) in bearish_transitions)
         )
     else:
         wyckoff_flip = False
@@ -467,23 +506,30 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
 
 def format_table(results: Dict[str, Any]) -> str:
     table_data = [
-        ["Supertrend: ", "", ""],
-        ["Trend ", results["supertrend_trend_prev"], results["supertrend_trend"]],
-        ["Value ", fmt_price(results["supertrend_prev"]), fmt_price(results["supertrend"])],
+        ["Supertrend:", "", ""],
+        ["Trend", "Prev.", results["supertrend_trend_prev"]],
+        ["","Cur.", results["supertrend_trend"]],
+        ["Value ", "Prev.", fmt_price(results["supertrend_prev"])],
+        ["", "Cur.", fmt_price(results["supertrend"])],
         ["", "", ""],
         ["VWAP: ", "", ""],
-        ["Trend ", results["vwap_trend_prev"], results["vwap_trend"]],
-        ["Value ", fmt_price(results["vwap_prev"]), fmt_price(results["vwap"])],
+        ["Trend", "Prev.", results["vwap_trend_prev"]],
+        ["","Cur.", results["vwap_trend"]],
+        ["Value ", "Prev.", fmt_price(results["vwap_prev"])],
+        ["", "Cur.", fmt_price(results["vwap"])],
         ["", "", ""],
         ["Wyckoff: ", "", ""],
-        ["Phase ", results["wyckoff_phase_prev"], results["wyckoff_phase"]],
-        ["Volume ", results["wyckoff_volume_prev"], results["wyckoff_volume"]],
-        ["Pattern ", results["wyckoff_pattern_prev"], results["wyckoff_pattern"]]
+        ["Phase", "Prev.", results["wyckoff_phase_prev"]],
+        ["","Cur.", results["wyckoff_phase"]],
+        ["Volume", "Prev.", results["wyckoff_volume_prev"]],
+        ["","Cur.", results["wyckoff_volume"]],
+        ["Pattern", "Prev.", results["wyckoff_pattern_prev"]],
+        ["","Cur.", results["wyckoff_pattern"]]
     ]
     
     return tabulate(
         table_data,
-        headers=["", "Previous", "Current"],
+        headers=["","", ""],
         tablefmt=simple_separated_format(" "),
         colalign=("right", "right", "right"),
     )
