@@ -111,40 +111,44 @@ def score_level(
     
     return min(base_score * multiplier, 1.0)
 
-def find_significant_levels(df: pd.DataFrame, n_levels: int = 3) -> Tuple[List[float], List[float]]:
-    """Enhanced support and resistance detection using scipy for better precision"""
-    # Return empty lists if there's insufficient data
+def find_significant_levels(df: pd.DataFrame, n_levels: int = 4, min_score: float = 0.2) -> Tuple[List[float], List[float]]:
+    """Enhanced support and resistance detection with adaptive parameters"""
     if len(df) < 2:
         return [], []
         
     current_price = df['Close'].iloc[-1]
     
-    # Dynamic lookback based on timeframe
+    # Adaptive lookback based on volatility
+    volatility = df['Close'].pct_change().std()
+    base_lookback = {
+        1: 200,   # 1h or less
+        4: 180,   # 4h
+        24: 150   # daily
+    }
     timeframe_hours = (df.index[-1] - df.index[-2]).total_seconds() / 3600
-    if timeframe_hours <= 1:  # 1h or less
-        lookback = 200  # About 8 days for 1h
-    elif timeframe_hours <= 4:  # 4h
-        lookback = 180  # About 30 days for 4h
-    else:  # daily
-        lookback = 150  # About 5 months for daily
+    lookback = int(base_lookback.get(
+        min(k for k in base_lookback.keys() if timeframe_hours <= k), 
+        150
+    ) * (1 + volatility * 2))  # Increase lookback in high volatility
         
-    # Use dynamic recent data points
-    recent_df = df.iloc[-lookback:]
+    # Use recent data with overlap for better edge detection
+    recent_df = df.iloc[-min(lookback, len(df)):]
+
     highs = recent_df['High'].values
     lows = recent_df['Low'].values
     volumes = recent_df['Volume'].values
     closes = recent_df['Close'].values
     timestamps = np.arange(len(recent_df))
     
-    # Dynamic tolerance based on recent volatility
-    atr: float = recent_df['ATR'].iloc[-1]
-    recent_volatility = recent_df['Close'].std() / recent_df['Close'].mean()
-    base_tolerance = atr * np.log1p(recent_volatility) * 0.35
-    
-    # Price range limits based on current price
-    max_deviation = 0.15  # 15% from current price
+    # Adaptive price range based on volatility
+    max_deviation = min(0.15 * (1 + volatility), 0.25)  # Cap at 25%
     min_price = current_price * (1 - max_deviation)
     max_price = current_price * (1 + max_deviation)
+    
+    # Adaptive base tolerance
+    atr: float = recent_df['ATR'].iloc[-1]
+    recent_volatility = recent_df['Close'].std() / recent_df['Close'].mean()
+    base_tolerance = atr * np.log1p(recent_volatility) * (0.3 + volatility * 0.2)
     
     # Price-volume profile with tighter range
     price_steps = 100
@@ -170,15 +174,28 @@ def find_significant_levels(df: pd.DataFrame, n_levels: int = 3) -> Tuple[List[f
     
     max_vol = max(volumes.sum(), 1)
     
-    resistance_levels = sorted(
-        [cluster['price'] for cluster in resistance_clusters.values()
-         if score_level(cluster, max_vol, current_price, resistance_clusters) > 0.2],  # Increased threshold
-        reverse=True
-    )[:n_levels]
+    # Filter levels with minimum spacing
+    def filter_nearby_levels(levels: List[float], min_distance: float) -> List[float]:
+        if not levels:
+            return levels
+        filtered = [levels[0]]
+        for level in levels[1:]:
+            if min(abs(level - f) / f for f in filtered) > min_distance:
+                filtered.append(level)
+        return filtered[:n_levels]
     
-    support_levels = sorted(
+    min_spacing = base_tolerance * 0.5
+    
+    resistance_levels = filter_nearby_levels(
+        [cluster['price'] for cluster in resistance_clusters.values()
+         if score_level(cluster, max_vol, current_price, resistance_clusters) > min_score],
+        min_spacing
+    )
+    
+    support_levels = filter_nearby_levels(
         [cluster['price'] for cluster in support_clusters.values()
-         if score_level(cluster, max_vol, current_price, resistance_clusters) > 0.2],  # Increased threshold
-    )[:n_levels]
+         if score_level(cluster, max_vol, current_price, resistance_clusters) > min_score],
+        min_spacing
+    )
     
     return sorted(resistance_levels), sorted(support_levels)
