@@ -1,6 +1,7 @@
 *
 !*.py
 !strategies/**/*.py
+!technical_analysis/**/*.py
 !pyproject.toml
 !uv.lock
 **/__pycache__/
