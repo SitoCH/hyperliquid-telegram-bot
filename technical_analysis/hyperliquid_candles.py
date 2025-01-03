@@ -432,6 +432,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
     # Send 1h data and chart
     await telegram_utils.send(
         "1h indicators:\n"
+        f"{results_1h['wyckoff_description']}\n"
         f"<pre>{table_1h}</pre>",
         parse_mode=ParseMode.HTML
     )
@@ -440,6 +441,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
     # Send 4h data and chart
     await telegram_utils.send(
         "4h indicators:\n"
+        f"{results_4h['wyckoff_description']}\n"
         f"<pre>{table_4h}</pre>",
         parse_mode=ParseMode.HTML
     )
@@ -448,6 +450,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
     # Send 1d data and chart
     await telegram_utils.send(
         "1d indicators:\n"
+        f"{results_1d['wyckoff_description']}\n"
         f"<pre>{table_1d}</pre>",
         parse_mode=ParseMode.HTML
     )
@@ -504,7 +507,8 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
         "wyckoff_pattern_prev": pattern_prev,
         "wyckoff_pattern": pattern,
         "wyckoff_effort_vs_result_prev": effort_vs_result_prev,
-        "wyckoff_effort_vs_result": effort_vs_result
+        "wyckoff_effort_vs_result": effort_vs_result,
+        "wyckoff_description": df['wyckoff_description'].iloc[-1] if 'wyckoff_description' in df.columns else "unknown"
     }
 
 
