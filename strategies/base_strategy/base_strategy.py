@@ -166,18 +166,22 @@ class BaseStrategy(ABC):
                     market_cap=coin["market_cap"],
                     price_change_1y=coin.get("price_change_percentage_1y_in_currency")
                 ))
-        
-        # Process other positions as before
+
         other_positions = []
         for symbol, value in position_values.items():
             if symbol not in top_crypto_symbols:
                 coin_data = next((c for c in cryptos if c["symbol"] == symbol), None)
+                market_cap = coin_data["market_cap"] if coin_data else None
+                price_change_1y = (
+                    coin_data.get("price_change_percentage_1y_in_currency")
+                    if coin_data else None
+                )
                 other_positions.append(PositionData(
                     name=coin_data["name"] if coin_data else symbol,
                     symbol=symbol,
                     current_value=value,
-                    market_cap=coin_data["market_cap"] if coin_data else None,
-                    price_change_1y=coin_data.get("price_change_percentage_1y_in_currency")
+                    market_cap=market_cap,
+                    price_change_1y=price_change_1y
                 ))
 
         usdc_difference = usdc_target_balance - usdc_balance
