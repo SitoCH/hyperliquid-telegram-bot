@@ -22,10 +22,10 @@ from utils import OPERATION_CANCELLED, fmt, fmt_price
 from technical_analysis.significant_levels import find_significant_levels
 from technical_analysis.wyckoff import detect_wyckoff_phase, detect_actionable_wyckoff_signal, WyckoffPhase, WyckoffState, VolumeState, MarketPattern
 from technical_analysis.candles_utils import get_coins_to_analyze
+from technical_analysis.candles_cache import get_candles_with_cache
 
 
 SELECTING_COIN_FOR_TA = range(1)
-
 
 async def execute_ta(update: Update, context: CallbackContext) -> int:
     if not update.message:
@@ -75,23 +75,32 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
-        candles_15m = hyperliquid_utils.info.candles_snapshot(coin, "15m", now - 125 * 86400000, now)
-        candles_1h = hyperliquid_utils.info.candles_snapshot(coin, "1h", now - 250 * 86400000, now)
-        candles_4h = hyperliquid_utils.info.candles_snapshot(coin, "4h", now - 500 * 86400000, now)
-        candles_1d = hyperliquid_utils.info.candles_snapshot(coin, "1d", now - 750 * 86400000, now)
+        start_time = time.time()
 
+        # Use the new cache module through get_candles_with_cache
+        candles_15m = get_candles_with_cache(coin, "15m", now, 125, hyperliquid_utils.info.candles_snapshot)
+        candles_1h = get_candles_with_cache(coin, "1h", now, 250, hyperliquid_utils.info.candles_snapshot)
+        candles_4h = get_candles_with_cache(coin, "4h", now, 500, hyperliquid_utils.info.candles_snapshot)
+        candles_1d = get_candles_with_cache(coin, "1d", now, 750, hyperliquid_utils.info.candles_snapshot)
+        
+        logger.info(f'Loading candles took {(time.time() - start_time):.3f} seconds to execute')
+
+        start_time = time.time()
         local_tz = get_localzone()
         df_15m = prepare_dataframe(candles_15m, local_tz)
         df_1h = prepare_dataframe(candles_1h, local_tz)
         df_4h = prepare_dataframe(candles_4h, local_tz)
         df_1d = prepare_dataframe(candles_1d, local_tz)
+        logger.info(f'Prepare data frame took {(time.time() - start_time):.3f} seconds to execute')
 
+        start_time = time.time()
         mid = float(all_mids[coin])
         # Apply indicators
         apply_indicators(df_15m, mid)
         _, wyckoff_flip_1h = apply_indicators(df_1h, mid)
         _, wyckoff_flip_4h = apply_indicators(df_4h, mid)
         apply_indicators(df_1d, mid)
+        logger.info(f'Apply indicators took {(time.time() - start_time):.3f} seconds to execute')
         
         # Check if 4h candle is recent enough
         is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
@@ -108,8 +117,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
             ))
         )
 
+        start_time = time.time()
         if should_notify:
             await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin)
+        logger.info(f'Send charts took {(time.time() - start_time):.3f} seconds to execute')
     except Exception as e:
         logger.critical(e, exc_info=True)
         await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
