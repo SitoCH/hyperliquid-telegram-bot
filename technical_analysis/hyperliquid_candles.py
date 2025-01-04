@@ -20,7 +20,7 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt, fmt_price
 from technical_analysis.significant_levels import find_significant_levels
-from technical_analysis.wyckoff import detect_wyckoff_phase
+from technical_analysis.wyckoff import detect_wyckoff_phase, WyckoffPhase, WyckoffState, VolumeState, MarketPattern
 
 SELECTING_COIN_FOR_TA = range(1)
 
@@ -160,6 +160,48 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     return df
 
 
+def detect_wyckoff_flip(current_wyckoff: WyckoffState, prev_wyckoff: WyckoffState, older_wyckoff: WyckoffState) -> bool:
+    """
+    Detect if there's a significant Wyckoff phase transition.
+    
+    Args:
+        current_wyckoff: Current period's Wyckoff state
+        prev_wyckoff: Previous period's Wyckoff state
+        older_wyckoff: Period before previous' Wyckoff state
+        
+    Returns:
+        bool: True if a significant phase transition is detected
+    """
+    # Define significant phase transitions using proper enum values
+    bullish_transitions = {
+        (WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP): True,
+        (WyckoffPhase.RANGING, WyckoffPhase.ACCUMULATION): True,
+        (WyckoffPhase.MARKDOWN, WyckoffPhase.ACCUMULATION): True
+    }
+    
+    bearish_transitions = {
+        (WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN): True,
+        (WyckoffPhase.RANGING, WyckoffPhase.DISTRIBUTION): True,
+        (WyckoffPhase.MARKUP, WyckoffPhase.DISTRIBUTION): True
+    }
+    
+    # Check for confirmed phase change using proper object attributes
+    return (
+        # Phase has changed
+        current_wyckoff.phase != prev_wyckoff.phase and 
+        # Not uncertain about current phase
+        not current_wyckoff.uncertain_phase and 
+        # Previous phase was stable
+        prev_wyckoff.phase == older_wyckoff.phase and
+        # Volume confirms the move
+        current_wyckoff.volume == VolumeState.HIGH and
+        # Pattern shows trending behavior
+        current_wyckoff.pattern == MarketPattern.TRENDING and
+        # Check if it's a significant transition
+        ((prev_wyckoff.phase, current_wyckoff.phase) in bullish_transitions or 
+         (prev_wyckoff.phase, current_wyckoff.phase) in bearish_transitions)
+    )
+
 def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
     """Apply indicators and return (supertrend_flip, wyckoff_flip)"""
     # SuperTrend: shorter for faster response
@@ -239,39 +281,11 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
     detect_wyckoff_phase(df)
     
     # Enhanced Wyckoff flip detection
-    if len(df['wyckoff_phase']) >= 3:  # Check at least 3 periods for confirmation
-        current_phase = df['wyckoff_phase'].iloc[-1]
-        prev_phase = df['wyckoff_phase'].iloc[-2]
-        older_phase = df['wyckoff_phase'].iloc[-3]
-        
-        # Define significant phase transitions
-        bullish_transitions = {
-            ('acc.', 'markup'): True,  # Accumulation to Markup
-            ('rang.', 'acc.'): True,   # Range to Accumulation
-            ('markdown', 'acc.'): True  # Markdown to Accumulation
-        }
-        
-        bearish_transitions = {
-            ('dist.', 'markdown'): True,  # Distribution to Markdown
-            ('rang.', 'dist.'): True,     # Range to Distribution
-            ('markup', 'dist.'): True     # Markup to Distribution
-        }
-        
-        # Check for confirmed phase change
-        wyckoff_flip = (
-            # Phase has changed
-            current_phase != prev_phase and 
-            # Not uncertain about current phase
-            not df['uncertain_phase'].iloc[-1] and 
-            # Previous phase was stable
-            prev_phase == older_phase and
-            # Volume confirms the move
-            df['wyckoff_volume'].iloc[-1] == 'high' and
-            # Pattern shows trending behavior
-            df['wyckoff_pattern'].iloc[-1] == 'trending' and
-            # Check if it's a significant transition
-            ((prev_phase, current_phase) in bullish_transitions or 
-             (prev_phase, current_phase) in bearish_transitions)
+    if len(df['wyckoff']) >= 3:  # Check at least 3 periods for confirmation
+        wyckoff_flip = detect_wyckoff_flip(
+            df['wyckoff'].iloc[-1],
+            df['wyckoff'].iloc[-2],
+            df['wyckoff'].iloc[-3]
         )
     else:
         wyckoff_flip = False
@@ -422,33 +436,36 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
 
     # Send 15m chart
     await telegram_utils.send(
-        "15m indicators:",
+        "<b>15m indicators</b>:",
         parse_mode=ParseMode.HTML
     )
     await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[0])
 
     # Send 1h data and chart
+    wyckoff_description_1h = results_1h['wyckoff'].description if results_1h.get('wyckoff') else 'No Wyckoff data available'
     await telegram_utils.send(
-        "1h indicators:\n"
-        f"{results_1h['wyckoff_description']}\n"
+        "<b>1h indicators:</b>\n"
+        f"{wyckoff_description_1h}\n"
         f"<pre>{table_1h}</pre>",
         parse_mode=ParseMode.HTML
     )
     await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[1])
 
     # Send 4h data and chart
+    wyckoff_description_4h = results_4h['wyckoff'].description if results_4h.get('wyckoff') else 'No Wyckoff data available'
     await telegram_utils.send(
-        "4h indicators:\n"
-        f"{results_4h['wyckoff_description']}\n"
+        "<b>4h indicators:</b>\n"
+        f"{wyckoff_description_4h}\n"
         f"<pre>{table_4h}</pre>",
         parse_mode=ParseMode.HTML
     )
     await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[2])
 
     # Send 1d data and chart
+    wyckoff_description_1d = results_1d['wyckoff'].description if results_1d.get('wyckoff') else 'No Wyckoff data available'
     await telegram_utils.send(
-        "1d indicators:\n"
-        f"{results_1d['wyckoff_description']}\n"
+        "<b>1d indicators:</b>\n"
+        f"{wyckoff_description_1d}\n"
         f"<pre>{table_1d}</pre>",
         parse_mode=ParseMode.HTML
     )
@@ -468,26 +485,16 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
             "vwap": 0,
             "vwap_trend_prev": "unknown",
             "vwap_trend": "unknown",
-            "wyckoff_phase_prev": "unknown",
-            "wyckoff_phase": "unknown",
-            "wyckoff_volume_prev": "unknown",
-            "wyckoff_volume": "unknown",
-            "wyckoff_pattern_prev": "unknown",
-            "wyckoff_pattern": "unknown"
+            "wyckoff_prev": None,
+            "wyckoff": None
         }
 
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
     vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
 
     # Correctly get previous values by accessing index -2
-    phase_prev = df['wyckoff_phase'].iloc[-2] if 'wyckoff_phase' in df.columns else "unknown"
-    phase = df['wyckoff_phase'].iloc[-1] if 'wyckoff_phase' in df.columns else "unknown"
-    volume_prev = df['wyckoff_volume'].iloc[-2] if 'wyckoff_volume' in df.columns else "unknown"
-    volume = df['wyckoff_volume'].iloc[-1] if 'wyckoff_volume' in df.columns else "unknown"
-    pattern_prev = df['wyckoff_pattern'].iloc[-2] if 'wyckoff_pattern' in df.columns else "unknown"
-    pattern = df['wyckoff_pattern'].iloc[-1] if 'wyckoff_pattern' in df.columns else "unknown"
-    effort_vs_result_prev = df['effort_vs_result'].iloc[-2] if 'effort_vs_result' in df.columns else "unknown"
-    effort_vs_result = df['effort_vs_result'].iloc[-1] if 'effort_vs_result' in df.columns else "unknown"
+    wyckoff_prev = df['wyckoff'].iloc[-2]
+    wyckoff_cur = df['wyckoff'].iloc[-1]
 
     return {
         "supertrend_prev": supertrend_prev,
@@ -498,19 +505,15 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
         "vwap": vwap,
         "vwap_trend_prev": "uptrend" if mid > vwap_prev else "downtrend",
         "vwap_trend": "uptrend" if mid > vwap else "downtrend",
-        "wyckoff_phase_prev": phase_prev,
-        "wyckoff_phase": phase,
-        "wyckoff_volume_prev": volume_prev,
-        "wyckoff_volume": volume,
-        "wyckoff_pattern_prev": pattern_prev,
-        "wyckoff_pattern": pattern,
-        "wyckoff_effort_vs_result_prev": effort_vs_result_prev,
-        "wyckoff_effort_vs_result": effort_vs_result,
-        "wyckoff_description": df['wyckoff_description'].iloc[-1] if 'wyckoff_description' in df.columns else "unknown"
+        "wyckoff_prev": wyckoff_prev,
+        "wyckoff": wyckoff_cur
     }
 
 
 def format_table(results: Dict[str, Any]) -> str:
+    wyckoff_prev = results['wyckoff_prev']
+    wyckoff_cur = results['wyckoff']
+    
     table_data = [
         ["Supertrend:", "", ""],
         ["Trend", "Prev.", results["supertrend_trend_prev"]],
@@ -525,14 +528,14 @@ def format_table(results: Dict[str, Any]) -> str:
         ["", "Cur.", fmt_price(results["vwap"])],
         ["", "", ""],
         ["Wyckoff: ", "", ""],
-        ["Phase", "Prev.", results["wyckoff_phase_prev"]],
-        ["","Cur.", results["wyckoff_phase"]],
-        ["Volume", "Prev.", results["wyckoff_volume_prev"]],
-        ["","Cur.", results["wyckoff_volume"]],
-        ["Pattern", "Prev.", results["wyckoff_pattern_prev"]],
-        ["","Cur.", results["wyckoff_pattern"]],
-        ["Effort / result", "Prev.", results["wyckoff_effort_vs_result_prev"]],
-        ["","Cur.", results["wyckoff_effort_vs_result"]]
+        ["Phase", "Prev.", wyckoff_prev.phase.value],
+        ["","Cur.", wyckoff_cur.phase.value],
+        ["Volume", "Prev.", wyckoff_prev.volume.value],
+        ["","Cur.", wyckoff_cur.volume.value],
+        ["Pattern", "Prev.", wyckoff_prev.pattern.value],
+        ["","Cur.", wyckoff_cur.pattern.value],
+        ["Effort / result", "Prev.", wyckoff_prev.effort_vs_result.value],
+        ["","Cur.", wyckoff_cur.effort_vs_result.value]
     ]
     
     return tabulate(
