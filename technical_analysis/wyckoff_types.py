@@ -3,6 +3,12 @@ from dataclasses import dataclass
 from typing import Optional
 
 class WyckoffPhase(Enum):
+    """
+    Represents the current market phase in Wyckoff analysis.
+    Phases are longer-term market conditions that describe the overall structure
+    and stage of the market. A phase may last for an extended period and can
+    be uncertain (denoted by POSSIBLE_ prefix).
+    """
     ACCUMULATION = "acc."
     DISTRIBUTION = "dist."
     MARKUP = "markup"
@@ -49,11 +55,17 @@ class WyckoffSign(Enum):
     NONE = "NONE"
 
 class CompositeAction(Enum):
-    ACCUMULATING = "accumulating"
-    DISTRIBUTING = "distributing"
-    MARKING_UP = "marking up"
-    MARKING_DOWN = "marking down"
-    NEUTRAL = "neutral"
+    """
+    Represents the current action of composite operators (institutions).
+    Unlike phases, composite actions represent immediate institutional behavior
+    and are more tactical in nature. They indicate what large operators are
+    doing right now, providing actionable insights for trading decisions.
+    """
+    ACCUMULATING = "absorbing supply"
+    DISTRIBUTING = "distributing supply"
+    MARKING_UP = "actively pushing prices higher"
+    MARKING_DOWN = "actively pushing prices lower"
+    NEUTRAL = "showing no clear directional activity"
     UNKNOWN = "unknown"
 
 @dataclass
