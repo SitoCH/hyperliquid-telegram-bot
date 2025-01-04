@@ -35,6 +35,27 @@ class VolatilityState(Enum):
     NORMAL = "normal"
     UNKNOWN = "unknown"
 
+class WyckoffSign(Enum):
+    SELLING_CLIMAX = "SC"
+    AUTOMATIC_RALLY = "AR"
+    SECONDARY_TEST = "ST"
+    LAST_POINT_OF_SUPPORT = "LPS"
+    SIGN_OF_STRENGTH = "SOS"
+    BUYING_CLIMAX = "BC"
+    AUTOMATIC_REACTION = "AR"
+    SECONDARY_TEST_RESISTANCE = "STR"
+    LAST_POINT_OF_RESISTANCE = "LPSY"
+    SIGN_OF_WEAKNESS = "SOW"
+    NONE = "NONE"
+
+class CompositeAction(Enum):
+    ACCUMULATING = "accumulating"
+    DISTRIBUTING = "distributing"
+    MARKING_UP = "marking up"
+    MARKING_DOWN = "marking down"
+    NEUTRAL = "neutral"
+    UNKNOWN = "unknown"
+
 @dataclass
 class WyckoffState:
     phase: WyckoffPhase
@@ -46,6 +67,8 @@ class WyckoffState:
     is_upthrust: bool
     volume_spread: VolumeState
     effort_vs_result: EffortResult
+    composite_action: CompositeAction
+    wyckoff_sign: WyckoffSign
     description: str
 
     def to_dict(self):
@@ -59,6 +82,8 @@ class WyckoffState:
             'is_upthrust': self.is_upthrust,
             'volume_spread': self.volume_spread.value,
             'effort_vs_result': self.effort_vs_result.value,
+            'composite_action': self.composite_action.value,
+            'wyckoff_sign': self.wyckoff_sign.value,
             'description': self.description
         }
 
@@ -74,5 +99,7 @@ class WyckoffState:
             is_upthrust=False,
             volume_spread=VolumeState.UNKNOWN,
             effort_vs_result=EffortResult.UNKNOWN,
+            composite_action=CompositeAction.UNKNOWN,
+            wyckoff_sign=WyckoffSign.NONE,
             description="Unknown market state"
         )

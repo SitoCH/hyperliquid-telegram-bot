@@ -111,7 +111,11 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
         
         effort_result = EffortResult.STRONG if abs(effort_vs_result.iloc[-1]) > EFFORT_THRESHOLD else EffortResult.WEAK
         
-        # Create WyckoffState instance
+        # Detect composite action and Wyckoff signs
+        composite_action = detect_composite_action(data_subset, price_strength, volume_trend_value, effort_vs_result.iloc[-1])
+        wyckoff_sign = detect_wyckoff_signs(data_subset, price_strength, volume_trend_value, is_spring, is_upthrust)
+        
+        # Create WyckoffState instance with correct parameters
         wyckoff_state = WyckoffState(
             phase=phase,
             uncertain_phase=uncertain_phase,
@@ -122,9 +126,12 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
             is_upthrust=is_upthrust,
             volume_spread=VolumeState.HIGH if volume_spread.iloc[-1] > volume_spread_ma.iloc[-1] else VolumeState.LOW,
             effort_vs_result=effort_result,
+            composite_action=composite_action,
+            wyckoff_sign=wyckoff_sign,
             description=generate_wyckoff_description(
                 phase, uncertain_phase, is_high_volume, momentum_strength, 
-                volatility.iloc[-1], is_spring, is_upthrust, effort_result
+                is_spring, is_upthrust, effort_result,
+                composite_action, wyckoff_sign
             )
         )
 
@@ -181,94 +188,160 @@ def determine_phase_by_price_strength(
         return WyckoffPhase.MARKDOWN
     return WyckoffPhase.POSSIBLE_MARKDOWN
 
-def generate_trading_suggestion(
-    phase: WyckoffPhase,
-    uncertain_phase: bool,
-    momentum_strength: float,
-    is_spring: bool,
-    is_upthrust: bool,
-    effort: EffortResult
-) -> str:
-    """Generate trading suggestion based on Wyckoff analysis."""
-    if uncertain_phase:
-        return "wait for confirmation before trading"
+def detect_composite_action(
+    df: pd.DataFrame,
+    price_strength: float,
+    volume_trend: float,
+    effort_vs_result: float
+) -> CompositeAction:
+    """Detect actions of composite operators based on Wyckoff principles."""
+    # Check for absorption of supply/demand
+    price_range = df['h'] - df['l']
+    price_close = df['c'] - df['o']
+    absorption = (price_range.iloc[-1] > price_range.mean()) and (abs(price_close.iloc[-1]) < price_close.std())
     
-    if is_spring and effort == EffortResult.STRONG:
-        return "consider opening long position"
-    if is_upthrust and effort == EffortResult.STRONG:
-        return "consider opening short position"
-    
-    suggestions = {
-        WyckoffPhase.ACCUMULATION: "accumulate long positions",
-        WyckoffPhase.DISTRIBUTION: "accumulate short positions",
-        WyckoffPhase.MARKUP: "hold / increase long positions" if momentum_strength > MOMENTUM_THRESHOLD else "hold long positions",
-        WyckoffPhase.MARKDOWN: "hold / increase short positions" if momentum_strength < -MOMENTUM_THRESHOLD else "hold short positions",
-        WyckoffPhase.POSSIBLE_ACCUMULATION: "cautiously accumulate long positions",
-        WyckoffPhase.POSSIBLE_DISTRIBUTION: "cautiously accumulate short positions",
-        WyckoffPhase.POSSIBLE_MARKUP: "cautiously hold long positions",
-        WyckoffPhase.POSSIBLE_MARKDOWN: "cautiously hold short positions",
-        WyckoffPhase.UNKNOWN: "wait for clear signal"
-    }
-    
-    if effort == EffortResult.WEAK:
-        suggestion = suggestions.get(phase, "wait for clear signal")
-        return f"cautiously {suggestion}" if not suggestion.startswith(("wait", "cautiously")) else suggestion
+    if absorption and volume_trend > VOLUME_THRESHOLD:
+        if price_strength < 0:
+            return CompositeAction.ACCUMULATING
+        return CompositeAction.DISTRIBUTING
         
-    return suggestions.get(phase, "wait for clear signal")
+    if effort_vs_result > EFFORT_THRESHOLD and volume_trend > 0:
+        return CompositeAction.MARKING_UP
+    if effort_vs_result < -EFFORT_THRESHOLD and volume_trend > 0:
+        return CompositeAction.MARKING_DOWN
+        
+    return CompositeAction.NEUTRAL
+
+def detect_wyckoff_signs(
+    df: pd.DataFrame,
+    price_strength: float,
+    volume_trend: float,
+    is_spring: bool,
+    is_upthrust: bool
+) -> WyckoffSign:
+    """Detect specific Wyckoff signs in market action."""
+    if len(df) < 5:
+        return WyckoffSign.NONE
+        
+    price_change = df['c'].pct_change()
+    volume_change = df['v'].pct_change()
+    
+    # Selling Climax detection
+    if (price_change.iloc[-1] < -0.03 and 
+        volume_change.iloc[-1] > 2.0 and 
+        price_strength < -STRONG_DEV_THRESHOLD):
+        return WyckoffSign.SELLING_CLIMAX
+        
+    # Buying Climax detection
+    if (price_change.iloc[-1] > 0.03 and 
+        volume_change.iloc[-1] > 2.0 and 
+        price_strength > STRONG_DEV_THRESHOLD):
+        return WyckoffSign.BUYING_CLIMAX
+        
+    # Other signs detection
+    if is_spring:
+        if volume_trend > 0:
+            return WyckoffSign.LAST_POINT_OF_SUPPORT
+        return WyckoffSign.SECONDARY_TEST
+        
+    if is_upthrust:
+        if volume_trend > 0:
+            return WyckoffSign.LAST_POINT_OF_RESISTANCE
+        return WyckoffSign.SECONDARY_TEST_RESISTANCE
+        
+    return WyckoffSign.NONE
 
 def generate_wyckoff_description(
     phase: WyckoffPhase,
     uncertain_phase: bool,
     is_high_volume: bool,
     momentum_strength: float,
-    volatility: float,
     is_spring: bool,
     is_upthrust: bool,
-    effort_vs_result: EffortResult
+    effort_vs_result: EffortResult,
+    composite_action: CompositeAction,
+    wyckoff_sign: WyckoffSign
 ) -> str:
-    """Generate a descriptive text of the Wyckoff analysis results with trading suggestion."""
+    """Generate enhanced Wyckoff analysis description."""
     base_phase = phase.name.replace("_", " ").capitalize()
     
-    description_parts = [base_phase]
+    # Start with composite operator action
+    description_parts = [
+        f"{base_phase} phase with composite operators {composite_action.value}"
+    ]
     
-    # Pattern context first
+    # Add Wyckoff sign if present
+    if wyckoff_sign != WyckoffSign.NONE:
+        description_parts.append(f"showing {wyckoff_sign.value}")
+    
+    # Add spring/upthrust patterns
     if is_spring:
-        description_parts.append("showing Spring pattern")
+        description_parts.append("with spring pattern indicating potential accumulation")
     elif is_upthrust:
-        description_parts.append("showing Upthrust pattern")
+        description_parts.append("with upthrust pattern indicating potential distribution")
     
-    # Volume and effort characteristics
+    # Volume and effort analysis
     if is_high_volume and effort_vs_result == EffortResult.STRONG:
-        description_parts.append("with strong volume and conviction")
-    elif is_high_volume and effort_vs_result == EffortResult.WEAK:
-        description_parts.append("with high volume but weak momentum")
+        description_parts.append("supported by institutional volume")
     elif not is_high_volume and effort_vs_result == EffortResult.STRONG:
-        description_parts.append("with efficient price movement despite low volume")
+        description_parts.append("showing efficient price movement despite low volume")
     
-    # Market context
-    context_parts = []
-    if abs(momentum_strength) > MOMENTUM_THRESHOLD:
-        context_parts.append("trending market")
-    else:
-        context_parts.append("ranging market")
-    
-    if volatility > 1.5:  # Use fixed threshold for high volatility
-        context_parts.append("high volatility")
-    
-    if context_parts:
-        description_parts.append(f"in a {' with '.join(context_parts)}")
-    
-    # Join main description
+    # Join description
     main_description = ", ".join(description_parts)
     
-    # Add trading suggestion on new line
+    # Add trading suggestion
     suggestion = generate_trading_suggestion(
         phase,
         uncertain_phase,
         momentum_strength,
         is_spring,
         is_upthrust,
-        effort_vs_result
+        effort_vs_result,
+        composite_action,
+        wyckoff_sign
     )
     
     return f"{main_description}.\nTrading suggestion: {suggestion}."
+
+def generate_trading_suggestion(
+    phase: WyckoffPhase,
+    uncertain_phase: bool,
+    momentum_strength: float,
+    is_spring: bool,
+    is_upthrust: bool,
+    effort: EffortResult,
+    composite_action: CompositeAction,
+    wyckoff_sign: WyckoffSign
+) -> str:
+    """Generate trading suggestion based on enhanced Wyckoff analysis."""
+    # Handle uncertain phase first
+    if uncertain_phase:
+        return "wait for confirmation of institutional activity"
+    
+    # Check for effort and patterns
+    if effort == EffortResult.WEAK:
+        return "wait for stronger market conviction"
+    
+    # Priority to specific Wyckoff signs with high-probability setups
+    if wyckoff_sign in [WyckoffSign.SELLING_CLIMAX, WyckoffSign.LAST_POINT_OF_SUPPORT] and is_spring:
+        return "potential accumulation zone, consider preparing long positions"
+    if wyckoff_sign in [WyckoffSign.BUYING_CLIMAX, WyckoffSign.LAST_POINT_OF_RESISTANCE] and is_upthrust:
+        return "potential distribution zone, consider preparing short positions"
+    
+    # Consider composite operator actions with momentum confirmation
+    if composite_action == CompositeAction.ACCUMULATING and momentum_strength > 0:
+        return "institutional accumulation detected, consider joining with longs"
+    if composite_action == CompositeAction.DISTRIBUTING and momentum_strength < 0:
+        return "institutional distribution detected, consider joining with shorts"
+    
+    # Basic phase-based suggestions
+    basic_suggestions = {
+        WyckoffPhase.ACCUMULATION: "look for spring patterns and signs of absorption",
+        WyckoffPhase.DISTRIBUTION: "look for upthrust patterns and signs of supply",
+        WyckoffPhase.MARKUP: "follow the trend with stops under support",
+        WyckoffPhase.MARKDOWN: "follow the trend with stops above resistance",
+        WyckoffPhase.RANGING: "wait for clear institutional participation",
+        WyckoffPhase.UNKNOWN: "wait for clear institutional activity"
+    }
+    
+    return basic_suggestions.get(phase, "wait for clear institutional activity")
