@@ -64,9 +64,13 @@ def find_significant_levels(df: pd.DataFrame, n_levels: int = 4, min_score: floa
         
     current_price = df['Close'].iloc[-1]
     
-    # Simplified adaptive lookback
+    # Safe volatility calculation with minimum lookback
     volatility = df['Close'].pct_change().std()
-    lookback = int(150 * (1 + volatility))
+    if pd.isna(volatility):
+        volatility = 0.01  # Default value if volatility can't be calculated
+    
+    # Ensure minimum lookback of 3 periods
+    lookback = max(3, int(150 * (1 + volatility)))
     
     recent_df = df.iloc[-min(lookback, len(df)):]
     
