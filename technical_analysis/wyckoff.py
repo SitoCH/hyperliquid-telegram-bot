@@ -345,3 +345,102 @@ def generate_trading_suggestion(
     }
     
     return basic_suggestions.get(phase, "wait for clear institutional activity")
+
+
+def detect_wyckoff_flip(current_wyckoff: WyckoffState, prev_wyckoff: WyckoffState, older_wyckoff: WyckoffState) -> bool:
+    """
+    Detect if there's a significant Wyckoff phase transition.
+    
+    Args:
+        current_wyckoff: Current period's Wyckoff state
+        prev_wyckoff: Previous period's Wyckoff state
+        older_wyckoff: Period before previous' Wyckoff state
+        
+    Returns:
+        bool: True if a significant phase transition is detected
+    """
+    # Define significant phase transitions using proper enum values
+    bullish_transitions = {
+        (WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP): True,
+        (WyckoffPhase.RANGING, WyckoffPhase.ACCUMULATION): True,
+        (WyckoffPhase.MARKDOWN, WyckoffPhase.ACCUMULATION): True
+    }
+    
+    bearish_transitions = {
+        (WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN): True,
+        (WyckoffPhase.RANGING, WyckoffPhase.DISTRIBUTION): True,
+        (WyckoffPhase.MARKUP, WyckoffPhase.DISTRIBUTION): True
+    }
+    
+    # Check for confirmed phase change using proper object attributes
+    return (
+        # Phase has changed
+        current_wyckoff.phase != prev_wyckoff.phase and 
+        # Not uncertain about current phase
+        not current_wyckoff.uncertain_phase and 
+        # Previous phase was stable
+        prev_wyckoff.phase == older_wyckoff.phase and
+        # Volume confirms the move
+        current_wyckoff.volume == VolumeState.HIGH and
+        # Pattern shows trending behavior
+        current_wyckoff.pattern == MarketPattern.TRENDING and
+        # Check if it's a significant transition
+        ((prev_wyckoff.phase, current_wyckoff.phase) in bullish_transitions or 
+         (prev_wyckoff.phase, current_wyckoff.phase) in bearish_transitions)
+    )
+
+
+def detect_actionable_wyckoff_signal(
+    df: pd.DataFrame,
+    min_confirmation_periods: int = 3,
+    volume_threshold: float = 1.5
+) -> bool:
+    """
+    Detect high-probability Wyckoff trading opportunities with multiple confirmations.
+    Returns True only when there's strong institutional activity confirmation.
+    """
+    if len(df) < min_confirmation_periods:
+        return False
+        
+    current_state = df['wyckoff'].iloc[-1]
+    
+    # 1. Check for basic phase flip
+    phase_changed = detect_wyckoff_flip(
+        df['wyckoff'].iloc[-1],
+        df['wyckoff'].iloc[-2],
+        df['wyckoff'].iloc[-3]
+    )
+    
+    if not phase_changed:
+        return False
+        
+    # 2. Verify institutional participation
+    volume_increasing = df['v'].iloc[-3:].is_monotonic_increasing
+    above_avg_volume = df['v'].iloc[-1] > df['v'].rolling(30).mean().iloc[-1] * volume_threshold
+    
+    # 3. Check effort vs result alignment
+    effort_confirms = current_state.effort_vs_result == EffortResult.STRONG
+    
+    # 4. Verify price action confirmation
+    price_confirms_phase = (
+        (current_state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION] and
+         df['c'].iloc[-1] > df['c'].iloc[-2]) or
+        (current_state.phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION] and
+         df['c'].iloc[-1] < df['c'].iloc[-2])
+    )
+    
+    # 5. Check for spring/upthrust confirmation
+    pattern_confirms = (
+        current_state.is_spring or 
+        current_state.is_upthrust or 
+        current_state.wyckoff_sign != WyckoffSign.NONE
+    )
+    
+    # Return True only if we have multiple confirmations
+    return (phase_changed and
+            volume_increasing and
+            above_avg_volume and
+            effort_confirms and
+            price_confirms_phase and
+            pattern_confirms and
+            not current_state.uncertain_phase)

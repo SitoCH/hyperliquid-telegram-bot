@@ -20,7 +20,7 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt, fmt_price
 from technical_analysis.significant_levels import find_significant_levels
-from technical_analysis.wyckoff import detect_wyckoff_phase, WyckoffPhase, WyckoffState, VolumeState, MarketPattern
+from technical_analysis.wyckoff import detect_wyckoff_phase, detect_actionable_wyckoff_signal, WyckoffPhase, WyckoffState, VolumeState, MarketPattern
 
 SELECTING_COIN_FOR_TA = range(1)
 
@@ -160,48 +160,6 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     return df
 
 
-def detect_wyckoff_flip(current_wyckoff: WyckoffState, prev_wyckoff: WyckoffState, older_wyckoff: WyckoffState) -> bool:
-    """
-    Detect if there's a significant Wyckoff phase transition.
-    
-    Args:
-        current_wyckoff: Current period's Wyckoff state
-        prev_wyckoff: Previous period's Wyckoff state
-        older_wyckoff: Period before previous' Wyckoff state
-        
-    Returns:
-        bool: True if a significant phase transition is detected
-    """
-    # Define significant phase transitions using proper enum values
-    bullish_transitions = {
-        (WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP): True,
-        (WyckoffPhase.RANGING, WyckoffPhase.ACCUMULATION): True,
-        (WyckoffPhase.MARKDOWN, WyckoffPhase.ACCUMULATION): True
-    }
-    
-    bearish_transitions = {
-        (WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN): True,
-        (WyckoffPhase.RANGING, WyckoffPhase.DISTRIBUTION): True,
-        (WyckoffPhase.MARKUP, WyckoffPhase.DISTRIBUTION): True
-    }
-    
-    # Check for confirmed phase change using proper object attributes
-    return (
-        # Phase has changed
-        current_wyckoff.phase != prev_wyckoff.phase and 
-        # Not uncertain about current phase
-        not current_wyckoff.uncertain_phase and 
-        # Previous phase was stable
-        prev_wyckoff.phase == older_wyckoff.phase and
-        # Volume confirms the move
-        current_wyckoff.volume == VolumeState.HIGH and
-        # Pattern shows trending behavior
-        current_wyckoff.pattern == MarketPattern.TRENDING and
-        # Check if it's a significant transition
-        ((prev_wyckoff.phase, current_wyckoff.phase) in bullish_transitions or 
-         (prev_wyckoff.phase, current_wyckoff.phase) in bearish_transitions)
-    )
-
 def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
     """Apply indicators and return (supertrend_flip, wyckoff_flip)"""
     # SuperTrend: shorter for faster response
@@ -279,17 +237,7 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
     df["EMA"] = ta.ema(df["c"], length=ema_length)
 
     detect_wyckoff_phase(df)
-    
-    # Enhanced Wyckoff flip detection
-    if len(df['wyckoff']) >= 3:  # Check at least 3 periods for confirmation
-        wyckoff_flip = detect_wyckoff_flip(
-            df['wyckoff'].iloc[-1],
-            df['wyckoff'].iloc[-2],
-            df['wyckoff'].iloc[-3]
-        )
-    else:
-        wyckoff_flip = False
-        logger.warning("Insufficient data for Wyckoff flip detection")
+    wyckoff_flip = detect_actionable_wyckoff_signal(df)
     
     return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
 
