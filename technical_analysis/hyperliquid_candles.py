@@ -21,6 +21,8 @@ from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt, fmt_price
 from technical_analysis.significant_levels import find_significant_levels
 from technical_analysis.wyckoff import detect_wyckoff_phase, detect_actionable_wyckoff_signal, WyckoffPhase, WyckoffState, VolumeState, MarketPattern
+from technical_analysis.candles_utils import get_coins_to_analyze
+
 
 SELECTING_COIN_FOR_TA = range(1)
 
@@ -67,44 +69,6 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     for coin in coins_to_analyze:
         await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
         time.sleep(3)
-
-async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
-    """Get the set of coins to analyze based on configuration."""
-    coins_to_analyze: Set[str] = set()
-    
-    # Add explicitly configured coins
-    configured_coins = os.getenv("HTB_COINS_TO_ANALYZE", "").split(",")
-    coins_to_analyze.update(coin for coin in configured_coins if coin and coin in all_mids)
-    
-    # Add coins from configured categories
-    if categories := os.getenv("HTB_CATEGORIES_TO_ANALYZE"):
-        for category in categories.split(","):
-            if not category.strip():
-                continue
-                
-            params = {
-                "vs_currency": "usd",
-                "order": "market_cap_desc",
-                "per_page": 25,
-                "sparkline": "false",
-                "category": category.strip(),
-                "price_change_percentage": "24h,30d,1y",
-            }
-            
-            cryptos = hyperliquid_utils.fetch_cryptos(params)
-            coins_to_analyze.update(
-                crypto["symbol"] for crypto in cryptos 
-                if crypto["symbol"] in all_mids
-            )
-    
-    # Add coins with open orders if configured
-    if os.getenv('HTB_ANALYZE_COINS_WITH_OPEN_ORDERS', 'False') == 'True':
-        coins_to_analyze.update(
-            coin for coin in hyperliquid_utils.get_coins_with_open_positions()
-            if coin in all_mids
-        )
-    
-    return coins_to_analyze
 
 
 async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, all_mids: Dict[str, Any], always_notify: bool) -> None:
