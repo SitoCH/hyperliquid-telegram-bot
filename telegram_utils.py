@@ -168,7 +168,7 @@ class TelegramUtils:
             logging.error("Telegram app not initialized - missing environment variables")
             return
         self.telegram_app.job_queue.run_repeating(
-            callback, interval=interval, first=first
+            callback, interval=interval, first=first, job_kwargs={'misfire_grace_time': 60}
         )
 
     def run_polling(self, shutdown):
