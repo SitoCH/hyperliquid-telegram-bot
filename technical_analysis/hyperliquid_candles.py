@@ -66,9 +66,12 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not coins_to_analyze:
         return
         
+    logger.info(f"Running TA for {len(coins_to_analyze)} coins")
     for coin in coins_to_analyze:
         await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
         time.sleep(3)
+
+    logger.info(f"TA done for {len(coins_to_analyze)} coins")
 
 
 async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, all_mids: Dict[str, Any], always_notify: bool) -> None:
@@ -179,18 +182,10 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
         df["VWAP_Flip_Detected"] = False
         logger.warning("Insufficient data for VWAP flip detection")
 
-    # MACD
-    macd = ta.macd(df["c"], fast=12, slow=26, signal=9)
-    if macd is not None and not macd["MACD_12_26_9"].isna().all():
-        df["MACD"] = macd["MACD_12_26_9"]
-        df["MACD_Signal"] = macd["MACDs_12_26_9"]
-        df["MACD_Hist"] = macd["MACDh_12_26_9"]
-    else:
-        # Use zeros instead of NaN for better chart rendering
-        df["MACD"] = 0.0
-        df["MACD_Signal"] = 0.0
-        df["MACD_Hist"] = 0.0
-        logger.warning("MACD calculation failed, using zeros")
+    macd = ta.macd(df["c"], fast=6, slow=13, signal=4)
+    df["MACD"] = macd["MACD_6_13_4"]
+    df["MACD_Signal"] = macd["MACDs_6_13_4"]
+    df["MACD_Hist"] = macd["MACDh_6_13_4"]
 
     if "SuperTrend_Flip_Detected" in df.columns:
         # Only consider flips with significant price movement (>0.5% from SuperTrend)
@@ -230,28 +225,29 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
 def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> List[io.BytesIO]:
     chart_buffers = []
 
+    plt.switch_backend('Agg')
+
     def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta) -> io.BytesIO:
-
         from_time = df['t'].max() - chart_image_time_delta
-
         df_plot = df.loc[df['t'] >= from_time].copy()
 
         buf = io.BytesIO()
-        fig, ax = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
+        fig, ax = plt.subplots(2, 1, figsize=(10, 6), gridspec_kw={'height_ratios': [3, 1]})
 
-        df_plot.loc[:, 'SuperTrend_Green'] = df_plot.apply(
-            lambda row: row['SuperTrend'] if row['Close'] > row['SuperTrend'] else float('nan'), 
-            axis=1
+        df_plot['SuperTrend_Green'] = np.where(
+            df_plot['Close'] > df_plot['SuperTrend'],
+            df_plot['SuperTrend'],
+            np.nan
         )
-        df_plot.loc[:, 'SuperTrend_Red'] = df_plot.apply(
-            lambda row: row['SuperTrend'] if row['Close'] <= row['SuperTrend'] else float('nan'), 
-            axis=1
+        df_plot['SuperTrend_Red'] = np.where(
+            df_plot['Close'] <= df_plot['SuperTrend'],
+            df_plot['SuperTrend'],
+            np.nan
         )
 
         ha_df = heikin_ashi(df_plot)
 
-        df_plot.loc[:, 'MACD_Hist'] = df_plot['MACD_Hist'].fillna(0)
-        
+        df_plot['MACD_Hist'] = df_plot['MACD_Hist'].fillna(0)
         strong_positive_threshold = max(df_plot['MACD_Hist'].max() * 0.4, 0.000001)
         strong_negative_threshold = min(df_plot['MACD_Hist'].min() * 0.4, -0.000001)
 
@@ -267,29 +263,26 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
 
         macd_hist_colors = df_plot['MACD_Hist'].apply(determine_color).values
 
-        # Find significant price levels
         resistance_levels, support_levels = find_significant_levels(df)
         
-        # Create horizontal lines for each level
         level_lines = []
         for level in resistance_levels:
             line = pd.Series([level] * len(df_plot), index=df_plot.index)
-            level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=1, 
+            level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
                                               label=f'R {fmt_price(level)}', linestyle='--'))
         
         for level in support_levels:
             line = pd.Series([level] * len(df_plot), index=df_plot.index)
-            level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=1, 
+            level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
                                               label=f'S {fmt_price(level)}', linestyle=':'))
 
-        # Add current price line using Heikin-Ashi color
         current_price = df_plot['Close'].iloc[-1]
-        is_ha_bullish = ha_df['Close'].iloc[-1] >= ha_df['Open'].iloc[-1]  # Use Heikin-Ashi values
-        current_price_color = 'green' if is_ha_bullish else 'red'
+        is_ha_bullish = ha_df['Close'].iloc[-1] >= ha_df['Open'].iloc[-1]
         current_price_line = pd.Series([current_price] * len(df_plot), index=df_plot.index)
-        level_lines.append(mpf.make_addplot(current_price_line, ax=ax[0], color=current_price_color, width=0.5, 
-                                          label=f'Current {fmt_price(current_price)}', 
-                                          linestyle=':', alpha=0.8))
+        level_lines.append(mpf.make_addplot(current_price_line, ax=ax[0], 
+                                          color='green' if is_ha_bullish else 'red', 
+                                          width=0.5, label=f'Current {fmt_price(current_price)}', 
+                                          linestyle=':', alpha=0.6))
 
         mpf.plot(ha_df,
                 type='candle',
@@ -298,18 +291,19 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
                 axtitle=title,
                 style='charles',
                 addplot=[
-                    mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', label='SuperTrend', width=0.75),
-                    mpf.make_addplot(df_plot['SuperTrend_Red'], ax=ax[0], color='red', width=0.75),
-                    mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='blue', label='VWAP', width=0.75),
-                    mpf.make_addplot(df_plot['EMA'], ax=ax[0], color='orange', label='EMA', width=0.75),
+                    mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', width=0.5),
+                    mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='blue', width=0.5),
+                    mpf.make_addplot(df_plot['EMA'], ax=ax[0], color='orange', width=0.5),
                     *level_lines,
-                    mpf.make_addplot(df_plot['MACD_Hist'], type='bar', width=0.7, color=macd_hist_colors, ax=ax[1], alpha=0.5, secondary_y=False)
+                    mpf.make_addplot(df_plot['MACD_Hist'], type='bar', width=0.7, 
+                                   color=macd_hist_colors, ax=ax[1], alpha=0.4)
                 ])
 
-        ax[0].legend(loc='upper left')
+        ax[0].legend(loc='upper left', fontsize='small')
 
         plt.tight_layout()
-        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', 
+                   facecolor='white', edgecolor='none')
         buf.seek(0)
         plt.close(fig)
         return buf
@@ -330,12 +324,15 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
 
 
 async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> None:
+    
     charts = generate_chart(df_15m, df_1h, df_4h, df_1d, coin)
     
+    results_15m = get_ta_results(df_15m, mid)
     results_1h = get_ta_results(df_1h, mid)
     results_4h = get_ta_results(df_4h, mid)
     results_1d = get_ta_results(df_1d, mid)
     
+    table_15m = format_table(results_15m)
     table_1h = format_table(results_1h)
     table_4h = format_table(results_4h)
     table_1d = format_table(results_1d)
@@ -347,42 +344,27 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
         parse_mode=ParseMode.HTML
     )
 
+    no_wyckoff_data_available = 'No Wyckoff data available'
+
     # Send 15m chart
-    await telegram_utils.send(
-        "<b>15m indicators</b>:",
-        parse_mode=ParseMode.HTML
-    )
-    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[0])
+    wyckoff_description = results_15m['wyckoff'].description if results_15m.get('wyckoff') else no_wyckoff_data_available
+    caption = f"<b>15m indicators:</b>\n{wyckoff_description}\n<pre>{table_15m}</pre>"
+    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[0], caption=caption, parse_mode=ParseMode.HTML)
 
     # Send 1h data and chart
-    wyckoff_description_1h = results_1h['wyckoff'].description if results_1h.get('wyckoff') else 'No Wyckoff data available'
-    await telegram_utils.send(
-        "<b>1h indicators:</b>\n"
-        f"{wyckoff_description_1h}\n"
-        f"<pre>{table_1h}</pre>",
-        parse_mode=ParseMode.HTML
-    )
-    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[1])
+    wyckoff_description = results_1h['wyckoff'].description if results_1h.get('wyckoff') else no_wyckoff_data_available
+    caption = f"<b>1h indicators:</b>\n{wyckoff_description}\n<pre>{table_1h}</pre>"
+    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[1], caption=caption, parse_mode=ParseMode.HTML)
 
     # Send 4h data and chart
-    wyckoff_description_4h = results_4h['wyckoff'].description if results_4h.get('wyckoff') else 'No Wyckoff data available'
-    await telegram_utils.send(
-        "<b>4h indicators:</b>\n"
-        f"{wyckoff_description_4h}\n"
-        f"<pre>{table_4h}</pre>",
-        parse_mode=ParseMode.HTML
-    )
-    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[2])
+    wyckoff_description = results_4h['wyckoff'].description if results_4h.get('wyckoff') else no_wyckoff_data_available
+    caption = f"<b>4h indicators:</b>\n{wyckoff_description}\n<pre>{table_4h}</pre>"
+    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[2], caption=caption, parse_mode=ParseMode.HTML)
 
     # Send 1d data and chart
-    wyckoff_description_1d = results_1d['wyckoff'].description if results_1d.get('wyckoff') else 'No Wyckoff data available'
-    await telegram_utils.send(
-        "<b>1d indicators:</b>\n"
-        f"{wyckoff_description_1d}\n"
-        f"<pre>{table_1d}</pre>",
-        parse_mode=ParseMode.HTML
-    )
-    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[3])
+    wyckoff_description = results_1d['wyckoff'].description if results_1d.get('wyckoff') else no_wyckoff_data_available
+    caption = f"<b>1d indicators:</b>\n{wyckoff_description}\n<pre>{table_1d}</pre>"
+    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[3], caption=caption, parse_mode=ParseMode.HTML)
 
 
 def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
@@ -398,16 +380,13 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
             "vwap": 0,
             "vwap_trend_prev": "unknown",
             "vwap_trend": "unknown",
-            "wyckoff_prev": None,
             "wyckoff": None
         }
 
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
     vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
 
-    # Correctly get previous values by accessing index -2
-    wyckoff_prev = df['wyckoff'].iloc[-2]
-    wyckoff_cur = df['wyckoff'].iloc[-1]
+    wyckoff = df['wyckoff'].iloc[-1]
 
     return {
         "supertrend_prev": supertrend_prev,
@@ -418,42 +397,31 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
         "vwap": vwap,
         "vwap_trend_prev": "uptrend" if mid > vwap_prev else "downtrend",
         "vwap_trend": "uptrend" if mid > vwap else "downtrend",
-        "wyckoff_prev": wyckoff_prev,
-        "wyckoff": wyckoff_cur
+        "wyckoff": wyckoff
     }
 
 
 def format_table(results: Dict[str, Any]) -> str:
-    wyckoff_prev = results['wyckoff_prev']
-    wyckoff_cur = results['wyckoff']
+    wyckoff = results['wyckoff']
     
     table_data = [
-        ["Supertrend:", "", ""],
-        ["Trend", "Prev.", results["supertrend_trend_prev"]],
-        ["","Cur.", results["supertrend_trend"]],
-        ["Value ", "Prev.", fmt_price(results["supertrend_prev"])],
-        ["", "Cur.", fmt_price(results["supertrend"])],
-        ["", "", ""],
-        ["VWAP: ", "", ""],
-        ["Trend", "Prev.", results["vwap_trend_prev"]],
-        ["","Cur.", results["vwap_trend"]],
-        ["Value ", "Prev.", fmt_price(results["vwap_prev"])],
-        ["", "Cur.", fmt_price(results["vwap"])],
-        ["", "", ""],
-        ["Wyckoff: ", "", ""],
-        ["Phase", "Prev.", wyckoff_prev.phase.value],
-        ["","Cur.", wyckoff_cur.phase.value],
-        ["Volume", "Prev.", wyckoff_prev.volume.value],
-        ["","Cur.", wyckoff_cur.volume.value],
-        ["Pattern", "Prev.", wyckoff_prev.pattern.value],
-        ["","Cur.", wyckoff_cur.pattern.value],
-        ["Effort / result", "Prev.", wyckoff_prev.effort_vs_result.value],
-        ["","Cur.", wyckoff_cur.effort_vs_result.value]
+        ["Supertrend:", ""],
+        ["Trend", results["supertrend_trend"]],
+        ["Value ", fmt_price(results["supertrend"])],
+        ["VWAP:", ""],
+        ["Trend", results["vwap_trend"]],
+        ["Value ", fmt_price(results["vwap"])],
+        ["Wyckoff:", ""],
+        ["Phase", wyckoff.phase.value],
+        ["Comp. Action", wyckoff.composite_action.name.lower()],
+        ["Pattern", wyckoff.pattern.value],
+        ["Volume", wyckoff.volume.value],
+        ["Volatility", wyckoff.volatility.value],
     ]
     
     return tabulate(
         table_data,
-        headers=["","", ""],
+        headers=["", ""],
         tablefmt=simple_separated_format(" "),
-        colalign=("right", "right", "right"),
+        colalign=("right", "right"),
     )
