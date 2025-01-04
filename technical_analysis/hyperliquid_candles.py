@@ -75,32 +75,24 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
-        start_time = time.time()
 
-        # Use the new cache module through get_candles_with_cache
         candles_15m = get_candles_with_cache(coin, "15m", now, 125, hyperliquid_utils.info.candles_snapshot)
         candles_1h = get_candles_with_cache(coin, "1h", now, 250, hyperliquid_utils.info.candles_snapshot)
         candles_4h = get_candles_with_cache(coin, "4h", now, 500, hyperliquid_utils.info.candles_snapshot)
         candles_1d = get_candles_with_cache(coin, "1d", now, 750, hyperliquid_utils.info.candles_snapshot)
         
-        logger.info(f'Loading candles took {(time.time() - start_time):.3f} seconds to execute')
-
-        start_time = time.time()
         local_tz = get_localzone()
         df_15m = prepare_dataframe(candles_15m, local_tz)
         df_1h = prepare_dataframe(candles_1h, local_tz)
         df_4h = prepare_dataframe(candles_4h, local_tz)
         df_1d = prepare_dataframe(candles_1d, local_tz)
-        logger.info(f'Prepare data frame took {(time.time() - start_time):.3f} seconds to execute')
 
-        start_time = time.time()
         mid = float(all_mids[coin])
         # Apply indicators
         apply_indicators(df_15m, mid)
         _, wyckoff_flip_1h = apply_indicators(df_1h, mid)
         _, wyckoff_flip_4h = apply_indicators(df_4h, mid)
         apply_indicators(df_1d, mid)
-        logger.info(f'Apply indicators took {(time.time() - start_time):.3f} seconds to execute')
         
         # Check if 4h candle is recent enough
         is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
@@ -117,10 +109,8 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
             ))
         )
 
-        start_time = time.time()
         if should_notify:
             await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin)
-        logger.info(f'Send charts took {(time.time() - start_time):.3f} seconds to execute')
     except Exception as e:
         logger.critical(e, exc_info=True)
         await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
@@ -341,11 +331,11 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
 
 async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> None:
     charts = generate_chart(df_15m, df_1h, df_4h, df_1d, coin)
-
+    
     results_1h = get_ta_results(df_1h, mid)
     results_4h = get_ta_results(df_4h, mid)
     results_1d = get_ta_results(df_1d, mid)
-
+    
     table_1h = format_table(results_1h)
     table_4h = format_table(results_4h)
     table_1d = format_table(results_1d)
