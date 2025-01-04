@@ -239,7 +239,7 @@ def generate_wyckoff_description(
         is_spring, is_upthrust, effort
     )
     
-    return f"{main_description}.\nTrading suggestion: {suggestion}"
+    return f"{main_description}.\nTrading suggestion: {suggestion}."
 
 def store_wyckoff_results(
     df: pd.DataFrame, idx: pd.Timestamp, phase: str, uncertain_phase: bool,
