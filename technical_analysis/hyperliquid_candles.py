@@ -132,21 +132,19 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         # Check if 4h candle is recent enough
         is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
         
-        # Check if 1h and 4h Wyckoff phases are coherent
-        wyckoff_coherent = (
-            'wyckoff_phase' in df_1h.columns and 
-            'wyckoff_phase' in df_4h.columns and 
-            df_1h['wyckoff_phase'].iloc[-1] == df_4h['wyckoff_phase'].iloc[-1] and
-            not df_1h['uncertain_phase'].iloc[-1] and 
-            not df_4h['uncertain_phase'].iloc[-1]
+        # Either strong 4h signal or coherent 1h and 4h signals
+        should_notify = (
+            always_notify or
+            (is_4h_recent and (
+                # Strong 4h signal alone is enough
+                (wyckoff_flip_4h and df_4h['wyckoff_volume'].iloc[-1] == 'high' and not df_4h['uncertain_phase'].iloc[-1]) or
+                # Or coherent 1h and 4h signals with less strict conditions
+                (wyckoff_flip_1h and wyckoff_flip_4h and
+                 df_1h['wyckoff_phase'].iloc[-1] == df_4h['wyckoff_phase'].iloc[-1])
+            ))
         )
-        
-        # Only notify if we have coherent Wyckoff signals on both timeframes
-        should_notify = (wyckoff_coherent and 
-                        is_4h_recent and 
-                        (wyckoff_flip_1h or wyckoff_flip_4h))
 
-        if always_notify or should_notify:
+        if should_notify:
             await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin)
     except Exception as e:
         logger.critical(e, exc_info=True)
