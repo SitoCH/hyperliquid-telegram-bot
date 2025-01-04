@@ -156,24 +156,24 @@ def generate_trading_suggestion(
 ) -> str:
     """Generate trading suggestion based on Wyckoff analysis."""
     if uncertain_phase:
-        return "Wait for confirmation before trading"
+        return "wait for confirmation before trading"
     
     if is_spring and effort == "strong":
-        return "Consider opening long position"
+        return "consider opening long position"
     if is_upthrust and effort == "strong":
-        return "Consider opening short position"
+        return "consider opening short position"
     
     suggestions = {
-        "acc.": "Accumulate long positions",
-        "dist.": "Accumulate short positions",
-        "markup": "Hold/Increase long positions" if momentum_strength > MOMENTUM_THRESHOLD else "Hold long positions",
-        "markdown": "Hold/Increase short positions" if momentum_strength < -MOMENTUM_THRESHOLD else "Hold short positions",
-        "rang.": "Trade range boundaries or wait for breakout"
+        "acc.": "accumulate long positions",
+        "dist.": "accumulate short positions",
+        "markup": "hold / increase long positions" if momentum_strength > MOMENTUM_THRESHOLD else "hold long positions",
+        "markdown": "hold / increase short positions" if momentum_strength < -MOMENTUM_THRESHOLD else "hold short positions",
+        "rang.": "trade range boundaries or wait for breakout"
     }
     
     if effort == "weak":
-        return f"Cautiously {suggestions.get(phase, 'wait for clear signal')}"
-    return suggestions.get(phase, "Wait for clear signal")
+        return f"cautiously {suggestions.get(phase, 'wait for clear signal')}"
+    return suggestions.get(phase, "wait for clear signal")
 
 def generate_wyckoff_description(
     phase: str,
@@ -191,48 +191,55 @@ def generate_wyckoff_description(
     base_phase = {
         "acc.": "Accumulation",
         "dist.": "Distribution",
-        "markup": "Mark Up",
-        "markdown": "Mark Down",
-        "rang.": "Trading Range",
-        "~ acc.": "Possible Accumulation",
-        "~ dist.": "Possible Distribution",
-        "~ markup": "Possible Mark Up",
-        "~ markdown": "Possible Mark Down",
-        "~ rang.": "Possible Trading Range"
+        "markup": "Mark up",
+        "markdown": "Mark down",
+        "rang.": "Trading range",
+        "~ acc.": "Possible accumulation",
+        "~ dist.": "Possible distribution",
+        "~ markup": "Possible mark up",
+        "~ markdown": "Possible mark down",
+        "~ rang.": "Possible trading range"
     }.get(phase, "Unknown")
     
-    description = [base_phase]
+    description_parts = [base_phase]
     
+    # Pattern context first
     if is_spring:
-        description.append("with Spring pattern")
+        description_parts.append("showing Spring pattern")
     elif is_upthrust:
-        description.append("with Upthrust pattern")
+        description_parts.append("showing Upthrust pattern")
     
     # Volume and effort characteristics
     if volume == "high" and effort == "strong":
-        description.append("showing strong conviction")
+        description_parts.append("with strong volume and conviction")
     elif volume == "high" and effort == "weak":
-        description.append("with high volume but poor result")
+        description_parts.append("with high volume but weak momentum")
     elif volume == "low" and effort == "strong":
-        description.append("efficient price movement on low volume")
+        description_parts.append("with efficient price movement despite low volume")
     
-    # Pattern and volatility context
+    # Market context
+    context_parts = []
     if pattern == "trending":
-        description.append("in a trending market")
+        context_parts.append("trending market")
     else:
-        description.append("in a ranging market")
+        context_parts.append("ranging market")
     
     if volatility == "high":
-        description.append("with high volatility")
+        context_parts.append("high volatility")
     
-    # Add trading suggestion
+    if context_parts:
+        description_parts.append(f"in a {' with '.join(context_parts)}")
+    
+    # Join main description
+    main_description = ", ".join(description_parts)
+    
+    # Add trading suggestion on new line
     suggestion = generate_trading_suggestion(
         phase, uncertain_phase, momentum_strength,
         is_spring, is_upthrust, effort
     )
-    description.append(f"Trading suggestion: {suggestion}")
     
-    return " ".join(description)
+    return f"{main_description}.\nTrading suggestion: {suggestion}"
 
 def store_wyckoff_results(
     df: pd.DataFrame, idx: pd.Timestamp, phase: str, uncertain_phase: bool,
