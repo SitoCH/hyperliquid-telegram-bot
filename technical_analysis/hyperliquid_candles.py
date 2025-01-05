@@ -1,6 +1,7 @@
 import os
 import io
 import time
+import asyncio
 from tzlocal import get_localzone
 from typing import Set, List, Dict, Any, Optional, cast, Tuple
 import pandas as pd  # type: ignore[import]
@@ -69,6 +70,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
     for coin in coins_to_analyze:
         await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
+        await asyncio.sleep(1.25)
 
     logger.info(f"TA done for {len(coins_to_analyze)} coins")
 
