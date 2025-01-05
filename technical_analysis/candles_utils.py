@@ -3,7 +3,7 @@ import time
 
 from typing import Set, List, Dict, Any, Optional, cast, Tuple
 from hyperliquid_utils import hyperliquid_utils
-
+from logging_utils import logger
 
 async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
     """Get the set of coins to analyze based on configuration."""
@@ -28,12 +28,16 @@ async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
                 "price_change_percentage": "24h,30d,1y",
             }
             
-            cryptos = hyperliquid_utils.fetch_cryptos(params)
-            coins_to_analyze.update(
-                crypto["symbol"] for crypto in cryptos 
-                if crypto["symbol"] in all_mids
-            )
-            time.sleep(1)
+            try:
+                cryptos = hyperliquid_utils.fetch_cryptos(params)
+                coins_to_analyze.update(
+                    crypto["symbol"] for crypto in cryptos 
+                    if crypto["symbol"] in all_mids
+                )
+            except Exception as e:
+                logger.error(f"Error fetching cryptos for category {category}: {str(e)}", exc_info=True)
+            
+            time.sleep(5)
     
     # Add coins with open orders if configured
     if os.getenv('HTB_ANALYZE_COINS_WITH_OPEN_ORDERS', 'False') == 'True':
