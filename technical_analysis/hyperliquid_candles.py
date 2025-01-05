@@ -308,63 +308,81 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
         plt.close(fig)
         return buf
 
-    df_15m_plot = df_15m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    chart_buffers.append(save_to_buffer(df_15m_plot, f"{coin} - 15M Chart", pd.Timedelta(hours=36)))
+    try:
+        df_15m_plot = df_15m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        chart_buffers.append(save_to_buffer(df_15m_plot, f"{coin} - 15M Chart", pd.Timedelta(hours=36)))
 
-    df_1h_plot = df_1h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart", pd.Timedelta(days=3)))
+        df_1h_plot = df_1h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart", pd.Timedelta(days=3)))
 
-    df_4h_plot = df_4h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    chart_buffers.append(save_to_buffer(df_4h_plot, f"{coin} - 4H Chart", pd.Timedelta(days=20)))
+        df_4h_plot = df_4h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        chart_buffers.append(save_to_buffer(df_4h_plot, f"{coin} - 4H Chart", pd.Timedelta(days=20)))
 
-    df_1d_plot = df_1d.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    chart_buffers.append(save_to_buffer(df_1d_plot, f"{coin} - 1D Chart", pd.Timedelta(days=180)))
+        df_1d_plot = df_1d.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        chart_buffers.append(save_to_buffer(df_1d_plot, f"{coin} - 1D Chart", pd.Timedelta(days=180)))
+
+    finally:
+        # Ensure all figures are closed
+        plt.close('all')
+        
+        # Clear any remaining buffers if there was an error
+        for buf in chart_buffers:
+            if buf and not buf.closed:
+                buf.close()
 
     return chart_buffers
 
 
 async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> None:
     
-    charts = generate_chart(df_15m, df_1h, df_4h, df_1d, coin)
-    
-    results_15m = get_ta_results(df_15m, mid)
-    results_1h = get_ta_results(df_1h, mid)
-    results_4h = get_ta_results(df_4h, mid)
-    results_1d = get_ta_results(df_1d, mid)
-    
-    table_15m = format_table(results_15m)
-    table_1h = format_table(results_1h)
-    table_4h = format_table(results_4h)
-    table_1d = format_table(results_1d)
+    charts = []
+    try:
+        charts = generate_chart(df_15m, df_1h, df_4h, df_1d, coin)
+        
+        results_15m = get_ta_results(df_15m, mid)
+        results_1h = get_ta_results(df_1h, mid)
+        results_4h = get_ta_results(df_4h, mid)
+        results_1d = get_ta_results(df_1d, mid)
+        
+        table_15m = format_table(results_15m)
+        table_1h = format_table(results_1h)
+        table_4h = format_table(results_4h)
+        table_1d = format_table(results_1d)
 
-    # Send header
-    await telegram_utils.send(
-        f"<b>Indicators for {coin}</b>\n"
-        f"Market price: {fmt_price(mid)} USDC",
-        parse_mode=ParseMode.HTML
-    )
+        # Send header
+        await telegram_utils.send(
+            f"<b>Indicators for {coin}</b>\n"
+            f"Market price: {fmt_price(mid)} USDC",
+            parse_mode=ParseMode.HTML
+        )
 
-    no_wyckoff_data_available = 'No Wyckoff data available'
+        no_wyckoff_data_available = 'No Wyckoff data available'
 
-    # Send 15m chart
-    wyckoff_description = results_15m['wyckoff'].description if results_15m.get('wyckoff') else no_wyckoff_data_available
-    caption = f"<b>15m indicators:</b>\n{wyckoff_description}\n<pre>{table_15m}</pre>"
-    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[0], caption=caption, parse_mode=ParseMode.HTML)
+        # Send 15m chart
+        wyckoff_description = results_15m['wyckoff'].description if results_15m.get('wyckoff') else no_wyckoff_data_available
+        caption = f"<b>15m indicators:</b>\n{wyckoff_description}\n<pre>{table_15m}</pre>"
+        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[0], caption=caption, parse_mode=ParseMode.HTML)
 
-    # Send 1h data and chart
-    wyckoff_description = results_1h['wyckoff'].description if results_1h.get('wyckoff') else no_wyckoff_data_available
-    caption = f"<b>1h indicators:</b>\n{wyckoff_description}\n<pre>{table_1h}</pre>"
-    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[1], caption=caption, parse_mode=ParseMode.HTML)
+        # Send 1h data and chart
+        wyckoff_description = results_1h['wyckoff'].description if results_1h.get('wyckoff') else no_wyckoff_data_available
+        caption = f"<b>1h indicators:</b>\n{wyckoff_description}\n<pre>{table_1h}</pre>"
+        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[1], caption=caption, parse_mode=ParseMode.HTML)
 
-    # Send 4h data and chart
-    wyckoff_description = results_4h['wyckoff'].description if results_4h.get('wyckoff') else no_wyckoff_data_available
-    caption = f"<b>4h indicators:</b>\n{wyckoff_description}\n<pre>{table_4h}</pre>"
-    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[2], caption=caption, parse_mode=ParseMode.HTML)
+        # Send 4h data and chart
+        wyckoff_description = results_4h['wyckoff'].description if results_4h.get('wyckoff') else no_wyckoff_data_available
+        caption = f"<b>4h indicators:</b>\n{wyckoff_description}\n<pre>{table_4h}</pre>"
+        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[2], caption=caption, parse_mode=ParseMode.HTML)
 
-    # Send 1d data and chart
-    wyckoff_description = results_1d['wyckoff'].description if results_1d.get('wyckoff') else no_wyckoff_data_available
-    caption = f"<b>1d indicators:</b>\n{wyckoff_description}\n<pre>{table_1d}</pre>"
-    await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[3], caption=caption, parse_mode=ParseMode.HTML)
+        # Send 1d data and chart
+        wyckoff_description = results_1d['wyckoff'].description if results_1d.get('wyckoff') else no_wyckoff_data_available
+        caption = f"<b>1d indicators:</b>\n{wyckoff_description}\n<pre>{table_1d}</pre>"
+        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[3], caption=caption, parse_mode=ParseMode.HTML)
+
+    finally:
+        # Ensure all buffers are closed
+        for chart in charts:
+            if chart and not chart.closed:
+                chart.close()
 
 
 def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
