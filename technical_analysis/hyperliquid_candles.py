@@ -321,17 +321,16 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
         df_1d_plot = df_1d.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
         chart_buffers.append(save_to_buffer(df_1d_plot, f"{coin} - 1D Chart", pd.Timedelta(days=180)))
 
-    finally:
-        # Ensure all figures are closed
+    except Exception as e:
+        # Clean up on error
         plt.close('all')
-        
-        # Clear any remaining buffers if there was an error
         for buf in chart_buffers:
             if buf and not buf.closed:
                 buf.close()
+        raise e
 
+    plt.close('all')
     return chart_buffers
-
 
 async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> None:
     
@@ -358,28 +357,31 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
 
         no_wyckoff_data_available = 'No Wyckoff data available'
 
-        # Send 15m chart
-        wyckoff_description = results_15m['wyckoff'].description if results_15m.get('wyckoff') else no_wyckoff_data_available
-        caption = f"<b>15m indicators:</b>\n{wyckoff_description}\n<pre>{table_15m}</pre>"
-        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[0], caption=caption, parse_mode=ParseMode.HTML)
-
-        # Send 1h data and chart
-        wyckoff_description = results_1h['wyckoff'].description if results_1h.get('wyckoff') else no_wyckoff_data_available
-        caption = f"<b>1h indicators:</b>\n{wyckoff_description}\n<pre>{table_1h}</pre>"
-        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[1], caption=caption, parse_mode=ParseMode.HTML)
-
-        # Send 4h data and chart
-        wyckoff_description = results_4h['wyckoff'].description if results_4h.get('wyckoff') else no_wyckoff_data_available
-        caption = f"<b>4h indicators:</b>\n{wyckoff_description}\n<pre>{table_4h}</pre>"
-        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[2], caption=caption, parse_mode=ParseMode.HTML)
-
-        # Send 1d data and chart
-        wyckoff_description = results_1d['wyckoff'].description if results_1d.get('wyckoff') else no_wyckoff_data_available
-        caption = f"<b>1d indicators:</b>\n{wyckoff_description}\n<pre>{table_1d}</pre>"
-        await context.bot.send_photo(chat_id=telegram_utils.telegram_chat_id, photo=charts[3], caption=caption, parse_mode=ParseMode.HTML)
+        # Send all charts in sequence, using copies of the buffers
+        for idx, (chart, period, results) in enumerate([
+            (charts[0], "15m", results_15m),
+            (charts[1], "1h", results_1h),
+            (charts[2], "4h", results_4h),
+            (charts[3], "1d", results_1d)
+        ]):
+            wyckoff_description = results['wyckoff'].description if results.get('wyckoff') else no_wyckoff_data_available
+            caption = f"<b>{period} indicators:</b>\n{wyckoff_description}\n<pre>{format_table(results)}</pre>"
+            
+            # Create a copy of the buffer's contents
+            chart_copy = io.BytesIO(chart.getvalue())
+            
+            try:
+                await context.bot.send_photo(
+                    chat_id=telegram_utils.telegram_chat_id,
+                    photo=chart_copy,
+                    caption=caption,
+                    parse_mode=ParseMode.HTML
+                )
+            finally:
+                chart_copy.close()
 
     finally:
-        # Ensure all buffers are closed
+        # Clean up the original buffers
         for chart in charts:
             if chart and not chart.closed:
                 chart.close()
