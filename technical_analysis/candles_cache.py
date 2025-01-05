@@ -9,10 +9,8 @@ def get_cached_candles(coin: str, timeframe: str, start_time: int, end_time: int
     if coin not in _candles_cache or timeframe not in _candles_cache[coin]:
         return None
     
-    last_update, candles = _candles_cache[coin][timeframe]
-    if not candles or last_update < end_time - 300000:  # Cache expires after 5 minutes
-        return None
-    
+    _, candles = _candles_cache[coin][timeframe]
+   
     # Filter candles within requested time range
     return [c for c in candles if start_time <= c['T'] <= end_time]
 
