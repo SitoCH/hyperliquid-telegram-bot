@@ -113,7 +113,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         )
 
         if should_notify:
-            await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin)
+            await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin, always_notify)
     except Exception as e:
         logger.critical(e, exc_info=True)
         await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
@@ -332,21 +332,16 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
     plt.close('all')
     return chart_buffers
 
-async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str) -> None:
+async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str, send_charts: bool) -> None:
     
     charts = []
     try:
-        charts = generate_chart(df_15m, df_1h, df_4h, df_1d, coin)
+        charts = generate_chart(df_15m, df_1h, df_4h, df_1d, coin) if send_charts else [None] * 4 # type: ignore
         
         results_15m = get_ta_results(df_15m, mid)
         results_1h = get_ta_results(df_1h, mid)
         results_4h = get_ta_results(df_4h, mid)
         results_1d = get_ta_results(df_1d, mid)
-        
-        table_15m = format_table(results_15m)
-        table_1h = format_table(results_1h)
-        table_4h = format_table(results_4h)
-        table_1d = format_table(results_1d)
 
         # Send header
         await telegram_utils.send(
@@ -367,18 +362,21 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
             wyckoff_description = results['wyckoff'].description if results.get('wyckoff') else no_wyckoff_data_available
             caption = f"<b>{period} indicators:</b>\n{wyckoff_description}\n<pre>{format_table(results)}</pre>"
             
-            # Create a copy of the buffer's contents
-            chart_copy = io.BytesIO(chart.getvalue())
-            
-            try:
-                await context.bot.send_photo(
-                    chat_id=telegram_utils.telegram_chat_id,
-                    photo=chart_copy,
-                    caption=caption,
-                    parse_mode=ParseMode.HTML
-                )
-            finally:
-                chart_copy.close()
+            if chart:
+                # Create a copy of the buffer's contents
+                chart_copy = io.BytesIO(chart.getvalue())
+                
+                try:
+                    await context.bot.send_photo(
+                        chat_id=telegram_utils.telegram_chat_id,
+                        photo=chart_copy,
+                        caption=caption,
+                        parse_mode=ParseMode.HTML
+                    )
+                finally:
+                    chart_copy.close()
+            else:
+                await telegram_utils.send(caption,parse_mode=ParseMode.HTML)
 
     finally:
         # Clean up the original buffers
