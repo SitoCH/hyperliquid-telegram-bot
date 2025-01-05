@@ -183,9 +183,14 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
         logger.warning("Insufficient data for VWAP flip detection")
 
     macd = ta.macd(df["c"], fast=6, slow=13, signal=4)
-    df["MACD"] = macd["MACD_6_13_4"]
-    df["MACD_Signal"] = macd["MACDs_6_13_4"]
-    df["MACD_Hist"] = macd["MACDh_6_13_4"]
+    if macd is not None:
+        df["MACD"] = macd["MACD_6_13_4"]
+        df["MACD_Signal"] = macd["MACDs_6_13_4"]
+        df["MACD_Hist"] = macd["MACDh_6_13_4"]
+    else:
+        df["MACD"] = 0.0
+        df["MACD_Signal"] = 0.0
+        df["MACD_Hist"] = 0.0
 
     if "SuperTrend_Flip_Detected" in df.columns:
         # Only consider flips with significant price movement (>0.5% from SuperTrend)
