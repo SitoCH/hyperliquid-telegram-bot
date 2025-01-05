@@ -144,16 +144,23 @@ def identify_wyckoff_phase(
     price_strength: float, momentum_strength: float, is_high_volume: bool,
     volatility: pd.Series
 ) -> WyckoffPhase:
-    """Identify the Wyckoff phase based on market conditions."""
-    if is_spring and curr_volume > volume_sma * VOLUME_THRESHOLD:
+    """Identify the Wyckoff phase with crypto-specific adjustments."""
+    # Crypto markets are more volatile, adjust thresholds
+    CRYPTO_VOLUME_THRESHOLD = VOLUME_THRESHOLD * 1.5  # Higher volume requirement
+    CRYPTO_EFFORT_THRESHOLD = EFFORT_THRESHOLD * 0.8  # Lower effort requirement due to higher volatility
+    
+    if is_spring and curr_volume > volume_sma * CRYPTO_VOLUME_THRESHOLD:
         return WyckoffPhase.ACCUMULATION
-    if is_upthrust and curr_volume > volume_sma * VOLUME_THRESHOLD:
+    if is_upthrust and curr_volume > volume_sma * CRYPTO_VOLUME_THRESHOLD:
         return WyckoffPhase.DISTRIBUTION
-    if effort_vs_result > EFFORT_THRESHOLD and volume_spread > volume_spread_ma * 1.5:
+    
+    # Account for 24/7 trading and potential manipulation
+    if effort_vs_result > CRYPTO_EFFORT_THRESHOLD:
+        # Check for potential stop hunts in crypto
+        if volume_spread > volume_spread_ma * 2.0:  # More aggressive volume spread threshold
+            return WyckoffPhase.POSSIBLE_MARKUP
         return WyckoffPhase.MARKUP
-    if effort_vs_result < -EFFORT_THRESHOLD and volume_spread > volume_spread_ma * 1.5:
-        return WyckoffPhase.MARKDOWN
-
+        
     return determine_phase_by_price_strength(
         price_strength, momentum_strength, is_high_volume, volatility
     )
@@ -194,7 +201,17 @@ def detect_composite_action(
     volume_trend: float,
     effort_vs_result: float
 ) -> CompositeAction:
-    """Detect actions of composite operators based on Wyckoff principles."""
+    """Detect actions with crypto-specific patterns."""
+    # Check for whale manipulation patterns
+    sudden_volume_spike = df['v'].iloc[-1] > df['v'].iloc[-5:].mean() * 3
+    price_rejection = (abs(df['h'].iloc[-1] - df['c'].iloc[-1]) > 
+                      abs(df['c'].iloc[-1] - df['o'].iloc[-1]) * 2)
+    
+    if sudden_volume_spike and price_rejection:
+        if df['c'].iloc[-1] > df['o'].iloc[-1]:
+            return CompositeAction.DISTRIBUTING
+        return CompositeAction.ACCUMULATING
+    
     # Check for absorption of supply/demand
     price_range = df['h'] - df['l']
     price_close = df['c'] - df['o']
@@ -313,14 +330,17 @@ def generate_trading_suggestion(
     composite_action: CompositeAction,
     wyckoff_sign: WyckoffSign
 ) -> str:
-    """Generate trading suggestion based on enhanced Wyckoff analysis."""
-    # Handle uncertain phase first
+    """Generate crypto-specific trading suggestions."""
+    # Add crypto-specific warnings
     if uncertain_phase:
-        return "wait for confirmation of institutional activity"
+        return "high crypto volatility period, wait for clear institutional moves"
     
-    # Check for effort and patterns
     if effort == EffortResult.WEAK:
-        return "wait for stronger market conviction"
+        return "potential stop hunt, wait for volume confirmation"
+    
+    # Handle potential manipulation
+    if wyckoff_sign in [WyckoffSign.SELLING_CLIMAX, WyckoffSign.BUYING_CLIMAX]:
+        return "possible whale manipulation, wait for volume confirmation"
     
     # Priority to specific Wyckoff signs with high-probability setups
     if wyckoff_sign in [WyckoffSign.SELLING_CLIMAX, WyckoffSign.LAST_POINT_OF_SUPPORT] and is_spring:
