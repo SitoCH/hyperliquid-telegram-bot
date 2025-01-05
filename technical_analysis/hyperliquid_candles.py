@@ -1,7 +1,6 @@
 import os
 import io
 import time
-import asyncio
 from tzlocal import get_localzone
 from typing import Set, List, Dict, Any, Optional, cast, Tuple
 import pandas as pd  # type: ignore[import]
@@ -70,7 +69,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
     for coin in coins_to_analyze:
         await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
-        await asyncio.sleep(1.25)
+
 
     logger.info(f"TA done for {len(coins_to_analyze)} coins")
 
@@ -116,7 +115,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         if should_notify:
             await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin, always_notify)
     except Exception as e:
-        logger.critical(e, exc_info=True)
+        logger.error(e, exc_info=True)
         await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
 
 

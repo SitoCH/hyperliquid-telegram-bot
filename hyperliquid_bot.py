@@ -52,7 +52,10 @@ def main() -> None:
                 telegram_utils.run_once(strategy.init_strategy)
             logger.info(f'Exchange order enabled and loaded the strategy "{strategy_name}"')
 
-        next_hour = datetime.datetime.now().replace(minute=0, second=15, microsecond=0) + datetime.timedelta(hours=1)
+        current_time = datetime.datetime.now()
+        next_hour = current_time.replace(minute=0, second=15, microsecond=0)
+        if current_time >= next_hour:
+            next_hour += datetime.timedelta(hours=1)
         telegram_utils.run_repeating(analyze_candles, interval=datetime.timedelta(hours=1.0), first=next_hour)
         # telegram_utils.run_once(analyze_candles)
 
