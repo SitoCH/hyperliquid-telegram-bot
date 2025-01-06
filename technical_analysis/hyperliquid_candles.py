@@ -69,7 +69,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
     for coin in coins_to_analyze:
         await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
-        time.sleep(3)
+        time.sleep(2)
 
 
     logger.info(f"TA done for {len(coins_to_analyze)} coins")
