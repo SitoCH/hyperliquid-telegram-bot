@@ -1,7 +1,11 @@
+import os
+import pickle
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
-# Cache structure: {coin: {timeframe: (last_update_ts, candles)}}
-_candles_cache: Dict[str, Dict[str, Tuple[int, List[Dict[str, Any]]]]] = {}
+# Calculate cache directory relative to project root
+PROJECT_ROOT = Path(__file__).parent.parent
+CACHE_DIR = PROJECT_ROOT / 'cache' / 'candles'
 
 # Timeframe to minutes mapping
 TIMEFRAME_MINUTES = {
@@ -13,13 +17,38 @@ TIMEFRAME_MINUTES = {
     '1d': 1440
 }
 
+def _get_cache_file_path(coin: str, timeframe: str) -> Path:
+    """Get the path for the cache file of a specific coin and timeframe"""
+    if not CACHE_DIR.exists():
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return CACHE_DIR / f"{coin}_{timeframe}_candles.pkl"
+
+def _load_from_disk(coin: str, timeframe: str) -> Optional[Tuple[int, List[Dict[str, Any]]]]:
+    """Load candles data from disk"""
+    cache_file = _get_cache_file_path(coin, timeframe)
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'rb') as f:
+                return pickle.load(f)
+        except (EOFError, pickle.UnpicklingError):
+            # Handle corrupted cache files
+            cache_file.unlink()
+    return None
+
+def _save_to_disk(coin: str, timeframe: str, data: Tuple[int, List[Dict[str, Any]]]) -> None:
+    """Save candles data to disk"""
+    cache_file = _get_cache_file_path(coin, timeframe)
+    with open(cache_file, 'wb') as f:
+        pickle.dump(data, f)
+
 def get_cached_candles(coin: str, timeframe: str, start_time: int, end_time: int) -> Optional[List[Dict[str, Any]]]:
     """Get candles from cache if available and not too old"""
-    if coin not in _candles_cache or timeframe not in _candles_cache[coin]:
+    # Try disk cache
+    cached_data = _load_from_disk(coin, timeframe)
+    if cached_data is None:
         return None
     
-    _, candles = _candles_cache[coin][timeframe]
-   
+    _, candles = cached_data
     # Filter candles within requested time range
     return [c for c in candles if start_time <= c['T'] <= end_time]
 
@@ -39,17 +68,21 @@ def merge_candles(old_candles: List[Dict[str, Any]], new_candles: List[Dict[str,
     return trim_candles(sorted_candles, lookback_days)
 
 def update_cache(coin: str, timeframe: str, candles: List[Dict[str, Any]], current_time: int) -> None:
-    """Update the cache with new candles"""
-    if coin not in _candles_cache:
-        _candles_cache[coin] = {}
-    
-    if timeframe in _candles_cache[coin]:
+    """Update disk cache with new candles"""
+    cached_data = _load_from_disk(coin, timeframe)
+    if cached_data is not None:
         # Merge with existing candles
-        _, existing_candles = _candles_cache[coin][timeframe]
+        _, existing_candles = cached_data
         lookback_days = (current_time - min(c['T'] for c in existing_candles)) // 86400000
         candles = merge_candles(existing_candles, candles, lookback_days)
     
-    _candles_cache[coin][timeframe] = (current_time, candles)
+    _save_to_disk(coin, timeframe, (current_time, candles))
+
+def clear_cache() -> None:
+    """Clear disk cache"""
+    if CACHE_DIR.exists():
+        for cache_file in CACHE_DIR.glob('*_candles.pkl'):
+            cache_file.unlink()
 
 def _round_timestamp(ts: int, timeframe: str) -> int:
     """Round timestamp down to nearest interval based on timeframe"""
