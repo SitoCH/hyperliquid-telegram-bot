@@ -1,5 +1,9 @@
 import pytest
-from technical_analysis.candles_cache import get_candles_with_cache, _candles_cache, _round_timestamp
+from pathlib import Path
+import shutil
+from technical_analysis.candles_cache import (
+    get_candles_with_cache, _round_timestamp, CACHE_DIR, clear_cache
+)
 
 @pytest.fixture
 def mock_fetch():
@@ -13,10 +17,19 @@ def mock_fetch():
     return fetch
 
 @pytest.fixture(autouse=True)
-def clear_cache():
-    _candles_cache.clear()
+def setup_teardown():
+    """Create cache directory before tests and clean it up after"""
+    # Setup
+    if CACHE_DIR.exists():
+        shutil.rmtree(CACHE_DIR)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    
     yield
-    _candles_cache.clear()
+    
+    # Teardown
+    clear_cache()
+    if CACHE_DIR.exists():
+        shutil.rmtree(CACHE_DIR)
 
 def test_get_candles_empty_cache(mock_fetch):
     now = 1000000000000
