@@ -1,6 +1,5 @@
 import os
 import time
-import asyncio
 
 from typing import Set, List, Dict, Any, Optional, cast, Tuple
 from hyperliquid_utils import hyperliquid_utils
@@ -38,7 +37,7 @@ async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
             except Exception as e:
                 logger.error(f"Error fetching cryptos for category {category}: {str(e)}", exc_info=True)
             
-            await asyncio.sleep(3)
+            time.sleep(3)
     
     # Add coins with open orders if configured
     if os.getenv('HTB_ANALYZE_COINS_WITH_OPEN_ORDERS', 'False') == 'True':
