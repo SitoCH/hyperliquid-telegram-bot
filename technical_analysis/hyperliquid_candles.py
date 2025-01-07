@@ -23,6 +23,7 @@ from technical_analysis.significant_levels import find_significant_levels
 from technical_analysis.wyckoff import detect_wyckoff_phase, detect_actionable_wyckoff_signal, WyckoffPhase, WyckoffState, VolumeState, MarketPattern
 from technical_analysis.candles_utils import get_coins_to_analyze
 from technical_analysis.candles_cache import get_candles_with_cache
+from technical_analysis.funding_rates_cache import get_funding_with_cache
 
 
 SELECTING_COIN_FOR_TA = range(1)
@@ -69,7 +70,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
     for coin in coins_to_analyze:
         await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
-        time.sleep(2)
+        time.sleep(1)
 
 
     logger.info(f"TA done for {len(coins_to_analyze)} coins")
@@ -79,6 +80,8 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
+
+        funding_rates = get_funding_with_cache(coin, now, 30, hyperliquid_utils.info.funding_history)
 
         candles_15m = get_candles_with_cache(coin, "15m", now, 125, hyperliquid_utils.info.candles_snapshot)
         candles_1h = get_candles_with_cache(coin, "1h", now, 250, hyperliquid_utils.info.candles_snapshot)
