@@ -12,11 +12,10 @@ def detect_actionable_wyckoff_signal(
     df: pd.DataFrame,
     funding_rates: Optional[List[FundingRateEntry]] = None,
     extreme_funding_threshold: float = 0.01,  # 1% threshold for extreme funding
-    min_volume_factor: float = 1.5,  # Minimum volume compared to average
     min_confirmation_bars: int = 3  # Minimum bars to confirm pattern
 ) -> bool:
     """
-    Detect high-probability Wyckoff setups focusing on specific events.
+    Detect high-probability Wyckoff setups focusing on specific events and composite actions.
     """
     if len(df) < min_confirmation_bars or 'wyckoff' not in df.columns:
         return False
@@ -27,28 +26,44 @@ def detect_actionable_wyckoff_signal(
         
     current_state = df['wyckoff'].iloc[-1]
     
-    # Check volume confirmation
-    recent_volume = df['v'].iloc[-min_confirmation_bars:]
-    volume_ma = df['v'].rolling(24).mean().iloc[-1]  # 24-period volume MA
-    volume_confirmed = recent_volume.mean() > volume_ma * min_volume_factor
-    
     # Check for repeated patterns (avoid false signals)
     recent_states = df['wyckoff'].iloc[-min_confirmation_bars:]
-    # Filter out any non-WyckoffState values
     valid_states = [state for state in recent_states if isinstance(state, WyckoffState)]
     
     if not valid_states or len(valid_states) < min_confirmation_bars:
         return False
         
     consistent_phase = all(state.phase == current_state.phase for state in valid_states)
+    consistent_action = all(state.composite_action == current_state.composite_action for state in valid_states)
+    consistent_volume = all(state.volume == VolumeState.HIGH for state in valid_states)
     
-    # Check for spring or upthrust with stricter conditions
+    # Enhanced event signal detection including composite actions
     event_signal = (
-        ((current_state.is_spring and current_state.phase == WyckoffPhase.ACCUMULATION) or
-         (current_state.is_upthrust and current_state.phase == WyckoffPhase.DISTRIBUTION)) and
-        volume_confirmed and
+        # Spring with accumulation signals
+        (current_state.is_spring and 
+         current_state.phase == WyckoffPhase.ACCUMULATION and
+         current_state.composite_action == CompositeAction.ACCUMULATING) or
+        # Upthrust with distribution signals
+        (current_state.is_upthrust and 
+         current_state.phase == WyckoffPhase.DISTRIBUTION and
+         current_state.composite_action == CompositeAction.DISTRIBUTING) or
+        # Strong markup signals
+        (current_state.phase == WyckoffPhase.MARKUP and
+         current_state.composite_action == CompositeAction.MARKING_UP and
+         current_state.pattern == MarketPattern.TRENDING) or
+        # Strong markdown signals
+        (current_state.phase == WyckoffPhase.MARKDOWN and
+         current_state.composite_action == CompositeAction.MARKING_DOWN and
+         current_state.pattern == MarketPattern.TRENDING)
+    )
+    
+    # Combine with consistency checks
+    action_signal = (
+        event_signal and
         consistent_phase and
-        current_state.volatility != VolatilityState.HIGH  # Avoid extremely volatile periods
+        consistent_action and
+        consistent_volume and
+        current_state.volatility != VolatilityState.HIGH
     )
     
     # Calculate weighted average funding rate
@@ -68,17 +83,21 @@ def detect_actionable_wyckoff_signal(
         if total_weight > 0:
             avg_funding = weighted_sum / total_weight
             funding_signal = (
+                # Accumulation with negative funding
                 (avg_funding < -extreme_funding_threshold and 
                  current_state.phase == WyckoffPhase.ACCUMULATION and
+                 current_state.composite_action == CompositeAction.ACCUMULATING and
                  current_state.volume == VolumeState.HIGH) or
+                # Distribution with positive funding
                 (avg_funding > extreme_funding_threshold and 
                  current_state.phase == WyckoffPhase.DISTRIBUTION and
+                 current_state.composite_action == CompositeAction.DISTRIBUTING and
                  current_state.volume == VolumeState.HIGH)
             )
     
     return (
-        (event_signal or funding_signal) and
+        (action_signal or funding_signal) and
         not current_state.uncertain_phase and
         current_state.effort_vs_result == EffortResult.STRONG and
-        volume_confirmed
+        current_state.volume == VolumeState.HIGH
     )
