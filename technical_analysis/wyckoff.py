@@ -8,14 +8,14 @@ from statistics import mean
 from typing import List, Optional, Dict, Any
 
 # Constants for Wyckoff analysis
-VOLUME_THRESHOLD: Final[float] = 1.2
-STRONG_DEV_THRESHOLD: Final[float] = 1.5
-NEUTRAL_ZONE_THRESHOLD: Final[float] = 0.5
-MOMENTUM_THRESHOLD: Final[float] = 0.6
-EFFORT_THRESHOLD: Final[float] = 0.7
+VOLUME_THRESHOLD: Final[float] = 1.5  # Increased from 1.2 for crypto's higher volatility
+STRONG_DEV_THRESHOLD: Final[float] = 1.8  # Increased from 1.5 for wider price swings
+NEUTRAL_ZONE_THRESHOLD: Final[float] = 0.8  # Increased from 0.5 for crypto's wider ranging periods
+MOMENTUM_THRESHOLD: Final[float] = 0.5  # Decreased from 0.6 for faster momentum shifts
+EFFORT_THRESHOLD: Final[float] = 0.65  # Decreased from 0.7 for crypto's quick moves
 MIN_PERIODS: Final[int] = 30
-VOLUME_MA_THRESHOLD: Final[float] = 1.1
-VOLUME_SURGE_THRESHOLD: Final[float] = 1.5
+VOLUME_MA_THRESHOLD: Final[float] = 1.3  # Increased from 1.1
+VOLUME_SURGE_THRESHOLD: Final[float] = 2.0  # Increased from 1.5 for crypto's volume spikes
 VOLUME_TREND_SHORT: Final[int] = 5
 VOLUME_TREND_LONG: Final[int] = 10
 FUNDING_EXTREME_THRESHOLD: Final[float] = 0.01  # 1% threshold for extreme funding
@@ -62,11 +62,10 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
         volume_sma = data_subset['v'].rolling(window=MIN_PERIODS).mean()
         price_sma = data_subset['c'].rolling(window=MIN_PERIODS).mean()
         price_std = data_subset['c'].rolling(window=MIN_PERIODS).std()
-        momentum = data_subset['c'].diff(14) / data_subset['c'].shift(14)  # 14-period ROC
-        
-        # Improved volume trend calculation
-        volume_short_ma = data_subset['v'].rolling(window=VOLUME_TREND_SHORT).mean()
-        volume_long_ma = data_subset['v'].rolling(window=VOLUME_TREND_LONG).mean()
+
+        # Enhanced volume analysis for crypto
+        volume_short_ma = data_subset['v'].rolling(window=3).mean()  # Shorter window for faster response
+        volume_long_ma = data_subset['v'].rolling(window=8).mean()  # Shorter window than stock markets
         volume_trend = ((volume_short_ma - volume_long_ma) / volume_long_ma).fillna(0)
         
         # Volume analysis (VSA)
@@ -94,15 +93,31 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
         # Calculate volume consistency (how many recent periods had above-average volume)
         recent_strong_volume = (data_subset['v'].iloc[-3:] > volume_sma.iloc[-3:]).mean()
         
-        # Determine if volume is high based on multiple factors
+        # Enhanced momentum calculation for crypto
+        fast_momentum = data_subset['c'].diff(7) / data_subset['c'].shift(7)  # Faster ROC
+        slow_momentum = data_subset['c'].diff(14) / data_subset['c'].shift(14)  # Original ROC
+        momentum = (fast_momentum + slow_momentum) / 2  # Combined momentum
+        
+        # Volume spike detection for crypto
+        volume_std = data_subset['v'].rolling(window=12).std()
+        volume_spike = (curr_volume - volume_sma_value) / (volume_std.iloc[-1] + 1e-8)
+        
+        # Enhanced relative volume calculation
         is_high_volume = (
-            (relative_volume > VOLUME_MA_THRESHOLD and volume_trend_value > 0) or  # Trending up and above average
-            (relative_volume > VOLUME_SURGE_THRESHOLD) or  # Significant volume spike
-            (recent_strong_volume > 0.66 and relative_volume > 1.0)  # Consistent high volume
+            (relative_volume > VOLUME_MA_THRESHOLD and volume_trend_value > 0) or
+            (volume_spike > 2.5) or  # More sensitive to extreme spikes
+            (relative_volume > VOLUME_SURGE_THRESHOLD) or
+            (recent_strong_volume > 0.6 and relative_volume > 1.2)  # More lenient conditions
         )
 
         price_strength = (curr_price - avg_price) / (price_std_last + 1e-8)
         momentum_strength = momentum.iloc[-1] * 100
+
+        # Enhanced price strength calculation
+        price_ma_short = data_subset['c'].rolling(window=8).mean()
+        price_ma_long = data_subset['c'].rolling(window=21).mean()
+        trend_strength = ((price_ma_short - price_ma_long) / price_ma_long).iloc[-1]
+        price_strength = price_strength * 0.7 + trend_strength * 0.3  # Combine both metrics
 
         # Phase identification
         phase = identify_wyckoff_phase(
@@ -396,35 +411,50 @@ def generate_trading_suggestion(
 
 def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState:
     """
-    Analyze funding rates with time weighting to determine market state.
+    Analyze funding rates with enhanced crypto-specific features:
+    - Non-linear time weighting for faster response to changes
+    - Outlier detection to ignore manipulation spikes
+    - Dynamic thresholds based on volatility
     """
-    if not funding_rates:
+    if not funding_rates or len(funding_rates) < 3:  # Need minimum samples
         return FundingState.UNKNOWN
     
     now = max(rate['time'] for rate in funding_rates)
-    weighted_rates = []
-    decay_factor = 0.85  # Higher numbers give more weight to recent values
     
-    for rate in funding_rates:
-        time_diff = (now - rate['time']) / (1000 * 3600)
-        weight = decay_factor ** time_diff
-        weighted_rates.append(rate['fundingRate'] * weight)
+    # Convert to numpy array for efficient calculations
+    rates = np.array([rate['fundingRate'] for rate in funding_rates])
+    times = np.array([rate['time'] for rate in funding_rates])
     
-    weights_sum = sum(decay_factor ** ((now - rate['time']) / (1000 * 3600)) 
-                     for rate in funding_rates)
+    # Remove outliers using IQR method
+    q1, q3 = np.percentile(rates, [25, 75])
+    iqr = q3 - q1
+    mask = (rates >= q1 - 1.5 * iqr) & (rates <= q3 + 1.5 * iqr)
+    rates = rates[mask]
+    times = times[mask]
     
-    if weights_sum == 0:
+    if len(rates) < 3:  # Check if we still have enough data after outlier removal
         return FundingState.UNKNOWN
-        
-    avg_funding = sum(weighted_rates) / weights_sum
     
-    if avg_funding > FUNDING_EXTREME_THRESHOLD:
+    # Non-linear time weighting (emphasizes recent values more)
+    time_diff_hours = (now - times) / (1000 * 3600)
+    weights = 1 / (1 + np.exp(0.5 * time_diff_hours - 2))  # Steeper sigmoid curve
+    
+    # Calculate weighted average with normalization
+    avg_funding = np.sum(rates * weights) / np.sum(weights)
+    
+    # Dynamic thresholds based on funding rate volatility
+    volatility = np.std(rates)
+    extreme_threshold = max(FUNDING_EXTREME_THRESHOLD, volatility * 2)
+    moderate_threshold = max(FUNDING_MODERATE_THRESHOLD, volatility)
+    
+    # Determine state with dynamic thresholds
+    if avg_funding > extreme_threshold:
         return FundingState.HIGHLY_POSITIVE
-    elif avg_funding > FUNDING_MODERATE_THRESHOLD:
+    elif avg_funding > moderate_threshold:
         return FundingState.POSITIVE
-    elif avg_funding < -FUNDING_EXTREME_THRESHOLD:
+    elif avg_funding < -extreme_threshold:
         return FundingState.HIGHLY_NEGATIVE
-    elif avg_funding < -FUNDING_MODERATE_THRESHOLD:
+    elif avg_funding < -moderate_threshold:
         return FundingState.NEGATIVE
     else:
         return FundingState.NEUTRAL

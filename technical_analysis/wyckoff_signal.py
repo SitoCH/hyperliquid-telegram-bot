@@ -16,13 +16,13 @@ def detect_actionable_wyckoff_signal(
     min_confirmation_bars: int = 3  # Minimum bars to confirm pattern
 ) -> bool:
     """
-    Detect high-probability Wyckoff setups focusing on specific events:
-    - Spring during accumulation with volume confirmation
-    - Upthrust during distribution with volume confirmation
-    - Extreme funding rates (weighted average) aligned with phase
-    - Requires minimum volume and pattern confirmation
+    Detect high-probability Wyckoff setups focusing on specific events.
     """
-    if len(df) < min_confirmation_bars:
+    if len(df) < min_confirmation_bars or 'wyckoff' not in df.columns:
+        return False
+        
+    # Ensure we have valid WyckoffState objects
+    if not isinstance(df['wyckoff'].iloc[-1], WyckoffState):
         return False
         
     current_state = df['wyckoff'].iloc[-1]
@@ -34,7 +34,13 @@ def detect_actionable_wyckoff_signal(
     
     # Check for repeated patterns (avoid false signals)
     recent_states = df['wyckoff'].iloc[-min_confirmation_bars:]
-    consistent_phase = all(state.phase == current_state.phase for state in recent_states)
+    # Filter out any non-WyckoffState values
+    valid_states = [state for state in recent_states if isinstance(state, WyckoffState)]
+    
+    if not valid_states or len(valid_states) < min_confirmation_bars:
+        return False
+        
+    consistent_phase = all(state.phase == current_state.phase for state in valid_states)
     
     # Check for spring or upthrust with stricter conditions
     event_signal = (
