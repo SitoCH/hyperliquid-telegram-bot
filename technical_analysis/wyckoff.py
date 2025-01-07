@@ -313,50 +313,61 @@ def generate_wyckoff_description(
     funding_state: FundingState
 ) -> str:
     """Generate enhanced Wyckoff analysis description including funding rates."""
-    base_phase = phase.name.replace("_", " ").capitalize()
+    base_phase = phase.name.replace("_", " ").lower()
     
-    # Start with composite operator action
+    # Start with clear market structure
     description_parts = [
-        f"{base_phase} phase with composite operators {composite_action.value}"
+        f"Market is in {base_phase} phase",
+        f"{composite_action.value.lower()}"
     ]
     
-    # Add Wyckoff sign if present
+    # Add technical signs with more context
     if wyckoff_sign != WyckoffSign.NONE:
-        description_parts.append(f"showing {wyckoff_sign.value}")
+        description_parts.append(f"showing {wyckoff_sign.value} formation")
     
-    # Add spring/upthrust patterns
+    # Enhanced spring/upthrust descriptions
     if is_spring:
-        description_parts.append("with spring pattern indicating potential accumulation")
+        description_parts.append(
+            "with bullish Spring pattern (test of support with rapid recovery) "
+            "suggesting accumulation by institutions"
+        )
     elif is_upthrust:
-        description_parts.append("with upthrust pattern indicating potential distribution")
+        description_parts.append(
+            "with bearish Upthrust pattern (test of resistance with rapid rejection) "
+            "suggesting distribution by institutions"
+        )
     
-    # Volume and effort analysis
+    # Volume and effort analysis with more context
     if is_high_volume and effort_vs_result == EffortResult.STRONG:
-        description_parts.append("supported by institutional volume")
+        description_parts.append(
+            "backed by significant institutional volume showing clear directional intent"
+        )
     elif not is_high_volume and effort_vs_result == EffortResult.STRONG:
-        description_parts.append("showing efficient price movement despite low volume")
+        description_parts.append(
+            "showing efficient price movement despite low volume, suggesting smart money activity"
+        )
     
-    # Add funding rate analysis
+    # Enhanced funding rate context
     if funding_state != FundingState.UNKNOWN:
-        description_parts.append(f"with {funding_state.value} funding rates")
+        funding_context = {
+            FundingState.HIGHLY_POSITIVE: "extremely high funding rates suggesting overheated longs",
+            FundingState.POSITIVE: "positive funding rates showing long bias",
+            FundingState.NEUTRAL: "neutral funding rates",
+            FundingState.NEGATIVE: "negative funding rates showing short bias",
+            FundingState.HIGHLY_NEGATIVE: "extremely negative funding rates suggesting overheated shorts"
+        }
+        description_parts.append(funding_context.get(funding_state, ""))
 
-    # Join description
+    # Join description with better flow
     main_description = ", ".join(description_parts)
     
     # Add trading suggestion
     suggestion = generate_trading_suggestion(
-        phase,
-        uncertain_phase,
-        momentum_strength,
-        is_spring,
-        is_upthrust,
-        effort_vs_result,
-        composite_action,
-        wyckoff_sign,
-        funding_state
+        phase, uncertain_phase, momentum_strength, is_spring, is_upthrust,
+        effort_vs_result, composite_action, wyckoff_sign, funding_state
     )
     
-    return f"{main_description}.\nTrading suggestion: {suggestion}."
+    return f"{main_description}.\n\n<b>Trading Perspective:</b>\n{suggestion}"
 
 def generate_trading_suggestion(
     phase: WyckoffPhase,
@@ -369,45 +380,92 @@ def generate_trading_suggestion(
     wyckoff_sign: WyckoffSign,
     funding_state: FundingState
 ) -> str:
-    """Generate crypto-specific trading suggestions incorporating funding rates."""
-    # Add crypto-specific warnings
+    """Generate detailed crypto-specific trading suggestions."""
+    
+    # Handle uncertain market conditions with specific reasons
     if uncertain_phase:
-        return "high crypto volatility period, wait for clear institutional moves"
+        return (
+            "Market structure is unclear. Consider reducing position sizes and "
+            "waiting for institutional footprints (high volume with clear direction)"
+        )
     
     if effort == EffortResult.WEAK:
-        return "potential stop hunt, wait for volume confirmation"
+        return (
+            "Price movement lacks institutional backing. Watch for volume confirmation "
+            "before taking positions to avoid potential stop hunts"
+        )
     
-    # Handle potential manipulation
+    # Handle manipulation patterns with specific advice
     if wyckoff_sign in [WyckoffSign.SELLING_CLIMAX, WyckoffSign.BUYING_CLIMAX]:
-        return "possible whale manipulation, wait for volume confirmation"
+        return (
+            "Possible climax formation detected. Wait for volume to stabilize and "
+            "look for institutional absorption patterns before entering positions"
+        )
     
-    # Priority to specific Wyckoff signs with high-probability setups
+    # High-probability Wyckoff setups with detailed guidance
     if wyckoff_sign in [WyckoffSign.SELLING_CLIMAX, WyckoffSign.LAST_POINT_OF_SUPPORT] and is_spring:
-        return "potential accumulation zone, consider preparing long positions"
+        return (
+            "High-probability Accumulation zone detected. Consider scaling into longs "
+            "with stops below the Spring low. Look for volume confirmation on bounces"
+        )
     if wyckoff_sign in [WyckoffSign.BUYING_CLIMAX, WyckoffSign.LAST_POINT_OF_RESISTANCE] and is_upthrust:
-        return "potential distribution zone, consider preparing short positions"
+        return (
+            "High-probability Distribution zone detected. Consider scaling into shorts "
+            "with stops above the Upthrust high. Look for volume confirmation on drops"
+        )
     
-    # Consider composite operator actions with momentum confirmation
+    # Composite operator actions with momentum confirmation
     if composite_action == CompositeAction.ACCUMULATING and momentum_strength > 0:
-        return "institutional accumulation detected, consider joining with longs"
+        return (
+            "Clear institutional Accumulation detected. Consider joining longs after "
+            "pullbacks with stops under recent support levels"
+        )
     if composite_action == CompositeAction.DISTRIBUTING and momentum_strength < 0:
-        return "institutional distribution detected, consider joining with shorts"
+        return (
+            "Clear institutional Distribution detected. Consider joining shorts after "
+            "rallies with stops above recent resistance levels"
+        )
     
-    # Basic phase-based suggestions
+    # Enhanced phase-based suggestions with specific guidance
     basic_suggestions = {
-        WyckoffPhase.ACCUMULATION: "look for spring patterns and signs of absorption",
-        WyckoffPhase.DISTRIBUTION: "look for upthrust patterns and signs of supply",
-        WyckoffPhase.MARKUP: "follow the trend with stops under support",
-        WyckoffPhase.MARKDOWN: "follow the trend with stops above resistance",
-        WyckoffPhase.RANGING: "wait for clear institutional participation",
-        WyckoffPhase.UNKNOWN: "wait for clear institutional activity"
+        WyckoffPhase.ACCUMULATION: (
+            "Accumulation Phase: Watch for absorption of supply on tests of support. "
+            "Prepare for longs after Spring patterns or signs of stopping action"
+        ),
+        WyckoffPhase.DISTRIBUTION: (
+            "Distribution Phase: Watch for supply testing on rallies. "
+            "Prepare for shorts after Upthrust patterns or signs of stopping action"
+        ),
+        WyckoffPhase.MARKUP: (
+            "Markup Phase: Trail stops under developing support levels. "
+            "Look to add on pullbacks with institutional volume"
+        ),
+        WyckoffPhase.MARKDOWN: (
+            "Markdown Phase: Trail stops above developing resistance levels. "
+            "Look to add on rallies with institutional volume"
+        ),
+        WyckoffPhase.RANGING: (
+            "Ranging Phase: Focus on range extremes with volume confirmation. "
+            "Watch for institutional activity at support and resistance"
+        ),
+        WyckoffPhase.UNKNOWN: (
+            "Unclear market structure: Wait for price action to develop clear "
+            "institutional patterns before taking positions"
+        )
     }
     
+    # Handle extreme funding rates with specific advice
     if funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.HIGHLY_NEGATIVE]:
-        return "extreme funding rates detected, consider mean reversion"
+        return (
+            "Extreme funding rates suggest crowded positioning. "
+            "Consider counter-trend trades on strong institutional signals, "
+            "or reduce exposure until funding normalizes"
+        )
     
-    return basic_suggestions.get(phase, "wait for clear institutional activity")
-
+    return basic_suggestions.get(phase, (
+        "Market structure developing: Wait for clear institutional patterns "
+        "before taking positions"
+    ))
 
 def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState:
     """
