@@ -68,6 +68,14 @@ class CompositeAction(Enum):
     NEUTRAL = "showing no clear directional activity"
     UNKNOWN = "unknown"
 
+class FundingState(Enum):
+    HIGHLY_POSITIVE = "highly positive"
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    NEGATIVE = "negative"
+    HIGHLY_NEGATIVE = "highly negative"
+    UNKNOWN = "unknown"
+
 @dataclass
 class WyckoffState:
     phase: WyckoffPhase
@@ -81,6 +89,7 @@ class WyckoffState:
     effort_vs_result: EffortResult
     composite_action: CompositeAction
     wyckoff_sign: WyckoffSign
+    funding_state: FundingState
     description: str
 
     def to_dict(self):
@@ -96,6 +105,7 @@ class WyckoffState:
             'effort_vs_result': self.effort_vs_result.value,
             'composite_action': self.composite_action.value,
             'wyckoff_sign': self.wyckoff_sign.value,
+            'funding_state': self.funding_state.value,
             'description': self.description
         }
 
@@ -113,5 +123,6 @@ class WyckoffState:
             effort_vs_result=EffortResult.UNKNOWN,
             composite_action=CompositeAction.UNKNOWN,
             wyckoff_sign=WyckoffSign.NONE,
+            funding_state=FundingState.UNKNOWN,
             description="Unknown market state"
         )

@@ -2,7 +2,10 @@ import pandas as pd  # type: ignore[import]
 import pandas_ta as ta  # type: ignore[import]
 import numpy as np  # type: ignore[import]
 from typing import Final
-from .wyckoff_types import *
+from .wyckoff_types import MarketPattern, VolatilityState, WyckoffState, WyckoffPhase, EffortResult, CompositeAction, WyckoffSign, FundingState, VolumeState
+from .funding_rates_cache import FundingRateEntry
+from statistics import mean
+from typing import List, Optional, Dict, Any
 
 # Constants for Wyckoff analysis
 VOLUME_THRESHOLD: Final[float] = 1.2
@@ -15,6 +18,8 @@ VOLUME_MA_THRESHOLD: Final[float] = 1.1
 VOLUME_SURGE_THRESHOLD: Final[float] = 1.5
 VOLUME_TREND_SHORT: Final[int] = 5
 VOLUME_TREND_LONG: Final[int] = 10
+FUNDING_EXTREME_THRESHOLD: Final[float] = 0.01  # 1% threshold for extreme funding
+FUNDING_MODERATE_THRESHOLD: Final[float] = 0.005  # 0.5% threshold for moderate funding
 
 def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:
     """Detect spring and upthrust patterns"""
@@ -31,9 +36,9 @@ def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:
     
     return is_spring, is_upthrust
 
-def detect_wyckoff_phase(df: pd.DataFrame) -> None:
+def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingRateEntry]] = None) -> None:
     """
-    Analyze and store Wyckoff phase data for the last two periods in the dataframe.
+    Analyze and store Wyckoff phase data incorporating funding rates.
     """
     # Safety check for minimum required periods
     if len(df) < MIN_PERIODS:
@@ -115,6 +120,17 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
         composite_action = detect_composite_action(data_subset, price_strength, volume_trend_value, effort_vs_result.iloc[-1])
         wyckoff_sign = detect_wyckoff_signs(data_subset, price_strength, volume_trend_value, is_spring, is_upthrust)
         
+        funding_state = analyze_funding_rates(funding_rates or [])
+        
+        # Adjust phase confidence based on funding rates
+        if not uncertain_phase and funding_state != FundingState.UNKNOWN:
+            if phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]:
+                if funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE]:
+                    uncertain_phase = True
+            elif phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]:
+                if funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE]:
+                    uncertain_phase = True
+
         # Create WyckoffState instance with correct parameters
         wyckoff_state = WyckoffState(
             phase=phase,
@@ -128,10 +144,11 @@ def detect_wyckoff_phase(df: pd.DataFrame) -> None:
             effort_vs_result=effort_result,
             composite_action=composite_action,
             wyckoff_sign=wyckoff_sign,
+            funding_state=funding_state,
             description=generate_wyckoff_description(
                 phase, uncertain_phase, is_high_volume, momentum_strength, 
                 is_spring, is_upthrust, effort_result,
-                composite_action, wyckoff_sign
+                composite_action, wyckoff_sign, funding_state
             )
         )
 
@@ -277,9 +294,10 @@ def generate_wyckoff_description(
     is_upthrust: bool,
     effort_vs_result: EffortResult,
     composite_action: CompositeAction,
-    wyckoff_sign: WyckoffSign
+    wyckoff_sign: WyckoffSign,
+    funding_state: FundingState
 ) -> str:
-    """Generate enhanced Wyckoff analysis description."""
+    """Generate enhanced Wyckoff analysis description including funding rates."""
     base_phase = phase.name.replace("_", " ").capitalize()
     
     # Start with composite operator action
@@ -303,6 +321,10 @@ def generate_wyckoff_description(
     elif not is_high_volume and effort_vs_result == EffortResult.STRONG:
         description_parts.append("showing efficient price movement despite low volume")
     
+    # Add funding rate analysis
+    if funding_state != FundingState.UNKNOWN:
+        description_parts.append(f"with {funding_state.value} funding rates")
+
     # Join description
     main_description = ", ".join(description_parts)
     
@@ -315,7 +337,8 @@ def generate_wyckoff_description(
         is_upthrust,
         effort_vs_result,
         composite_action,
-        wyckoff_sign
+        wyckoff_sign,
+        funding_state
     )
     
     return f"{main_description}.\nTrading suggestion: {suggestion}."
@@ -328,9 +351,10 @@ def generate_trading_suggestion(
     is_upthrust: bool,
     effort: EffortResult,
     composite_action: CompositeAction,
-    wyckoff_sign: WyckoffSign
+    wyckoff_sign: WyckoffSign,
+    funding_state: FundingState
 ) -> str:
-    """Generate crypto-specific trading suggestions."""
+    """Generate crypto-specific trading suggestions incorporating funding rates."""
     # Add crypto-specific warnings
     if uncertain_phase:
         return "high crypto volatility period, wait for clear institutional moves"
@@ -364,118 +388,43 @@ def generate_trading_suggestion(
         WyckoffPhase.UNKNOWN: "wait for clear institutional activity"
     }
     
+    if funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.HIGHLY_NEGATIVE]:
+        return "extreme funding rates detected, consider mean reversion"
+    
     return basic_suggestions.get(phase, "wait for clear institutional activity")
 
 
-def detect_wyckoff_flip(current_wyckoff: WyckoffState, prev_wyckoff: WyckoffState, older_wyckoff: WyckoffState) -> bool:
+def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState:
     """
-    Detect significant Wyckoff phase transitions in crypto markets.
-    Enhanced for crypto's higher volatility and manipulation risks.
+    Analyze funding rates with time weighting to determine market state.
     """
-    valid_transitions = {
-        (WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP, 1),
-        (WyckoffPhase.RANGING, WyckoffPhase.ACCUMULATION, 1),
-        (WyckoffPhase.MARKDOWN, WyckoffPhase.ACCUMULATION, 1),
-        (WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN, -1),
-        (WyckoffPhase.RANGING, WyckoffPhase.DISTRIBUTION, -1),
-        (WyckoffPhase.MARKUP, WyckoffPhase.DISTRIBUTION, -1)
-    }
+    if not funding_rates:
+        return FundingState.UNKNOWN
     
-    transition = (prev_wyckoff.phase, current_wyckoff.phase)
+    now = max(rate['time'] for rate in funding_rates)
+    weighted_rates = []
+    decay_factor = 0.85  # Higher numbers give more weight to recent values
     
-    for from_phase, to_phase, expected_momentum in valid_transitions:
-        if transition == (from_phase, to_phase):
-            momentum_aligned = (
-                (expected_momentum > 0 and 
-                 current_wyckoff.pattern == MarketPattern.TRENDING and
-                 current_wyckoff.composite_action in [CompositeAction.MARKING_UP, CompositeAction.ACCUMULATING]) or
-                (expected_momentum < 0 and 
-                 current_wyckoff.pattern == MarketPattern.TRENDING and
-                 current_wyckoff.composite_action in [CompositeAction.MARKING_DOWN, CompositeAction.DISTRIBUTING])
-            )
-            
-            # Detect potential manipulation
-            potential_manipulation = (
-                current_wyckoff.volume == VolumeState.HIGH and 
-                current_wyckoff.volatility == VolatilityState.HIGH and
-                current_wyckoff.volume_spread == VolumeState.HIGH
-            )
-            
-            # Validate phase transition
-            return (
-                momentum_aligned and
-                not current_wyckoff.uncertain_phase and
-                prev_wyckoff.phase == older_wyckoff.phase and
-                current_wyckoff.volume == VolumeState.HIGH and
-                current_wyckoff.volatility in [VolatilityState.HIGH, VolatilityState.NORMAL] and
-                not potential_manipulation and
-                current_wyckoff.effort_vs_result == EffortResult.STRONG and
-                not (current_wyckoff.is_spring and current_wyckoff.phase == WyckoffPhase.DISTRIBUTION) and
-                not (current_wyckoff.is_upthrust and current_wyckoff.phase == WyckoffPhase.ACCUMULATION)
-            )
+    for rate in funding_rates:
+        time_diff = (now - rate['time']) / (1000 * 3600)
+        weight = decay_factor ** time_diff
+        weighted_rates.append(rate['fundingRate'] * weight)
     
-    return False
-
-def detect_actionable_wyckoff_signal(
-    df: pd.DataFrame,
-    min_confirmation_periods: int = 3,
-    volume_threshold: float = 2.0,
-    momentum_threshold: float = 0.03
-) -> bool:
-    """Enhanced detection of high-probability Wyckoff trading opportunities for crypto markets."""
-    if len(df) < min_confirmation_periods:
-        return False
+    weights_sum = sum(decay_factor ** ((now - rate['time']) / (1000 * 3600)) 
+                     for rate in funding_rates)
+    
+    if weights_sum == 0:
+        return FundingState.UNKNOWN
         
-    current_state = df['wyckoff'].iloc[-1]
+    avg_funding = sum(weighted_rates) / weights_sum
     
-    phase_changed = detect_wyckoff_flip(
-        df['wyckoff'].iloc[-1],
-        df['wyckoff'].iloc[-2],
-        df['wyckoff'].iloc[-3]
-    )
-    
-    if not phase_changed:
-        return False
-    
-    recent_volume = df['v'].iloc[-5:]
-    volume_ma = df['v'].rolling(30).mean().iloc[-1]
-    
-    # Core validation checks
-    volume_valid = (
-        (recent_volume > volume_ma).sum() >= 3 and
-        recent_volume.iloc[-1] > volume_ma * volume_threshold and
-        not (recent_volume.iloc[-1] > recent_volume.iloc[-2:].mean() * 3)
-    )
-    
-    price_valid = (
-        (current_state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION] and
-         df['l'].iloc[-1] > df['l'].iloc[-5:].min() * 0.985) or
-        (current_state.phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION] and
-         df['h'].iloc[-1] < df['h'].iloc[-5:].max() * 1.015)
-    )
-    
-    volatility = df['c'].pct_change().std() * np.sqrt(len(df))
-    momentum = (df['c'].iloc[-1] - df['c'].iloc[-2]) / df['c'].iloc[-2]
-    momentum_valid = (
-        (momentum > momentum_threshold * (1 + volatility) and 
-         current_state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]) or
-        (momentum < -momentum_threshold * (1 + volatility) and 
-         current_state.phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION])
-    )
-    
-    # Stability checks
-    stability_valid = (
-        (recent_volume.std() / recent_volume.mean() < 2.0) and  # Volume stability
-        ((df['h'].iloc[-3:] - df['l'].iloc[-3:]).std() / df['c'].iloc[-1] < 0.05)  # Price stability
-    )
- 
-    return (
-        phase_changed and
-        volume_valid and
-        price_valid and
-        momentum_valid and
-        stability_valid and
-        current_state.effort_vs_result == EffortResult.STRONG and
-        not current_state.uncertain_phase and
-        (volume_valid and momentum_valid)
-    )
+    if avg_funding > FUNDING_EXTREME_THRESHOLD:
+        return FundingState.HIGHLY_POSITIVE
+    elif avg_funding > FUNDING_MODERATE_THRESHOLD:
+        return FundingState.POSITIVE
+    elif avg_funding < -FUNDING_EXTREME_THRESHOLD:
+        return FundingState.HIGHLY_NEGATIVE
+    elif avg_funding < -FUNDING_MODERATE_THRESHOLD:
+        return FundingState.NEGATIVE
+    else:
+        return FundingState.NEUTRAL

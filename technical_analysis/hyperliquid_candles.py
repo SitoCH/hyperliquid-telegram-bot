@@ -20,10 +20,11 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt, fmt_price
 from technical_analysis.significant_levels import find_significant_levels
-from technical_analysis.wyckoff import detect_wyckoff_phase, detect_actionable_wyckoff_signal, WyckoffPhase, WyckoffState, VolumeState, MarketPattern
+from technical_analysis.wyckoff import detect_wyckoff_phase, WyckoffPhase, WyckoffState, VolumeState, MarketPattern
+from technical_analysis.wyckoff_signal import detect_actionable_wyckoff_signal
 from technical_analysis.candles_utils import get_coins_to_analyze
 from technical_analysis.candles_cache import get_candles_with_cache
-from technical_analysis.funding_rates_cache import get_funding_with_cache
+from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 
 
 SELECTING_COIN_FOR_TA = range(1)
@@ -95,11 +96,12 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         df_1d = prepare_dataframe(candles_1d, local_tz)
 
         mid = float(all_mids[coin])
+
         # Apply indicators
-        apply_indicators(df_15m, mid)
-        _, wyckoff_flip_1h = apply_indicators(df_1h, mid)
-        _, wyckoff_flip_4h = apply_indicators(df_4h, mid)
-        apply_indicators(df_1d, mid)
+        apply_indicators(df_15m, mid, funding_rates)
+        _, wyckoff_flip_1h = apply_indicators(df_1h, mid, funding_rates)
+        _, wyckoff_flip_4h = apply_indicators(df_4h, mid, funding_rates)
+        apply_indicators(df_1d, mid, funding_rates)
         
         # Check if 4h candle is recent enough
         is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
@@ -132,7 +134,7 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     return df
 
 
-def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
+def apply_indicators(df: pd.DataFrame, mid: float, funding_rates: Optional[List[FundingRateEntry]] = None) -> Tuple[bool, bool]:
     """Apply indicators and return (supertrend_flip, wyckoff_flip)"""
     # SuperTrend: shorter for faster response
     st_length = 10
@@ -205,7 +207,7 @@ def apply_indicators(df: pd.DataFrame, mid: float) -> Tuple[bool, bool]:
     # EMA with longer period for better trend following
     df["EMA"] = ta.ema(df["c"], length=ema_length)
 
-    detect_wyckoff_phase(df)
+    detect_wyckoff_phase(df, funding_rates)
     wyckoff_flip = detect_actionable_wyckoff_signal(df)
     
     return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
@@ -444,6 +446,7 @@ def format_table(results: Dict[str, Any]) -> str:
         ["Pattern", wyckoff.pattern.value],
         ["Volume", wyckoff.volume.value],
         ["Volatility", wyckoff.volatility.value],
+        ["Funding", wyckoff.funding_state.value],
     ]
     
     return tabulate(

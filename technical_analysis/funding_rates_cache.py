@@ -1,7 +1,7 @@
 import os
 import pickle
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple, TypedDict
+from typing import Dict, List, Any, Optional, Tuple, TypedDict, Callable
 
 # Calculate cache directory relative to project root
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -29,11 +29,13 @@ def _load_funding_from_disk(coin: str) -> Optional[Tuple[int, List[FundingRateEn
             cache_file.unlink()
     return None
 
+
 def _save_funding_to_disk(coin: str, data: Tuple[int, List[FundingRateEntry]]) -> None:
     """Save funding rate data to disk"""
     cache_file = _get_funding_cache_file_path(coin)
     with open(cache_file, 'wb') as f:
         pickle.dump(data, f)
+
 
 def get_funding_with_cache(coin: str, now: int, lookback_days: int, fetch_fn) -> List[FundingRateEntry]:
     """Get funding rates using cache, fetching only newer data if needed"""
@@ -61,7 +63,14 @@ def get_funding_with_cache(coin: str, now: int, lookback_days: int, fetch_fn) ->
             return merged
 
     # No cache or outdated, fetch all data
-    funding_rates = fetch_fn(coin, start_ts, end_ts)
+    raw_funding_rates = fetch_fn(coin, start_ts, end_ts)
+    funding_rates = [
+        {
+            'time': rate['time'],
+            'fundingRate': float(rate['fundingRate'])  # Explicit conversion when storing
+        }
+        for rate in raw_funding_rates
+    ]
     _save_funding_to_disk(coin, (now, funding_rates))
     return funding_rates
 
