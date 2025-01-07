@@ -3,119 +3,76 @@ import pandas_ta as ta  # type: ignore[import]
 import numpy as np  # type: ignore[import]
 from typing import Final
 from .wyckoff_types import WyckoffState, WyckoffPhase, MarketPattern, CompositeAction, VolumeState, VolatilityState, EffortResult
+from .funding_rates_cache import FundingRateEntry
 from statistics import mean
 from typing import List, Optional
 
 
-def detect_wyckoff_flip(current_wyckoff: WyckoffState, prev_wyckoff: WyckoffState, older_wyckoff: WyckoffState) -> bool:
-    """
-    Detect significant Wyckoff phase transitions in crypto markets.
-    Enhanced for crypto's higher volatility and manipulation risks.
-    """
-    valid_transitions = {
-        (WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP, 1),
-        (WyckoffPhase.RANGING, WyckoffPhase.ACCUMULATION, 1),
-        (WyckoffPhase.MARKDOWN, WyckoffPhase.ACCUMULATION, 1),
-        (WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN, -1),
-        (WyckoffPhase.RANGING, WyckoffPhase.DISTRIBUTION, -1),
-        (WyckoffPhase.MARKUP, WyckoffPhase.DISTRIBUTION, -1)
-    }
-    
-    transition = (prev_wyckoff.phase, current_wyckoff.phase)
-    
-    for from_phase, to_phase, expected_momentum in valid_transitions:
-        if transition == (from_phase, to_phase):
-            momentum_aligned = (
-                (expected_momentum > 0 and 
-                 current_wyckoff.pattern == MarketPattern.TRENDING and
-                 current_wyckoff.composite_action in [CompositeAction.MARKING_UP, CompositeAction.ACCUMULATING]) or
-                (expected_momentum < 0 and 
-                 current_wyckoff.pattern == MarketPattern.TRENDING and
-                 current_wyckoff.composite_action in [CompositeAction.MARKING_DOWN, CompositeAction.DISTRIBUTING])
-            )
-            
-            # Detect potential manipulation
-            potential_manipulation = (
-                current_wyckoff.volume == VolumeState.HIGH and 
-                current_wyckoff.volatility == VolatilityState.HIGH and
-                current_wyckoff.volume_spread == VolumeState.HIGH
-            )
-            
-            # Validate phase transition
-            return (
-                momentum_aligned and
-                not current_wyckoff.uncertain_phase and
-                prev_wyckoff.phase == older_wyckoff.phase and
-                current_wyckoff.volume == VolumeState.HIGH and
-                current_wyckoff.volatility in [VolatilityState.HIGH, VolatilityState.NORMAL] and
-                not potential_manipulation and
-                current_wyckoff.effort_vs_result == EffortResult.STRONG and
-                not (current_wyckoff.is_spring and current_wyckoff.phase == WyckoffPhase.DISTRIBUTION) and
-                not (current_wyckoff.is_upthrust and current_wyckoff.phase == WyckoffPhase.ACCUMULATION)
-            )
-    
-    return False
-
 def detect_actionable_wyckoff_signal(
     df: pd.DataFrame,
-    min_confirmation_periods: int = 3,
-    volume_threshold: float = 2.0,
-    momentum_threshold: float = 0.03
+    funding_rates: Optional[List[FundingRateEntry]] = None,
+    extreme_funding_threshold: float = 0.01,  # 1% threshold for extreme funding
+    min_volume_factor: float = 1.5,  # Minimum volume compared to average
+    min_confirmation_bars: int = 3  # Minimum bars to confirm pattern
 ) -> bool:
-    """Enhanced detection of high-probability Wyckoff trading opportunities for crypto markets."""
-    if len(df) < min_confirmation_periods:
+    """
+    Detect high-probability Wyckoff setups focusing on specific events:
+    - Spring during accumulation with volume confirmation
+    - Upthrust during distribution with volume confirmation
+    - Extreme funding rates (weighted average) aligned with phase
+    - Requires minimum volume and pattern confirmation
+    """
+    if len(df) < min_confirmation_bars:
         return False
         
     current_state = df['wyckoff'].iloc[-1]
     
-    phase_changed = detect_wyckoff_flip(
-        df['wyckoff'].iloc[-1],
-        df['wyckoff'].iloc[-2],
-        df['wyckoff'].iloc[-3]
+    # Check volume confirmation
+    recent_volume = df['v'].iloc[-min_confirmation_bars:]
+    volume_ma = df['v'].rolling(24).mean().iloc[-1]  # 24-period volume MA
+    volume_confirmed = recent_volume.mean() > volume_ma * min_volume_factor
+    
+    # Check for repeated patterns (avoid false signals)
+    recent_states = df['wyckoff'].iloc[-min_confirmation_bars:]
+    consistent_phase = all(state.phase == current_state.phase for state in recent_states)
+    
+    # Check for spring or upthrust with stricter conditions
+    event_signal = (
+        ((current_state.is_spring and current_state.phase == WyckoffPhase.ACCUMULATION) or
+         (current_state.is_upthrust and current_state.phase == WyckoffPhase.DISTRIBUTION)) and
+        volume_confirmed and
+        consistent_phase and
+        current_state.volatility != VolatilityState.HIGH  # Avoid extremely volatile periods
     )
     
-    if not phase_changed:
-        return False
+    # Calculate weighted average funding rate
+    funding_signal = False
+    if funding_rates and len(funding_rates) > 0:
+        now = max(rate['time'] for rate in funding_rates)
+        weighted_sum = 0
+        total_weight = 0
+        decay_factor = 0.85  # Higher weight to recent rates
+        
+        for rate in funding_rates:
+            time_diff = (now - rate['time']) / (1000 * 3600)  # Hours difference
+            weight = decay_factor ** time_diff
+            weighted_sum += rate['fundingRate'] * weight
+            total_weight += weight
+        
+        if total_weight > 0:
+            avg_funding = weighted_sum / total_weight
+            funding_signal = (
+                (avg_funding < -extreme_funding_threshold and 
+                 current_state.phase == WyckoffPhase.ACCUMULATION and
+                 current_state.volume == VolumeState.HIGH) or
+                (avg_funding > extreme_funding_threshold and 
+                 current_state.phase == WyckoffPhase.DISTRIBUTION and
+                 current_state.volume == VolumeState.HIGH)
+            )
     
-    recent_volume = df['v'].iloc[-5:]
-    volume_ma = df['v'].rolling(30).mean().iloc[-1]
-    
-    # Core validation checks
-    volume_valid = (
-        (recent_volume > volume_ma).sum() >= 3 and
-        recent_volume.iloc[-1] > volume_ma * volume_threshold and
-        not (recent_volume.iloc[-1] > recent_volume.iloc[-2:].mean() * 3)
-    )
-    
-    price_valid = (
-        (current_state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION] and
-         df['l'].iloc[-1] > df['l'].iloc[-5:].min() * 0.985) or
-        (current_state.phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION] and
-         df['h'].iloc[-1] < df['h'].iloc[-5:].max() * 1.015)
-    )
-    
-    volatility = df['c'].pct_change().std() * np.sqrt(len(df))
-    momentum = (df['c'].iloc[-1] - df['c'].iloc[-2]) / df['c'].iloc[-2]
-    momentum_valid = (
-        (momentum > momentum_threshold * (1 + volatility) and 
-         current_state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]) or
-        (momentum < -momentum_threshold * (1 + volatility) and 
-         current_state.phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION])
-    )
-    
-    # Stability checks
-    stability_valid = (
-        (recent_volume.std() / recent_volume.mean() < 2.0) and  # Volume stability
-        ((df['h'].iloc[-3:] - df['l'].iloc[-3:]).std() / df['c'].iloc[-1] < 0.05)  # Price stability
-    )
- 
     return (
-        phase_changed and
-        volume_valid and
-        price_valid and
-        momentum_valid and
-        stability_valid and
-        current_state.effort_vs_result == EffortResult.STRONG and
+        (event_signal or funding_signal) and
         not current_state.uncertain_phase and
-        (volume_valid and momentum_valid)
+        current_state.effort_vs_result == EffortResult.STRONG and
+        volume_confirmed
     )

@@ -208,7 +208,7 @@ def apply_indicators(df: pd.DataFrame, mid: float, funding_rates: Optional[List[
     df["EMA"] = ta.ema(df["c"], length=ema_length)
 
     detect_wyckoff_phase(df, funding_rates)
-    wyckoff_flip = detect_actionable_wyckoff_signal(df)
+    wyckoff_flip = detect_actionable_wyckoff_signal(df, funding_rates)
     
     return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
 
