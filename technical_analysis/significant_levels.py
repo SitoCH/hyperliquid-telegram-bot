@@ -1,8 +1,8 @@
 from typing import List, Tuple, Dict, Optional
 import pandas as pd
 import numpy as np
-from scipy.stats import norm
-from scipy.special import expit
+from scipy.stats import norm # type: ignore[import]
+from scipy.special import expit # type: ignore[import]
 from .wyckoff_types import WyckoffState, WyckoffPhase, CompositeAction, FundingState
 from .wyckoff import MIN_PERIODS, STRONG_DEV_THRESHOLD
 
@@ -139,13 +139,13 @@ def find_significant_levels(
     wyckoff_state = df['wyckoff'].iloc[-1]
 
     clusters = {
-        'resistance': cluster_points(data['highs'], data['volumes'], data['timestamps'],
+        'resistance': cluster_points(np.asarray(data['highs']), np.asarray(data['volumes']), np.asarray(data['timestamps']),
                                    min_price, max_price, tolerance, wyckoff_state),
-        'support': cluster_points(data['lows'], data['volumes'], data['timestamps'],
+        'support': cluster_points(np.asarray(data['lows']), np.asarray(data['volumes']), np.asarray(data['timestamps']),
                                 min_price, max_price, tolerance, wyckoff_state)
     }
     
-    max_vol = data['volumes'].sum()
+    max_vol = np.sum(np.asarray(data['volumes']))
     total_periods = len(recent_df)
 
     def filter_levels(clusters: Dict[float, Dict[str, float]], is_resistance: bool) -> List[float]:
