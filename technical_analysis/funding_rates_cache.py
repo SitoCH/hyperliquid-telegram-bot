@@ -36,6 +36,12 @@ def _save_funding_to_disk(coin: str, data: Tuple[int, List[FundingRateEntry]]) -
     with open(cache_file, 'w') as f:
         json.dump(data, f)
 
+def _convert_funding_rate(rate: Dict[str, Any]) -> FundingRateEntry:
+    """Convert raw funding rate data to FundingRateEntry with consistent types"""
+    return {
+        'time': int(str(rate['time'])),  # Handle both int and str inputs
+        'fundingRate': float(str(rate['fundingRate']))  # Handle both float and str inputs
+    }
 
 def get_funding_with_cache(coin: str, now: int, lookback_days: int, fetch_fn) -> List[FundingRateEntry]:
     """Get funding rates using cache, fetching only newer data if needed"""
@@ -50,27 +56,20 @@ def get_funding_with_cache(coin: str, now: int, lookback_days: int, fetch_fn) ->
         # Filter cached rates within requested time range
         cached_rates = [r for r in funding_rates if start_ts <= r['time'] <= end_ts]
         
-        # Check if cache is recent enough (within last hour)
-        if cached_rates and last_update >= end_ts - 3600000 / 2:  # 30 minues in milliseconds
+        # Check if cache is recent enough
+        if cached_rates and last_update >= end_ts - 3600000 / 4:  # 15 minues in milliseconds
             return cached_rates
             
         # Only fetch missing data
         if cached_rates:
             fetch_start = max(r['time'] for r in cached_rates) + 1
-            new_rates = fetch_fn(coin, fetch_start, end_ts)
+            new_rates =[_convert_funding_rate(rate) for rate in fetch_fn(coin, fetch_start, end_ts)]
             merged = merge_funding_rates(cached_rates, new_rates, lookback_days)
             _save_funding_to_disk(coin, (now, merged))
             return merged
 
     # No cache or outdated, fetch all data
-    raw_funding_rates = fetch_fn(coin, start_ts, end_ts)
-    funding_rates = [
-        {
-            'time': int(rate['time']),
-            'fundingRate': float(rate['fundingRate'])
-        }
-        for rate in raw_funding_rates
-    ]
+    funding_rates = [_convert_funding_rate(rate) for rate in fetch_fn(coin, start_ts, end_ts)]
     _save_funding_to_disk(coin, (now, funding_rates))
     return funding_rates
 
