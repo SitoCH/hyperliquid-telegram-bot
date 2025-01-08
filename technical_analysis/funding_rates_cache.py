@@ -66,8 +66,8 @@ def get_funding_with_cache(coin: str, now: int, lookback_days: int, fetch_fn) ->
     raw_funding_rates = fetch_fn(coin, start_ts, end_ts)
     funding_rates = [
         {
-            'time': rate['time'],
-            'fundingRate': float(rate['fundingRate'])  # Explicit conversion when storing
+            'time': int(rate['time']),
+            'fundingRate': float(rate['fundingRate'])
         }
         for rate in raw_funding_rates
     ]
