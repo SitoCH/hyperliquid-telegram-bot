@@ -3,6 +3,7 @@ import datetime
 import importlib
 import os
 import random
+from tzlocal import get_localzone
 
 from logging_utils import logger
 from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandler, MessageHandler, filters
@@ -52,7 +53,7 @@ def main() -> None:
                 telegram_utils.run_once(strategy.init_strategy)
             logger.info(f'Exchange order enabled and loaded the strategy "{strategy_name}"')
 
-        current_time = datetime.datetime.now()
+        current_time = datetime.datetime.now(get_localzone())
         next_hour = current_time.replace(minute=0, second=15, microsecond=0)
         if current_time >= next_hour:
             next_hour += datetime.timedelta(hours=1)
