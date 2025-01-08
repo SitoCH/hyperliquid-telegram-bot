@@ -1,5 +1,5 @@
 import os
-import pickle
+import json
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple, TypedDict, Callable
 
@@ -15,16 +15,16 @@ def _get_funding_cache_file_path(coin: str) -> Path:
     """Get the path for the funding rate cache file of a specific coin"""
     if not CACHE_DIR.exists():
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    return CACHE_DIR / f"{coin}_funding_rates.pkl"
+    return CACHE_DIR / f"{coin}_funding_rates.json"
 
 def _load_funding_from_disk(coin: str) -> Optional[Tuple[int, List[FundingRateEntry]]]:
     """Load funding rate data from disk"""
     cache_file = _get_funding_cache_file_path(coin)
     if cache_file.exists():
         try:
-            with open(cache_file, 'rb') as f:
-                return pickle.load(f)
-        except (EOFError, pickle.UnpicklingError):
+            with open(cache_file, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError):
             # Handle corrupted cache files
             cache_file.unlink()
     return None
@@ -33,8 +33,8 @@ def _load_funding_from_disk(coin: str) -> Optional[Tuple[int, List[FundingRateEn
 def _save_funding_to_disk(coin: str, data: Tuple[int, List[FundingRateEntry]]) -> None:
     """Save funding rate data to disk"""
     cache_file = _get_funding_cache_file_path(coin)
-    with open(cache_file, 'wb') as f:
-        pickle.dump(data, f)
+    with open(cache_file, 'w') as f:
+        json.dump(data, f)
 
 
 def get_funding_with_cache(coin: str, now: int, lookback_days: int, fetch_fn) -> List[FundingRateEntry]:
