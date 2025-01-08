@@ -18,8 +18,9 @@ VOLUME_MA_THRESHOLD: Final[float] = 1.3  # Increased from 1.1
 VOLUME_SURGE_THRESHOLD: Final[float] = 2.0  # Increased from 1.5 for crypto's volume spikes
 VOLUME_TREND_SHORT: Final[int] = 5
 VOLUME_TREND_LONG: Final[int] = 10
-FUNDING_EXTREME_THRESHOLD: Final[float] = 0.01  # 1% threshold for extreme funding
-FUNDING_MODERATE_THRESHOLD: Final[float] = 0.005  # 0.5% threshold for moderate funding
+# Constants for funding rate analysis (adjusted for annualized rates)
+FUNDING_EXTREME_THRESHOLD: Final[float] = 0.75  # 75% annualized (was 0.01)
+FUNDING_MODERATE_THRESHOLD: Final[float] = 0.25  # 25% annualized (was 0.005)
 
 def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:
     """Detect spring and upthrust patterns"""
@@ -473,6 +474,9 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
     - Non-linear time weighting for faster response to changes
     - Outlier detection to ignore manipulation spikes
     - Dynamic thresholds based on volatility
+    
+    Note: Funding rates are converted to annualized rates (multiply hourly by 8760).
+    Typical crypto funding rates range from ±10% to ±100% APR.
     """
     if not funding_rates or len(funding_rates) < 3:  # Need minimum samples
         return FundingState.UNKNOWN
@@ -480,7 +484,7 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
     now = max(rate['time'] for rate in funding_rates)
     
     # Convert to numpy array for efficient calculations
-    rates = np.array([rate['fundingRate'] for rate in funding_rates])
+    rates = np.array([rate['fundingRate'] * 8760 for rate in funding_rates])  # Annualize hourly rates
     times = np.array([rate['time'] for rate in funding_rates])
     
     # Remove outliers using IQR method
