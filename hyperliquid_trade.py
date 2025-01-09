@@ -277,6 +277,32 @@ async def selected_take_profit(update: Update, context: Union[CallbackContext, C
     return ConversationHandler.END
 
 
+def place_stop_loss_order(exchange: Any, 
+    selected_coin: str, 
+    is_long: bool, 
+    sz: float,
+    stop_loss_price: float) -> None:
+
+    sl_trigger_px = stop_loss_price
+
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+
+    liquidation_px_str = hyperliquid_utils.get_liquidation_px_str(user_state, selected_coin)
+
+    if liquidation_px_str is not None:
+        liquidation_px = float(liquidation_px_str)
+        if liquidation_px > 0.0:
+            liquidation_trigger_px = liquidation_px * (1.0025 if is_long else 0.9975)
+            
+            if stop_loss_price == 0 or (is_long and stop_loss_price < liquidation_trigger_px) or (not is_long and stop_loss_price > liquidation_trigger_px):
+                sl_trigger_px = liquidation_trigger_px
+    
+    if sl_trigger_px > 0:
+        sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
+        sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
+        sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
+        logger.info(sl_order_result)
+
 async def place_stop_loss_and_take_profit_orders(
     exchange: Any, 
     selected_coin: str, 
@@ -285,25 +311,8 @@ async def place_stop_loss_and_take_profit_orders(
     stop_loss_price: float, 
     take_profit_price: float
 ) -> None:
-    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
 
-    liquidation_px = float(hyperliquid_utils.get_liquidation_px_str(user_state, selected_coin))
-    if liquidation_px > 0.0:
-        liquidation_trigger_px = liquidation_px * (1.0025 if is_long else 0.9975)
-        
-        # Use liquidation-based stop loss if stop_loss_price is 0 or if it would trigger after liquidation
-        if stop_loss_price == 0 or (is_long and stop_loss_price < liquidation_trigger_px) or (not is_long and stop_loss_price > liquidation_trigger_px):
-            sl_trigger_px = liquidation_trigger_px
-            sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
-            sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
-            sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
-            logger.info(sl_order_result)
-        elif stop_loss_price > 0:  # Only place custom stop loss if it's not zero and would trigger before liquidation
-            sl_trigger_px = stop_loss_price
-            sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
-            sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
-            sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
-            logger.info(sl_order_result)
+    place_stop_loss_order(exchange, selected_coin, is_long, sz, stop_loss_price)
 
     if take_profit_price > 0:
         tp_trigger_px = take_profit_price
