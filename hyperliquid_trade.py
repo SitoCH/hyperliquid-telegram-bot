@@ -265,7 +265,7 @@ async def selected_take_profit(update: Update, context: Union[CallbackContext, C
             open_result = exchange.market_open(selected_coin, is_long, sz)
             logger.info(open_result)
 
-            await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, mid, stop_loss_price, take_profit_price)
+            await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
 
             await update.message.reply_text(text=f"Opened {context.user_data['enter_mode']} for {sz} units on {selected_coin} ({leverage}x)")
         else:
@@ -281,8 +281,7 @@ async def place_stop_loss_and_take_profit_orders(
     exchange: Any, 
     selected_coin: str, 
     is_long: bool, 
-    sz: float, 
-    mid: float, 
+    sz: float,
     stop_loss_price: float, 
     take_profit_price: float
 ) -> None:
