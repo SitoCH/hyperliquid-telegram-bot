@@ -2,7 +2,7 @@ import pandas as pd  # type: ignore[import]
 import pandas_ta as ta  # type: ignore[import]
 import numpy as np  # type: ignore[import]
 from typing import Final
-from .wyckoff_types import WyckoffState, WyckoffPhase, MarketPattern, CompositeAction, VolumeState, VolatilityState, EffortResult
+from .wyckoff_types import WyckoffState, WyckoffPhase, MarketPattern, CompositeAction, VolumeState, VolatilityState, EffortResult, FundingState
 from .funding_rates_cache import FundingRateEntry
 from statistics import mean
 from typing import List, Optional
@@ -11,7 +11,6 @@ from typing import List, Optional
 def detect_actionable_wyckoff_signal(
     df: pd.DataFrame,
     funding_rates: Optional[List[FundingRateEntry]] = None,
-    extreme_funding_threshold: float = 0.01,  # 1% threshold for extreme funding
     min_confirmation_bars: int = 3  # Minimum bars to confirm pattern
 ) -> bool:
     """
@@ -66,34 +65,19 @@ def detect_actionable_wyckoff_signal(
         current_state.volatility != VolatilityState.HIGH
     )
     
-    # Calculate weighted average funding rate
-    funding_signal = False
-    if funding_rates and len(funding_rates) > 0:
-        now = max(rate.time for rate in funding_rates)
-        weighted_sum = 0
-        total_weight = 0
-        decay_factor = 0.85  # Higher weight to recent rates
-        
-        for rate in funding_rates:
-            time_diff = (now - rate.time) / (1000 * 3600)  # Hours difference
-            weight = decay_factor ** time_diff
-            weighted_sum += rate.funding_rate * weight
-            total_weight += weight
-        
-        if total_weight > 0:
-            avg_funding = weighted_sum / total_weight
-            funding_signal = (
-                # Accumulation with negative funding
-                (avg_funding < -extreme_funding_threshold and 
-                 current_state.phase == WyckoffPhase.ACCUMULATION and
-                 current_state.composite_action == CompositeAction.ACCUMULATING and
-                 current_state.volume == VolumeState.HIGH) or
-                # Distribution with positive funding
-                (avg_funding > extreme_funding_threshold and 
-                 current_state.phase == WyckoffPhase.DISTRIBUTION and
-                 current_state.composite_action == CompositeAction.DISTRIBUTING and
-                 current_state.volume == VolumeState.HIGH)
-            )
+    # Check funding state alignment with market structure
+    funding_signal = (
+        # Accumulation with negative funding
+        (current_state.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and 
+         current_state.phase == WyckoffPhase.ACCUMULATION and
+         current_state.composite_action == CompositeAction.ACCUMULATING and
+         current_state.volume == VolumeState.HIGH) or
+        # Distribution with positive funding
+        (current_state.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and 
+         current_state.phase == WyckoffPhase.DISTRIBUTION and
+         current_state.composite_action == CompositeAction.DISTRIBUTING and
+         current_state.volume == VolumeState.HIGH)
+    )
     
     return (
         (action_signal or funding_signal) and
