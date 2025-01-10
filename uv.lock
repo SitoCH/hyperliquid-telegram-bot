@@ -188,6 +188,14 @@ wheels = [
 ]
 
 [[package]]
+name = "dacite"
+version = "1.8.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/21/0f/cf0943f4f55f0fbc7c6bd60caf1343061dff818b02af5a0d444e473bb78d/dacite-1.8.1-py3-none-any.whl", hash = "sha256:cc31ad6fdea1f49962ea42db9421772afe01ac5442380d9a99fcf3d188c61afe", size = 14309 },
+]
+
+[[package]]
 name = "eth-abi"
 version = "3.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -392,6 +400,7 @@ name = "hyperliquid-telegram-bot"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "dacite" },
     { name = "hyperliquid-python-sdk" },
     { name = "matplotlib" },
     { name = "mplfinance" },
@@ -412,6 +421,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dacite", specifier = ">=1.8.1" },
     { name = "hyperliquid-python-sdk", specifier = ">=0.7.1" },
     { name = "matplotlib", specifier = ">=3.9.2" },
     { name = "mplfinance", specifier = ">=0.12.10b0" },
