@@ -71,7 +71,9 @@ class CompositeAction(Enum):
 class FundingState(Enum):
     HIGHLY_POSITIVE = "highly positive"
     POSITIVE = "positive"
+    SLIGHTLY_POSITIVE = "slightly positive"
     NEUTRAL = "neutral"
+    SLIGHTLY_NEGATIVE = "slightly negative"
     NEGATIVE = "negative"
     HIGHLY_NEGATIVE = "highly negative"
     UNKNOWN = "unknown"

@@ -69,15 +69,15 @@ def detect_actionable_wyckoff_signal(
     # Calculate weighted average funding rate
     funding_signal = False
     if funding_rates and len(funding_rates) > 0:
-        now = max(rate['time'] for rate in funding_rates)
+        now = max(rate.time for rate in funding_rates)
         weighted_sum = 0
         total_weight = 0
         decay_factor = 0.85  # Higher weight to recent rates
         
         for rate in funding_rates:
-            time_diff = (now - rate['time']) / (1000 * 3600)  # Hours difference
+            time_diff = (now - rate.time) / (1000 * 3600)  # Hours difference
             weight = decay_factor ** time_diff
-            weighted_sum += rate['fundingRate'] * weight
+            weighted_sum += rate.funding_rate * weight
             total_weight += weight
         
         if total_weight > 0:

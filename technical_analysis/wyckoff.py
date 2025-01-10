@@ -18,9 +18,7 @@ VOLUME_MA_THRESHOLD: Final[float] = 1.3  # Increased from 1.1
 VOLUME_SURGE_THRESHOLD: Final[float] = 2.0  # Increased from 1.5 for crypto's volume spikes
 VOLUME_TREND_SHORT: Final[int] = 5
 VOLUME_TREND_LONG: Final[int] = 10
-# Constants for funding rate analysis (adjusted for annualized rates)
-FUNDING_EXTREME_THRESHOLD: Final[float] = 0.75  # 75% annualized (was 0.01)
-FUNDING_MODERATE_THRESHOLD: Final[float] = 0.25  # 25% annualized (was 0.005)
+
 
 def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:
     """Detect spring and upthrust patterns"""
@@ -350,14 +348,42 @@ def generate_wyckoff_description(
     
     # Enhanced funding rate context
     if funding_state != FundingState.UNKNOWN:
-        funding_context = {
-            FundingState.HIGHLY_POSITIVE: "extremely high funding rates suggesting overheated longs",
-            FundingState.POSITIVE: "positive funding rates showing long bias",
-            FundingState.NEUTRAL: "neutral funding rates",
-            FundingState.NEGATIVE: "negative funding rates showing short bias",
-            FundingState.HIGHLY_NEGATIVE: "extremely negative funding rates suggesting overheated shorts"
+        funding_advice = {
+            FundingState.HIGHLY_POSITIVE: (
+                "Extreme positive funding indicates severely overleveraged longs. "
+                "High risk of long liquidations. Consider waiting for funding reset or "
+                "look for short opportunities with strong institutional signals"
+            ),
+            FundingState.POSITIVE: (
+                "Positive funding shows aggressive long positioning. "
+                "Consider reduced leverage for longs and tighter stops. "
+                "Watch for potential long squeezes on strong distribution signals"
+            ),
+            FundingState.SLIGHTLY_POSITIVE: (
+                "Slightly positive funding suggests mild long bias. "
+                "Normal position sizing acceptable but monitor funding trend"
+            ),
+            FundingState.NEUTRAL: (
+                "Neutral funding indicates balanced positioning. "
+                "Focus on technical signals for trade direction"
+            ),
+            FundingState.SLIGHTLY_NEGATIVE: (
+                "Slightly negative funding suggests mild short bias. "
+                "Normal position sizing acceptable but monitor funding trend"
+            ),
+            FundingState.NEGATIVE: (
+                "Negative funding shows aggressive short positioning. "
+                "Consider reduced leverage for shorts and tighter stops. "
+                "Watch for potential short squeezes on strong accumulation signals"
+            ),
+            FundingState.HIGHLY_NEGATIVE: (
+                "Extreme negative funding indicates severely overleveraged shorts. "
+                "High risk of short liquidations. Consider waiting for funding reset or "
+                "look for long opportunities with strong institutional signals"
+            ),
+            FundingState.UNKNOWN: ""
         }
-        description_parts.append(funding_context.get(funding_state, ""))
+        description_parts.append(funding_advice.get(funding_state, ""))
 
     # Join description with better flow
     main_description = ", ".join(description_parts)
@@ -475,17 +501,18 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
     - Outlier detection to ignore manipulation spikes
     - Dynamic thresholds based on volatility
     
-    Note: Funding rates are converted to annualized rates (multiply hourly by 8760).
-    Typical crypto funding rates range from ±10% to ±100% APR.
+    Note: Funding rates are converted to EAR (Effective Annual Rate) using the formula:
+    EAR = (1 + hourly_rate)^8760 - 1
+    This gives the true annualized return accounting for compounding.
     """
     if not funding_rates or len(funding_rates) < 3:  # Need minimum samples
         return FundingState.UNKNOWN
     
-    now = max(rate['time'] for rate in funding_rates)
+    now = max(rate.time for rate in funding_rates)
     
-    # Convert to numpy array for efficient calculations
-    rates = np.array([rate['fundingRate'] * 8760 for rate in funding_rates])  # Annualize hourly rates
-    times = np.array([rate['time'] for rate in funding_rates])
+    # Convert to numpy array using EAR calculation
+    rates = np.array([(1 + rate.funding_rate) ** 8760 - 1 for rate in funding_rates])
+    times = np.array([rate.time for rate in funding_rates])
     
     # Remove outliers using IQR method
     q1, q3 = np.percentile(rates, [25, 75])
@@ -503,20 +530,19 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
     
     # Calculate weighted average with normalization
     avg_funding = np.sum(rates * weights) / np.sum(weights)
-    
-    # Dynamic thresholds based on funding rate volatility
-    volatility = np.std(rates)
-    extreme_threshold = max(FUNDING_EXTREME_THRESHOLD, volatility * 2)
-    moderate_threshold = max(FUNDING_MODERATE_THRESHOLD, volatility)
-    
-    # Determine state with dynamic thresholds
-    if avg_funding > extreme_threshold:
+
+    # Determine state with granular thresholds
+    if avg_funding > 0.25:
         return FundingState.HIGHLY_POSITIVE
-    elif avg_funding > moderate_threshold:
+    elif avg_funding > 0.1:
         return FundingState.POSITIVE
-    elif avg_funding < -extreme_threshold:
+    elif avg_funding > 0.02:
+        return FundingState.SLIGHTLY_POSITIVE
+    elif avg_funding < -0.25:
         return FundingState.HIGHLY_NEGATIVE
-    elif avg_funding < -moderate_threshold:
+    elif avg_funding < -0.1:
         return FundingState.NEGATIVE
+    elif avg_funding < -0.02:
+        return FundingState.SLIGHTLY_NEGATIVE
     else:
         return FundingState.NEUTRAL

@@ -82,7 +82,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     try:
         now = int(time.time() * 1000)
 
-        funding_rates = get_funding_with_cache(coin, now, 30, hyperliquid_utils.info.funding_history)
+        funding_rates = get_funding_with_cache(coin, now, 7)
 
         candles_15m = get_candles_with_cache(coin, "15m", now, 125, hyperliquid_utils.info.candles_snapshot)
         candles_1h = get_candles_with_cache(coin, "1h", now, 250, hyperliquid_utils.info.candles_snapshot)
