@@ -89,21 +89,18 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
         def exp_roc(series: pd.Series, periods: int) -> pd.Series:
             return (series / series.shift(periods)).pow(1/periods) - 1
             
-        momentum_parts = pd.Series({
-            'fast': exp_roc(data_subset['c'], 7),  # 7-period EROC
-            'medium': exp_roc(data_subset['c'], 14),  # 14-period EROC
-            'slow': exp_roc(data_subset['c'], 21)  # 21-period EROC
-        })
+        # Calculate momentum components
+        fast_momentum = exp_roc(data_subset['c'], 7).iloc[-1]  # Get last value
+        medium_momentum = exp_roc(data_subset['c'], 14).iloc[-1]  # Get last value
+        slow_momentum = exp_roc(data_subset['c'], 21).iloc[-1]  # Get last value
         
-        # Calculate momentum_strength with proper scaling and normalization
-        momentum = momentum_parts.mean()
-        if isinstance(momentum, pd.Series):
-            momentum_value = momentum.iloc[-1]
-        else:
-            momentum_value = float(momentum)
+        # Calculate average momentum
+        momentum_value = float(sum([fast_momentum, medium_momentum, slow_momentum]) / 3)
+
+        # Calculate momentum standard deviation for scaling
+        momentum_std = float(np.std([fast_momentum, medium_momentum, slow_momentum]))
 
         # Scale momentum to a -100 to +100 range based on historical volatility
-        momentum_std = momentum_parts.std()
         normalized_momentum = momentum_value / (momentum_std * 2) if momentum_std != 0 else 0
         momentum_strength = max(min(normalized_momentum * 100, 100), -100)
 

@@ -135,78 +135,67 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
 
 
 def apply_indicators(df: pd.DataFrame, mid: float, funding_rates: Optional[List[FundingRateEntry]] = None) -> Tuple[bool, bool]:
-    """Apply indicators and return (supertrend_flip, wyckoff_flip)"""
-    # SuperTrend: shorter for faster response
-    st_length = 10
-    # ATR: standard setting
+    """Apply technical indicators with Wyckoff-optimized settings"""
+    # SuperTrend: shorter for faster response to institutional activity
+    st_length = 8  # Reduced from 10 to be more responsive
+    # ATR: standard Wyckoff volatility measure
     atr_length = 14
-    # EMA: longer for trend following
-    ema_length = 21
-    # Volume SMA: about one day in periods
-    vol_length = 24
+    # Volume SMA: for effort vs result analysis
+    vol_length = 20  # Changed to better match trading sessions
+    # Price SMA: for trend context
+    price_sma_length = 20
 
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
 
-    # ATR calculation with error handling
+    # Wyckoff Volume Analysis
+    df["Volume_SMA"] = df["v"].rolling(window=vol_length).mean()
+    df["Volume_Confirm"] = df["v"] > df["Volume_SMA"]
+    
+    # Volume Force: measures buying/selling pressure
+    df["Volume_Force"] = ((df["c"] - df["o"]) / (df["h"] - df["l"])) * df["v"]
+    df["Volume_Force_SMA"] = df["Volume_Force"].rolling(window=vol_length).mean()
+    
+    # Effort vs Result: key Wyckoff concept
+    df["Price_Range"] = df["h"] - df["l"]
+    df["Close_Range"] = df["c"] - df["o"]
+    df["Effort_Result"] = (df["Close_Range"] / df["Price_Range"]) * (df["v"] / df["Volume_SMA"])
+
+    # ATR for volatility analysis
     atr_calc = ta.atr(df["h"], df["l"], df["c"], length=atr_length)
     if atr_calc is not None:
         df["ATR"] = atr_calc
     else:
         df["ATR"] = pd.Series([0.0] * len(df), index=df.index)
-        logger.warning("ATR calculation failed, using fallback values")
 
-    # Calculate Volume confirmation first
-    df["Volume_SMA"] = df["v"].rolling(window=vol_length).mean()
-    df["Volume_Confirm"] = df["v"] > df["Volume_SMA"]
-
-    # Then handle SuperTrend with optimized settings and error handling
-    supertrend = ta.supertrend(df["h"], df["l"], df["c"], length=st_length, multiplier=3.5)
+    # SuperTrend with optimized multiplier
+    supertrend = ta.supertrend(df["h"], df["l"], df["c"], length=st_length, multiplier=3.0)
     if supertrend is not None and len(df) > st_length:
-        df["SuperTrend"] = supertrend[f"SUPERT_{st_length}_3.5"]
+        df["SuperTrend"] = supertrend[f"SUPERT_{st_length}_3.0"]
         df["SuperTrend_Flip_Detected"] = (
-            supertrend[f"SUPERTd_{st_length}_3.5"].diff().abs() == 1) & df["Volume_Confirm"]
+            supertrend[f"SUPERTd_{st_length}_3.0"].diff().abs() == 1
+        ) & df["Volume_Confirm"]
     else:
-        df["SuperTrend"] = df["c"]  # Use close price as fallback
+        df["SuperTrend"] = df["c"]
         df["SuperTrend_Flip_Detected"] = False
-        logger.warning(f"Insufficient data for SuperTrend calculation (needed >{st_length} points, got {len(df)})")
 
-    # Volume confirmation using longer period
-    df["Volume_SMA"] = df["v"].rolling(window=vol_length).mean()
-    df["Volume_Confirm"] = df["v"] > df["Volume_SMA"]
-    
-    # Use shorter length for VWAP with safety checks
+    # VWAP for institutional reference
     df["VWAP"] = ta.vwap(df["h"], df["l"], df["c"], df["v"])
     
-    # Add safety check for VWAP flip detection
-    if len(df["VWAP"].dropna()) >= 2:  # Ensure we have at least 2 valid VWAP values
-        df["VWAP_Flip_Detected"] = (
-            ((mid > df["VWAP"].iloc[-2]) & (mid <= df["VWAP"].iloc[-1])) | 
-            ((mid < df["VWAP"].iloc[-2]) & (mid >= df["VWAP"].iloc[-1]))
-        )
-    else:
-        df["VWAP_Flip_Detected"] = False
-        logger.warning("Insufficient data for VWAP flip detection")
-
-    macd = ta.macd(df["c"], fast=6, slow=13, signal=4)
+    # Wyckoff Momentum Analysis
+    macd = ta.macd(df["c"], fast=8, slow=21, signal=5)  # Adjusted for institutional timeframes
     if macd is not None:
-        df["MACD"] = macd["MACD_6_13_4"]
-        df["MACD_Signal"] = macd["MACDs_6_13_4"]
-        df["MACD_Hist"] = macd["MACDh_6_13_4"]
+        df["MACD"] = macd["MACD_8_21_5"]
+        df["MACD_Signal"] = macd["MACDs_8_21_5"]
+        df["MACD_Hist"] = macd["MACDh_8_21_5"]
     else:
-        df["MACD"] = 0.0
-        df["MACD_Signal"] = 0.0
-        df["MACD_Hist"] = 0.0
+        df["MACD"] = df["MACD_Signal"] = df["MACD_Hist"] = 0.0
 
-    if "SuperTrend_Flip_Detected" in df.columns:
-        # Only consider flips with significant price movement (>0.5% from SuperTrend)
-        price_deviation = abs(df["c"] - df["SuperTrend"]) / df["SuperTrend"] * 100
-        significant_move = price_deviation > 0.5
-        df["SuperTrend_Flip_Detected"] = df["SuperTrend_Flip_Detected"] & significant_move & df["Volume_Confirm"]
+    # Trend Analysis
+    df["EMA"] = ta.ema(df["c"], length=21)  # Primary trend
+    df["SMA"] = ta.sma(df["c"], length=price_sma_length)  # Secondary trend
 
-    # EMA with longer period for better trend following
-    df["EMA"] = ta.ema(df["c"], length=ema_length)
-
+    # Wyckoff Phase Detection
     detect_wyckoff_phase(df, funding_rates)
     wyckoff_flip = detect_actionable_wyckoff_signal(df, funding_rates)
     
