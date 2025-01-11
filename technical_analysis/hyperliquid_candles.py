@@ -76,7 +76,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     for coin in coins_to_analyze:
         context.application.job_queue.run_once( # type: ignore
             analyze_candles_for_coin_job,
-            when=loop * 10,
+            when=loop * 7,
             data={"coin": coin},
             job_kwargs={'misfire_grace_time': 60}
         )
@@ -94,9 +94,9 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
 
         funding_rates = get_funding_with_cache(coin, now, 7)
 
-        candles_15m = get_candles_with_cache(coin, "15m", now, 125, hyperliquid_utils.info.candles_snapshot)
-        candles_1h = get_candles_with_cache(coin, "1h", now, 250, hyperliquid_utils.info.candles_snapshot)
-        candles_4h = get_candles_with_cache(coin, "4h", now, 500, hyperliquid_utils.info.candles_snapshot)
+        candles_15m = get_candles_with_cache(coin, "15m", now, 50, hyperliquid_utils.info.candles_snapshot)
+        candles_1h = get_candles_with_cache(coin, "1h", now, 100, hyperliquid_utils.info.candles_snapshot)
+        candles_4h = get_candles_with_cache(coin, "4h", now, 300, hyperliquid_utils.info.candles_snapshot)
         candles_1d = get_candles_with_cache(coin, "1d", now, 750, hyperliquid_utils.info.candles_snapshot)
         
         local_tz = get_localzone()
