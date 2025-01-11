@@ -1,11 +1,10 @@
 import pandas as pd  # type: ignore[import]
 import pandas_ta as ta  # type: ignore[import]
 import numpy as np  # type: ignore[import]
-from typing import Final
-from .wyckoff_types import MarketPattern, VolatilityState, WyckoffState, WyckoffPhase, EffortResult, CompositeAction, WyckoffSign, FundingState, VolumeState
+from typing import Final, Dict, List, Optional, Any
+from .wyckoff_types import MarketPattern, VolatilityState, WyckoffState, WyckoffPhase, EffortResult, CompositeAction, WyckoffSign, FundingState, VolumeState, ThresholdConfig, Timeframe
 from .funding_rates_cache import FundingRateEntry
 from statistics import mean
-from typing import List, Optional, Dict, Any
 from .wyckoff_description import generate_wyckoff_description
 from utils import log_execution_time
 
@@ -45,13 +44,23 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
         df.loc[df.index[-2:], 'wyckoff'] = [WyckoffState.unknown(), WyckoffState.unknown()]
         return
 
-    # Get ATR with safety checks
-    atr = df.get('ATR', pd.Series([0.0])).iloc[-1]
-    if atr == 0 or pd.isna(atr):
-        df.loc[df.index[-2:], 'wyckoff'] = [WyckoffState.unknown(), WyckoffState.unknown()]  # type: ignore[assignment]
-        return
+    # Determine timeframe and get appropriate thresholds
+    avg_time_delta = pd.Timedelta(df.index.to_series().diff().mean())
+    
+    if avg_time_delta >= pd.Timedelta(hours=24):
+        timeframe = Timeframe.DAY_1
+    elif avg_time_delta >= pd.Timedelta(hours=4):
+        timeframe = Timeframe.HOURS_4
+    elif avg_time_delta >= pd.Timedelta(hours=1):
+        timeframe = Timeframe.HOUR_1
+    else:
+        timeframe = Timeframe.MINUTES_15
+    
+    thresholds = ThresholdConfig.for_timeframe(timeframe)
+    is_higher_timeframe = timeframe in [Timeframe.HOURS_4, Timeframe.DAY_1]
 
-    # Process last three periods
+    # Process last three periods with phase smoothing
+    phases_history = []
     for i in [-3, -2, -1]:
         # Get the subset of data up to the current index
         data_subset = df.iloc[:i] if i != -1 else df
@@ -136,12 +145,12 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
             volume_spike > 2.0
         )
         
-        # Enhanced relative volume calculation
+        # Use thresholds from config
         is_high_volume = (
-            (relative_volume > VOLUME_MA_THRESHOLD and volume_trend_value > 0) or
-            (volume_spike > 2.5) or  # More sensitive to extreme spikes
-            (relative_volume > VOLUME_SURGE_THRESHOLD) or
-            (recent_strong_volume > 0.6 and relative_volume > 1.2)  # More lenient conditions
+            (relative_volume > thresholds.volume_threshold and volume_trend_value > 0) or
+            (volume_spike > 2.5) or
+            (relative_volume > thresholds.volume_surge_threshold) or
+            (recent_strong_volume > 0.6 and relative_volume > 1.2)
         )
 
         price_strength = (curr_price - avg_price) / (price_std_last + 1e-8)
@@ -165,19 +174,25 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
             (clustered_volume and volume_spike > 2.5)
         )
         
-        # Phase identification
-        phase = identify_wyckoff_phase(
+        # Phase identification with temporal smoothing
+        current_phase = identify_wyckoff_phase(
             is_spring, is_upthrust, curr_volume, volume_sma.iloc[-1],
             effort_vs_result.iloc[-1], volume_spread.iloc[-1], volume_spread_ma.iloc[-1],
-            price_strength, momentum_strength, is_high_volume, volatility
+            price_strength, momentum_strength, is_high_volume, volatility,
+            thresholds=thresholds
         )
         
-        # Combine manipulation signs with phase uncertainty
-        uncertain_phase = phase.value.startswith('~') or manipulation_signs
-        if manipulation_signs:
-            phase = WyckoffPhase.POSSIBLE_RANGING
+        phases_history.append(current_phase)
         
-        effort_result = EffortResult.STRONG if abs(effort_vs_result.iloc[-1]) > EFFORT_THRESHOLD else EffortResult.WEAK
+        # Apply phase smoothing
+        smoothed_phase = smooth_wyckoff_phase(phases_history, is_higher_timeframe)
+        
+        # Combine manipulation signs with phase uncertainty
+        uncertain_phase = smoothed_phase.value.startswith('~') or manipulation_signs
+        if manipulation_signs:
+            smoothed_phase = WyckoffPhase.POSSIBLE_RANGING
+        
+        effort_result = EffortResult.STRONG if abs(effort_vs_result.iloc[-1]) > thresholds.effort_threshold else EffortResult.WEAK
         
         # Detect composite action and Wyckoff signs
         composite_action = detect_composite_action(data_subset, price_strength, volume_trend_value, effort_vs_result.iloc[-1])
@@ -187,19 +202,19 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
         
         # Adjust phase confidence based on funding rates
         if not uncertain_phase and funding_state != FundingState.UNKNOWN:
-            if phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]:
+            if smoothed_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]:
                 if funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE]:
                     uncertain_phase = True
-            elif phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]:
+            elif smoothed_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]:
                 if funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE]:
                     uncertain_phase = True
 
-        # Create WyckoffState instance with correct parameters
+        # Create WyckoffState instance with smoothed phase
         wyckoff_state = WyckoffState(
-            phase=phase,
+            phase=smoothed_phase,
             uncertain_phase=uncertain_phase,
             volume=VolumeState.HIGH if is_high_volume else VolumeState.LOW,
-            pattern=MarketPattern.TRENDING if abs(momentum_strength) > MOMENTUM_THRESHOLD else MarketPattern.RANGING,
+            pattern=MarketPattern.TRENDING if abs(momentum_strength) > thresholds.momentum_threshold else MarketPattern.RANGING,
             volatility=VolatilityState.HIGH if volatility.iloc[-1] > volatility.mean() else VolatilityState.NORMAL,
             is_spring=is_spring,
             is_upthrust=is_upthrust,
@@ -209,7 +224,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
             wyckoff_sign=wyckoff_sign,
             funding_state=funding_state,
             description=generate_wyckoff_description(
-                phase, uncertain_phase, is_high_volume, momentum_strength, 
+                smoothed_phase, uncertain_phase, is_high_volume, momentum_strength, 
                 is_spring, is_upthrust, effort_result,
                 composite_action, wyckoff_sign, funding_state
             )
@@ -222,19 +237,20 @@ def identify_wyckoff_phase(
     is_spring: bool, is_upthrust: bool, curr_volume: float, volume_sma: float,
     effort_vs_result: float, volume_spread: float, volume_spread_ma: float,
     price_strength: float, momentum_strength: float, is_high_volume: bool,
-    volatility: pd.Series
+    volatility: pd.Series, thresholds: ThresholdConfig
 ) -> WyckoffPhase:
-    """Enhanced Wyckoff phase identification for crypto markets."""
+    """Enhanced Wyckoff phase identification with timeframe-specific adjustments."""
     # Adaptive thresholds based on market volatility
     volatility_factor = min(2.0, 1.0 + volatility.iloc[-1] / volatility.mean())
     
-    CRYPTO_VOLUME_THRESHOLD = VOLUME_THRESHOLD * volatility_factor
-    CRYPTO_EFFORT_THRESHOLD = EFFORT_THRESHOLD * (1.0 / volatility_factor)
+    # Use thresholds directly from config, only adjust for volatility
+    volume_threshold = thresholds.volume_threshold * volatility_factor
+    effort_threshold = thresholds.effort_threshold * (1.0 / volatility_factor)
     
     # Detect potential manipulation
     potential_manipulation = (
         volume_spread > volume_spread_ma * 3.0 and  # Extreme volume spread
-        abs(effort_vs_result) < CRYPTO_EFFORT_THRESHOLD * 0.5  # Low price result
+        abs(effort_vs_result) < effort_threshold * 0.5  # Low price result
     )
     
     if potential_manipulation:
@@ -242,22 +258,22 @@ def identify_wyckoff_phase(
                 else WyckoffPhase.POSSIBLE_ACCUMULATION)
     
     # Spring/Upthrust detection with volume confirmation
-    if is_spring and curr_volume > volume_sma * CRYPTO_VOLUME_THRESHOLD:
+    if is_spring and curr_volume > volume_sma * volume_threshold:
         # Check for fake springs (common in crypto)
-        if effort_vs_result < -CRYPTO_EFFORT_THRESHOLD:
+        if effort_vs_result < -effort_threshold:
             return WyckoffPhase.POSSIBLE_MARKDOWN
         return WyckoffPhase.ACCUMULATION
         
-    if is_upthrust and curr_volume > volume_sma * CRYPTO_VOLUME_THRESHOLD:
+    if is_upthrust and curr_volume > volume_sma * volume_threshold:
         # Check for fake upthrusts
-        if effort_vs_result > CRYPTO_EFFORT_THRESHOLD:
+        if effort_vs_result > effort_threshold:
             return WyckoffPhase.POSSIBLE_MARKUP
         return WyckoffPhase.DISTRIBUTION
     
     # Add divergence detection
     volume_price_divergence = (
         abs(volume_spread - volume_spread_ma) / volume_spread_ma > 1.5 and
-        abs(effort_vs_result) < CRYPTO_EFFORT_THRESHOLD * 0.5
+        abs(effort_vs_result) < effort_threshold * 0.5
     )
     
     if volume_price_divergence:
@@ -267,38 +283,73 @@ def identify_wyckoff_phase(
         return WyckoffPhase.POSSIBLE_ACCUMULATION
     
     return determine_phase_by_price_strength(
-        price_strength, momentum_strength, is_high_volume, volatility
+        price_strength, momentum_strength, is_high_volume, volatility,
+        thresholds=thresholds
     )
 
 def determine_phase_by_price_strength(
     price_strength: float, momentum_strength: float, 
-    is_high_volume: bool, volatility: pd.Series
+    is_high_volume: bool, volatility: pd.Series,
+    thresholds: ThresholdConfig
 ) -> WyckoffPhase:
     """Determine the Wyckoff phase based on price strength and other indicators."""
-    if price_strength > STRONG_DEV_THRESHOLD:
-        if momentum_strength < -MOMENTUM_THRESHOLD and is_high_volume:
+    if price_strength > thresholds.strong_dev_threshold:
+        if momentum_strength < -thresholds.momentum_threshold and is_high_volume:
             return WyckoffPhase.DISTRIBUTION
         return WyckoffPhase.POSSIBLE_DISTRIBUTION
     
-    if price_strength < -STRONG_DEV_THRESHOLD:
-        if momentum_strength > MOMENTUM_THRESHOLD and is_high_volume:
+    if price_strength < -thresholds.strong_dev_threshold:
+        if momentum_strength > thresholds.momentum_threshold and is_high_volume:
             return WyckoffPhase.ACCUMULATION
         return WyckoffPhase.POSSIBLE_ACCUMULATION
     
-    if abs(price_strength) <= NEUTRAL_ZONE_THRESHOLD:
-        if abs(momentum_strength) < MOMENTUM_THRESHOLD and volatility.iloc[-1] < volatility.mean():
+    if abs(price_strength) <= thresholds.neutral_zone_threshold:
+        if abs(momentum_strength) < thresholds.momentum_threshold and volatility.iloc[-1] < volatility.mean():
             return WyckoffPhase.RANGING
         return WyckoffPhase.POSSIBLE_RANGING
     
     # Transitional zones
     if price_strength > 0:
-        if momentum_strength > MOMENTUM_THRESHOLD:
+        if momentum_strength > thresholds.momentum_threshold:
             return WyckoffPhase.MARKUP
         return WyckoffPhase.POSSIBLE_MARKUP
     
-    if momentum_strength < -MOMENTUM_THRESHOLD:
+    if momentum_strength < -thresholds.momentum_threshold:
         return WyckoffPhase.MARKDOWN
     return WyckoffPhase.POSSIBLE_MARKDOWN
+
+def smooth_wyckoff_phase(phases: List[WyckoffPhase], is_higher_timeframe: bool) -> WyckoffPhase:
+    """Apply temporal smoothing to Wyckoff phases to reduce noise."""
+    if len(phases) < 2:  # Changed from 3 to 2 since we now use 3 periods
+        return phases[-1]
+        
+    # Count phase occurrences
+    phase_counts: Dict[WyckoffPhase, float] = {}
+    # Weight recent phases more heavily
+    weights = [0.2, 0.3, 0.5][-len(phases):]  # Changed weights to sum to 1 with 3 periods
+    
+    for phase, weight in zip(phases, weights):
+        phase_counts[phase] = phase_counts.get(phase, 0) + weight
+    
+    # Find the most common phase
+    most_common_phase = max(phase_counts.items(), key=lambda x: x[1])[0]
+    current_phase = phases[-1]
+    
+    # Higher timeframes require more consensus for phase changes
+    if is_higher_timeframe:
+        # Require strong consensus (>60%) to change phase
+        if phase_counts[most_common_phase] > 0.6:
+            return most_common_phase
+        # Keep previous phase if no strong consensus
+        if len(phases) > 1:
+            return phases[-2]
+    else:
+        # Lower timeframes can change more readily but still need some consensus
+        if phase_counts[most_common_phase] > 0.4:
+            return most_common_phase
+        
+    # Default to current phase if no consensus
+    return current_phase
 
 def detect_composite_action(
     df: pd.DataFrame,
@@ -396,7 +447,7 @@ def detect_wyckoff_signs(
     # Selling Climax detection
     if (price_change.iloc[-1] < -0.03 and 
         volume_change.iloc[-1] > 2.0 and 
-        price_strength < -STRONG_DEV_THRESHOLD):
+        price_strength < STRONG_DEV_THRESHOLD):
         return WyckoffSign.SELLING_CLIMAX
         
     # Buying Climax detection

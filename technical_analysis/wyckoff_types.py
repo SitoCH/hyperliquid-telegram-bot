@@ -1,6 +1,6 @@
 from enum import Enum, auto
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Dict
 
 class WyckoffPhase(Enum):
     """
@@ -127,4 +127,44 @@ class WyckoffState:
             wyckoff_sign=WyckoffSign.NONE,
             funding_state=FundingState.UNKNOWN,
             description="Unknown market state"
+        )
+
+class Timeframe(Enum):
+    MINUTES_15 = "15m"
+    HOUR_1 = "1h"
+    HOURS_4 = "4h"
+    DAY_1 = "1d"
+
+@dataclass
+class ThresholdConfig:
+    volume_threshold: float
+    strong_dev_threshold: float
+    neutral_zone_threshold: float
+    momentum_threshold: float
+    effort_threshold: float
+    volume_surge_threshold: float
+    
+    @staticmethod
+    def for_timeframe(timeframe: Timeframe) -> 'ThresholdConfig':
+        base_multiplier = {
+            Timeframe.MINUTES_15: 0.8,  # More sensitive for quick trades
+            Timeframe.HOUR_1: 1.0,      # Base reference
+            Timeframe.HOURS_4: 1.2,     # More conservative
+            Timeframe.DAY_1: 1.5        # Most conservative
+        }[timeframe]
+        
+        momentum_multiplier = {
+            Timeframe.MINUTES_15: 0.7,  # Faster momentum changes
+            Timeframe.HOUR_1: 1.0,
+            Timeframe.HOURS_4: 1.4,
+            Timeframe.DAY_1: 1.8
+        }[timeframe]
+        
+        return ThresholdConfig(
+            volume_threshold=1.5 * base_multiplier,
+            strong_dev_threshold=1.8 * base_multiplier,
+            neutral_zone_threshold=0.8 * base_multiplier,
+            momentum_threshold=0.5 * momentum_multiplier,
+            effort_threshold=0.65 * base_multiplier,
+            volume_surge_threshold=2.0 * base_multiplier
         )
