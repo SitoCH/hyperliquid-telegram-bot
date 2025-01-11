@@ -103,13 +103,12 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         df_4h = prepare_dataframe(candles_4h, local_tz)
         df_1d = prepare_dataframe(candles_1d, local_tz)
 
-        mid = float(hyperliquid_utils.info.all_mids()[coin])
 
         # Apply indicators
-        apply_indicators(df_15m, mid, funding_rates)
-        _, wyckoff_flip_1h = apply_indicators(df_1h, mid, funding_rates)
-        _, wyckoff_flip_4h = apply_indicators(df_4h, mid, funding_rates)
-        apply_indicators(df_1d, mid, funding_rates)
+        apply_indicators(df_15m, funding_rates)
+        _, wyckoff_flip_1h = apply_indicators(df_1h, funding_rates)
+        _, wyckoff_flip_4h = apply_indicators(df_4h, funding_rates)
+        apply_indicators(df_1d, funding_rates)
         
         # Check if 4h candle is recent enough
         is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
@@ -127,7 +126,9 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         )
 
         if should_notify:
+            mid = float(hyperliquid_utils.info.all_mids()[coin])
             await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin, always_notify)
+
     except Exception as e:
         logger.error(e, exc_info=True)
         await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
@@ -142,7 +143,7 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     return df
 
 
-def apply_indicators(df: pd.DataFrame, mid: float, funding_rates: Optional[List[FundingRateEntry]] = None) -> Tuple[bool, bool]:
+def apply_indicators(df: pd.DataFrame, funding_rates: Optional[List[FundingRateEntry]] = None) -> Tuple[bool, bool]:
     """Apply technical indicators with Wyckoff-optimized settings"""
     # SuperTrend: shorter for faster response to institutional activity
     st_length = 8  # Reduced from 10 to be more responsive

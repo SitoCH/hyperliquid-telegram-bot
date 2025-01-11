@@ -40,7 +40,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
     """Analyze and store Wyckoff phase data incorporating funding rates."""
     # Safety check for minimum required periods
     if len(df) < MIN_PERIODS:
-        df.loc[df.index[-2:], 'wyckoff'] = [WyckoffState.unknown(), WyckoffState.unknown()]  # type: ignore[assignment]
+        df.loc[df.index[-2:], 'wyckoff'] = [WyckoffState.unknown(), WyckoffState.unknown()]
         return
 
     # Get ATR with safety checks
