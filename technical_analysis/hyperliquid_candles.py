@@ -58,23 +58,31 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
+async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
+    await analyze_candles_for_coin(context, context.job.data['coin'], context.job.data['all_mids'], always_notify=False) # type: ignore
+
+
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Analyze candles for configured coins and categories."""
 
     all_mids = hyperliquid_utils.info.all_mids()
-
     coins_to_analyze = await get_coins_to_analyze(all_mids)
     
     if not coins_to_analyze:
         return
         
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
+    loop = 0
     for coin in coins_to_analyze:
-        await analyze_candles_for_coin(context, coin, all_mids, always_notify=False)
-        time.sleep(1.5)
+        context.application.job_queue.run_once( # type: ignore
+            analyze_candles_for_coin_job,
+            when=loop * 10,
+            data={"coin": coin, "all_mids": all_mids},
+            job_kwargs={'misfire_grace_time': 60}
+        )
+        loop += 1
 
-
-    logger.info(f"TA done for {len(coins_to_analyze)} coins")
+    logger.info(f"TA scheduled for {len(coins_to_analyze)} coins")
 
 
 async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, all_mids: Dict[str, Any], always_notify: bool) -> None:
