@@ -319,37 +319,64 @@ def determine_phase_by_price_strength(
     return WyckoffPhase.POSSIBLE_MARKDOWN
 
 def smooth_wyckoff_phase(phases: List[WyckoffPhase], is_higher_timeframe: bool) -> WyckoffPhase:
-    """Apply temporal smoothing to Wyckoff phases to reduce noise."""
-    if len(phases) < 2:  # Changed from 3 to 2 since we now use 3 periods
+    """Apply temporal smoothing to Wyckoff phases to reduce noise and validate transitions."""
+    if len(phases) < 2:
         return phases[-1]
-        
-    # Count phase occurrences
+    
+    # Valid phase transitions (from -> to)
+    valid_transitions = {
+        WyckoffPhase.ACCUMULATION: [WyckoffPhase.MARKUP, WyckoffPhase.RANGING],
+        WyckoffPhase.MARKUP: [WyckoffPhase.DISTRIBUTION, WyckoffPhase.RANGING],
+        WyckoffPhase.DISTRIBUTION: [WyckoffPhase.MARKDOWN, WyckoffPhase.RANGING],
+        WyckoffPhase.MARKDOWN: [WyckoffPhase.ACCUMULATION, WyckoffPhase.RANGING],
+        WyckoffPhase.RANGING: [WyckoffPhase.ACCUMULATION, WyckoffPhase.DISTRIBUTION],
+        # Possible phases can transition to their confirmed counterparts or ranging
+        WyckoffPhase.POSSIBLE_ACCUMULATION: [WyckoffPhase.ACCUMULATION, WyckoffPhase.RANGING],
+        WyckoffPhase.POSSIBLE_MARKUP: [WyckoffPhase.MARKUP, WyckoffPhase.RANGING],
+        WyckoffPhase.POSSIBLE_DISTRIBUTION: [WyckoffPhase.DISTRIBUTION, WyckoffPhase.RANGING],
+        WyckoffPhase.POSSIBLE_MARKDOWN: [WyckoffPhase.MARKDOWN, WyckoffPhase.RANGING],
+        WyckoffPhase.POSSIBLE_RANGING: [WyckoffPhase.RANGING]
+    }
+
+    # Dynamic weights based on phase certainty
+    def get_weight(phase: WyckoffPhase) -> float:
+        return 0.3 if phase.value.startswith('~') else 0.5
+
+    # Calculate weighted phase counts
+    weights = [0.2, 0.3, 0.5][-len(phases):]  # Base weights
     phase_counts: Dict[WyckoffPhase, float] = {}
-    # Weight recent phases more heavily
-    weights = [0.2, 0.3, 0.5][-len(phases):]  # Changed weights to sum to 1 with 3 periods
     
-    for phase, weight in zip(phases, weights):
-        phase_counts[phase] = phase_counts.get(phase, 0) + weight
-    
+    for phase, base_weight in zip(phases, weights):
+        adjusted_weight = base_weight * get_weight(phase)
+        phase_counts[phase] = phase_counts.get(phase, 0) + adjusted_weight
+
     # Find the most common phase
     most_common_phase = max(phase_counts.items(), key=lambda x: x[1])[0]
     current_phase = phases[-1]
-    
-    # Higher timeframes require more consensus for phase changes
-    if is_higher_timeframe:
-        # Require strong consensus (>60%) to change phase
-        if phase_counts[most_common_phase] > 0.6:
-            return most_common_phase
-        # Keep previous phase if no strong consensus
-        if len(phases) > 1:
-            return phases[-2]
+    previous_phase = phases[-2]
+
+    # Check if transition is valid
+    is_valid_transition = (
+        most_common_phase in valid_transitions.get(previous_phase, []) or
+        most_common_phase == previous_phase
+    )
+
+    # Higher timeframes require more consensus
+    consensus_threshold = 0.6 if is_higher_timeframe else 0.4
+    has_consensus = phase_counts[most_common_phase] > consensus_threshold
+
+    # Return appropriate phase based on conditions
+    if has_consensus and is_valid_transition:
+        return most_common_phase
+    elif is_higher_timeframe:
+        # Keep previous phase on higher timeframes if no strong consensus
+        return previous_phase
     else:
-        # Lower timeframes can change more readily but still need some consensus
-        if phase_counts[most_common_phase] > 0.4:
-            return most_common_phase
-        
-    # Default to current phase if no consensus
-    return current_phase
+        # On lower timeframes, allow more flexible transitions
+        if most_common_phase.value.startswith('~'):
+            # For uncertain phases, require stronger consensus
+            return current_phase if not has_consensus else most_common_phase
+        return most_common_phase if is_valid_transition else current_phase
 
 def detect_composite_action(
     df: pd.DataFrame,
