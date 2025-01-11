@@ -150,26 +150,9 @@ def apply_indicators(df: pd.DataFrame, funding_rates: Optional[List[FundingRateE
     st_length = 8  # Reduced from 10 to be more responsive
     # ATR: standard Wyckoff volatility measure
     atr_length = 14
-    # Volume SMA: for effort vs result analysis
-    vol_length = 20  # Changed to better match trading sessions
-    # Price SMA: for trend context
-    price_sma_length = 20
 
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
-
-    # Wyckoff Volume Analysis
-    df["Volume_SMA"] = df["v"].rolling(window=vol_length).mean()
-    df["Volume_Confirm"] = df["v"] > df["Volume_SMA"]
-    
-    # Volume Force: measures buying/selling pressure
-    df["Volume_Force"] = ((df["c"] - df["o"]) / (df["h"] - df["l"])) * df["v"]
-    df["Volume_Force_SMA"] = df["Volume_Force"].rolling(window=vol_length).mean()
-    
-    # Effort vs Result: key Wyckoff concept
-    df["Price_Range"] = df["h"] - df["l"]
-    df["Close_Range"] = df["c"] - df["o"]
-    df["Effort_Result"] = (df["Close_Range"] / df["Price_Range"]) * (df["v"] / df["Volume_SMA"])
 
     # ATR for volatility analysis
     atr_calc = ta.atr(df["h"], df["l"], df["c"], length=atr_length)
@@ -184,7 +167,7 @@ def apply_indicators(df: pd.DataFrame, funding_rates: Optional[List[FundingRateE
         df["SuperTrend"] = supertrend[f"SUPERT_{st_length}_3.0"]
         df["SuperTrend_Flip_Detected"] = (
             supertrend[f"SUPERTd_{st_length}_3.0"].diff().abs() == 1
-        ) & df["Volume_Confirm"]
+        )
     else:
         df["SuperTrend"] = df["c"]
         df["SuperTrend_Flip_Detected"] = False
@@ -201,10 +184,8 @@ def apply_indicators(df: pd.DataFrame, funding_rates: Optional[List[FundingRateE
     else:
         df["MACD"] = df["MACD_Signal"] = df["MACD_Hist"] = 0.0
 
-    # Trend Analysis
-    df["EMA"] = ta.ema(df["c"], length=21)  # Primary trend
-    df["SMA"] = ta.sma(df["c"], length=price_sma_length)  # Secondary trend
-
+    df["EMA"] = ta.ema(df["c"], length=21)
+    
     # Wyckoff Phase Detection
     detect_wyckoff_phase(df, funding_rates)
     wyckoff_flip = detect_actionable_wyckoff_signal(df)
