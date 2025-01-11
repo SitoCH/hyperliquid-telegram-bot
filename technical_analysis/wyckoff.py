@@ -37,7 +37,7 @@ def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:
     
     return is_spring, is_upthrust
 
-@log_execution_time
+
 def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingRateEntry]] = None) -> None:
     """Analyze and store Wyckoff phase data incorporating funding rates."""
     # Safety check for minimum required periods

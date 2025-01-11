@@ -85,7 +85,6 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"TA scheduled for {len(coins_to_analyze)} coins")
 
 
-@log_execution_time
 async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, always_notify: bool) -> None:
     
     logger.info(f"Running TA for {coin}")
@@ -143,7 +142,7 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     df["n"] = df["n"].astype(int)
     return df
 
-@log_execution_time
+
 def apply_indicators(df: pd.DataFrame, funding_rates: Optional[List[FundingRateEntry]] = None) -> Tuple[bool, bool]:
     """Apply technical indicators with Wyckoff-optimized settings"""
     # SuperTrend: shorter for faster response to institutional activity
@@ -323,7 +322,7 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
     plt.close('all')
     return chart_buffers
 
-@log_execution_time
+
 async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str, send_charts: bool) -> None:
     
     charts = []
