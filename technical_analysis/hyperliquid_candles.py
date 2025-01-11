@@ -53,13 +53,13 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
         return ConversationHandler.END
 
     await query.edit_message_text(text=f"Analyzing {coin}...")
-    await analyze_candles_for_coin(context, coin, hyperliquid_utils.info.all_mids(), always_notify=True)
+    await analyze_candles_for_coin(context, coin, always_notify=True)
     await query.delete_message()
     return ConversationHandler.END
 
 
 async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
-    await analyze_candles_for_coin(context, context.job.data['coin'], context.job.data['all_mids'], always_notify=False) # type: ignore
+    await analyze_candles_for_coin(context, context.job.data['coin'], always_notify=False) # type: ignore
 
 
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -77,7 +77,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
         context.application.job_queue.run_once( # type: ignore
             analyze_candles_for_coin_job,
             when=loop * 10,
-            data={"coin": coin, "all_mids": all_mids},
+            data={"coin": coin},
             job_kwargs={'misfire_grace_time': 60}
         )
         loop += 1
@@ -85,7 +85,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"TA scheduled for {len(coins_to_analyze)} coins")
 
 
-async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, all_mids: Dict[str, Any], always_notify: bool) -> None:
+async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, always_notify: bool) -> None:
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
@@ -103,7 +103,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         df_4h = prepare_dataframe(candles_4h, local_tz)
         df_1d = prepare_dataframe(candles_1d, local_tz)
 
-        mid = float(all_mids[coin])
+        mid = float(hyperliquid_utils.info.all_mids()[coin])
 
         # Apply indicators
         apply_indicators(df_15m, mid, funding_rates)
