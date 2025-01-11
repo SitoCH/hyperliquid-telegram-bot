@@ -5,6 +5,7 @@ from dataclasses import dataclass, asdict
 from dacite import from_dict # type: ignore
 from hyperliquid_utils import hyperliquid_utils
 from typing import Dict, List, Any, Optional, Tuple, TypedDict, Callable
+from utils import log_execution_time
 
 # Calculate cache directory relative to project root
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -64,6 +65,7 @@ def _fetch_new_funding_rates(coin: str, start_ts: int, end_ts: int) -> List[Fund
     """Fetch new funding rates from HyperLiquid API"""
     funding_rates = hyperliquid_utils.info.funding_history(coin, start_ts, end_ts)
     return [_convert_funding_rate(rate) for rate in funding_rates]
+
 
 def get_funding_with_cache(coin: str, now: int, lookback_days: int) -> List[FundingRateEntry]:
     """Get funding rates using cache, fetching only newer data if needed"""

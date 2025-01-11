@@ -18,7 +18,7 @@ from telegram.error import TelegramError
 from logging_utils import logger
 from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
-from utils import OPERATION_CANCELLED, fmt, fmt_price
+from utils import OPERATION_CANCELLED, fmt, fmt_price, log_execution_time
 from technical_analysis.significant_levels import find_significant_levels
 from technical_analysis.wyckoff import detect_wyckoff_phase, WyckoffPhase, WyckoffState, VolumeState, MarketPattern
 from technical_analysis.wyckoff_signal import detect_actionable_wyckoff_signal
@@ -85,7 +85,9 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info(f"TA scheduled for {len(coins_to_analyze)} coins")
 
 
+@log_execution_time
 async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, always_notify: bool) -> None:
+    
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
@@ -133,7 +135,6 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         logger.error(e, exc_info=True)
         await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
 
-
 def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     df = pd.DataFrame(candles)
     df["T"] = pd.to_datetime(df["T"], unit="ms", utc=True).dt.tz_convert(local_tz)
@@ -142,7 +143,7 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     df["n"] = df["n"].astype(int)
     return df
 
-
+@log_execution_time
 def apply_indicators(df: pd.DataFrame, funding_rates: Optional[List[FundingRateEntry]] = None) -> Tuple[bool, bool]:
     """Apply technical indicators with Wyckoff-optimized settings"""
     # SuperTrend: shorter for faster response to institutional activity
@@ -206,7 +207,7 @@ def apply_indicators(df: pd.DataFrame, funding_rates: Optional[List[FundingRateE
 
     # Wyckoff Phase Detection
     detect_wyckoff_phase(df, funding_rates)
-    wyckoff_flip = detect_actionable_wyckoff_signal(df, funding_rates)
+    wyckoff_flip = detect_actionable_wyckoff_signal(df)
     
     return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
 
@@ -341,6 +342,7 @@ def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFram
     plt.close('all')
     return chart_buffers
 
+@log_execution_time
 async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str, send_charts: bool) -> None:
     
     charts = []

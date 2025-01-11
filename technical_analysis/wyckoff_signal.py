@@ -10,7 +10,6 @@ from typing import List, Optional
 
 def detect_actionable_wyckoff_signal(
     df: pd.DataFrame,
-    funding_rates: Optional[List[FundingRateEntry]] = None,
     min_confirmation_bars: int = 3  # Minimum bars to confirm pattern
 ) -> bool:
     """

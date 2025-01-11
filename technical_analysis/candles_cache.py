@@ -2,6 +2,7 @@ import os
 import json
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
+from utils import log_execution_time
 
 # Calculate cache directory relative to project root
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -89,6 +90,7 @@ def _round_timestamp(ts: int, timeframe: str) -> int:
     minutes = TIMEFRAME_MINUTES[timeframe]
     ms_interval = minutes * 60 * 1000
     return ts - (ts % ms_interval)
+
 
 def get_candles_with_cache(coin: str, timeframe: str, now: int, lookback_days: int, fetch_fn) -> List[Dict[str, Any]]:
     """Get candles using cache, fetching only newer data if needed"""
