@@ -42,7 +42,7 @@ def main() -> None:
 
     telegram_utils.run_repeating(
         check_profit_percentage,
-        interval=datetime.timedelta(minutes=random.randint(50, 70))
+        interval=datetime.timedelta(minutes=random.randint(6 * 60 - 10, 6 * 60 + 10))
     )
 
     if exchange_enabled:
