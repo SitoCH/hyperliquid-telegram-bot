@@ -24,7 +24,19 @@ def generate_wyckoff_description(
     
     # Technical formation analysis
     if wyckoff_sign != WyckoffSign.NONE:
-        description_parts.append(f"Key Formation: {wyckoff_sign.value}")
+        wyckoff_descriptions = {
+            WyckoffSign.SELLING_CLIMAX: "Selling Climax (SC), rapid price drop with high volume, potential bottom",
+            WyckoffSign.AUTOMATIC_RALLY: "Automatic Rally (AR), initial bounce after selling climax, sets range",
+            WyckoffSign.SECONDARY_TEST: "Secondary Test (ST), retest of selling climax low, confirms support",
+            WyckoffSign.SIGN_OF_STRENGTH: "Sign of Strength (SOS), strong rally with high volume, indicates demand",
+            WyckoffSign.LAST_POINT_OF_SUPPORT: "Last Point of Support (LPS), final low before markup, confirms demand",
+            WyckoffSign.BUYING_CLIMAX: "Buying Climax (BC), rapid price rise with high volume, potential top",
+            WyckoffSign.UPTHRUST: "Upthrust (UT), false breakout above resistance, indicates supply",
+            WyckoffSign.SECONDARY_TEST_RESISTANCE: "Secondary Test Resistance (STR), retest of buying climax high, confirms resistance",
+            WyckoffSign.LAST_POINT_OF_RESISTANCE: "Last Point of Resistance (LPSY), final high before markdown, confirms supply",
+            WyckoffSign.SIGN_OF_WEAKNESS: "Sign of Weakness (SOW), strong decline with high volume, indicates supply"
+        }
+        description_parts.append(f"Key Formation: {wyckoff_descriptions[wyckoff_sign]}")
     
     # Spring/Upthrust analysis
     if is_spring:

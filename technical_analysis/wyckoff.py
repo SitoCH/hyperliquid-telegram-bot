@@ -464,35 +464,80 @@ def detect_wyckoff_signs(
     is_spring: bool,
     is_upthrust: bool
 ) -> WyckoffSign:
-    """Detect specific Wyckoff signs in market action."""
+    """
+    Detect specific Wyckoff signs in market action with comprehensive checks
+    for all possible signs in the WyckoffSign enum.
+    """
     if len(df) < 5:
         return WyckoffSign.NONE
         
     price_change = df['c'].pct_change()
     volume_change = df['v'].pct_change()
     
-    # Selling Climax detection
+    # Selling Climax (SC)
     if (price_change.iloc[-1] < -0.03 and 
         volume_change.iloc[-1] > 2.0 and 
-        price_strength < STRONG_DEV_THRESHOLD):
+        price_strength < -STRONG_DEV_THRESHOLD):
         return WyckoffSign.SELLING_CLIMAX
         
-    # Buying Climax detection
+    # Automatic Rally (AR)
+    if (price_change.iloc[-1] > 0.02 and
+        df['c'].iloc[-2:].pct_change().mean() > 0.015 and
+        volume_change.iloc[-1] < volume_change.iloc[-2] and
+        price_strength < 0):
+        return WyckoffSign.AUTOMATIC_RALLY
+        
+    # Secondary Test (ST)
+    if (abs(price_change.iloc[-1]) < 0.01 and
+        df['l'].iloc[-1] >= df['l'].iloc[-5:].min() and
+        volume_change.iloc[-1] < 1.0 and
+        price_strength < 0):
+        return WyckoffSign.SECONDARY_TEST
+        
+    # Last Point of Support (LPS)
+    if (is_spring and
+        volume_trend > 0 and
+        price_change.iloc[-1] > 0):
+        return WyckoffSign.LAST_POINT_OF_SUPPORT
+        
+    # Sign of Strength (SOS)
+    if (price_change.iloc[-1] > 0.02 and
+        volume_change.iloc[-1] > 1.5 and
+        price_strength > 0 and
+        volume_trend > 0):
+        return WyckoffSign.SIGN_OF_STRENGTH
+        
+    # Buying Climax (BC)
     if (price_change.iloc[-1] > 0.03 and 
         volume_change.iloc[-1] > 2.0 and 
         price_strength > STRONG_DEV_THRESHOLD):
         return WyckoffSign.BUYING_CLIMAX
         
-    # Other signs detection
-    if is_spring:
-        if volume_trend > 0:
-            return WyckoffSign.LAST_POINT_OF_SUPPORT
-        return WyckoffSign.SECONDARY_TEST
+    # Upthrust (UT)
+    if (is_upthrust and
+        volume_change.iloc[-1] > 1.2 and
+        price_change.iloc[-1] < 0):
+        return WyckoffSign.UPTHRUST
         
-    if is_upthrust:
-        if volume_trend > 0:
-            return WyckoffSign.LAST_POINT_OF_RESISTANCE
+    # Secondary Test Resistance (STR)
+    if (abs(price_change.iloc[-1]) < 0.01 and
+        df['h'].iloc[-1] <= df['h'].iloc[-5:].max() and
+        volume_change.iloc[-1] < 1.0 and
+        price_strength > 0):
         return WyckoffSign.SECONDARY_TEST_RESISTANCE
+        
+    # Last Point of Supply/Resistance (LPSY)
+    if (is_upthrust and
+        volume_trend > 0 and
+        price_change.iloc[-1] < 0):
+        return WyckoffSign.LAST_POINT_OF_RESISTANCE
+        
+    # Sign of Weakness (SOW)
+    if (price_change.iloc[-1] < -0.02 and
+        volume_change.iloc[-1] > 1.5 and
+        price_strength < 0 and
+        volume_trend > 0):
+        return WyckoffSign.SIGN_OF_WEAKNESS
         
     return WyckoffSign.NONE
 
