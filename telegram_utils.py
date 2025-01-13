@@ -115,7 +115,7 @@ class TelegramUtils:
         self.telegram_app.job_queue.run_once(
             self.send_message_and_exit,
             when=0.25,
-            job_kwargs={'misfire_grace_time': 60},
+            job_kwargs={'misfire_grace_time': 180},
             data=message,
             chat_id=self.telegram_chat_id,
         )
@@ -125,7 +125,7 @@ class TelegramUtils:
             logging.error("Telegram app not initialized - missing environment variables")
             return
         self.telegram_app.job_queue.run_once(
-            self.send_message, when=0.25, job_kwargs={'misfire_grace_time': 60}, data=message, chat_id=self.telegram_chat_id
+            self.send_message, when=0.25, job_kwargs={'misfire_grace_time': 180}, data=message, chat_id=self.telegram_chat_id
         )
 
     async def send_message(self, context: ContextTypes.DEFAULT_TYPE):
@@ -153,7 +153,7 @@ class TelegramUtils:
             logging.error("Telegram app not initialized - missing environment variables")
             return
         self.telegram_app.job_queue.run_once(
-            callback, when=0.25, job_kwargs={'misfire_grace_time': 60}, chat_id=self.telegram_chat_id
+            callback, when=0.25, job_kwargs={'misfire_grace_time': 180}, chat_id=self.telegram_chat_id
         )
 
     def run_repeating(
@@ -168,7 +168,7 @@ class TelegramUtils:
             logging.error("Telegram app not initialized - missing environment variables")
             return
         self.telegram_app.job_queue.run_repeating(
-            callback, interval=interval, first=first, job_kwargs={'misfire_grace_time': 60}
+            callback, interval=interval, first=first, job_kwargs={'misfire_grace_time': 180}
         )
 
     def run_polling(self, shutdown):
@@ -180,7 +180,7 @@ class TelegramUtils:
         self.telegram_app.job_queue.run_once(
             self.send_message,
             when=0.25,
-            job_kwargs={'misfire_grace_time': 60},
+            job_kwargs={'misfire_grace_time': 180},
             data="Hyperliquid Telegram bot up and running",
             chat_id=self.telegram_chat_id,
         )

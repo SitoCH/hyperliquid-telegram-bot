@@ -78,7 +78,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
             analyze_candles_for_coin_job,
             when=loop * 7,
             data={"coin": coin},
-            job_kwargs={'misfire_grace_time': 60}
+            job_kwargs={'misfire_grace_time': 180}
         )
         loop += 1
 
