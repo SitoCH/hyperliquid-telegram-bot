@@ -37,24 +37,12 @@ def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:
     return is_spring, is_upthrust
 
 
-def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingRateEntry]] = None) -> None:
+def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> None:
     """Analyze and store Wyckoff phase data incorporating funding rates."""
     # Safety check for minimum required periods
     if len(df) < MIN_PERIODS:
         df.loc[df.index[-1:], 'wyckoff'] = WyckoffState.unknown()
         return
-
-    # Determine timeframe and get appropriate thresholds
-    avg_time_delta = pd.Timedelta(df.index.to_series().diff().mean())
-    
-    if avg_time_delta >= pd.Timedelta(hours=24):
-        timeframe = Timeframe.DAY_1
-    elif avg_time_delta >= pd.Timedelta(hours=4):
-        timeframe = Timeframe.HOURS_4
-    elif avg_time_delta >= pd.Timedelta(hours=1):
-        timeframe = Timeframe.HOUR_1
-    else:
-        timeframe = Timeframe.MINUTES_15
     
     thresholds = ThresholdConfig.for_timeframe(timeframe)
 

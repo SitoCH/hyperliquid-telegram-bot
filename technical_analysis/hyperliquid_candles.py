@@ -24,6 +24,7 @@ from technical_analysis.wyckoff import detect_wyckoff_phase, WyckoffPhase, Wycko
 from technical_analysis.wyckoff_signal import detect_actionable_wyckoff_signal
 from technical_analysis.candles_utils import get_coins_to_analyze
 from technical_analysis.candles_cache import get_candles_with_cache
+from technical_analysis.wyckoff_types import Timeframe
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 
 
@@ -106,10 +107,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
 
 
         # Apply indicators
-        apply_indicators(df_15m, funding_rates)
-        _, wyckoff_flip_1h = apply_indicators(df_1h, funding_rates)
-        _, wyckoff_flip_4h = apply_indicators(df_4h, funding_rates)
-        apply_indicators(df_1d, funding_rates)
+        apply_indicators(df_15m, Timeframe.MINUTES_15, funding_rates)
+        _, wyckoff_flip_1h = apply_indicators(df_1h, Timeframe.HOUR_1, funding_rates)
+        _, wyckoff_flip_4h = apply_indicators(df_4h, Timeframe.HOURS_4, funding_rates)
+        apply_indicators(df_1d, Timeframe.DAY_1, funding_rates)
         
         # Check if 4h candle is recent enough
         is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
@@ -145,7 +146,7 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     return df
 
 
-def apply_indicators(df: pd.DataFrame, funding_rates: Optional[List[FundingRateEntry]] = None) -> Tuple[bool, bool]:
+def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> Tuple[bool, bool]:
     """Apply technical indicators with Wyckoff-optimized settings"""
     # SuperTrend: shorter for faster response to institutional activity
     st_length = 8  # Reduced from 10 to be more responsive
@@ -188,7 +189,7 @@ def apply_indicators(df: pd.DataFrame, funding_rates: Optional[List[FundingRateE
     df["EMA"] = ta.ema(df["c"], length=21)
     
     # Wyckoff Phase Detection
-    detect_wyckoff_phase(df, funding_rates)
+    detect_wyckoff_phase(df, timeframe, funding_rates)
     wyckoff_flip = detect_actionable_wyckoff_signal(df)
     
     return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
