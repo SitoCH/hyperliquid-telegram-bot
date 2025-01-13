@@ -155,15 +155,45 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     return df
 
 
+def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int, int, int, int, int]:
+    """Get optimized indicator settings based on timeframe and available data."""
+    # Base settings optimized for each timeframe
+    settings = {
+        Timeframe.MINUTES_15: (14, 8, 21, 5, 8),  # (atr_length, macd_fast, macd_slow, macd_signal, st_length)
+        Timeframe.HOUR_1: (21, 12, 26, 9, 10),
+        Timeframe.HOURS_4: (28, 12, 32, 9, 12),
+        Timeframe.DAY_1: (34, 12, 40, 9, 14)
+    }
+
+    # Get base settings for timeframe
+    atr_length, macd_fast, macd_slow, macd_signal, st_length = settings[timeframe]
+
+    # Adjust lengths based on available data
+    max_length = min(data_length - 1, {
+        Timeframe.MINUTES_15: 200,
+        Timeframe.HOUR_1: 150,
+        Timeframe.HOURS_4: 100,
+        Timeframe.DAY_1: 60
+    }[timeframe])
+
+    # Scale down if we don't have enough data
+    if max_length < atr_length * 2:
+        scale = max_length / (atr_length * 2)
+        atr_length = max(int(atr_length * scale), 5)
+        macd_fast = max(int(macd_fast * scale), 5)
+        macd_slow = max(int(macd_slow * scale), macd_fast + 4)
+        macd_signal = max(int(macd_signal * scale), 3)
+        st_length = max(int(st_length * scale), 4)
+
+    return atr_length, macd_fast, macd_slow, macd_signal, st_length
+
 def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> Tuple[bool, bool]:
     """Apply technical indicators with Wyckoff-optimized settings"""
-    # SuperTrend: shorter for faster response to institutional activity
-    st_length = 8  # Reduced from 10 to be more responsive
-    # ATR: standard Wyckoff volatility measure
-    atr_length = 14
-
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
+
+    # Get optimized settings based on timeframe and data length
+    atr_length, macd_fast, macd_slow, macd_signal, st_length = get_indicator_settings(timeframe, len(df))
 
     # ATR for volatility analysis
     atr_calc = ta.atr(df["h"], df["l"], df["c"], length=atr_length)
@@ -172,12 +202,22 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     else:
         df["ATR"] = pd.Series([0.0] * len(df), index=df.index)
 
-    # SuperTrend with optimized multiplier
-    supertrend = ta.supertrend(df["h"], df["l"], df["c"], length=st_length, multiplier=3.0)
+    # SuperTrend with optimized parameters
+    st_multiplier = {
+        Timeframe.MINUTES_15: 2.8,
+        Timeframe.HOUR_1: 3.0,
+        Timeframe.HOURS_4: 3.2,
+        Timeframe.DAY_1: 3.5
+    }[timeframe]
+
+    supertrend = ta.supertrend(df["h"], df["l"], df["c"], 
+                              length=st_length, 
+                              multiplier=st_multiplier)
+    
     if (supertrend is not None) and (len(df) > st_length):
-        df["SuperTrend"] = supertrend[f"SUPERT_{st_length}_3.0"]
+        df["SuperTrend"] = supertrend[f"SUPERT_{st_length}_{st_multiplier}"]
         df["SuperTrend_Flip_Detected"] = (
-            supertrend[f"SUPERTd_{st_length}_3.0"].diff().abs() == 1
+            supertrend[f"SUPERTd_{st_length}_{st_multiplier}"].diff().abs() == 1
         )
     else:
         df["SuperTrend"] = df["c"]
@@ -186,16 +226,28 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     # VWAP for institutional reference
     df["VWAP"] = ta.vwap(df["h"], df["l"], df["c"], df["v"])
     
-    # Wyckoff Momentum Analysis
-    macd = ta.macd(df["c"], fast=8, slow=21, signal=5)  # Adjusted for institutional timeframes
+    # Wyckoff Momentum Analysis with timeframe-optimized MACD
+    macd = ta.macd(df["c"], 
+                   fast=macd_fast, 
+                   slow=macd_slow, 
+                   signal=macd_signal)
+    
     if macd is not None:
-        df["MACD"] = macd["MACD_8_21_5"]
-        df["MACD_Signal"] = macd["MACDs_8_21_5"]
-        df["MACD_Hist"] = macd["MACDh_8_21_5"]
+        df["MACD"] = macd[f"MACD_{macd_fast}_{macd_slow}_{macd_signal}"]
+        df["MACD_Signal"] = macd[f"MACDs_{macd_fast}_{macd_slow}_{macd_signal}"]
+        df["MACD_Hist"] = macd[f"MACDh_{macd_fast}_{macd_slow}_{macd_signal}"]
     else:
         df["MACD"] = df["MACD_Signal"] = df["MACD_Hist"] = 0.0
 
-    df["EMA"] = ta.ema(df["c"], length=21)
+    # EMA length based on timeframe
+    ema_length = {
+        Timeframe.MINUTES_15: 21,
+        Timeframe.HOUR_1: 24,
+        Timeframe.HOURS_4: 28,
+        Timeframe.DAY_1: 34
+    }[timeframe]
+    
+    df["EMA"] = ta.ema(df["c"], length=min(ema_length, len(df) - 1))
     
     # Wyckoff Phase Detection
     detect_wyckoff_phase(df, timeframe, funding_rates)
