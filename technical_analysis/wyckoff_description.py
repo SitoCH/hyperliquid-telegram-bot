@@ -89,7 +89,7 @@ def generate_trading_suggestion(
     wyckoff_sign: WyckoffSign,
     funding_state: FundingState
 ) -> str:
-    """Generate clear, actionable trading context for all experience levels."""
+    """Generate clear, actionable trading context for both long and short positions."""
     
     # Risk assessment
     risk_level = "extreme" if uncertain_phase or funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.HIGHLY_NEGATIVE] else "high" if effort == EffortResult.WEAK else "normal"
@@ -108,90 +108,93 @@ def generate_trading_suggestion(
         return (
             "High-Risk Market Conditions:\n"
             "• Market appears unstable or showing extreme sentiment\n"
-            "• Recommended Action: Stay mostly in cash or stablecoins\n"
-            "• Existing Positions: Consider reducing size significantly\n"
-            "• Next Steps: Wait for clearer market direction and normal funding rates"
+            "• Recommended Action: Close or reduce both long and short positions\n"
+            "• Current Status: Better to stay neutral\n"
+            "• Next Steps: Wait for clearer market direction and normal funding rates\n"
+            f"• Warning: Funding rates show {funding_state.value} bias - increased liquidation risk"
         )
 
     # Strong technical setups
     if wyckoff_sign in [WyckoffSign.SELLING_CLIMAX, WyckoffSign.LAST_POINT_OF_SUPPORT] and is_spring:
         return (
             f"Potential Bottom Formation - {momentum_desc.title()} Momentum:\n"
-            "• Market Structure: Strong bounce from support level\n"
-            "• What This Means: Big players likely accumulating\n"
-            "• Possible Strategy: Consider building long positions gradually\n"
-            "• Key Level to Watch: Recent low point\n"
-            "• Warning Signs: Heavy selling volume on bounces"
+            "• Market Structure: Strong bounce from support with spring pattern\n"
+            "• Long Strategy: Consider scaling into longs above spring level\n"
+            "• Short Warning: Cover shorts, high risk of squeeze\n"
+            "• Key Levels: Support at spring low, resistance at recent high\n"
+            "• Risk Management: Stop loss under spring low for longs\n"
+            f"• Funding Context: {funding_state.value} - adjust position size accordingly"
         )
 
     if wyckoff_sign in [WyckoffSign.BUYING_CLIMAX, WyckoffSign.LAST_POINT_OF_RESISTANCE] and is_upthrust:
         return (
             f"Potential Top Formation - {momentum_desc.title()} Momentum:\n"
-            "• Market Structure: Failed breakout above resistance\n"
-            "• What This Means: Big players likely distributing\n"
-            "• Possible Strategy: Consider reducing longs or building shorts\n"
-            "• Key Level to Watch: Recent high point\n"
-            "• Warning Signs: Strong buying volume on dips"
+            "• Market Structure: Failed breakout with upthrust pattern\n"
+            "• Short Strategy: Consider scaling into shorts below upthrust\n"
+            "• Long Warning: Exit longs, high risk of reversal\n"
+            "• Key Levels: Resistance at upthrust high, support at recent low\n"
+            "• Risk Management: Stop loss above upthrust high for shorts\n"
+            f"• Funding Context: {funding_state.value} - adjust position size accordingly"
         )
 
     # Incorporate composite action into phase contexts
     composite_context = {
-        CompositeAction.ACCUMULATING: "Large players appear to be buying",
-        CompositeAction.DISTRIBUTING: "Large players appear to be selling",
-        CompositeAction.MARKING_UP: "Large players actively pushing prices up",
-        CompositeAction.MARKING_DOWN: "Large players actively pushing prices down",
-        CompositeAction.NEUTRAL: "No clear big player activity"
+        CompositeAction.ACCUMULATING: "Large players actively buying - caution with shorts",
+        CompositeAction.DISTRIBUTING: "Large players actively selling - caution with longs",
+        CompositeAction.MARKING_UP: "Large players pushing prices up - potential short squeeze",
+        CompositeAction.MARKING_DOWN: "Large players pushing prices down - potential long squeeze",
+        CompositeAction.NEUTRAL: "No clear institutional activity - trade smaller size"
     }[composite_action]
 
     # Phase-specific actionable contexts with momentum and composite action
     phase_contexts = {
         WyckoffPhase.ACCUMULATION: (
             f"Bottom Formation Process - {composite_context}:\n"
-            "• Current Stage: Market building energy for potential rise\n"
-            "• Key Signs: Watch for decreased selling pressure\n"
+            "• Long Strategy: Scale into longs near support levels\n"
+            "• Short Strategy: Only quick countertrend trades\n"
             f"• Momentum: {momentum_desc.title()}\n"
-            "• Possible Strategy: Consider starting to buy gradually\n"
-            "• Risk Management: Keep stops below recent lows"
+            "• Risk Management: Tight stops below support for longs\n"
+            f"• Funding Context: {funding_state.value} affects position sizing"
         ),
         WyckoffPhase.DISTRIBUTION: (
             f"Top Formation Process - {composite_context}:\n"
-            "• Current Stage: Market showing signs of selling pressure\n"
-            "• Key Signs: Watch for weakening rallies\n"
+            "• Short Strategy: Scale into shorts near resistance\n"
+            "• Long Strategy: Only quick countertrend trades\n"
             f"• Momentum: {momentum_desc.title()}\n"
-            "• Possible Strategy: Consider taking profits or short positions\n"
-            "• Risk Management: Keep stops above recent highs"
+            "• Risk Management: Tight stops above resistance for shorts\n"
+            f"• Funding Context: {funding_state.value} affects position sizing"
         ),
         WyckoffPhase.MARKUP: (
             f"Upward Trend - {composite_context}:\n"
-            "• Current Stage: Market in rising phase\n"
-            "• Key Signs: Previous resistance becomes support\n"
+            "• Long Strategy: Buy dips with trend following\n"
+            "• Short Warning: Avoid fighting the trend\n"
             f"• Momentum: {momentum_desc.title()}\n"
-            "• Possible Strategy: Buy dips while trend continues\n"
-            "• Risk Management: Trail stops below support levels"
+            "• Risk Management: Trail stops, add to winners\n"
+            f"• Funding Context: {funding_state.value} affects leverage risk"
         ),
         WyckoffPhase.MARKDOWN: (
             f"Downward Trend - {composite_context}:\n"
-            "• Current Stage: Market in falling phase\n"
-            "• Key Signs: Previous support becomes resistance\n"
+            "• Short Strategy: Sell rallies with trend following\n"
+            "• Long Warning: Avoid fighting the trend\n"
             f"• Momentum: {momentum_desc.title()}\n"
-            "• Possible Strategy: Sell rallies while trend continues\n"
-            "• Risk Management: Trail stops above resistance levels"
+            "• Risk Management: Trail stops, add to winners\n"
+            f"• Funding Context: {funding_state.value} affects leverage risk"
         ),
         WyckoffPhase.RANGING: (
             f"Sideways Market - {composite_context}:\n"
-            "• Current Stage: Market moving sideways\n"
-            "• Key Signs: Price bouncing between clear levels\n"
+            "• Long Strategy: Buy near support, sell resistance\n"
+            "• Short Strategy: Sell near resistance, cover support\n"
             f"• Momentum: {momentum_desc.title()}\n"
-            "• Possible Strategy: Trade between support and resistance\n"
-            "• Risk Management: Exit if price breaks range"
+            "• Risk Management: Tight stops outside range\n"
+            f"• Funding Context: {funding_state.value} affects carry cost"
         )
     }
 
     return phase_contexts.get(phase, (
         f"Unclear Market Conditions - {composite_context}:\n"
-        "• Current Stage: Market direction developing\n"
-        "• Key Signs: Watch volume and price action\n"
+        "• Trading Style: Reduce position sizes both ways\n"
+        "• Long Strategy: Only very clear support levels\n"
+        "• Short Strategy: Only very clear resistance levels\n"
         f"• Momentum: {momentum_desc.title()}\n"
-        "• Possible Strategy: Wait for clearer setup\n"
-        "• Risk Management: Keep higher cash position"
+        f"• Funding Context: {funding_state.value} - consider carry cost"
     ))
