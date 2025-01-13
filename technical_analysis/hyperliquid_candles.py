@@ -23,7 +23,7 @@ from technical_analysis.candles_cache import get_candles_with_cache
 from technical_analysis.wyckoff_types import Timeframe
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from technical_analysis.wykcoff_chart import generate_chart
-
+from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext
 
 SELECTING_COIN_FOR_TA = range(1)
 
@@ -103,22 +103,34 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         df_1d = prepare_dataframe(candles_1d, local_tz)
 
 
-        # Apply indicators
+        # Apply indicators with Wyckoff analysis
+        states = {}
         apply_indicators(df_15m, Timeframe.MINUTES_15, funding_rates)
-        _, wyckoff_flip_1h = apply_indicators(df_1h, Timeframe.HOUR_1, funding_rates)
-        _, wyckoff_flip_4h = apply_indicators(df_4h, Timeframe.HOURS_4, funding_rates)
-        apply_indicators(df_1d, Timeframe.DAY_1, funding_rates)
+        states[Timeframe.MINUTES_15] = df_15m['wyckoff'].iloc[-1]
         
-        # Check if 4h candle is recent enough
+        _, wyckoff_flip_1h = apply_indicators(df_1h, Timeframe.HOUR_1, funding_rates)
+        states[Timeframe.HOUR_1] = df_1h['wyckoff'].iloc[-1]
+        
+        _, wyckoff_flip_4h = apply_indicators(df_4h, Timeframe.HOURS_4, funding_rates)
+        states[Timeframe.HOURS_4] = df_4h['wyckoff'].iloc[-1]
+        
+        apply_indicators(df_1d, Timeframe.DAY_1, funding_rates)
+        states[Timeframe.DAY_1] = df_1d['wyckoff'].iloc[-1]
+
+        # Add multi-timeframe analysis
+        from technical_analysis.wyckoff_multi_timeframe import analyze_multi_timeframe
+        mtf_context = analyze_multi_timeframe(states)
+        
+        # Update notification logic to include MTF analysis
         is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
         
-        # Either strong 4h signal or coherent 1h and 4h signals
         should_notify = (
             always_notify or
             (is_4h_recent and (
-                # Strong 4h signal alone is enough
+                # Strong signal with multi-timeframe confirmation
+                (mtf_context.confidence_level > 0.7 and mtf_context.alignment_score > 0.6) or
+                # Original conditions
                 (wyckoff_flip_4h and df_4h['wyckoff_volume'].iloc[-1] == 'high' and not df_4h['uncertain_phase'].iloc[-1]) or
-                # Or coherent 1h and 4h signals with less strict conditions
                 (wyckoff_flip_1h and wyckoff_flip_4h and
                  df_1h['wyckoff_phase'].iloc[-1] == df_4h['wyckoff_phase'].iloc[-1])
             ))
@@ -126,7 +138,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
 
         if should_notify:
             mid = float(hyperliquid_utils.info.all_mids()[coin])
-            await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin, always_notify)
+            await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin, always_notify, mtf_context)
 
     except Exception as e:
         logger.error(e, exc_info=True)
@@ -162,7 +174,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
 
     # SuperTrend with optimized multiplier
     supertrend = ta.supertrend(df["h"], df["l"], df["c"], length=st_length, multiplier=3.0)
-    if supertrend is not None and len(df) > st_length:
+    if (supertrend is not None) and (len(df) > st_length):
         df["SuperTrend"] = supertrend[f"SUPERT_{st_length}_3.0"]
         df["SuperTrend_Flip_Detected"] = (
             supertrend[f"SUPERTd_{st_length}_3.0"].diff().abs() == 1
@@ -192,7 +204,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
 
 
-async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str, send_charts: bool) -> None:
+async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str, send_charts: bool, mtf_context: MultiTimeframeContext) -> None:
     
     charts = []
     try:
@@ -203,10 +215,11 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
         results_4h = get_ta_results(df_4h, mid)
         results_1d = get_ta_results(df_1d, mid)
 
-        # Send header
+        # Add MTF analysis at the start of the message
         await telegram_utils.send(
             f"<b>Indicators for {coin}</b>\n"
-            f"Market price: {fmt_price(mid)} USDC",
+            f"Market price: {fmt_price(mid)} USDC\n"
+            f"Multi-Timeframe Analysis:\n{mtf_context.description}\n\n",
             parse_mode=ParseMode.HTML
         )
 
