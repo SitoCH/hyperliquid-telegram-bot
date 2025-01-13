@@ -332,78 +332,102 @@ def detect_wyckoff_signs(
     is_upthrust: bool
 ) -> WyckoffSign:
     """
-    Detect specific Wyckoff signs in market action with comprehensive checks
-    for all possible signs in the WyckoffSign enum.
+    Detect specific Wyckoff signs in market action with stricter confirmation requirements
+    to reduce noise and false signals.
     """
     if len(df) < 5:
         return WyckoffSign.NONE
         
+    # Calculate key metrics with noise reduction
     price_change = df['c'].pct_change()
     volume_change = df['v'].pct_change()
     
-    # Selling Climax (SC)
-    if (price_change.iloc[-1] < -0.03 and 
-        volume_change.iloc[-1] > 2.0 and 
-        price_strength < -STRONG_DEV_THRESHOLD):
+    # Calculate rolling metrics for better context
+    price_volatility = df['c'].pct_change().rolling(5).std().iloc[-1]
+    volume_ma = df['v'].rolling(5).mean()
+    price_ma = df['c'].rolling(8).mean()
+    
+    # Minimum thresholds scaled by volatility
+    min_price_move = max(0.02, price_volatility * 1.5)
+    min_volume_surge = max(2.0, volume_change.rolling(5).std().iloc[-1] * 2)
+    
+    # Check for strong confirmation across multiple candles
+    def confirm_trend(window: int, threshold: float) -> bool:
+        recent_changes = price_change.iloc[-window:]
+        return (recent_changes > threshold).sum() >= window // 2
+
+    def confirm_volume(window: int, threshold: float) -> bool:
+        recent_volume = volume_change.iloc[-window:]
+        return (recent_volume > threshold).sum() >= window // 2
+        
+    # Selling Climax (SC) - Requires panic selling with climactic volume
+    if (price_change.iloc[-1] < -min_price_move and 
+        volume_change.iloc[-1] > min_volume_surge and 
+        price_strength < -STRONG_DEV_THRESHOLD and
+        df['c'].iloc[-1] < price_ma.iloc[-1] * 0.95):  # Price well below MA
         return WyckoffSign.SELLING_CLIMAX
         
-    # Automatic Rally (AR)
-    if (price_change.iloc[-1] > 0.02 and
-        df['c'].iloc[-2:].pct_change().mean() > 0.015 and
-        volume_change.iloc[-1] < volume_change.iloc[-2] and
+    # Automatic Rally (AR) - Must follow a selling climax
+    if (price_change.iloc[-1] > min_price_move and
+        confirm_trend(3, min_price_move * 0.5) and
+        df['l'].iloc[-1] > df['l'].iloc[-5:].min() and  # Higher low
         price_strength < 0):
         return WyckoffSign.AUTOMATIC_RALLY
         
-    # Secondary Test (ST)
-    if (abs(price_change.iloc[-1]) < 0.01 and
-        df['l'].iloc[-1] >= df['l'].iloc[-5:].min() and
-        volume_change.iloc[-1] < 1.0 and
+    # Secondary Test (ST) - Lower volume test of support
+    if (abs(price_change.iloc[-1]) < price_volatility and
+        df['l'].iloc[-1] >= df['l'].iloc[-5:].min() * 0.99 and  # Test previous low
+        df['v'].iloc[-1] < volume_ma.iloc[-1] * 0.8 and  # Lower volume
         price_strength < 0):
         return WyckoffSign.SECONDARY_TEST
         
-    # Last Point of Support (LPS)
+    # Last Point of Support (LPS) - Spring with volume confirmation
     if (is_spring and
-        volume_trend > 0 and
-        price_change.iloc[-1] > 0):
+        volume_trend > 0.5 and  # Strong volume
+        price_change.iloc[-1] > min_price_move and
+        confirm_volume(3, 1.2)):  # Sustained volume
         return WyckoffSign.LAST_POINT_OF_SUPPORT
         
-    # Sign of Strength (SOS)
-    if (price_change.iloc[-1] > 0.02 and
-        volume_change.iloc[-1] > 1.5 and
-        price_strength > 0 and
-        volume_trend > 0):
+    # Sign of Strength (SOS) - Strong move up with volume
+    if (price_change.iloc[-1] > min_price_move * 1.5 and
+        confirm_trend(3, min_price_move) and
+        confirm_volume(3, 1.5) and
+        price_strength > 0.5):  # Clear strength
         return WyckoffSign.SIGN_OF_STRENGTH
         
-    # Buying Climax (BC)
-    if (price_change.iloc[-1] > 0.03 and 
-        volume_change.iloc[-1] > 2.0 and 
-        price_strength > STRONG_DEV_THRESHOLD):
+    # Buying Climax (BC) - Extreme buying with high volume
+    if (price_change.iloc[-1] > min_price_move * 2 and 
+        volume_change.iloc[-1] > min_volume_surge and 
+        price_strength > STRONG_DEV_THRESHOLD and
+        df['c'].iloc[-1] > price_ma.iloc[-1] * 1.05):  # Price well above MA
         return WyckoffSign.BUYING_CLIMAX
         
-    # Upthrust (UT)
+    # Upthrust (UT) - False breakout with rejection
     if (is_upthrust and
-        volume_change.iloc[-1] > 1.2 and
-        price_change.iloc[-1] < 0):
+        volume_change.iloc[-1] > min_volume_surge * 0.8 and
+        price_change.iloc[-1] < -min_price_move * 0.5 and
+        df['c'].iloc[-1] < df['h'].iloc[-1] * 0.985):  # Strong rejection
         return WyckoffSign.UPTHRUST
         
-    # Secondary Test Resistance (STR)
-    if (abs(price_change.iloc[-1]) < 0.01 and
-        df['h'].iloc[-1] <= df['h'].iloc[-5:].max() and
-        volume_change.iloc[-1] < 1.0 and
+    # Secondary Test Resistance (STR) - Higher test with lower volume
+    if (abs(price_change.iloc[-1]) < price_volatility and
+        df['h'].iloc[-1] <= df['h'].iloc[-5:].max() * 1.01 and
+        df['v'].iloc[-1] < volume_ma.iloc[-1] * 0.8 and
         price_strength > 0):
         return WyckoffSign.SECONDARY_TEST_RESISTANCE
         
-    # Last Point of Supply/Resistance (LPSY)
+    # Last Point of Supply (LPSY) - Failed upthrust with volume
     if (is_upthrust and
-        volume_trend > 0 and
-        price_change.iloc[-1] < 0):
+        volume_trend > 0.5 and
+        price_change.iloc[-1] < -min_price_move and
+        confirm_volume(3, 1.2)):
         return WyckoffSign.LAST_POINT_OF_RESISTANCE
         
-    # Sign of Weakness (SOW)
-    if (price_change.iloc[-1] < -0.02 and
-        volume_change.iloc[-1] > 1.5 and
-        price_strength < 0 and
-        volume_trend > 0):
+    # Sign of Weakness (SOW) - Strong down move with volume
+    if (price_change.iloc[-1] < -min_price_move * 1.5 and
+        confirm_trend(3, -min_price_move) and
+        confirm_volume(3, 1.5) and
+        price_strength < -0.5):
         return WyckoffSign.SIGN_OF_WEAKNESS
         
     return WyckoffSign.NONE
