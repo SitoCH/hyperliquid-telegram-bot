@@ -86,7 +86,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, always_notify: bool) -> None:
-    
+    start_time = time.time()
     logger.info(f"Running TA for {coin}")
     try:
         now = int(time.time() * 1000)
@@ -133,6 +133,8 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
     except Exception as e:
         logger.error(e, exc_info=True)
         await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
+    logger.info(f"TA for {coin} done in {(time.time() - start_time):.2f} seconds")
+
 
 def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
     df = pd.DataFrame(candles)
