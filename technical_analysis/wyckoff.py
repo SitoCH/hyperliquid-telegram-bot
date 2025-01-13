@@ -41,7 +41,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
     """Analyze and store Wyckoff phase data incorporating funding rates."""
     # Safety check for minimum required periods
     if len(df) < MIN_PERIODS:
-        df.loc[df.index[-2:], 'wyckoff'] = [WyckoffState.unknown(), WyckoffState.unknown()]
+        df.loc[df.index[-1:], 'wyckoff'] = WyckoffState.unknown()
         return
 
     # Determine timeframe and get appropriate thresholds
@@ -57,180 +57,118 @@ def detect_wyckoff_phase(df: pd.DataFrame, funding_rates: Optional[List[FundingR
         timeframe = Timeframe.MINUTES_15
     
     thresholds = ThresholdConfig.for_timeframe(timeframe)
-    is_higher_timeframe = timeframe in [Timeframe.HOURS_4, Timeframe.DAY_1]
 
-    # Process last three periods with phase smoothing
-    phases_history = []
-    for i in [-3, -2, -1]:
-        # Get the subset of data up to the current index
-        data_subset = df.iloc[:i] if i != -1 else df
-        short_term_window = min(MIN_PERIODS, len(data_subset) - 1)
-        recent_df = data_subset.iloc[-short_term_window:]
-        
-        # Calculate technical indicators
-        volume_sma = data_subset['v'].rolling(window=MIN_PERIODS).mean()
-        price_sma = data_subset['c'].rolling(window=MIN_PERIODS).mean()
-        price_std = data_subset['c'].rolling(window=MIN_PERIODS).std()
+    # Process last period
+    short_term_window = min(MIN_PERIODS, len(df) - 1)
+    recent_df = df.iloc[-short_term_window:]
+    
+    # Calculate technical indicators
+    volume_sma = df['v'].rolling(window=MIN_PERIODS).mean()
+    price_sma = df['c'].rolling(window=MIN_PERIODS).mean()
+    price_std = df['c'].rolling(window=MIN_PERIODS).std()
 
-        # Enhanced volume analysis for crypto
-        volume_short_ma = data_subset['v'].rolling(window=3).mean()  # Shorter window for faster response
-        volume_long_ma = data_subset['v'].rolling(window=8).mean()  # Shorter window than stock markets
-        volume_trend = ((volume_short_ma - volume_long_ma) / volume_long_ma).fillna(0)
+    # Enhanced volume analysis for crypto
+    volume_short_ma = df['v'].rolling(window=3).mean()
+    volume_long_ma = df['v'].rolling(window=8).mean()
+    volume_trend = ((volume_short_ma - volume_long_ma) / volume_long_ma).fillna(0)
+    
+    # Volume analysis (VSA)
+    volume_spread = recent_df['v'] * (recent_df['h'] - recent_df['l'])
+    volume_spread_ma = volume_spread.rolling(window=7).mean()
+    effort_vs_result = (recent_df['c'] - recent_df['o']) / (recent_df['h'] - recent_df['l'])
+    
+    # Get current values
+    curr_price = df['c'].iloc[-1]
+    curr_volume = df['v'].iloc[-1]
+    avg_price = price_sma.iloc[-1]
+    price_std_last = price_std.iloc[-1]
+    volatility = price_std / avg_price
+    
+    # Enhanced momentum with Exponential ROC
+    def exp_roc(series: pd.Series, periods: int) -> pd.Series:
+        return (series / series.shift(periods)).pow(1/periods) - 1
         
+    # Calculate momentum components
+    fast_momentum = exp_roc(df['c'], 7).iloc[-1]
+    medium_momentum = exp_roc(df['c'], 14).iloc[-1]
+    slow_momentum = exp_roc(df['c'], 21).iloc[-1]
+    
+    # Calculate average momentum
+    momentum_value = float(sum([fast_momentum, medium_momentum, slow_momentum]) / 3)
 
-        # Volume analysis (VSA)
-        volume_spread = recent_df['v'] * (recent_df['h'] - recent_df['l'])
-        volume_spread_ma = volume_spread.rolling(window=7).mean()
-        effort_vs_result = (recent_df['c'] - recent_df['o']) / (recent_df['h'] - recent_df['l'])
-        
-        # Get current values relative to the position in the loop
-        curr_price = data_subset['c'].iloc[-1]
-        curr_volume = data_subset['v'].iloc[-1]
-        avg_price = price_sma.iloc[-1]
-        price_std_last = price_std.iloc[-1]
-        volatility = price_std / avg_price
-        
-        # Add price volatility bands
-        volatility_bands = {
-            'upper': price_sma + price_std * 2,
-            'lower': price_sma - price_std * 2
-        }
-        
-        # Enhanced momentum with Exponential ROC - Improved calculation
-        def exp_roc(series: pd.Series, periods: int) -> pd.Series:
-            return (series / series.shift(periods)).pow(1/periods) - 1
-            
-        # Calculate momentum components
-        fast_momentum = exp_roc(data_subset['c'], 7).iloc[-1]  # Get last value
-        medium_momentum = exp_roc(data_subset['c'], 14).iloc[-1]  # Get last value
-        slow_momentum = exp_roc(data_subset['c'], 21).iloc[-1]  # Get last value
-        
-        # Calculate average momentum
-        momentum_value = float(sum([fast_momentum, medium_momentum, slow_momentum]) / 3)
+    # Calculate momentum standard deviation for scaling
+    momentum_std = float(np.std([fast_momentum, medium_momentum, slow_momentum]))
 
-        # Calculate momentum standard deviation for scaling
-        momentum_std = float(np.std([fast_momentum, medium_momentum, slow_momentum]))
+    # Scale momentum
+    normalized_momentum = momentum_value / (momentum_std * 2) if momentum_std != 0 else 0
+    momentum_strength = max(min(normalized_momentum * 100, 100), -100)
 
-        # Scale momentum to a -100 to +100 range based on historical volatility
-        normalized_momentum = momentum_value / (momentum_std * 2) if momentum_std != 0 else 0
-        momentum_strength = max(min(normalized_momentum * 100, 100), -100)
+    # Detect springs and upthrusts for the current period
+    is_spring, is_upthrust = detect_spring_upthrust(df, -1)
+    
+    # Market condition checks
+    volume_sma_value = float(volume_sma.iloc[-1]) if not pd.isna(volume_sma.iloc[-1]) else 0.0
+    volume_trend_value = float(volume_trend.iloc[-1]) if not pd.isna(volume_trend.iloc[-1]) else 0.0
+    
+    # Calculate relative volume
+    relative_volume = curr_volume / volume_sma_value if volume_sma_value > 0 else 1.0
+    
+    # Calculate volume consistency
+    recent_strong_volume = (df['v'].iloc[-3:] > volume_sma.iloc[-3:]).mean()
+    
+    # Use thresholds from config
+    is_high_volume = (
+        (relative_volume > thresholds.volume_threshold and volume_trend_value > 0) or
+        (relative_volume > thresholds.volume_surge_threshold) or
+        (recent_strong_volume > 0.6 and relative_volume > 1.2)
+    )
 
-        # Detect springs and upthrusts for the current period
-        is_spring, is_upthrust = detect_spring_upthrust(data_subset, -1)
-        
-        # Market condition checks
-        volume_sma_value = float(volume_sma.iloc[-1]) if not pd.isna(volume_sma.iloc[-1]) else 0.0
-        volume_trend_value = float(volume_trend.iloc[-1]) if not pd.isna(volume_trend.iloc[-1]) else 0.0
-        
-        # Calculate relative volume (current volume compared to recent average)
-        relative_volume = curr_volume / volume_sma_value if volume_sma_value > 0 else 1.0
-        
-        # Calculate volume consistency (how many recent periods had above-average volume)
-        recent_strong_volume = (data_subset['v'].iloc[-3:] > volume_sma.iloc[-3:]).mean()
-        
-        # Volume spike detection for crypto
-        volume_std = data_subset['v'].rolling(window=12).std()
-        volume_spike = (curr_volume - volume_sma_value) / (volume_std.iloc[-1] + 1e-8)
-        
-        # Detect stop hunts (common in crypto)
-        stop_hunt_up = (
-            data_subset['h'].iloc[-1] > volatility_bands['upper'].iloc[-1] and
-            data_subset['c'].iloc[-1] < price_sma.iloc[-1] and
-            volume_spike > 2.0
+    price_strength = (curr_price - avg_price) / (price_std_last + 1e-8)
+
+    # Enhanced price strength calculation
+    price_ma_short = df['c'].rolling(window=8).mean()
+    price_ma_long = df['c'].rolling(window=21).mean()
+    trend_strength = ((price_ma_short - price_ma_long) / price_ma_long).iloc[-1]
+    price_strength = price_strength * 0.7 + trend_strength * 0.3
+
+    # Phase identification for current period
+    current_phase = identify_wyckoff_phase(
+        is_spring, is_upthrust, curr_volume, volume_sma.iloc[-1],
+        effort_vs_result.iloc[-1], volume_spread.iloc[-1], volume_spread_ma.iloc[-1],
+        price_strength, momentum_strength, is_high_volume, volatility,
+        thresholds=thresholds
+    )
+    
+    effort_result = EffortResult.STRONG if abs(effort_vs_result.iloc[-1]) > thresholds.effort_threshold else EffortResult.WEAK
+    
+    # Detect composite action and Wyckoff signs
+    composite_action = detect_composite_action(df, price_strength, volume_trend_value, effort_vs_result.iloc[-1])
+    wyckoff_sign = detect_wyckoff_signs(df, price_strength, volume_trend_value, is_spring, is_upthrust)
+    
+    funding_state = analyze_funding_rates(funding_rates or [])
+    
+    # Create WyckoffState instance
+    wyckoff_state = WyckoffState(
+        phase=current_phase,
+        uncertain_phase=current_phase.value.startswith('~'),
+        volume=VolumeState.HIGH if is_high_volume else VolumeState.LOW,
+        pattern=MarketPattern.TRENDING if abs(momentum_strength) > thresholds.momentum_threshold else MarketPattern.RANGING,
+        volatility=VolatilityState.HIGH if volatility.iloc[-1] > volatility.mean() else VolatilityState.NORMAL,
+        is_spring=is_spring,
+        is_upthrust=is_upthrust,
+        volume_spread=VolumeState.HIGH if volume_spread.iloc[-1] > volume_spread_ma.iloc[-1] else VolumeState.LOW,
+        effort_vs_result=effort_result,
+        composite_action=composite_action,
+        wyckoff_sign=wyckoff_sign,
+        funding_state=funding_state,
+        description=generate_wyckoff_description(
+            current_phase, current_phase.value.startswith('~'), is_high_volume, momentum_strength, 
+            is_spring, is_upthrust, effort_result,
+            composite_action, wyckoff_sign, funding_state
         )
-        
-        stop_hunt_down = (
-            data_subset['l'].iloc[-1] < volatility_bands['lower'].iloc[-1] and
-            data_subset['c'].iloc[-1] > price_sma.iloc[-1] and
-            volume_spike > 2.0
-        )
-        
-        # Use thresholds from config
-        is_high_volume = (
-            (relative_volume > thresholds.volume_threshold and volume_trend_value > 0) or
-            (volume_spike > 2.5) or
-            (relative_volume > thresholds.volume_surge_threshold) or
-            (recent_strong_volume > 0.6 and relative_volume > 1.2)
-        )
+    )
 
-        price_strength = (curr_price - avg_price) / (price_std_last + 1e-8)
-
-        # Enhanced price strength calculation
-        price_ma_short = data_subset['c'].rolling(window=8).mean()
-        price_ma_long = data_subset['c'].rolling(window=21).mean()
-        trend_strength = ((price_ma_short - price_ma_long) / price_ma_long).iloc[-1]
-        price_strength = price_strength * 0.7 + trend_strength * 0.3  # Combine both metrics
-
-        # Enhanced volume clustering analysis
-        volume_clusters = data_subset['v'].rolling(5).apply(
-            lambda x: np.sum(np.diff(np.sort(x)) > np.std(x))
-        )
-        clustered_volume = volume_clusters.iloc[-1] >= 3  # At least 3 significant gaps
-        
-        # Detect potential manipulation
-        manipulation_signs = (
-            stop_hunt_up or stop_hunt_down or
-            (volume_spike > 3.0 and abs(effort_vs_result.iloc[-1]) < 0.3) or
-            (clustered_volume and volume_spike > 2.5)
-        )
-        
-        # Phase identification with temporal smoothing
-        current_phase = identify_wyckoff_phase(
-            is_spring, is_upthrust, curr_volume, volume_sma.iloc[-1],
-            effort_vs_result.iloc[-1], volume_spread.iloc[-1], volume_spread_ma.iloc[-1],
-            price_strength, momentum_strength, is_high_volume, volatility,
-            thresholds=thresholds
-        )
-        
-        phases_history.append(current_phase)
-        
-        # Apply phase smoothing
-        smoothed_phase = smooth_wyckoff_phase(phases_history, is_higher_timeframe)
-        
-        # Combine manipulation signs with phase uncertainty
-        uncertain_phase = smoothed_phase.value.startswith('~') or manipulation_signs
-        if manipulation_signs:
-            smoothed_phase = WyckoffPhase.POSSIBLE_RANGING
-        
-        effort_result = EffortResult.STRONG if abs(effort_vs_result.iloc[-1]) > thresholds.effort_threshold else EffortResult.WEAK
-        
-        # Detect composite action and Wyckoff signs
-        composite_action = detect_composite_action(data_subset, price_strength, volume_trend_value, effort_vs_result.iloc[-1])
-        wyckoff_sign = detect_wyckoff_signs(data_subset, price_strength, volume_trend_value, is_spring, is_upthrust)
-        
-        funding_state = analyze_funding_rates(funding_rates or [])
-        
-        # Adjust phase confidence based on funding rates
-        if not uncertain_phase and funding_state != FundingState.UNKNOWN:
-            if smoothed_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]:
-                if funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE]:
-                    uncertain_phase = True
-            elif smoothed_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]:
-                if funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE]:
-                    uncertain_phase = True
-
-        # Create WyckoffState instance with smoothed phase
-        wyckoff_state = WyckoffState(
-            phase=smoothed_phase,
-            uncertain_phase=uncertain_phase,
-            volume=VolumeState.HIGH if is_high_volume else VolumeState.LOW,
-            pattern=MarketPattern.TRENDING if abs(momentum_strength) > thresholds.momentum_threshold else MarketPattern.RANGING,
-            volatility=VolatilityState.HIGH if volatility.iloc[-1] > volatility.mean() else VolatilityState.NORMAL,
-            is_spring=is_spring,
-            is_upthrust=is_upthrust,
-            volume_spread=VolumeState.HIGH if volume_spread.iloc[-1] > volume_spread_ma.iloc[-1] else VolumeState.LOW,
-            effort_vs_result=effort_result,
-            composite_action=composite_action,
-            wyckoff_sign=wyckoff_sign,
-            funding_state=funding_state,
-            description=generate_wyckoff_description(
-                smoothed_phase, uncertain_phase, is_high_volume, momentum_strength, 
-                is_spring, is_upthrust, effort_result,
-                composite_action, wyckoff_sign, funding_state
-            )
-        )
-
-        df.loc[df.index[i], 'wyckoff'] = wyckoff_state  # type: ignore
+    df.loc[df.index[-1], 'wyckoff'] = wyckoff_state # type: ignore
 
 
 def identify_wyckoff_phase(
@@ -318,65 +256,6 @@ def determine_phase_by_price_strength(
         return WyckoffPhase.MARKDOWN
     return WyckoffPhase.POSSIBLE_MARKDOWN
 
-def smooth_wyckoff_phase(phases: List[WyckoffPhase], is_higher_timeframe: bool) -> WyckoffPhase:
-    """Apply temporal smoothing to Wyckoff phases to reduce noise and validate transitions."""
-    if len(phases) < 2:
-        return phases[-1]
-    
-    # Valid phase transitions (from -> to)
-    valid_transitions = {
-        WyckoffPhase.ACCUMULATION: [WyckoffPhase.MARKUP, WyckoffPhase.RANGING],
-        WyckoffPhase.MARKUP: [WyckoffPhase.DISTRIBUTION, WyckoffPhase.RANGING],
-        WyckoffPhase.DISTRIBUTION: [WyckoffPhase.MARKDOWN, WyckoffPhase.RANGING],
-        WyckoffPhase.MARKDOWN: [WyckoffPhase.ACCUMULATION, WyckoffPhase.RANGING],
-        WyckoffPhase.RANGING: [WyckoffPhase.ACCUMULATION, WyckoffPhase.DISTRIBUTION],
-        # Possible phases can transition to their confirmed counterparts or ranging
-        WyckoffPhase.POSSIBLE_ACCUMULATION: [WyckoffPhase.ACCUMULATION, WyckoffPhase.RANGING],
-        WyckoffPhase.POSSIBLE_MARKUP: [WyckoffPhase.MARKUP, WyckoffPhase.RANGING],
-        WyckoffPhase.POSSIBLE_DISTRIBUTION: [WyckoffPhase.DISTRIBUTION, WyckoffPhase.RANGING],
-        WyckoffPhase.POSSIBLE_MARKDOWN: [WyckoffPhase.MARKDOWN, WyckoffPhase.RANGING],
-        WyckoffPhase.POSSIBLE_RANGING: [WyckoffPhase.RANGING]
-    }
-
-    # Dynamic weights based on phase certainty
-    def get_weight(phase: WyckoffPhase) -> float:
-        return 0.3 if phase.value.startswith('~') else 0.5
-
-    # Calculate weighted phase counts
-    weights = [0.2, 0.3, 0.5][-len(phases):]  # Base weights
-    phase_counts: Dict[WyckoffPhase, float] = {}
-    
-    for phase, base_weight in zip(phases, weights):
-        adjusted_weight = base_weight * get_weight(phase)
-        phase_counts[phase] = phase_counts.get(phase, 0) + adjusted_weight
-
-    # Find the most common phase
-    most_common_phase = max(phase_counts.items(), key=lambda x: x[1])[0]
-    current_phase = phases[-1]
-    previous_phase = phases[-2]
-
-    # Check if transition is valid
-    is_valid_transition = (
-        most_common_phase in valid_transitions.get(previous_phase, []) or
-        most_common_phase == previous_phase
-    )
-
-    # Higher timeframes require more consensus
-    consensus_threshold = 0.6 if is_higher_timeframe else 0.4
-    has_consensus = phase_counts[most_common_phase] > consensus_threshold
-
-    # Return appropriate phase based on conditions
-    if has_consensus and is_valid_transition:
-        return most_common_phase
-    elif is_higher_timeframe:
-        # Keep previous phase on higher timeframes if no strong consensus
-        return previous_phase
-    else:
-        # On lower timeframes, allow more flexible transitions
-        if most_common_phase.value.startswith('~'):
-            # For uncertain phases, require stronger consensus
-            return current_phase if not has_consensus else most_common_phase
-        return most_common_phase if is_valid_transition else current_phase
 
 def detect_composite_action(
     df: pd.DataFrame,
