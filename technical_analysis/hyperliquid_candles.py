@@ -94,12 +94,14 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         candles_15m = get_candles_with_cache(coin, "15m", now, 50, hyperliquid_utils.info.candles_snapshot)
         candles_1h = get_candles_with_cache(coin, "1h", now, 100, hyperliquid_utils.info.candles_snapshot)
         candles_4h = get_candles_with_cache(coin, "4h", now, 300, hyperliquid_utils.info.candles_snapshot)
+        candles_8h = get_candles_with_cache(coin, "8h", now, 450, hyperliquid_utils.info.candles_snapshot)
         candles_1d = get_candles_with_cache(coin, "1d", now, 750, hyperliquid_utils.info.candles_snapshot)
         
         local_tz = get_localzone()
         df_15m = prepare_dataframe(candles_15m, local_tz)
         df_1h = prepare_dataframe(candles_1h, local_tz)
         df_4h = prepare_dataframe(candles_4h, local_tz)
+        df_8h = prepare_dataframe(candles_8h, local_tz)
         df_1d = prepare_dataframe(candles_1d, local_tz)
 
 
@@ -113,6 +115,9 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         
         _, wyckoff_flip_4h = apply_indicators(df_4h, Timeframe.HOURS_4, funding_rates)
         states[Timeframe.HOURS_4] = df_4h['wyckoff'].iloc[-1]
+
+        apply_indicators(df_8h, Timeframe.HOURS_8, funding_rates)
+        states[Timeframe.HOURS_8] = df_8h['wyckoff'].iloc[-1]
         
         apply_indicators(df_1d, Timeframe.DAY_1, funding_rates)
         states[Timeframe.DAY_1] = df_1d['wyckoff'].iloc[-1]
@@ -162,6 +167,7 @@ def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int,
         Timeframe.MINUTES_15: (14, 8, 21, 5, 8),  # (atr_length, macd_fast, macd_slow, macd_signal, st_length)
         Timeframe.HOUR_1: (21, 12, 26, 9, 10),
         Timeframe.HOURS_4: (28, 12, 32, 9, 12),
+        Timeframe.HOURS_8: (30, 12, 36, 9, 13),
         Timeframe.DAY_1: (34, 12, 40, 9, 14)
     }
 
@@ -173,6 +179,7 @@ def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int,
         Timeframe.MINUTES_15: 200,
         Timeframe.HOUR_1: 150,
         Timeframe.HOURS_4: 100,
+        Timeframe.HOURS_8: 80,
         Timeframe.DAY_1: 60
     }[timeframe])
 
@@ -207,6 +214,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
         Timeframe.MINUTES_15: 2.8,
         Timeframe.HOUR_1: 3.0,
         Timeframe.HOURS_4: 3.2,
+        Timeframe.HOURS_8: 3.35,
         Timeframe.DAY_1: 3.5
     }[timeframe]
 
@@ -244,6 +252,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
         Timeframe.MINUTES_15: 21,
         Timeframe.HOUR_1: 24,
         Timeframe.HOURS_4: 28,
+        Timeframe.HOURS_8: 31,
         Timeframe.DAY_1: 34
     }[timeframe]
     

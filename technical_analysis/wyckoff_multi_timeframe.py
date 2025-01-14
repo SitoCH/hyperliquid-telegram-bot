@@ -9,19 +9,18 @@ from .wyckoff_types import (
 
 @dataclass
 class MultiTimeframeContext:
-    alignment_score: float  # 0-1 score indicating how well timeframes align
-    dominant_phase: WyckoffPhase  # Most significant phase across timeframes
-    dominant_action: CompositeAction  # Most significant composite action
-    confidence_level: float  # 0-1 score for overall confidence
-    description: str  # Human-readable analysis
+    alignment_score: float  # 0 to 1, indicating how well timeframes align
+    confidence_level: float  # 0 to 1, indicating strength of signals
+    description: str
 
 def get_phase_weight(timeframe: Timeframe) -> float:
     """Get the weight for each timeframe's contribution to analysis."""
     return {
-        Timeframe.MINUTES_15: 0.1,
-        Timeframe.HOUR_1: 0.2,
-        Timeframe.HOURS_4: 0.3,
-        Timeframe.DAY_1: 0.4
+        Timeframe.MINUTES_15: 0.05,
+        Timeframe.HOUR_1: 0.15,
+        Timeframe.HOURS_4: 0.25,
+        Timeframe.HOURS_8: 0.30,
+        Timeframe.DAY_1: 0.25
     }[timeframe]
 
 def analyze_multi_timeframe(
@@ -29,9 +28,11 @@ def analyze_multi_timeframe(
 ) -> MultiTimeframeContext:
     """Analyze Wyckoff states across multiple timeframes."""
     if not states:
-        return MultiTimeframeContext(0.0, WyckoffPhase.UNKNOWN, 
-                                   CompositeAction.UNKNOWN, 0.0, 
-                                   "Insufficient data for analysis")
+        return MultiTimeframeContext(
+            alignment_score=0.0,
+            confidence_level=0.0,
+            description="Insufficient timeframe data for analysis"
+        )
 
     # Calculate weighted phase frequency
     phase_weights: Dict[WyckoffPhase, float] = {}
@@ -72,8 +73,6 @@ def analyze_multi_timeframe(
 
     return MultiTimeframeContext(
         alignment_score=alignment_score,
-        dominant_phase=dominant_phase,
-        dominant_action=dominant_action,
         confidence_level=confidence_level,
         description=description
     )
@@ -85,49 +84,77 @@ def _generate_mtf_description(
     alignment_score: float,
     confidence_level: float
 ) -> str:
-    """Generate a human-readable multi-timeframe analysis description."""
-    
-    # Early return for low confidence
-    if confidence_level < 0.4:
-        return "Insufficient confidence in multi-timeframe analysis. Market structure unclear."
-
-    # Format alignment quality
-    alignment_desc = (
-        "strong" if alignment_score > 0.8
-        else "moderate" if alignment_score > 0.6
-        else "weak"
+    """Generate a detailed multi-timeframe analysis description."""
+    # Determine dominant bias based on phase and action
+    dominant_bias = (
+        "bullish" if dominant_action == CompositeAction.ACCUMULATING
+        else "bearish" if dominant_action == CompositeAction.DISTRIBUTING
+        else "neutral"
     )
 
+    # Format alignment and confidence as percentages
+    alignment_pct = f"{alignment_score * 100:.0f}%"
+    confidence_pct = f"{confidence_level * 100:.0f}%"
+
     # Analyze timeframe relationships
-    higher_tf_state = states.get(Timeframe.DAY_1)
-    lower_tf_state = states.get(Timeframe.HOUR_1)
+    higher_tf_agreement = (
+        states[Timeframe.DAY_1].phase == states[Timeframe.HOURS_8].phase and
+        states[Timeframe.HOURS_8].phase == states[Timeframe.HOURS_4].phase
+    )
     
-    if not (higher_tf_state and lower_tf_state):
-        return "Incomplete timeframe data for analysis."
-
-    # Build description
-    lines = [
-        f"Multi-timeframe analysis shows {alignment_desc} alignment "
-        f"({alignment_score:.0%} agreement between timeframes).",
-        
-        f"Dominant market phase is {dominant_phase.value} with "
-        f"{dominant_action.value} on multiple timeframes.",
-    ]
-
-    # Add trend structure analysis
-    if higher_tf_state.phase == lower_tf_state.phase:
-        lines.append("Trend structure is aligned across timeframes, "
-                    "increasing probability of continuation.")
-    else:
-        lines.append("Divergence between higher and lower timeframes "
-                    "suggests potential trend transition.")
-
-    # Add volume analysis
-    volume_agreement = all(s.volume == VolumeState.HIGH for s in states.values())
-    if volume_agreement:
-        lines.append("Strong volume confirmation across all timeframes.")
+    medium_tf_agreement = (
+        states[Timeframe.HOURS_8].phase == states[Timeframe.HOURS_4].phase and
+        states[Timeframe.HOURS_4].phase == states[Timeframe.HOUR_1].phase
+    )
     
-    # Add confidence statement
-    lines.append(f"Overall analysis confidence: {confidence_level:.0%}")
+    lower_tf_agreement = (
+        states[Timeframe.HOURS_4].phase == states[Timeframe.HOUR_1].phase and
+        states[Timeframe.HOUR_1].phase == states[Timeframe.MINUTES_15].phase
+    )
 
-    return "\n".join(lines)
+    # Enhanced trend context with 8h perspective
+    trend_context = (
+        "Strong trending market across all timeframes" if higher_tf_agreement and medium_tf_agreement and lower_tf_agreement else
+        "Clear trend in higher timeframes" if higher_tf_agreement and medium_tf_agreement else
+        "Developing trend in medium timeframes" if medium_tf_agreement else
+        "Mixed signals across timeframes" if alignment_score < 0.6 else
+        "Transitioning market structure"
+    )
+
+    description = (
+        f"• Bias: {dominant_bias.title()}\n"
+        f"• Market Structure: {trend_context}\n"
+        f"• Alignment: {alignment_pct} agreement across timeframes\n"
+        f"• Signal Confidence: {confidence_pct}\n"
+        "\nTimeframe Analysis:\n"
+    )
+
+    # Add specific timeframe details with hierarchical importance
+    for tf in [Timeframe.DAY_1, Timeframe.HOURS_8, Timeframe.HOURS_4, Timeframe.HOUR_1, Timeframe.MINUTES_15]:
+        state = states[tf]
+        timeframe_desc = _get_timeframe_description(tf, state)
+        description += timeframe_desc
+
+    return description
+
+def _get_timeframe_description(tf: Timeframe, state: WyckoffState) -> str:
+    """Generate a descriptive line for each timeframe's state."""
+    tf_desc = {
+        Timeframe.DAY_1: "Daily trend",
+        Timeframe.HOURS_8: "8h trend",
+        Timeframe.HOURS_4: "4h trend",
+        Timeframe.HOUR_1: "Hourly trend",
+        Timeframe.MINUTES_15: "Short-term"
+    }[tf]
+    
+    phase_desc = f"{state.phase.value}"
+    if state.uncertain_phase:
+        phase_desc += " (uncertain)"
+    
+    action_desc = ""
+    if state.composite_action != CompositeAction.NEUTRAL:
+        action_desc = f" - {state.composite_action.value}"
+    
+    volume_desc = " with high volume" if state.volume == VolumeState.HIGH else ""
+    
+    return f"• {tf_desc}: {phase_desc}{action_desc}{volume_desc}\n"

@@ -8,13 +8,14 @@ from utils import log_execution_time
 PROJECT_ROOT = Path(__file__).parent.parent
 CACHE_DIR = PROJECT_ROOT / 'cache' / 'candles'
 
-# Timeframe to minutes mapping
+# Update timeframe mapping to include 8h
 TIMEFRAME_MINUTES = {
     '1m': 1,
     '5m': 5,
     '15m': 15,
     '1h': 60,
     '4h': 240,
+    '8h': 480,
     '1d': 1440
 }
 

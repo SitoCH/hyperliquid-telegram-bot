@@ -133,6 +133,7 @@ class Timeframe(Enum):
     MINUTES_15 = "15m"
     HOUR_1 = "1h"
     HOURS_4 = "4h"
+    HOURS_8 = "8h"
     DAY_1 = "1d"
 
 @dataclass
@@ -150,6 +151,7 @@ class ThresholdConfig:
             Timeframe.MINUTES_15: 0.8,  # More sensitive for quick trades
             Timeframe.HOUR_1: 1.0,      # Base reference
             Timeframe.HOURS_4: 1.2,     # More conservative
+            Timeframe.HOURS_8: 1.35,    # Even more conservative
             Timeframe.DAY_1: 1.5        # Most conservative
         }[timeframe]
         
@@ -157,6 +159,7 @@ class ThresholdConfig:
             Timeframe.MINUTES_15: 0.7,  # Faster momentum changes
             Timeframe.HOUR_1: 1.0,
             Timeframe.HOURS_4: 1.4,
+            Timeframe.HOURS_8: 1.6,     # More emphasis on longer trends
             Timeframe.DAY_1: 1.8
         }[timeframe]
         
