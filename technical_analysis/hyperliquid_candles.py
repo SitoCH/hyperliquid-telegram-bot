@@ -92,23 +92,27 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         funding_rates = get_funding_with_cache(coin, now, 7)
 
         candles_15m = get_candles_with_cache(coin, Timeframe.MINUTES_15, now, 50, hyperliquid_utils.info.candles_snapshot)
-        candles_1h = get_candles_with_cache(coin, Timeframe.HOUR_1, now, 100, hyperliquid_utils.info.candles_snapshot)
+        candles_30m = get_candles_with_cache(coin, Timeframe.MINUTES_30, now, 100, hyperliquid_utils.info.candles_snapshot)
+        candles_1h = get_candles_with_cache(coin, Timeframe.HOUR_1, now, 150, hyperliquid_utils.info.candles_snapshot)
         candles_4h = get_candles_with_cache(coin, Timeframe.HOURS_4, now, 300, hyperliquid_utils.info.candles_snapshot)
         candles_8h = get_candles_with_cache(coin, Timeframe.HOURS_8, now, 450, hyperliquid_utils.info.candles_snapshot)
         candles_1d = get_candles_with_cache(coin, Timeframe.DAY_1, now, 750, hyperliquid_utils.info.candles_snapshot)
         
         local_tz = get_localzone()
         df_15m = prepare_dataframe(candles_15m, local_tz)
+        df_30m = prepare_dataframe(candles_30m, local_tz)
         df_1h = prepare_dataframe(candles_1h, local_tz)
         df_4h = prepare_dataframe(candles_4h, local_tz)
         df_8h = prepare_dataframe(candles_8h, local_tz)
         df_1d = prepare_dataframe(candles_1d, local_tz)
 
-
         # Apply indicators with Wyckoff analysis
         states = {}
         apply_indicators(df_15m, Timeframe.MINUTES_15, funding_rates)
         states[Timeframe.MINUTES_15] = df_15m['wyckoff'].iloc[-1]
+
+        apply_indicators(df_30m, Timeframe.MINUTES_30, funding_rates)
+        states[Timeframe.MINUTES_30] = df_30m['wyckoff'].iloc[-1]
         
         _, wyckoff_flip_1h = apply_indicators(df_1h, Timeframe.HOUR_1, funding_rates)
         states[Timeframe.HOUR_1] = df_1h['wyckoff'].iloc[-1]
@@ -165,6 +169,7 @@ def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int,
     # Base settings optimized for each timeframe
     settings = {
         Timeframe.MINUTES_15: (14, 8, 21, 5, 8),  # (atr_length, macd_fast, macd_slow, macd_signal, st_length)
+        Timeframe.MINUTES_30: (18, 10, 24, 7, 9),  # Settings between 15m and 1h
         Timeframe.HOUR_1: (21, 12, 26, 9, 10),
         Timeframe.HOURS_4: (28, 12, 32, 9, 12),
         Timeframe.HOURS_8: (30, 12, 36, 9, 13),
@@ -177,6 +182,7 @@ def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int,
     # Adjust lengths based on available data
     max_length = min(data_length - 1, {
         Timeframe.MINUTES_15: 200,
+        Timeframe.MINUTES_30: 175,  # Between 15m and 1h
         Timeframe.HOUR_1: 150,
         Timeframe.HOURS_4: 100,
         Timeframe.HOURS_8: 80,
@@ -212,6 +218,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     # SuperTrend with optimized parameters
     st_multiplier = {
         Timeframe.MINUTES_15: 2.8,
+        Timeframe.MINUTES_30: 2.9,  # Between 15m and 1h
         Timeframe.HOUR_1: 3.0,
         Timeframe.HOURS_4: 3.2,
         Timeframe.HOURS_8: 3.35,
@@ -250,6 +257,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     # EMA length based on timeframe
     ema_length = {
         Timeframe.MINUTES_15: 21,
+        Timeframe.MINUTES_30: 22,  # Between 15m and 1h
         Timeframe.HOUR_1: 24,
         Timeframe.HOURS_4: 28,
         Timeframe.HOURS_8: 31,

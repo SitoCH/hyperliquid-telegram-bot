@@ -17,10 +17,11 @@ def get_phase_weight(timeframe: Timeframe) -> float:
     """Get the weight for each timeframe's contribution to analysis."""
     return {
         Timeframe.MINUTES_15: 0.05,
+        Timeframe.MINUTES_30: 0.10,
         Timeframe.HOUR_1: 0.15,
-        Timeframe.HOURS_4: 0.25,
-        Timeframe.HOURS_8: 0.30,
-        Timeframe.DAY_1: 0.25
+        Timeframe.HOURS_4: 0.175,
+        Timeframe.HOURS_8: 0.175,
+        Timeframe.DAY_1: 0.175
     }[timeframe]
 
 def analyze_multi_timeframe(
@@ -130,7 +131,7 @@ def _generate_mtf_description(
     )
 
     # Add specific timeframe details with hierarchical importance
-    for tf in [Timeframe.DAY_1, Timeframe.HOURS_8, Timeframe.HOURS_4, Timeframe.HOUR_1, Timeframe.MINUTES_15]:
+    for tf in [Timeframe.DAY_1, Timeframe.HOURS_8, Timeframe.HOURS_4, Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15]:
         state = states[tf]
         timeframe_desc = _get_timeframe_description(tf, state)
         description += timeframe_desc
@@ -144,6 +145,7 @@ def _get_timeframe_description(tf: Timeframe, state: WyckoffState) -> str:
         Timeframe.HOURS_8: "8h trend",
         Timeframe.HOURS_4: "4h trend",
         Timeframe.HOUR_1: "Hourly trend",
+        Timeframe.MINUTES_30: "30min trend",
         Timeframe.MINUTES_15: "Short-term"
     }[tf]
     

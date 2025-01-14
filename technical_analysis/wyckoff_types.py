@@ -131,6 +131,7 @@ class WyckoffState:
 
 class Timeframe(Enum):
     MINUTES_15 = ("15m", 15)
+    MINUTES_30 = ("30m", 30)
     HOUR_1 = ("1h", 60)
     HOURS_4 = ("4h", 240)
     HOURS_8 = ("8h", 480)
@@ -164,6 +165,7 @@ class ThresholdConfig:
     def for_timeframe(timeframe: Timeframe) -> 'ThresholdConfig':
         base_multiplier = {
             Timeframe.MINUTES_15: 0.8,  # More sensitive for quick trades
+            Timeframe.MINUTES_30: 0.9,  # Between 15m and 1h sensitivity
             Timeframe.HOUR_1: 1.0,      # Base reference
             Timeframe.HOURS_4: 1.2,     # More conservative
             Timeframe.HOURS_8: 1.35,    # Even more conservative
@@ -172,6 +174,7 @@ class ThresholdConfig:
         
         momentum_multiplier = {
             Timeframe.MINUTES_15: 0.7,  # Faster momentum changes
+            Timeframe.MINUTES_30: 0.85, # Between 15m and 1h momentum
             Timeframe.HOUR_1: 1.0,
             Timeframe.HOURS_4: 1.4,
             Timeframe.HOURS_8: 1.6,     # More emphasis on longer trends
