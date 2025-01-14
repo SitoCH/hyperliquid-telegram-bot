@@ -147,7 +147,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
 
         if should_notify:
             mid = float(hyperliquid_utils.info.all_mids()[coin])
-            await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, df_1d, coin, always_notify, mtf_context)
+            await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, coin, always_notify, mtf_context)
 
     except Exception as e:
         logger.error(e, exc_info=True)
@@ -238,16 +238,15 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
 
 
-async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, df_1d: pd.DataFrame, coin: str, send_charts: bool, mtf_context: MultiTimeframeContext) -> None:
+async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str, send_charts: bool, mtf_context: MultiTimeframeContext) -> None:
     
     charts = []
     try:
-        charts = generate_chart(df_15m, df_1h, df_4h, df_1d, coin) if send_charts else [None] * 4 # type: ignore
+        charts = generate_chart(df_15m, df_1h, df_4h, coin) if send_charts else [None] * 4 # type: ignore
         
         results_15m = get_ta_results(df_15m, mid)
         results_1h = get_ta_results(df_1h, mid)
         results_4h = get_ta_results(df_4h, mid)
-        results_1d = get_ta_results(df_1d, mid)
 
         # Add MTF analysis at the start of the message
         await telegram_utils.send(
@@ -263,8 +262,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
         for idx, (chart, period, results) in enumerate([
             (charts[0], "15m", results_15m),
             (charts[1], "1h", results_1h),
-            (charts[2], "4h", results_4h),
-            (charts[3], "1d", results_1d)
+            (charts[2], "4h", results_4h)
         ]):
             wyckoff_description = results['wyckoff'].description if results.get('wyckoff') else no_wyckoff_data_available
             caption = f"<b>{period} indicators:</b>\n{wyckoff_description}\n<pre>{format_table(results)}</pre>"

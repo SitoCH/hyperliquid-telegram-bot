@@ -177,8 +177,8 @@ class Timeframe(Enum):
     @property
     def settings(self) -> TimeframeSettings:
         if self._settings is None:
-            self._settings = _TIMEFRAME_SETTINGS[self]
-        return self._settings
+            self._settings = _TIMEFRAME_SETTINGS[self] # type: ignore
+        return self._settings # type: ignore
         
     def __str__(self) -> str:
         return self._name
