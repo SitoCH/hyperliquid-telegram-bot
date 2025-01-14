@@ -4,7 +4,7 @@ import pandas as pd  # type: ignore[import]
 
 from .wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, 
-    CompositeAction, Timeframe, VolumeState
+    CompositeAction, Timeframe, VolumeState, FundingState
 )
 
 @dataclass
@@ -20,54 +20,75 @@ def get_phase_weight(timeframe: Timeframe) -> float:
 def analyze_multi_timeframe(
     states: Dict[Timeframe, WyckoffState]
 ) -> MultiTimeframeContext:
-    """Analyze Wyckoff states by grouping into higher and lower timeframes."""
+    """
+    Analyze Wyckoff states across multiple timeframes to determine market structure.
+    
+    Evaluates alignment between timeframes, confidence of signals, and generates
+    trading context with higher weighting on longer timeframes.
+    
+    Args:
+        states: Dictionary mapping timeframes to their Wyckoff states
+        
+    Returns:
+        MultiTimeframeContext with alignment score, confidence level and description
+    """
+    # Input validation
     if not states:
         return MultiTimeframeContext(
             alignment_score=0.0,
             confidence_level=0.0,
-            description="Insufficient timeframe data for analysis"
+            description="No timeframe data available for analysis"
         )
 
-    # Group timeframes into higher and lower
-    higher_tf = {
-        tf: state for tf, state in states.items() 
-        if tf in [Timeframe.DAY_1, Timeframe.HOURS_8, Timeframe.HOURS_4]
-    }
-    lower_tf = {
-        tf: state for tf, state in states.items()
-        if tf in [Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15]
-    }
+    # Ensure minimum required timeframes
+    required_higher = {Timeframe.HOURS_4, Timeframe.HOURS_8, Timeframe.DAY_1}
+    required_lower = {Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15}
+    
+    available_higher = set(states.keys()) & required_higher
+    available_lower = set(states.keys()) & required_lower
+    
+    if not available_higher or not available_lower:
+        return MultiTimeframeContext(
+            alignment_score=0.0,
+            confidence_level=0.0,
+            description="Insufficient timeframe coverage for reliable analysis"
+        )
 
-    # Analyze each group
-    higher_analysis = _analyze_timeframe_group(higher_tf, "Higher")
-    lower_analysis = _analyze_timeframe_group(lower_tf, "Lower")
+    # Group timeframes
+    higher_tf = {tf: state for tf, state in states.items() if tf in available_higher}
+    lower_tf = {tf: state for tf, state in states.items() if tf in available_lower}
 
-    # Calculate inter-group alignment
-    groups_alignment = _calculate_dual_groups_alignment(
-        higher_analysis,
-        lower_analysis
-    )
+    try:
+        # Analyze each group
+        higher_analysis = _analyze_timeframe_group(higher_tf)
+        lower_analysis = _analyze_timeframe_group(lower_tf)
 
-    # Calculate overall confidence level
-    confidence_level = _calculate_dual_confidence(
-        higher_analysis,
-        lower_analysis,
-        groups_alignment
-    )
+        # Calculate alignment and confidence
+        groups_alignment = _calculate_dual_groups_alignment(higher_analysis, lower_analysis)
+        confidence_level = _calculate_dual_confidence(higher_analysis, lower_analysis, groups_alignment)
 
-    # Generate description
-    description = _generate_dual_group_description(
-        higher_analysis,
-        lower_analysis,
-        groups_alignment,
-        confidence_level
-    )
+        # Generate comprehensive description
+        description = _generate_dual_group_description(
+            higher_analysis,
+            lower_analysis,
+            groups_alignment,
+            confidence_level,
+            higher_tf  # Pass higher_tf to the description generator
+        )
 
-    return MultiTimeframeContext(
-        alignment_score=groups_alignment,
-        confidence_level=confidence_level,
-        description=description
-    )
+        return MultiTimeframeContext(
+            alignment_score=groups_alignment,
+            confidence_level=confidence_level,
+            description=description
+        )
+        
+    except Exception as e:
+        # Fallback in case of analysis errors
+        return MultiTimeframeContext(
+            alignment_score=0.0,
+            confidence_level=0.0,
+            description=f"Error analyzing timeframes: {str(e)}"
+        )
 
 @dataclass
 class TimeframeGroupAnalysis:
@@ -79,8 +100,7 @@ class TimeframeGroupAnalysis:
     group_weight: float
 
 def _analyze_timeframe_group(
-    group: Dict[Timeframe, WyckoffState],
-    group_type: str
+    group: Dict[Timeframe, WyckoffState]
 ) -> TimeframeGroupAnalysis:
     """Analyze a group of related timeframes."""
     if not group:
@@ -194,7 +214,8 @@ def _generate_dual_group_description(
     higher: TimeframeGroupAnalysis,
     lower: TimeframeGroupAnalysis,
     groups_alignment: float,
-    confidence_level: float
+    confidence_level: float,
+    higher_tf: Dict[Timeframe, WyckoffState]
 ) -> str:
     """Generate a narrative description for dual group analysis."""
     alignment_pct = f"{groups_alignment * 100:.0f}%"
@@ -205,7 +226,7 @@ def _generate_dual_group_description(
     actionable_insight = _generate_dual_actionable_insight(higher, lower, confidence_level)
     
     # Get funding state (same for all timeframes, so we can take from either group)
-    funding_state = next(iter(higher.group.values())).funding_state if higher.group else "unknown funding"
+    funding_state = next(iter(higher_tf.values())).funding_state if higher_tf else FundingState.UNKNOWN
 
     # Create narrative description
     description = (
@@ -225,7 +246,7 @@ def _generate_dual_actionable_insight(
 ) -> str:
     """Generate actionable insights from dual timeframe analysis."""
     if confidence_level < 0.5:
-        return "Interpretation: Insufficient confidence for clear directional bias\nSuggestion: Avoid new positions, reduce existing exposure"
+        return "<b>Interpretation:</b> Insufficient confidence for clear directional bias\n<b>Suggestion:</b> Avoid new positions, reduce existing exposure"
 
     # Get base market condition
     if higher.momentum_bias == lower.momentum_bias:
@@ -260,7 +281,7 @@ def _generate_dual_actionable_insight(
                 "Longs: Take profit on existing positions, avoid adding to longs"
             )
 
-    return f"Interpretation: {base_signal}\nTrade Suggestions:\n{action_plan}"
+    return f"<b>Interpretation:</b> {base_signal}\n<b>Suggestions:</b>\n{action_plan}"
 
 def _determine_dual_market_context(
     higher: TimeframeGroupAnalysis,
@@ -287,5 +308,3 @@ def _determine_dual_trend_strength(
         return "Moderate"
     else:
         return "Weak"
-
-# ...existing code...

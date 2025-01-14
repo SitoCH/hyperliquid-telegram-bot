@@ -290,7 +290,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
         await telegram_utils.send(
             f"<b>Technical analysis summary for {coin}</b>\n"
             f"Market price: {fmt_price(mid)} USDC\n"
-            f"Multi timeframe analysis:\n{mtf_context.description}\n\n",
+            f"<b>Multi timeframe analysis:</b>\n{mtf_context.description}\n\n",
             parse_mode=ParseMode.HTML
         )
 
