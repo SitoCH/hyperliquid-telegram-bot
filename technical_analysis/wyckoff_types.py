@@ -130,11 +130,26 @@ class WyckoffState:
         )
 
 class Timeframe(Enum):
-    MINUTES_15 = "15m"
-    HOUR_1 = "1h"
-    HOURS_4 = "4h"
-    HOURS_8 = "8h"
-    DAY_1 = "1d"
+    MINUTES_15 = ("15m", 15)
+    HOUR_1 = ("1h", 60)
+    HOURS_4 = ("4h", 240)
+    HOURS_8 = ("8h", 480)
+    DAY_1 = ("1d", 1440)
+    
+    def __init__(self, name: str, minutes: int):
+        self._name = name
+        self._minutes = minutes
+        
+    @property
+    def name(self) -> str:
+        return self._name
+        
+    @property
+    def minutes(self) -> int:
+        return self._minutes
+        
+    def __str__(self) -> str:
+        return self._name
 
 @dataclass
 class ThresholdConfig:
