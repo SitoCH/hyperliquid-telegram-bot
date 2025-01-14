@@ -129,6 +129,30 @@ class WyckoffState:
             description="Unknown market state"
         )
 
+@dataclass
+class TimeframeSettings:
+    phase_weight: float
+    max_lookback: int
+    ema_length: int
+    atr_settings: tuple[int, int, int, int, int]  # atr_length, macd_fast, macd_slow, macd_signal, st_length
+    supertrend_multiplier: float
+    base_multiplier: float
+    momentum_multiplier: float
+    description: str
+    
+    @property
+    def thresholds(self) -> tuple[float, float, float, float, float, float]:
+        """Returns (volume_threshold, strong_dev_threshold, neutral_zone_threshold, 
+                   momentum_threshold, effort_threshold, volume_surge_threshold)"""
+        return (
+            1.5 * self.base_multiplier,      # volume_threshold
+            1.8 * self.base_multiplier,      # strong_dev_threshold
+            0.8 * self.base_multiplier,      # neutral_zone_threshold
+            0.5 * self.momentum_multiplier,  # momentum_threshold
+            0.65 * self.base_multiplier,     # effort_threshold
+            2.0 * self.base_multiplier       # volume_surge_threshold
+        )
+
 class Timeframe(Enum):
     MINUTES_15 = ("15m", 15)
     MINUTES_30 = ("30m", 30)
@@ -140,6 +164,7 @@ class Timeframe(Enum):
     def __init__(self, name: str, minutes: int):
         self._name = name
         self._minutes = minutes
+        self._settings = None  # Will be initialized later
         
     @property
     def name(self) -> str:
@@ -148,44 +173,76 @@ class Timeframe(Enum):
     @property
     def minutes(self) -> int:
         return self._minutes
+
+    @property
+    def settings(self) -> TimeframeSettings:
+        if self._settings is None:
+            self._settings = _TIMEFRAME_SETTINGS[self]
+        return self._settings
         
     def __str__(self) -> str:
         return self._name
 
-@dataclass
-class ThresholdConfig:
-    volume_threshold: float
-    strong_dev_threshold: float
-    neutral_zone_threshold: float
-    momentum_threshold: float
-    effort_threshold: float
-    volume_surge_threshold: float
-    
-    @staticmethod
-    def for_timeframe(timeframe: Timeframe) -> 'ThresholdConfig':
-        base_multiplier = {
-            Timeframe.MINUTES_15: 0.8,  # More sensitive for quick trades
-            Timeframe.MINUTES_30: 0.9,  # Between 15m and 1h sensitivity
-            Timeframe.HOUR_1: 1.0,      # Base reference
-            Timeframe.HOURS_4: 1.2,     # More conservative
-            Timeframe.HOURS_8: 1.35,    # Even more conservative
-            Timeframe.DAY_1: 1.5        # Most conservative
-        }[timeframe]
-        
-        momentum_multiplier = {
-            Timeframe.MINUTES_15: 0.7,  # Faster momentum changes
-            Timeframe.MINUTES_30: 0.85, # Between 15m and 1h momentum
-            Timeframe.HOUR_1: 1.0,
-            Timeframe.HOURS_4: 1.4,
-            Timeframe.HOURS_8: 1.6,     # More emphasis on longer trends
-            Timeframe.DAY_1: 1.8
-        }[timeframe]
-        
-        return ThresholdConfig(
-            volume_threshold=1.5 * base_multiplier,
-            strong_dev_threshold=1.8 * base_multiplier,
-            neutral_zone_threshold=0.8 * base_multiplier,
-            momentum_threshold=0.5 * momentum_multiplier,
-            effort_threshold=0.65 * base_multiplier,
-            volume_surge_threshold=2.0 * base_multiplier
-        )
+# Define settings after Timeframe class is fully defined
+_TIMEFRAME_SETTINGS = {
+    Timeframe.MINUTES_15: TimeframeSettings(
+        phase_weight=0.05,
+        max_lookback=200,
+        ema_length=21,
+        atr_settings=(14, 8, 21, 5, 8),
+        supertrend_multiplier=2.8,
+        base_multiplier=0.8,
+        momentum_multiplier=0.7,
+        description="15 min trend"
+    ),
+    Timeframe.MINUTES_30: TimeframeSettings(
+        phase_weight=0.10,
+        max_lookback=175,
+        ema_length=22,
+        atr_settings=(18, 10, 24, 7, 9),
+        supertrend_multiplier=2.9,
+        base_multiplier=0.9,
+        momentum_multiplier=0.85,
+        description="30 min trend"
+    ),
+    Timeframe.HOUR_1: TimeframeSettings(
+        phase_weight=0.15,
+        max_lookback=150,
+        ema_length=24,
+        atr_settings=(21, 12, 26, 9, 10),
+        supertrend_multiplier=3.0,
+        base_multiplier=1.0,
+        momentum_multiplier=1.0,
+        description="Hourly trend"
+    ),
+    Timeframe.HOURS_4: TimeframeSettings(
+        phase_weight=0.175,
+        max_lookback=100,
+        ema_length=28,
+        atr_settings=(28, 12, 32, 9, 12),
+        supertrend_multiplier=3.2,
+        base_multiplier=1.2,
+        momentum_multiplier=1.4,
+        description="4h trend"
+    ),
+    Timeframe.HOURS_8: TimeframeSettings(
+        phase_weight=0.175,
+        max_lookback=80,
+        ema_length=31,
+        atr_settings=(30, 12, 36, 9, 13),
+        supertrend_multiplier=3.35,
+        base_multiplier=1.35,
+        momentum_multiplier=1.6,
+        description="8h trend"
+    ),
+    Timeframe.DAY_1: TimeframeSettings(
+        phase_weight=0.175,
+        max_lookback=60,
+        ema_length=34,
+        atr_settings=(34, 12, 40, 9, 14),
+        supertrend_multiplier=3.5,
+        base_multiplier=1.5,
+        momentum_multiplier=1.8,
+        description="Daily trend"
+    ),
+}

@@ -166,28 +166,10 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
 
 def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int, int, int, int, int]:
     """Get optimized indicator settings based on timeframe and available data."""
-    # Base settings optimized for each timeframe
-    settings = {
-        Timeframe.MINUTES_15: (14, 8, 21, 5, 8),  # (atr_length, macd_fast, macd_slow, macd_signal, st_length)
-        Timeframe.MINUTES_30: (18, 10, 24, 7, 9),  # Settings between 15m and 1h
-        Timeframe.HOUR_1: (21, 12, 26, 9, 10),
-        Timeframe.HOURS_4: (28, 12, 32, 9, 12),
-        Timeframe.HOURS_8: (30, 12, 36, 9, 13),
-        Timeframe.DAY_1: (34, 12, 40, 9, 14)
-    }
-
-    # Get base settings for timeframe
-    atr_length, macd_fast, macd_slow, macd_signal, st_length = settings[timeframe]
-
-    # Adjust lengths based on available data
-    max_length = min(data_length - 1, {
-        Timeframe.MINUTES_15: 200,
-        Timeframe.MINUTES_30: 175,  # Between 15m and 1h
-        Timeframe.HOUR_1: 150,
-        Timeframe.HOURS_4: 100,
-        Timeframe.HOURS_8: 80,
-        Timeframe.DAY_1: 60
-    }[timeframe])
+    # Get base settings from timeframe
+    settings = timeframe.settings
+    atr_length, macd_fast, macd_slow, macd_signal, st_length = settings.atr_settings
+    max_length = min(data_length - 1, settings.max_lookback)
 
     # Scale down if we don't have enough data
     if max_length < atr_length * 2:
@@ -216,15 +198,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
         df["ATR"] = pd.Series([0.0] * len(df), index=df.index)
 
     # SuperTrend with optimized parameters
-    st_multiplier = {
-        Timeframe.MINUTES_15: 2.8,
-        Timeframe.MINUTES_30: 2.9,  # Between 15m and 1h
-        Timeframe.HOUR_1: 3.0,
-        Timeframe.HOURS_4: 3.2,
-        Timeframe.HOURS_8: 3.35,
-        Timeframe.DAY_1: 3.5
-    }[timeframe]
-
+    st_multiplier = timeframe.settings.supertrend_multiplier
     supertrend = ta.supertrend(df["h"], df["l"], df["c"], 
                               length=st_length, 
                               multiplier=st_multiplier)
@@ -255,16 +229,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
         df["MACD"] = df["MACD_Signal"] = df["MACD_Hist"] = 0.0
 
     # EMA length based on timeframe
-    ema_length = {
-        Timeframe.MINUTES_15: 21,
-        Timeframe.MINUTES_30: 22,  # Between 15m and 1h
-        Timeframe.HOUR_1: 24,
-        Timeframe.HOURS_4: 28,
-        Timeframe.HOURS_8: 31,
-        Timeframe.DAY_1: 34
-    }[timeframe]
-    
-    df["EMA"] = ta.ema(df["c"], length=min(ema_length, len(df) - 1))
+    df["EMA"] = ta.ema(df["c"], length=min(timeframe.settings.ema_length, len(df) - 1))
     
     # Wyckoff Phase Detection
     detect_wyckoff_phase(df, timeframe, funding_rates)

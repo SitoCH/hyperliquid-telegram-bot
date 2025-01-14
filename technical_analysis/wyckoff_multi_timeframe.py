@@ -15,14 +15,7 @@ class MultiTimeframeContext:
 
 def get_phase_weight(timeframe: Timeframe) -> float:
     """Get the weight for each timeframe's contribution to analysis."""
-    return {
-        Timeframe.MINUTES_15: 0.05,
-        Timeframe.MINUTES_30: 0.10,
-        Timeframe.HOUR_1: 0.15,
-        Timeframe.HOURS_4: 0.175,
-        Timeframe.HOURS_8: 0.175,
-        Timeframe.DAY_1: 0.175
-    }[timeframe]
+    return timeframe.settings.phase_weight
 
 def analyze_multi_timeframe(
     states: Dict[Timeframe, WyckoffState]
@@ -140,15 +133,6 @@ def _generate_mtf_description(
 
 def _get_timeframe_description(tf: Timeframe, state: WyckoffState) -> str:
     """Generate a descriptive line for each timeframe's state."""
-    tf_desc = {
-        Timeframe.DAY_1: "Daily trend",
-        Timeframe.HOURS_8: "8h trend",
-        Timeframe.HOURS_4: "4h trend",
-        Timeframe.HOUR_1: "Hourly trend",
-        Timeframe.MINUTES_30: "30min trend",
-        Timeframe.MINUTES_15: "Short-term"
-    }[tf]
-    
     phase_desc = f"{state.phase.value}"
     if state.uncertain_phase:
         phase_desc += " (uncertain)"
@@ -159,4 +143,4 @@ def _get_timeframe_description(tf: Timeframe, state: WyckoffState) -> str:
     
     volume_desc = " with high volume" if state.volume == VolumeState.HIGH else ""
     
-    return f"• {tf_desc}: {phase_desc}{action_desc}{volume_desc}\n"
+    return f"• {tf.settings.description}: {phase_desc}{action_desc}{volume_desc}\n"
