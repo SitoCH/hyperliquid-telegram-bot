@@ -292,16 +292,27 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
                 chart_copy = io.BytesIO(chart.getvalue())
                 
                 try:
-                    await context.bot.send_photo(
-                        chat_id=telegram_utils.telegram_chat_id,
-                        photo=chart_copy,
-                        caption=caption,
-                        parse_mode=ParseMode.HTML
-                    )
+                    if len(caption) >= 1024:
+                        # Send chart and caption separately if caption is too long
+                        await context.bot.send_photo(
+                            chat_id=telegram_utils.telegram_chat_id,
+                            photo=chart_copy,
+                            caption=f"<b>{period} chart</b>",
+                            parse_mode=ParseMode.HTML
+                        )
+                        await telegram_utils.send(caption, parse_mode=ParseMode.HTML)
+                    else:
+                        # Send together if caption is within limits
+                        await context.bot.send_photo(
+                            chat_id=telegram_utils.telegram_chat_id,
+                            photo=chart_copy,
+                            caption=caption,
+                            parse_mode=ParseMode.HTML
+                        )
                 finally:
                     chart_copy.close()
             else:
-                await telegram_utils.send(caption,parse_mode=ParseMode.HTML)
+                await telegram_utils.send(caption, parse_mode=ParseMode.HTML)
 
     finally:
         # Clean up the original buffers
