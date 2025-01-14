@@ -248,14 +248,6 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
         results_1h = get_ta_results(df_1h, mid)
         results_4h = get_ta_results(df_4h, mid)
 
-        # Add MTF analysis at the start of the message
-        await telegram_utils.send(
-            f"<b>Indicators for {coin}</b>\n"
-            f"Market price: {fmt_price(mid)} USDC\n"
-            f"Multi-Timeframe Analysis:\n{mtf_context.description}\n\n",
-            parse_mode=ParseMode.HTML
-        )
-
         no_wyckoff_data_available = 'No Wyckoff data available'
 
         # Send all charts in sequence, using copies of the buffers
@@ -293,6 +285,15 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
                     chart_copy.close()
             else:
                 await telegram_utils.send(caption, parse_mode=ParseMode.HTML)
+
+        # Add MTF analysis at the start of the message
+        await telegram_utils.send(
+            f"<b>Technical analysis summary for {coin}</b>\n"
+            f"Market price: {fmt_price(mid)} USDC\n"
+            f"Multi timeframe analysis:\n{mtf_context.description}\n\n",
+            parse_mode=ParseMode.HTML
+        )
+
 
     finally:
         # Clean up the original buffers
