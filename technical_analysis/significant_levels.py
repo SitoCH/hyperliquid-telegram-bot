@@ -159,7 +159,7 @@ def find_significant_levels(
             if score > min_score and (price > current_price) == is_resistance
         ]
         
-        return sorted(valid_levels)[:n_levels]
+        return sorted(valid_levels, reverse=True)[:n_levels]
     
     return (
         filter_levels(clusters['resistance'], True),
