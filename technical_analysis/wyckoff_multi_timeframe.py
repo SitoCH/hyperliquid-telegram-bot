@@ -230,9 +230,9 @@ def _generate_dual_group_description(
 
     # Create narrative description
     description = (
-        f"Market analysis shows a {trend_strength.lower()} {market_context.lower()} with {funding_state.value} funding. "
+        f"Market analysis shows a {trend_strength.lower()} {market_context.lower()} with {funding_state.value} funding.\n"
         f"Higher timeframes indicate {higher.dominant_phase.value} phase with {higher.dominant_action.value}, "
-        f"while lower timeframes show {lower.dominant_phase.value} with {lower.dominant_action.value}. "
+        f"while lower timeframes show {lower.dominant_phase.value} with {lower.dominant_action.value}.\n"
         f"Overall alignment between timeframes is {alignment_pct} with {confidence_pct} confidence.\n"
         f"{actionable_insight}"
     )
@@ -246,42 +246,42 @@ def _generate_dual_actionable_insight(
 ) -> str:
     """Generate actionable insights from dual timeframe analysis."""
     if confidence_level < 0.5:
-        return "<b>Interpretation:</b> Insufficient confidence for clear directional bias\n<b>Suggestion:</b> Avoid new positions, reduce existing exposure"
+        return "<b>Interpretation:</b>\nInsufficient confidence for clear directional bias.\n<b>Suggestion:</b>\nAvoid new positions, reduce existing exposure."
 
     # Get base market condition
     if higher.momentum_bias == lower.momentum_bias:
         if higher.momentum_bias == "bullish":
-            base_signal = "Strong bullish continuation likely"
+            base_signal = "Strong bullish continuation likely."
             action_plan = (
-                "Longs: Hold existing positions, add on pullbacks to higher timeframe support\n"
-                "Shorts: Avoid counter-trend positions, only scalp clear rejections"
+                "Longs: Hold existing positions, add on pullbacks to higher timeframe support.\n"
+                "Shorts: Avoid counter-trend positions, only scalp clear rejections."
             )
         elif higher.momentum_bias == "bearish":
-            base_signal = "Strong bearish continuation likely"
+            base_signal = "Strong bearish continuation likely."
             action_plan = (
-                "Shorts: Hold existing positions, add on rallies to higher timeframe resistance\n"
-                "Longs: Avoid counter-trend positions, only scalp clear bounces"
+                "Shorts: Hold existing positions, add on rallies to higher timeframe resistance.\n"
+                "Longs: Avoid counter-trend positions, only scalp clear bounces."
             )
         else:
-            base_signal = "Neutral market conditions"
+            base_signal = "Neutral market conditions."
             action_plan = (
-                "Both Sides: Focus on range-bound strategies\n"
-                "Wait for clear breakout confirmation before directional trades"
+                "Both Sides: Focus on range-bound strategies.\n"
+                "Wait for clear breakout confirmation before directional trades."
             )
     else:
-        base_signal = f"Potential {lower.momentum_bias} reversal forming against {higher.momentum_bias} trend"
+        base_signal = f"Potential {lower.momentum_bias} reversal forming against {higher.momentum_bias} trend."
         if lower.momentum_bias == "bullish":
             action_plan = (
-                "Longs: Build positions gradually with tight stops below lower timeframe support\n"
-                "Shorts: Take profit on existing positions, avoid adding to shorts"
+                "Longs: Build positions gradually with tight stops below lower timeframe support.\n"
+                "Shorts: Take profit on existing positions, avoid adding to shorts."
             )
         else:
             action_plan = (
-                "Shorts: Build positions gradually with tight stops above lower timeframe resistance\n"
-                "Longs: Take profit on existing positions, avoid adding to longs"
+                "Shorts: Build positions gradually with tight stops above lower timeframe resistance.\n"
+                "Longs: Take profit on existing positions, avoid adding to longs."
             )
 
-    return f"<b>Interpretation:</b> {base_signal}\n<b>Suggestions:</b>\n{action_plan}"
+    return f"<b>Interpretation:</b>\n{base_signal}\n<b>Suggestions:</b>\n{action_plan}"
 
 def _determine_dual_market_context(
     higher: TimeframeGroupAnalysis,
