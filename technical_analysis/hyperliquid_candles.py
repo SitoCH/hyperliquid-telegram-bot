@@ -1,13 +1,10 @@
-import os
 import io
 import time
 from tzlocal import get_localzone
 from typing import List, Dict, Any, cast, Tuple
 import pandas as pd  # type: ignore[import]
 import pandas_ta as ta  # type: ignore[import]
-import mplfinance as mpf  # type: ignore[import]
 
-from tabulate import tabulate, simple_separated_format
 from telegram import Update
 from telegram.ext import CallbackContext, ContextTypes, ConversationHandler
 from telegram.constants import ParseMode
@@ -257,7 +254,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
             (charts[2], "4h", results_4h)
         ]):
             wyckoff_description = results['wyckoff'].description if results.get('wyckoff') else no_wyckoff_data_available
-            caption = f"<b>{period} indicators:</b>\n{wyckoff_description}\n<pre>{format_table(results)}</pre>"
+            caption = f"<b>{period} indicators:</b>\n{wyckoff_description}"
             
             if chart:
                 # Create a copy of the buffer's contents
@@ -288,7 +285,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
 
         # Add MTF analysis at the start of the message
         await telegram_utils.send(
-            f"<b>Technical analysis summary for {coin}</b>\n"
+            f"<b>Technical analysis for {coin}</b>\n"
             f"Market price: {fmt_price(mid)} USDC\n"
             f"<b>Multi timeframe analysis:</b>\n{mtf_context.description}\n\n",
             parse_mode=ParseMode.HTML
@@ -334,30 +331,3 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
         "vwap_trend": "uptrend" if mid > vwap else "downtrend",
         "wyckoff": wyckoff
     }
-
-
-def format_table(results: Dict[str, Any]) -> str:
-    wyckoff = results['wyckoff']
-    
-    table_data = [
-        ["Supertrend:", ""],
-        ["Trend", results["supertrend_trend"]],
-        ["Value ", fmt_price(results["supertrend"])],
-        ["VWAP:", ""],
-        ["Trend", results["vwap_trend"]],
-        ["Value ", fmt_price(results["vwap"])],
-        ["Wyckoff:", ""],
-        ["Phase", wyckoff.phase.value],
-        ["Comp. Action", wyckoff.composite_action.name.lower()],
-        ["Pattern", wyckoff.pattern.value],
-        ["Volume", wyckoff.volume.value],
-        ["Volatility", wyckoff.volatility.value],
-        ["Funding", wyckoff.funding_state.value],
-    ]
-    
-    return tabulate(
-        table_data,
-        headers=["", ""],
-        tablefmt=simple_separated_format(" "),
-        colalign=("right", "right"),
-    )

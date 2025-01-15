@@ -76,7 +76,7 @@ def generate_wyckoff_description(
         effort_vs_result, composite_action, wyckoff_sign, funding_state
     )
     
-    return f"<b>Wyckoff Analysis:</b>\n{analysis}\n\n<b>Trading Context:</b>\n{suggestion}"
+    return f"<b>Wyckoff Analysis:</b>\n{analysis}\n<b>Trading Context:</b>\n{suggestion}"
 
 def generate_trading_suggestion(
     phase: WyckoffPhase,
