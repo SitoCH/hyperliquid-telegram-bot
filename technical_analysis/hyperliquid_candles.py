@@ -14,13 +14,13 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt_price, log_execution_time
 from technical_analysis.wyckoff import detect_wyckoff_phase
-from technical_analysis.wyckoff_signal import detect_actionable_wyckoff_signal
 from technical_analysis.candles_utils import get_coins_to_analyze
 from technical_analysis.candles_cache import get_candles_with_cache
 from technical_analysis.wyckoff_types import Timeframe
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from technical_analysis.wykcoff_chart import generate_chart
-from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext
+from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe
+
 
 SELECTING_COIN_FOR_TA = range(1)
 
@@ -111,10 +111,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         apply_indicators(df_30m, Timeframe.MINUTES_30, funding_rates)
         states[Timeframe.MINUTES_30] = df_30m['wyckoff'].iloc[-1]
         
-        _, wyckoff_flip_1h = apply_indicators(df_1h, Timeframe.HOUR_1, funding_rates)
+        apply_indicators(df_1h, Timeframe.HOUR_1, funding_rates)
         states[Timeframe.HOUR_1] = df_1h['wyckoff'].iloc[-1]
         
-        _, wyckoff_flip_4h = apply_indicators(df_4h, Timeframe.HOURS_4, funding_rates)
+        apply_indicators(df_4h, Timeframe.HOURS_4, funding_rates)
         states[Timeframe.HOURS_4] = df_4h['wyckoff'].iloc[-1]
 
         apply_indicators(df_8h, Timeframe.HOURS_8, funding_rates)
@@ -124,22 +124,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         states[Timeframe.DAY_1] = df_1d['wyckoff'].iloc[-1]
 
         # Add multi-timeframe analysis
-        from technical_analysis.wyckoff_multi_timeframe import analyze_multi_timeframe
         mtf_context = analyze_multi_timeframe(states)
-        
-        # Update notification logic to include MTF analysis
-        is_4h_recent = 'T' in df_4h.columns and df_4h["T"].iloc[-1] >= pd.Timestamp.now(local_tz) - pd.Timedelta(hours=1)
-        
+
         should_notify = (
-            always_notify or
-            (is_4h_recent and (
-                # Strong signal with multi-timeframe confirmation
-                (mtf_context.confidence_level > 0.7 and mtf_context.alignment_score > 0.6) or
-                # Original conditions
-                (wyckoff_flip_4h and df_4h['wyckoff_volume'].iloc[-1] == 'high' and not df_4h['uncertain_phase'].iloc[-1]) or
-                (wyckoff_flip_1h and wyckoff_flip_4h and
-                 df_1h['wyckoff_phase'].iloc[-1] == df_4h['wyckoff_phase'].iloc[-1])
-            ))
+            always_notify or mtf_context.confidence_level > 0.7
         )
 
         if should_notify:
@@ -179,7 +167,7 @@ def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int,
 
     return atr_length, macd_fast, macd_slow, macd_signal, st_length
 
-def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> Tuple[bool, bool]:
+def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> None:
     """Apply technical indicators with Wyckoff-optimized settings"""
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
@@ -230,9 +218,6 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     
     # Wyckoff Phase Detection
     detect_wyckoff_phase(df, timeframe, funding_rates)
-    wyckoff_flip = detect_actionable_wyckoff_signal(df)
-    
-    return df["SuperTrend_Flip_Detected"].iloc[-1], wyckoff_flip
 
 
 async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str, send_charts: bool, mtf_context: MultiTimeframeContext) -> None:
