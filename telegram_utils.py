@@ -63,6 +63,7 @@ class TelegramUtils:
             ),
         ],
         resize_keyboard=True,
+        is_persistent=True
     )
 
     def __init__(self):  
@@ -89,7 +90,8 @@ class TelegramUtils:
 
         self.reply_markup = ReplyKeyboardMarkup(
             keyboard_layout,
-            resize_keyboard=True
+            resize_keyboard=True,
+            persistent=True,  # Add this parameter
         )
 
     async def reply(
