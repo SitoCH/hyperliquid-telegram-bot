@@ -28,7 +28,7 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
 
     return ha_df
 
-def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta) -> io.BytesIO:
+def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta, mid: float) -> io.BytesIO:
     from_time = df['t'].max() - chart_image_time_delta
     df_plot = df.loc[df['t'] >= from_time].copy()
 
@@ -77,12 +77,11 @@ def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta) -> io.B
         level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
                                             label=f'S {fmt_price(level)}', linestyle=':'))
 
-    current_price = df_plot['Close'].iloc[-1]
     is_ha_bullish = ha_df['Close'].iloc[-1] >= ha_df['Open'].iloc[-1]
-    current_price_line = pd.Series([current_price] * len(df_plot), index=df_plot.index)
+    current_price_line = pd.Series([mid] * len(df_plot), index=df_plot.index)
     level_lines.append(mpf.make_addplot(current_price_line, ax=ax[0], 
                                         color='green' if is_ha_bullish else 'red', 
-                                        width=0.5, label=f'Current {fmt_price(current_price)}', 
+                                        width=0.5, label=f'Current {fmt_price(mid)}', 
                                         linestyle=':', alpha=0.6))
 
     mpf.plot(ha_df,
@@ -110,22 +109,20 @@ def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta) -> io.B
     return buf
 
 
-def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str) -> List[io.BytesIO]:
+def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str, mid: float) -> List[io.BytesIO]:
     chart_buffers = []
 
     plt.switch_backend('Agg')
 
-  
-
     try:
         df_15m_plot = df_15m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-        chart_buffers.append(save_to_buffer(df_15m_plot, f"{coin} - 15M Chart", pd.Timedelta(hours=48)))
+        chart_buffers.append(save_to_buffer(df_15m_plot, f"{coin} - 15M Chart", pd.Timedelta(hours=48), mid))
 
         df_1h_plot = df_1h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-        chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart", pd.Timedelta(days=7)))
+        chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart", pd.Timedelta(days=7), mid))
 
         df_4h_plot = df_4h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-        chart_buffers.append(save_to_buffer(df_4h_plot, f"{coin} - 4H Chart", pd.Timedelta(days=21)))
+        chart_buffers.append(save_to_buffer(df_4h_plot, f"{coin} - 4H Chart", pd.Timedelta(days=21), mid))
 
     except Exception as e:
         # Clean up on error

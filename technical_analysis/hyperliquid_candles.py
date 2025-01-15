@@ -242,7 +242,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
     
     charts = []
     try:
-        charts = generate_chart(df_15m, df_1h, df_4h, coin) if send_charts else [None] * 4 # type: ignore
+        charts = generate_chart(df_15m, df_1h, df_4h, coin, mid) if send_charts else [None] * 4 # type: ignore
         
         results_15m = get_ta_results(df_15m, mid)
         results_1h = get_ta_results(df_1h, mid)
