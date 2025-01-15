@@ -19,9 +19,7 @@ jobs:
       uses: astral-sh/setup-uv@v5
       with:
         enable-cache: true
-
-    - name: Install Python 3.10
-      run: uv python install 3.10
+        version: "0.5.18"
 
     - name: Run tests
       run: uv run pytest --cov --cov-report=xml --junitxml=test-results.xml
