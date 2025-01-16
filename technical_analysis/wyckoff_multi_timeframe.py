@@ -4,7 +4,7 @@ import pandas as pd  # type: ignore[import]
 
 from .wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, 
-    CompositeAction, Timeframe, VolumeState, FundingState
+    CompositeAction, Timeframe, VolumeState, FundingState, VolatilityState
 )
 
 @dataclass
@@ -102,7 +102,7 @@ class TimeframeGroupAnalysis:
 def _analyze_timeframe_group(
     group: Dict[Timeframe, WyckoffState]
 ) -> TimeframeGroupAnalysis:
-    """Analyze a group of related timeframes."""
+    """Analyze a group with enhanced reactivity to strong signals."""
     if not group:
         return TimeframeGroupAnalysis(
             dominant_phase=WyckoffPhase.UNKNOWN,
@@ -118,8 +118,18 @@ def _analyze_timeframe_group(
     action_weights: Dict[CompositeAction, float] = {}
     total_weight = 0.0
 
+    # Add volatility-based weight adjustment
     for tf, state in group.items():
         weight = get_phase_weight(tf)
+        
+        # Increase weight for high volatility and volume conditions
+        if state.volatility == VolatilityState.HIGH and state.volume == VolumeState.HIGH:
+            weight *= 1.2  # 20% boost for high volatility + volume
+        
+        # Boost weight for spring/upthrust patterns
+        if state.is_spring or state.is_upthrust:
+            weight *= 1.15  # 15% boost for significant price action patterns
+            
         total_weight += weight
 
         if not state.uncertain_phase:
@@ -189,20 +199,29 @@ def _calculate_dual_confidence(
     lower: TimeframeGroupAnalysis,
     groups_alignment: float
 ) -> float:
-    """Calculate confidence level for dual group analysis."""
-    # Weight factors
-    alignment_weight = 0.4
-    volume_weight = 0.3
+    """Calculate confidence level with enhanced lower timeframe reactivity."""
+    # Adjusted weight factors to be more reactive
+    alignment_weight = 0.35  # Reduced from 0.4
+    volume_weight = 0.35    # Increased from 0.3
     consistency_weight = 0.3
 
-    # Volume confirmation (weighted towards higher timeframes)
+    # Volume confirmation with dynamic weighting
+    # Increase lower timeframe influence when volume is significantly higher
+    lower_volume_factor = min(0.6, lower.volume_strength * 1.2)  # Can go up to 60% weight
+    higher_volume_factor = 1.0 - lower_volume_factor
+    
     volume_confirmation = (
-        higher.volume_strength * 0.6 +
-        lower.volume_strength * 0.4
+        higher.volume_strength * higher_volume_factor +
+        lower.volume_strength * lower_volume_factor
     )
 
-    # Trend consistency
-    trend_consistency = 1.0 if higher.momentum_bias == lower.momentum_bias else 0.0
+    # Enhanced trend consistency check
+    # Give more weight to lower timeframes during strong moves
+    trend_consistency = (
+        1.0 if higher.momentum_bias == lower.momentum_bias else
+        0.7 if lower.volume_strength > 0.8 else  # Strong lower timeframe moves get 70% credit
+        0.3  # Minimal consistency during disagreement
+    )
 
     return (
         groups_alignment * alignment_weight +

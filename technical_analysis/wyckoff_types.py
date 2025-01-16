@@ -216,7 +216,7 @@ _TIMEFRAME_SETTINGS = {
         description="Hourly trend"
     ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.175,
+        phase_weight=0.17,  # Slightly reduced from 0.175
         max_lookback=100,
         ema_length=28,
         atr_settings=(28, 12, 32, 9, 12),
@@ -226,7 +226,7 @@ _TIMEFRAME_SETTINGS = {
         description="4h trend"
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.175,
+        phase_weight=0.16,
         max_lookback=80,
         ema_length=31,
         atr_settings=(30, 12, 36, 9, 13),
@@ -236,7 +236,7 @@ _TIMEFRAME_SETTINGS = {
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.175,
+        phase_weight=0.15,
         max_lookback=60,
         ema_length=34,
         atr_settings=(34, 12, 40, 9, 14),
