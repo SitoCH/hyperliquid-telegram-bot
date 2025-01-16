@@ -27,6 +27,10 @@ SELECTING_COIN_FOR_TA = range(1)
 async def execute_ta(update: Update, context: CallbackContext) -> int:
     if not update.message:
         return ConversationHandler.END
+
+    if context.args and len(context.args) > 0:
+        await analyze_candles_for_coin(context, context.args[0].upper(), always_notify=True)
+        return ConversationHandler.END
     
     await update.message.reply_text("Choose a coin to analyze:", reply_markup=hyperliquid_utils.get_coins_reply_markup())
     return cast(int, SELECTING_COIN_FOR_TA)
@@ -275,9 +279,10 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
                 if chart and not chart.closed:
                     chart.close()
     
-    # Add MTF analysis at the start of the message
+    # Add MTF analysis
+    link = f"<a href='tg://resolve?domain={context.bot.username}&text=/ta%20{coin}'>{coin}</a>"
     await telegram_utils.send(
-        f"<b>Technical analysis for {coin}</b>\n"
+        f"<b>Technical analysis for {link}</b>\n"
         f"Market price: {fmt_price(mid)} USDC\n"
         f"<b>Multi timeframe analysis:</b>\n{mtf_context.description}\n\n",
         parse_mode=ParseMode.HTML
