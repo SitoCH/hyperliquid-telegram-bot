@@ -222,66 +222,66 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
 
 async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str, send_charts: bool, mtf_context: MultiTimeframeContext) -> None:
     
-    charts = []
-    try:
-        charts = generate_chart(df_15m, df_1h, df_4h, coin, mid) if send_charts else [None] * 4 # type: ignore
-        
-        results_15m = get_ta_results(df_15m, mid)
-        results_1h = get_ta_results(df_1h, mid)
-        results_4h = get_ta_results(df_4h, mid)
-
-        no_wyckoff_data_available = 'No Wyckoff data available'
-
-        # Send all charts in sequence, using copies of the buffers
-        for idx, (chart, period, results) in enumerate([
-            (charts[0], "15m", results_15m),
-            (charts[1], "1h", results_1h),
-            (charts[2], "4h", results_4h)
-        ]):
-            wyckoff_description = results['wyckoff'].description if results.get('wyckoff') else no_wyckoff_data_available
-            caption = f"<b>{period} indicators:</b>\n{wyckoff_description}"
+    if send_charts:
+        charts = []
+        try:
+            charts = generate_chart(df_15m, df_1h, df_4h, coin, mid)
             
-            if chart:
-                # Create a copy of the buffer's contents
-                chart_copy = io.BytesIO(chart.getvalue())
+            results_15m = get_ta_results(df_15m, mid)
+            results_1h = get_ta_results(df_1h, mid)
+            results_4h = get_ta_results(df_4h, mid)
+
+            no_wyckoff_data_available = 'No Wyckoff data available'
+
+            # Send all charts in sequence, using copies of the buffers
+            for idx, (chart, period, results) in enumerate([
+                (charts[0], "15m", results_15m),
+                (charts[1], "1h", results_1h),
+                (charts[2], "4h", results_4h)
+            ]):
+                wyckoff_description = results['wyckoff'].description if results.get('wyckoff') else no_wyckoff_data_available
+                caption = f"<b>{period} indicators:</b>\n{wyckoff_description}"
                 
-                try:
-                    if len(caption) >= 1024:
-                        # Send chart and caption separately if caption is too long
-                        await context.bot.send_photo(
-                            chat_id=telegram_utils.telegram_chat_id,
-                            photo=chart_copy,
-                            caption=f"<b>{period} chart</b>",
-                            parse_mode=ParseMode.HTML
-                        )
-                        await telegram_utils.send(caption, parse_mode=ParseMode.HTML)
-                    else:
-                        # Send together if caption is within limits
-                        await context.bot.send_photo(
-                            chat_id=telegram_utils.telegram_chat_id,
-                            photo=chart_copy,
-                            caption=caption,
-                            parse_mode=ParseMode.HTML
-                        )
-                finally:
-                    chart_copy.close()
-            else:
-                await telegram_utils.send(caption, parse_mode=ParseMode.HTML)
+                if chart:
+                    # Create a copy of the buffer's contents
+                    chart_copy = io.BytesIO(chart.getvalue())
+                    
+                    try:
+                        if len(caption) >= 1024:
+                            # Send chart and caption separately if caption is too long
+                            await context.bot.send_photo(
+                                chat_id=telegram_utils.telegram_chat_id,
+                                photo=chart_copy,
+                                caption=f"<b>{period} chart</b>",
+                                parse_mode=ParseMode.HTML
+                            )
+                            await telegram_utils.send(caption, parse_mode=ParseMode.HTML)
+                        else:
+                            # Send together if caption is within limits
+                            await context.bot.send_photo(
+                                chat_id=telegram_utils.telegram_chat_id,
+                                photo=chart_copy,
+                                caption=caption,
+                                parse_mode=ParseMode.HTML
+                            )
+                    finally:
+                        chart_copy.close()
+                else:
+                    await telegram_utils.send(caption, parse_mode=ParseMode.HTML)
 
-        # Add MTF analysis at the start of the message
-        await telegram_utils.send(
-            f"<b>Technical analysis for {coin}</b>\n"
-            f"Market price: {fmt_price(mid)} USDC\n"
-            f"<b>Multi timeframe analysis:</b>\n{mtf_context.description}\n\n",
-            parse_mode=ParseMode.HTML
-        )
-
-
-    finally:
-        # Clean up the original buffers
-        for chart in charts:
-            if chart and not chart.closed:
-                chart.close()
+        finally:
+            # Clean up the original buffers
+            for chart in charts:
+                if chart and not chart.closed:
+                    chart.close()
+    
+    # Add MTF analysis at the start of the message
+    await telegram_utils.send(
+        f"<b>Technical analysis for {coin}</b>\n"
+        f"Market price: {fmt_price(mid)} USDC\n"
+        f"<b>Multi timeframe analysis:</b>\n{mtf_context.description}\n\n",
+        parse_mode=ParseMode.HTML
+    )
 
 
 def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
