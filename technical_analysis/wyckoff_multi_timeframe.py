@@ -246,42 +246,58 @@ def _generate_dual_actionable_insight(
 ) -> str:
     """Generate actionable insights from dual timeframe analysis."""
     if confidence_level < 0.5:
-        return "<b>Interpretation:</b>\nInsufficient confidence for clear directional bias.\n<b>Suggestion:</b>\nAvoid new positions, reduce existing exposure."
+        return "<b>Analysis:</b>\nLow confidence signals across timeframes.\n<b>Recommendation:</b>\nReduce exposure and wait for clearer setups."
 
-    # Get base market condition
+    def get_trend_intensity(momentum: str, volume: float) -> str:
+        if volume > 0.8:
+            return "dominant" if momentum == "bullish" else "heavy"
+        elif volume > 0.6:
+            return "strong" if momentum == "bullish" else "significant"
+        elif volume > 0.4:
+            return "moderate"
+        else:
+            return "mild"
+
+    higher_intensity = get_trend_intensity(higher.momentum_bias, higher.volume_strength)
+    lower_intensity = get_trend_intensity(lower.momentum_bias, lower.volume_strength)
+
+    # Get base market condition with more nuanced descriptions
     if higher.momentum_bias == lower.momentum_bias:
         if higher.momentum_bias == "bullish":
-            base_signal = "Strong bullish continuation likely."
+            base_signal = f"Market showing {higher_intensity} buying pressure with {lower_intensity} momentum on lower timeframes."
             action_plan = (
-                "Longs: Hold existing positions, add on pullbacks to higher timeframe support.\n"
-                "Shorts: Avoid counter-trend positions, only scalp clear rejections."
+                "Longs: Maintain positions, add during dips to major support levels.\n"
+                "Shorts: Exercise caution, limit to quick reversals at key resistance."
             )
         elif higher.momentum_bias == "bearish":
-            base_signal = "Strong bearish continuation likely."
+            base_signal = f"Market exhibiting {higher_intensity} selling pressure with {lower_intensity} downside momentum."
             action_plan = (
-                "Shorts: Hold existing positions, add on rallies to higher timeframe resistance.\n"
-                "Longs: Avoid counter-trend positions, only scalp clear bounces."
+                "Shorts: Maintain positions, add during relief rallies to resistance.\n"
+                "Longs: Limited to quick scalps at major support levels."
             )
         else:
-            base_signal = "Neutral market conditions."
+            base_signal = f"Market in equilibrium with {lower_intensity} two-sided action."
             action_plan = (
-                "Both Sides: Focus on range-bound strategies.\n"
-                "Wait for clear breakout confirmation before directional trades."
+                "Both Directions: Focus on range extremes.\n"
+                "Monitor for range expansion and breakout opportunities."
             )
     else:
-        base_signal = f"Potential {lower.momentum_bias} reversal forming against {higher.momentum_bias} trend."
+        base_signal = (
+            f"Potential trend shift: {higher_intensity} {higher.momentum_bias} on higher timeframes "
+            f"versus {lower_intensity} {lower.momentum_bias} on lower timeframes."
+        )
         if lower.momentum_bias == "bullish":
             action_plan = (
-                "Longs: Build positions gradually with tight stops below lower timeframe support.\n"
-                "Shorts: Take profit on existing positions, avoid adding to shorts."
+                "Longs: Scale in carefully with defined risk below key support.\n"
+                "Shorts: Consider profit taking, avoid adding to positions."
             )
         else:
             action_plan = (
-                "Shorts: Build positions gradually with tight stops above lower timeframe resistance.\n"
-                "Longs: Take profit on existing positions, avoid adding to longs."
+                "Shorts: Scale in carefully with defined risk above key resistance.\n"
+                "Longs: Consider profit taking, avoid adding to positions."
             )
 
-    return f"<b>Interpretation:</b>\n{base_signal}\n<b>Suggestions:</b>\n{action_plan}"
+    return f"<b>Analysis:</b>\n{base_signal}\n<b>Strategy:</b>\n{action_plan}"
 
 def _determine_dual_market_context(
     higher: TimeframeGroupAnalysis,
@@ -289,9 +305,15 @@ def _determine_dual_market_context(
 ) -> str:
     """Determine market context from two timeframe groups."""
     if higher.momentum_bias == lower.momentum_bias:
-        return f"Strong {higher.momentum_bias} bias across timeframes"
+        context = higher.momentum_bias
+        if higher.volume_strength > 0.7 and lower.volume_strength > 0.6:
+            return f"high-conviction {context} trend"
+        elif higher.volume_strength > 0.5:
+            return f"established {context} trend"
+        else:
+            return f"developing {context} bias"
     
-    return f"Higher timeframe {higher.momentum_bias} with lower timeframe {lower.momentum_bias}"
+    return f"{higher.momentum_bias} structure with {lower.momentum_bias} short-term momentum"
 
 def _determine_dual_trend_strength(
     higher: TimeframeGroupAnalysis,
@@ -300,11 +322,13 @@ def _determine_dual_trend_strength(
     """Determine trend strength from two timeframe groups."""
     avg_alignment = (higher.internal_alignment * 0.6 + lower.internal_alignment * 0.4)
     
-    if avg_alignment > 0.8:
+    if avg_alignment > 0.85:
+        return "Extremely Strong"
+    elif avg_alignment > 0.7:
         return "Very Strong"
-    elif avg_alignment > 0.6:
+    elif avg_alignment > 0.5:
         return "Strong"
-    elif avg_alignment > 0.4:
+    elif avg_alignment > 0.3:
         return "Moderate"
     else:
         return "Weak"
