@@ -84,18 +84,17 @@ def _round_timestamp(ts: int, timeframe: Timeframe) -> int:
 
 def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_days: int, fetch_fn) -> List[Dict[str, Any]]:
     """Get candles using cache, fetching only newer data if needed"""
-    end_ts = _round_timestamp(now, timeframe)
+    end_ts = now
     start_ts = _round_timestamp(end_ts - lookback_days * 86400000, timeframe)
     
     cached = get_cached_candles(coin, timeframe, start_ts, end_ts)
     if cached:
-        # If we have cached data, check if it's up to date
+        # If we have cached data, check if it's very recent (within 1 minute)
         last_cached_ts = max(c['T'] for c in cached)
-        interval_ms = timeframe.minutes * 60 * 1000
-        if last_cached_ts >= end_ts - interval_ms:  # One interval behind is acceptable
+        if last_cached_ts >= now - 60000:  # Within last minute
             return cached
             
-        # Only fetch missing candles
+        # Only fetch missing candles, including incomplete ones
         fetch_start = _round_timestamp(last_cached_ts + 1, timeframe)
         new_candles = fetch_fn(coin, timeframe.name, fetch_start, end_ts)
         merged = merge_candles(cached, new_candles, lookback_days)

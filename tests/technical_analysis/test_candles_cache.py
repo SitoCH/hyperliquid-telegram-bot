@@ -66,12 +66,24 @@ def test_get_candles_update_cache(mock_fetch):
 
 def test_get_candles_cache_hit(mock_fetch):
     now = 1000000000000
-    end_ts = _round_timestamp(now, Timeframe.HOUR_1)
-    # First call to populate cache
-    get_candles_with_cache('BTC', Timeframe.HOUR_1, now, 1, mock_fetch)
+    first_result = get_candles_with_cache('BTC', Timeframe.HOUR_1, now, 1, mock_fetch)
     
-    # Second call with same timestamp should use cache
+    # Second call just 30 seconds later
+    slightly_later = now + 30000  # 30 seconds later
+    
+    # Mock get_cached_candles to return data with a very recent candle
+    def mock_get_cached_candles(*args):
+        candles = first_result.copy()
+        # Add a very recent candle
+        candles[-1] = {**candles[-1], 'T': slightly_later - 30000}  # Candle from 30s ago
+        return candles
+    
+    import technical_analysis.candles_cache as cc
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(cc, 'get_cached_candles', mock_get_cached_candles)
+    
     mock_fetch_with_tracking = lambda *args: (mock_fetch(*args), pytest.fail("Should not be called"))[-1]
-    result = get_candles_with_cache('BTC', Timeframe.HOUR_1, now, 1, mock_fetch_with_tracking)
-    assert len(result) == 24
-    assert result[-1]['T'] == end_ts - 3600000
+    result = get_candles_with_cache('BTC', Timeframe.HOUR_1, slightly_later, 1, mock_fetch_with_tracking)
+    
+    assert len(result) == len(first_result)
+    assert result[-1]['T'] >= slightly_later - 60000  # Last candle should be within 1 minute
