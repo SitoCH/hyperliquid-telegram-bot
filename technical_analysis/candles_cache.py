@@ -62,12 +62,18 @@ def merge_candles(old_candles: List[Dict[str, Any]], new_candles: List[Dict[str,
 
 def update_cache(coin: str, timeframe: Timeframe, candles: List[Dict[str, Any]], current_time: int) -> None:
     """Update disk cache with new candles"""
+    # Don't update cache if no new candles
+    if not candles:
+        return
+        
     cached_data = _load_from_disk(coin, timeframe)
     if cached_data is not None:
-        # Merge with existing candles
         _, existing_candles = cached_data
-        lookback_days = (current_time - min(c['T'] for c in existing_candles)) // 86400000
-        candles = merge_candles(existing_candles, candles, lookback_days)
+        # Only merge if we have existing candles with data
+        if existing_candles and len(existing_candles) > 0:
+            min_timestamp = min(c['T'] for c in existing_candles)
+            lookback_days = (current_time - min_timestamp) // 86400000
+            candles = merge_candles(existing_candles, candles, lookback_days)
     
     _save_to_disk(coin, timeframe, (current_time, candles))
 
@@ -88,7 +94,7 @@ def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_d
     start_ts = _round_timestamp(end_ts - lookback_days * 86400000, timeframe)
     
     cached = get_cached_candles(coin, timeframe, start_ts, end_ts)
-    if cached:
+    if cached and len(cached) > 0:
         # If we have cached data, check if it's very recent (within 1 minute)
         last_cached_ts = max(c['T'] for c in cached)
         if last_cached_ts >= now - 60000:  # Within last minute
@@ -100,8 +106,9 @@ def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_d
         merged = merge_candles(cached, new_candles, lookback_days)
         update_cache(coin, timeframe, merged, now)
         return merged
-    else:
-        # No cache, fetch all candles
-        candles = fetch_fn(coin, timeframe.name, start_ts, end_ts)
+
+    # No cache or empty cache, fetch all candles
+    candles = fetch_fn(coin, timeframe.name, start_ts, end_ts)
+    if candles:  # Only update cache if we got data
         update_cache(coin, timeframe, candles, now)
-        return candles
+    return candles
