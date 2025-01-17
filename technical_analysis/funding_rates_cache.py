@@ -63,8 +63,11 @@ def _convert_funding_rate(rate: Dict[str, Any]) -> FundingRateEntry:
 
 def _fetch_new_funding_rates(coin: str, start_ts: int, end_ts: int) -> List[FundingRateEntry]:
     """Fetch new funding rates from HyperLiquid API"""
-    funding_rates = hyperliquid_utils.info.funding_history(coin, start_ts, end_ts)
-    return [_convert_funding_rate(rate) for rate in funding_rates]
+    try:
+        funding_rates = hyperliquid_utils.info.funding_history(coin, start_ts, end_ts)
+        return [_convert_funding_rate(rate) for rate in funding_rates]
+    except KeyError:
+        return []
 
 
 def get_funding_with_cache(coin: str, now: int, lookback_days: int) -> List[FundingRateEntry]:
@@ -87,13 +90,16 @@ def get_funding_with_cache(coin: str, now: int, lookback_days: int) -> List[Fund
         if cached_rates:
             fetch_start = max(r.time for r in cached_rates) + 1
             new_rates = _fetch_new_funding_rates(coin, fetch_start, end_ts)
-            merged = merge_funding_rates(cached_rates, new_rates, lookback_days)
-            _save_funding_to_disk(coin, FundingRateCache(now, merged))
-            return merged
+            if new_rates:
+                merged = merge_funding_rates(cached_rates, new_rates, lookback_days)
+                _save_funding_to_disk(coin, FundingRateCache(now, merged))
+                return merged
+            return cached_rates
 
     # No cache or outdated, fetch all data
     funding_rates = _fetch_new_funding_rates(coin, start_ts, end_ts)
-    _save_funding_to_disk(coin, FundingRateCache(now, funding_rates))
+    if funding_rates:
+        _save_funding_to_disk(coin, FundingRateCache(now, funding_rates))
     return funding_rates
 
 def merge_funding_rates(
