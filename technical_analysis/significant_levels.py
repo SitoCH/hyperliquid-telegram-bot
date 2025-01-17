@@ -103,14 +103,13 @@ def score_level(
 
 def find_significant_levels(
     df: pd.DataFrame,
+    current_price: float,
     n_levels: int = 4, 
     min_score: float = 0.2
 ) -> Tuple[List[float], List[float]]:
     """Get significant price levels aligned with Wyckoff analysis"""
     if len(df) < MIN_PERIODS:  # Use same minimum periods as Wyckoff
         return [], []
-        
-    current_price = df['Close'].iloc[-1]
     
     # Use same volatility calculation as Wyckoff
     price_sma = df['Close'].rolling(window=MIN_PERIODS).mean()

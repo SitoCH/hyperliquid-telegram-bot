@@ -64,7 +64,7 @@ def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta, mid: fl
 
     macd_hist_colors = df_plot['MACD_Hist'].apply(determine_color).values
 
-    resistance_levels, support_levels = find_significant_levels(df)
+    resistance_levels, support_levels = find_significant_levels(df, mid)
     
     level_lines = []
     for level in resistance_levels:
