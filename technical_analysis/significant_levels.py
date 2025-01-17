@@ -148,17 +148,19 @@ def find_significant_levels(
     total_periods = len(recent_df)
 
     def filter_levels(clusters: Dict[float, Dict[str, float]], is_resistance: bool) -> List[float]:
-        scored_levels = [
-            (cluster['price'], score_level(cluster, max_vol, current_price, wyckoff_state, total_periods))
-            for cluster in clusters.values()
-        ]
+        scored_levels = []
+        for cluster in clusters.values():
+            price = cluster['price']
+            # Only include levels if they are on the correct side of current_price
+            if (is_resistance and price > current_price) or (not is_resistance and price < current_price):
+                score = score_level(cluster, max_vol, current_price, wyckoff_state, total_periods)
+                if score > min_score:
+                    scored_levels.append((price, score))
         
-        valid_levels = [
-            price for price, score in scored_levels
-            if score > min_score and (price > current_price) == is_resistance
-        ]
-        
-        return sorted(valid_levels, reverse=True)[:n_levels]
+        # Sort resistance levels high to low, support levels low to high
+        return [price for price, _ in sorted(scored_levels, 
+                                           key=lambda x: x[0], 
+                                           reverse=is_resistance)][:n_levels]
     
     return (
         filter_levels(clusters['resistance'], True),
