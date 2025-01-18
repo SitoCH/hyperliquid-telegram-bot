@@ -90,25 +90,29 @@ def _round_timestamp(ts: int, timeframe: Timeframe) -> int:
 
 def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_days: int, fetch_fn) -> List[Dict[str, Any]]:
     """Get candles using cache, fetching only newer data if needed"""
-    end_ts = now
-    start_ts = _round_timestamp(end_ts - lookback_days * 86400000, timeframe)
-    
-    cached = get_cached_candles(coin, timeframe, start_ts, end_ts)
-    if cached and len(cached) > 0:
-        # If we have cached data, check if it's very recent (within 1 minute)
-        last_cached_ts = max(c['T'] for c in cached)
-        if last_cached_ts >= now - 60000:  # Within last minute
-            return cached
-            
-        # Only fetch missing candles, including incomplete ones
-        fetch_start = _round_timestamp(last_cached_ts + 1, timeframe)
-        new_candles = fetch_fn(coin, timeframe.name, fetch_start, end_ts)
-        merged = merge_candles(cached, new_candles, lookback_days)
-        update_cache(coin, timeframe, merged, now)
-        return merged
+    try:
+        end_ts = now
+        start_ts = _round_timestamp(end_ts - lookback_days * 86400000, timeframe)
+        
+        cached = get_cached_candles(coin, timeframe, start_ts, end_ts)
+        if cached and len(cached) > 0:
+            # If we have cached data, check if it's very recent (within 1 minute)
+            last_cached_ts = max(c['T'] for c in cached)
+            if last_cached_ts >= now - 60000:  # Within last minute
+                return cached
+                
+            # Only fetch missing candles, including incomplete ones
+            fetch_start = _round_timestamp(last_cached_ts + 1, timeframe)
+            new_candles = fetch_fn(coin, timeframe.name, fetch_start, end_ts)
+            merged = merge_candles(cached, new_candles, lookback_days)
+            update_cache(coin, timeframe, merged, now)
+            return merged
 
-    # No cache or empty cache, fetch all candles
-    candles = fetch_fn(coin, timeframe.name, start_ts, end_ts)
-    if candles:  # Only update cache if we got data
-        update_cache(coin, timeframe, candles, now)
-    return candles
+        # No cache or empty cache, fetch all candles
+        candles = fetch_fn(coin, timeframe.name, start_ts, end_ts)
+        if candles:  # Only update cache if we got data
+            update_cache(coin, timeframe, candles, now)
+        return candles
+    except KeyError:
+        # Handle case where coin is not found in hyperliquid API
+        return []
