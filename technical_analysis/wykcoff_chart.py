@@ -72,7 +72,7 @@ def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta, mid: fl
         level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
                                             label=f'R {fmt_price(level)}', linestyle='--'))
     
-    for level in support_levels:
+    for level in reversed(support_levels):
         line = pd.Series([level] * len(df_plot), index=df_plot.index)
         level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
                                             label=f'S {fmt_price(level)}', linestyle=':'))
