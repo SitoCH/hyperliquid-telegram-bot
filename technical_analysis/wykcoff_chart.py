@@ -29,6 +29,15 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
     return ha_df
 
 def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta, mid: float) -> io.BytesIO:
+    # Calculate thresholds from full dataset
+    df['MACD_Hist'] = df['MACD_Hist'].fillna(0)
+    strong_positive_threshold = max(df['MACD_Hist'].max() * 0.4, 0.000001)
+    strong_negative_threshold = min(df['MACD_Hist'].min() * 0.4, -0.000001)
+    
+    # Calculate significant levels using full dataset
+    resistance_levels, support_levels = find_significant_levels(df, mid)
+
+    # Now filter for plotting window
     from_time = df['t'].max() - chart_image_time_delta
     df_plot = df.loc[df['t'] >= from_time].copy()
 
@@ -48,10 +57,6 @@ def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta, mid: fl
 
     ha_df = heikin_ashi(df_plot)
 
-    df_plot['MACD_Hist'] = df_plot['MACD_Hist'].fillna(0)
-    strong_positive_threshold = max(df_plot['MACD_Hist'].max() * 0.4, 0.000001)
-    strong_negative_threshold = min(df_plot['MACD_Hist'].min() * 0.4, -0.000001)
-
     def determine_color(value: float) -> str:
         if value >= strong_positive_threshold:
             return 'green'
@@ -62,10 +67,9 @@ def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta, mid: fl
         else:
             return 'red'
 
+    # Apply colors based on full dataset thresholds but only to plotting window data
     macd_hist_colors = df_plot['MACD_Hist'].apply(determine_color).values
 
-    resistance_levels, support_levels = find_significant_levels(df, mid)
-    
     level_lines = []
     for level in resistance_levels:
         line = pd.Series([level] * len(df_plot), index=df_plot.index)
