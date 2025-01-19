@@ -112,7 +112,14 @@ def load_strategy(strategy_name):
         return None
 
 async def start(update, context):
-    await telegram_utils.reply(update, "Welcome! Click the button below to check the account's positions.")
+    if context.args:
+        raw_param = context.args[0]
+        if raw_param.startswith("TA_"):
+            context.args = [raw_param[3:]]
+            await update.message.delete()
+            await execute_ta(update, context)    
+    else:
+        await telegram_utils.reply(update, "Welcome! Click the button below to check the account's positions.")
 
 async def shutdown(application):
     logger.info("Shutting down Hyperliquid Telegram bot...")
