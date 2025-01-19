@@ -110,7 +110,7 @@ class TimeframeGroupAnalysis:
     dominant_action: CompositeAction
     internal_alignment: float
     volume_strength: float
-    momentum_bias: str
+    momentum_bias: MultiTimeframeDirection
     group_weight: float
 
 def _analyze_timeframe_group(
@@ -123,7 +123,7 @@ def _analyze_timeframe_group(
             dominant_action=CompositeAction.UNKNOWN,
             internal_alignment=0.0,
             volume_strength=0.0,
-            momentum_bias="neutral",
+            momentum_bias=MultiTimeframeDirection.NEUTRAL,
             group_weight=0.0
         )
 
@@ -171,9 +171,9 @@ def _analyze_timeframe_group(
         s.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.MARKING_DOWN])
     
     momentum_bias = (
-        "bullish" if bullish_signals > bearish_signals else
-        "bearish" if bearish_signals > bullish_signals else
-        "neutral"
+        MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals else
+        MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals else
+        MultiTimeframeDirection.NEUTRAL
     )
 
     return TimeframeGroupAnalysis(
@@ -261,9 +261,20 @@ def _generate_dual_group_description(
     # Get funding state (same for all timeframes, so we can take from either group)
     funding_state = next(iter(higher_tf.values())).funding_state if higher_tf else FundingState.UNKNOWN
 
-    # Create narrative description
+    # Determine emoji based on market bias
+    if higher.momentum_bias == lower.momentum_bias:
+        if higher.momentum_bias == MultiTimeframeDirection.BULLISH:
+            emoji = "📈"  # Chart increasing
+        elif higher.momentum_bias == MultiTimeframeDirection.BEARISH:
+            emoji = "📉"  # Chart decreasing
+        else:
+            emoji = "📊"  # Bar chart
+    else:
+        emoji = "↔️"  # Left-right arrow for mixed signals
+
+    # Create narrative description with emoji
     description = (
-        f"Market analysis shows a {trend_strength.lower()} {market_context.lower()} with {funding_state.value} funding.\n"
+        f"{emoji} Market analysis shows a {trend_strength.lower()} {market_context.lower()} with {funding_state.value} funding.\n"
         f"Higher timeframes indicate {higher.dominant_phase.value} phase with {higher.dominant_action.value}, "
         f"while lower timeframes show {lower.dominant_phase.value} with {lower.dominant_action.value}.\n"
         f"Overall alignment between timeframes is {alignment_pct} with {confidence_pct} confidence.\n"
@@ -281,11 +292,11 @@ def _generate_dual_actionable_insight(
     if confidence_level < 0.5:
         return "<b>Analysis:</b>\nLow confidence signals across timeframes.\n<b>Recommendation:</b>\nReduce exposure and wait for clearer setups."
 
-    def get_trend_intensity(momentum: str, volume: float) -> str:
+    def get_trend_intensity(momentum: MultiTimeframeDirection, volume: float) -> str:
         if volume > 0.8:
-            return "dominant" if momentum == "bullish" else "heavy"
+            return "dominant" if momentum == MultiTimeframeDirection.BULLISH else "heavy"
         elif volume > 0.6:
-            return "strong" if momentum == "bullish" else "significant"
+            return "strong" if momentum == MultiTimeframeDirection.BULLISH else "significant"
         elif volume > 0.4:
             return "moderate"
         else:
@@ -296,13 +307,13 @@ def _generate_dual_actionable_insight(
 
     # Get base market condition with more nuanced descriptions
     if higher.momentum_bias == lower.momentum_bias:
-        if higher.momentum_bias == "bullish":
+        if higher.momentum_bias == MultiTimeframeDirection.BULLISH:
             base_signal = f"Market showing {higher_intensity} buying pressure with {lower_intensity} momentum on lower timeframes."
             action_plan = (
                 "Longs: Maintain positions, add during dips to major support levels.\n"
                 "Shorts: Exercise caution, limit to quick reversals at key resistance."
             )
-        elif higher.momentum_bias == "bearish":
+        elif higher.momentum_bias == MultiTimeframeDirection.BEARISH:
             base_signal = f"Market exhibiting {higher_intensity} selling pressure with {lower_intensity} downside momentum."
             action_plan = (
                 "Shorts: Maintain positions, add during relief rallies to resistance.\n"
@@ -316,10 +327,10 @@ def _generate_dual_actionable_insight(
             )
     else:
         base_signal = (
-            f"Potential trend shift: {higher_intensity} {higher.momentum_bias} on higher timeframes "
-            f"versus {lower_intensity} {lower.momentum_bias} on lower timeframes."
+            f"Potential trend shift: {higher_intensity} {higher.momentum_bias.value} on higher timeframes "
+            f"versus {lower_intensity} {lower.momentum_bias.value} on lower timeframes."
         )
-        if lower.momentum_bias == "bullish":
+        if lower.momentum_bias == MultiTimeframeDirection.BULLISH:
             action_plan = (
                 "Longs: Scale in carefully with defined risk below key support.\n"
                 "Shorts: Consider profit taking, avoid adding to positions."
@@ -338,7 +349,7 @@ def _determine_dual_market_context(
 ) -> str:
     """Determine market context from two timeframe groups."""
     if higher.momentum_bias == lower.momentum_bias:
-        context = higher.momentum_bias
+        context = higher.momentum_bias.value
         if higher.volume_strength > 0.7 and lower.volume_strength > 0.6:
             return f"high-conviction {context} trend"
         elif higher.volume_strength > 0.5:
@@ -346,7 +357,7 @@ def _determine_dual_market_context(
         else:
             return f"developing {context} bias"
     
-    return f"{higher.momentum_bias} structure with {lower.momentum_bias} short-term momentum"
+    return f"{higher.momentum_bias.value} structure with {lower.momentum_bias.value} short-term momentum"
 
 def _determine_dual_trend_strength(
     higher: TimeframeGroupAnalysis,
@@ -389,21 +400,15 @@ def _determine_direction(
     # Strong conviction setup
     if avg_alignment > 0.7 and strong_volume:  # Aligned with "Very Strong" trend
         if higher.momentum_bias == lower.momentum_bias:
-            return MultiTimeframeDirection.BULLISH if higher.momentum_bias == "bullish" else (
-                MultiTimeframeDirection.BEARISH if higher.momentum_bias == "bearish" else MultiTimeframeDirection.NEUTRAL
-            )
+            return higher.momentum_bias
     
     # Moderate conviction setup
     elif avg_alignment > 0.5 and moderate_volume:  # Aligned with "Strong" trend
         if higher.momentum_bias == lower.momentum_bias:
-            return MultiTimeframeDirection.BULLISH if higher.momentum_bias == "bullish" else (
-                MultiTimeframeDirection.BEARISH if higher.momentum_bias == "bearish" else MultiTimeframeDirection.NEUTRAL
-            )
+            return higher.momentum_bias
     
     # Higher timeframe dominance with strong signals
     elif higher.internal_alignment > 0.7 and higher.volume_strength > 0.6:
-        return MultiTimeframeDirection.BULLISH if higher.momentum_bias == "bullish" else (
-            MultiTimeframeDirection.BEARISH if higher.momentum_bias == "bearish" else MultiTimeframeDirection.NEUTRAL
-        )
+        return higher.momentum_bias
     
     return MultiTimeframeDirection.NEUTRAL
