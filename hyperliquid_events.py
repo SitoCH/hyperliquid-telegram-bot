@@ -47,6 +47,8 @@ def process_fill(fill: Fill) -> None:
         fill_message = get_fill_description(f"{get_fill_icon(closed_pnl)} Liquidated isolated long:", coin, size, fee, fee_token, closed_pnl=closed_pnl)
     elif fill["dir"] == 'Long > Short':
         fill_message = get_fill_description(f"{get_fill_icon(closed_pnl)} Long -> short:", coin, size, fee, fee_token, closed_pnl=closed_pnl)
+    elif fill["dir"] == 'Spot Dust Conversion':
+        fill_message = get_fill_description("🧹 Dust conversion:", coin, size, fee, fee_token, amount)
     else:
         fill_message = json.dumps(fill)
 
