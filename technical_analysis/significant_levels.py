@@ -108,25 +108,24 @@ def find_significant_levels(
     min_score: float = 0.2
 ) -> Tuple[List[float], List[float]]:
     """Get significant price levels aligned with Wyckoff analysis"""
-    if len(df) < MIN_PERIODS:  # Use same minimum periods as Wyckoff
+    if len(df) < MIN_PERIODS:
         return [], []
     
-    # Use same volatility calculation as Wyckoff
     price_sma = df['Close'].rolling(window=MIN_PERIODS).mean()
     price_std = df['Close'].rolling(window=MIN_PERIODS).std()
     volatility = (price_std / price_sma).iloc[-1]
     
-    # Use recent window aligned with Wyckoff
-    lookback = min(len(df), MIN_PERIODS * 2)  # 2x MIN_PERIODS for better level detection
-    recent_df = df.iloc[-lookback:]
+    # Use full dataset instead of limited lookback
+    recent_df = df.copy()
     
-    # Use same price range threshold as Wyckoff's STRONG_DEV_THRESHOLD
-    max_deviation = min(STRONG_DEV_THRESHOLD * volatility, 0.25)  # Cap at 25%
+    max_deviation = min(STRONG_DEV_THRESHOLD * volatility, 0.25)
     min_price = current_price * (1 - max_deviation)
     max_price = current_price * (1 + max_deviation)
     
-    # Simplified tolerance calculation
-    tolerance = recent_df['ATR'].iloc[-1] * (0.3 + volatility * 0.2)
+    # Scale tolerance with dataset length
+    base_tolerance = recent_df['ATR'].iloc[-1] * (0.3 + volatility * 0.2)
+    length_factor = np.log1p(len(recent_df) / MIN_PERIODS) / 2
+    tolerance = base_tolerance * (1 + length_factor)
     
     data = dict(
         highs=recent_df['High'].values,
