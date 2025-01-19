@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import pandas as pd  # type: ignore[import]
@@ -7,11 +8,17 @@ from .wyckoff_types import (
     CompositeAction, Timeframe, VolumeState, FundingState, VolatilityState
 )
 
+class MultiTimeframeDirection(Enum):
+    BULLISH = "bullish"
+    BEARISH = "bearish"
+    NEUTRAL = "neutral"
+
 @dataclass
 class MultiTimeframeContext:
     alignment_score: float  # 0 to 1, indicating how well timeframes align
     confidence_level: float  # 0 to 1, indicating strength of signals
     description: str
+    direction: MultiTimeframeDirection
 
 def get_phase_weight(timeframe: Timeframe) -> float:
     """Get the weight for each timeframe's contribution to analysis."""
@@ -37,7 +44,8 @@ def analyze_multi_timeframe(
         return MultiTimeframeContext(
             alignment_score=0.0,
             confidence_level=0.0,
-            description="No timeframe data available for analysis"
+            description="No timeframe data available for analysis",
+            direction=MultiTimeframeDirection.NEUTRAL
         )
 
     # Ensure minimum required timeframes
@@ -51,7 +59,8 @@ def analyze_multi_timeframe(
         return MultiTimeframeContext(
             alignment_score=0.0,
             confidence_level=0.0,
-            description="Insufficient timeframe coverage for reliable analysis"
+            description="Insufficient timeframe coverage for reliable analysis",
+            direction=MultiTimeframeDirection.NEUTRAL
         )
 
     # Group timeframes
@@ -76,10 +85,14 @@ def analyze_multi_timeframe(
             higher_tf  # Pass higher_tf to the description generator
         )
 
+        # Determine direction based on momentum bias and confidence
+        direction = _determine_direction(higher_analysis, lower_analysis, confidence_level)
+
         return MultiTimeframeContext(
             alignment_score=groups_alignment,
             confidence_level=confidence_level,
-            description=description
+            description=description,
+            direction=direction
         )
         
     except Exception as e:
@@ -87,7 +100,8 @@ def analyze_multi_timeframe(
         return MultiTimeframeContext(
             alignment_score=0.0,
             confidence_level=0.0,
-            description=f"Error analyzing timeframes: {str(e)}"
+            description=f"Error analyzing timeframes: {str(e)}",
+            direction=MultiTimeframeDirection.NEUTRAL
         )
 
 @dataclass
@@ -351,3 +365,45 @@ def _determine_dual_trend_strength(
         return "Moderate"
     else:
         return "Weak"
+
+def _determine_direction(
+    higher: TimeframeGroupAnalysis,
+    lower: TimeframeGroupAnalysis,
+    confidence_level: float
+) -> MultiTimeframeDirection:
+    """
+    Determine the trading direction with enhanced alignment to trend strength 
+    and market context analysis.
+    """
+    # Calculate composite strength similar to trend strength calculation
+    avg_alignment = (higher.internal_alignment * 0.6 + lower.internal_alignment * 0.4)
+    
+    # Use volume confirmation like market context
+    strong_volume = (higher.volume_strength > 0.7 and lower.volume_strength > 0.6)
+    moderate_volume = (higher.volume_strength > 0.5)
+    
+    # If confidence is too low, return neutral (increased threshold for better quality)
+    if confidence_level < 0.65:  # Slightly higher threshold
+        return MultiTimeframeDirection.NEUTRAL
+        
+    # Strong conviction setup
+    if avg_alignment > 0.7 and strong_volume:  # Aligned with "Very Strong" trend
+        if higher.momentum_bias == lower.momentum_bias:
+            return MultiTimeframeDirection.BULLISH if higher.momentum_bias == "bullish" else (
+                MultiTimeframeDirection.BEARISH if higher.momentum_bias == "bearish" else MultiTimeframeDirection.NEUTRAL
+            )
+    
+    # Moderate conviction setup
+    elif avg_alignment > 0.5 and moderate_volume:  # Aligned with "Strong" trend
+        if higher.momentum_bias == lower.momentum_bias:
+            return MultiTimeframeDirection.BULLISH if higher.momentum_bias == "bullish" else (
+                MultiTimeframeDirection.BEARISH if higher.momentum_bias == "bearish" else MultiTimeframeDirection.NEUTRAL
+            )
+    
+    # Higher timeframe dominance with strong signals
+    elif higher.internal_alignment > 0.7 and higher.volume_strength > 0.6:
+        return MultiTimeframeDirection.BULLISH if higher.momentum_bias == "bullish" else (
+            MultiTimeframeDirection.BEARISH if higher.momentum_bias == "bearish" else MultiTimeframeDirection.NEUTRAL
+        )
+    
+    return MultiTimeframeDirection.NEUTRAL

@@ -19,7 +19,7 @@ from technical_analysis.candles_cache import get_candles_with_cache
 from technical_analysis.wyckoff_types import Timeframe
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from technical_analysis.wykcoff_chart import generate_chart
-from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe
+from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe, MultiTimeframeDirection
 
 
 SELECTING_COIN_FOR_TA = range(1)
@@ -135,7 +135,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         mtf_context = analyze_multi_timeframe(states)
 
         should_notify = (
-            always_notify or mtf_context.confidence_level > 0.75
+            always_notify or (mtf_context.confidence_level > 0.75 and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
         )
 
         if should_notify:
