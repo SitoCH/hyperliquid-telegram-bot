@@ -286,9 +286,8 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
                     chart.close()
     
     # Add MTF analysis
-    link = f"<a href='https://t.me/{context.bot.username}?start=TA_{coin}'>{coin}</a>"
     await telegram_utils.send(
-        f"<b>Technical analysis for {link}</b>\n"
+        f"<b>Technical analysis for {telegram_utils.get_link(context, coin, f'TA_{coin}')}</b>\n"
         f"Market price: {fmt_price(mid)} USDC\n"
         f"<b>Multi timeframe analysis:</b>\n{mtf_context.description}\n\n",
         parse_mode=ParseMode.HTML

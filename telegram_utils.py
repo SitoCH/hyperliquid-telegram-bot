@@ -199,4 +199,8 @@ class TelegramUtils:
         self.telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
+    def get_link(self, context: ContextTypes.DEFAULT_TYPE, link_text: str, link_action: str) -> str:
+        return f"<a href='https://t.me/{context.bot.username}?start={link_action}'>{link_text}</a>"
+
+
 telegram_utils = TelegramUtils()
