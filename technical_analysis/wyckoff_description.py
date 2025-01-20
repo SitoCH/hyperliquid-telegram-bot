@@ -59,13 +59,13 @@ def generate_wyckoff_description(
     # Funding rate analysis
     if funding_state != FundingState.UNKNOWN:
         funding_context = {
-            FundingState.HIGHLY_POSITIVE: "Extreme long bias in funding suggests overleveraged market",
-            FundingState.POSITIVE: "Notable long bias in funding rates",
-            FundingState.SLIGHTLY_POSITIVE: "Mild long bias in funding",
+            FundingState.HIGHLY_POSITIVE: "High long bias in funding suggests overleveraged market",
+            FundingState.POSITIVE: "Long bias in funding rates",
+            FundingState.SLIGHTLY_POSITIVE: "Slight long bias in funding",
             FundingState.NEUTRAL: "Balanced funding rates",
-            FundingState.SLIGHTLY_NEGATIVE: "Mild short bias in funding",
-            FundingState.NEGATIVE: "Notable short bias in funding rates",
-            FundingState.HIGHLY_NEGATIVE: "Extreme short bias in funding suggests overleveraged market"
+            FundingState.SLIGHTLY_NEGATIVE: "Slight short bias in funding",
+            FundingState.NEGATIVE: "Short bias in funding rates",
+            FundingState.HIGHLY_NEGATIVE: "High short bias in funding suggests overleveraged market"
         }
         description_parts.append(f"Funding Context: {funding_context[funding_state]}")
 
