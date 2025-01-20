@@ -1,10 +1,14 @@
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional, Union, NamedTuple
 from logging_utils import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
 from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
+from telegram.constants import ParseMode
 from utils import OPERATION_CANCELLED, fmt, px_round, fmt_price
+from technical_analysis.hyperliquid_candles import get_significant_levels
+from technical_analysis.wyckoff_types import Timeframe
+from tabulate import tabulate, simple_separated_format
 
 EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT, SELECTING_LEVERAGE = range(6)
 
@@ -98,24 +102,72 @@ async def selected_leverage(update: Update, context: Union[CallbackContext, Cont
     return SELECTING_STOP_LOSS
 
 
-async def send_stop_loss_suggestions(query: Any, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> None:
+class PriceSuggestion(NamedTuple):
+    type: str
+    price: float
+    percentage: float
+
+def get_price_suggestions(coin: str, mid: float, is_stop_loss: bool, is_long: bool) -> List[PriceSuggestion]:
+    """Get price suggestions for either entry or exit points."""
+    resistance_levels, support_levels = get_significant_levels(coin, mid, Timeframe.HOUR_1, 250)
+    suggestions: List[PriceSuggestion] = []
+
+    # For take profit (exit), we reverse the direction compared to stop loss (entry)
+    if not is_stop_loss:
+        is_long = not is_long
+
+    # Add percentage-based suggestions
+    for pct in [1.0, 2.0, 3.0, 4.0, 5.0]:
+        price = float(mid * (1.0 - pct / 100.0) if is_long else mid * (1.0 + pct / 100.0))
+        suggestions.append(PriceSuggestion("Fixed", price, pct))
+
+    # Add level-based suggestions
+    if is_long and support_levels:
+        valid_supports = [level for level in support_levels if level < mid]
+        for level in sorted(valid_supports, reverse=True)[:3]:
+            pct = abs((level - mid) / mid * 100)
+            suggestions.append(PriceSuggestion("Support", level, pct))
+    elif not is_long and resistance_levels:
+        valid_resistances = [level for level in resistance_levels if level > mid]
+        for level in sorted(valid_resistances)[:3]:
+            pct = abs((level - mid) / mid * 100)
+            suggestions.append(PriceSuggestion("Resistance", level, pct))
+
+    # Sort suggestions by price (ascending for shorts, descending for longs)
+    suggestions.sort(key=lambda x: x.price, reverse=is_long)
+    return suggestions
+
+
+async def get_price_suggestions_text(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE], is_stop_loss: bool) -> str:
+    """Send formatted price suggestions for either stop loss or take profit."""
     coin = context.user_data["selected_coin"]
     mid = float(hyperliquid_utils.info.all_mids()[coin])
     is_long = context.user_data["enter_mode"] == "long"
 
-    suggestions = []
-    for pct in [1.0, 2.0, 3.0, 4.0, 5.0]:
-        price = ger_price_estimate(mid, is_long, pct)
-        suggestions.append(f"{pct}% (~{price} USDC)")
-
-    message = (
-        f"Current market price: {fmt_price(mid)} USDC\n"
-        f"Suggested stop losses:\n" + 
-        "\n".join([f"• {sugg}" for sugg in suggestions]) +
-        "\n\nEnter your desired stop loss price in USDC, or 'cancel' to stop:"
-    )
+    suggestions = get_price_suggestions(coin, mid, is_stop_loss, is_long)
     
-    await query.edit_message_text(message)
+    table_data = [
+        [sugg.type, fmt_price(sugg.price), f"{fmt(sugg.percentage)}%"]
+        for sugg in suggestions
+    ]
+    tablefmt = simple_separated_format('  ')
+    table = tabulate(
+        table_data,
+        headers=["Type", "Price", "Distance"],
+        tablefmt=tablefmt,
+        colalign=("left", "right", "right")
+    )
+
+    return (
+        f"Current market price: {fmt_price(mid)} USDC\n"
+        f"Suggested {'stop losses' if is_stop_loss else 'take profits'}:\n"
+        f"<pre>{table}</pre>\n"
+        f"\nEnter your desired {'stop loss' if is_stop_loss else 'take profit'} price in USDC, or 'cancel' to stop:"
+    )
+
+
+async def send_stop_loss_suggestions(query: Any, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> None:
+    await query.edit_message_text(await get_price_suggestions_text(context, True), parse_mode=ParseMode.HTML)
 
 
 async def selected_stop_loss(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
@@ -151,23 +203,9 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
         await update.message.reply_text("Invalid price. Please enter a number or 'cancel'.")
         return SELECTING_STOP_LOSS
 
-    coin = context.user_data["selected_coin"]
-    mid = float(hyperliquid_utils.info.all_mids()[coin])
-    is_long = context.user_data["enter_mode"] == "long"
+    await telegram_utils.reply(update, await get_price_suggestions_text(context, False), parse_mode=ParseMode.HTML)
 
-    suggestions = []
-    for pct in [1.0, 2.0, 3.0, 4.0, 5.0]:
-        price = ger_price_estimate(mid, not is_long, pct)
-        suggestions.append(f"• {pct}% (~{price} USDC)")
 
-    message = (
-        f"Current market price: {fmt_price(mid)} USDC\n"
-        f"Suggested take profits:\n" + 
-        "\n".join(suggestions) +
-        "\n\nEnter your desired take profit price in USDC, or 'cancel' to stop:"
-    )
-    
-    await update.message.reply_text(message)
     return SELECTING_TAKE_PROFIT
 
 
