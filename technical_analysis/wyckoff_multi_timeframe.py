@@ -5,7 +5,7 @@ import pandas as pd  # type: ignore[import]
 
 from .wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, 
-    CompositeAction, Timeframe, VolumeState, FundingState, VolatilityState
+    CompositeAction, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
 )
 
 class MultiTimeframeDirection(Enum):
@@ -112,11 +112,15 @@ class TimeframeGroupAnalysis:
     volume_strength: float
     momentum_bias: MultiTimeframeDirection
     group_weight: float
+    funding_sentiment: float  # -1 to 1, negative means bearish funding
+    liquidity_state: MarketLiquidity
+    liquidation_risk: LiquidationRisk
+    volatility_state: VolatilityState
 
 def _analyze_timeframe_group(
     group: Dict[Timeframe, WyckoffState]
 ) -> TimeframeGroupAnalysis:
-    """Analyze a group with enhanced reactivity to strong signals."""
+    """Analyze a group with enhanced crypto-specific signals."""
     if not group:
         return TimeframeGroupAnalysis(
             dominant_phase=WyckoffPhase.UNKNOWN,
@@ -124,7 +128,11 @@ def _analyze_timeframe_group(
             internal_alignment=0.0,
             volume_strength=0.0,
             momentum_bias=MultiTimeframeDirection.NEUTRAL,
-            group_weight=0.0
+            group_weight=0.0,
+            funding_sentiment=0.0,
+            liquidity_state=MarketLiquidity.UNKNOWN,
+            liquidation_risk=LiquidationRisk.UNKNOWN,
+            volatility_state=VolatilityState.UNKNOWN
         )
 
     # Calculate weighted votes for phases and actions
@@ -162,14 +170,57 @@ def _analyze_timeframe_group(
     # Calculate volume strength
     volume_strength = sum(1 for s in group.values() if s.volume == VolumeState.HIGH) / len(group)
 
-    # Determine momentum bias
-    bullish_signals = sum(1 for s in group.values() if 
-        s.phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP] or 
-        s.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.MARKING_UP])
-    bearish_signals = sum(1 for s in group.values() if 
-        s.phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] or 
-        s.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.MARKING_DOWN])
+    # Calculate funding sentiment (-1 to 1)
+    funding_signals = []
+    for state in group.values():
+        if state.funding_state == FundingState.HIGHLY_POSITIVE:
+            funding_signals.append(1.0)
+        elif state.funding_state == FundingState.POSITIVE:
+            funding_signals.append(0.5)
+        elif state.funding_state == FundingState.SLIGHTLY_POSITIVE:
+            funding_signals.append(0.25)
+        elif state.funding_state == FundingState.HIGHLY_NEGATIVE:
+            funding_signals.append(-1.0)
+        elif state.funding_state == FundingState.NEGATIVE:
+            funding_signals.append(-0.5)
+        elif state.funding_state == FundingState.SLIGHTLY_NEGATIVE:
+            funding_signals.append(-0.25)
     
+    funding_sentiment = sum(funding_signals) / len(funding_signals) if funding_signals else 0
+
+    # Analyze liquidity state
+    liquidity_counts = {state.liquidity: 0 for state in group.values()}
+    for state in group.values():
+        liquidity_counts[state.liquidity] += 1
+    liquidity_state = max(liquidity_counts.items(), key=lambda x: x[1])[0]
+
+    # Analyze liquidation risk
+    risk_counts = {state.liquidation_risk: 0 for state in group.values()}
+    for state in group.values():
+        risk_counts[state.liquidation_risk] += 1
+    liquidation_risk = max(risk_counts.items(), key=lambda x: x[1])[0]
+
+    # Analyze volatility state
+    volatility_counts = {state.volatility: 0 for state in group.values()}
+    for state in group.values():
+        volatility_counts[state.volatility] += 1
+    volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
+
+    # Enhance momentum bias calculation with funding and liquidation data
+    bullish_signals = sum(1 for s in group.values() if (
+        s.phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP] or 
+        s.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.MARKING_UP] or
+        (s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH) or
+        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN)  # Potential short squeeze
+    ))
+    
+    bearish_signals = sum(1 for s in group.values() if (
+        s.phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] or 
+        s.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.MARKING_DOWN] or
+        (s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH) or
+        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP)  # Potential long liquidation
+    ))
+
     momentum_bias = (
         MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals else
         MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals else
@@ -182,7 +233,11 @@ def _analyze_timeframe_group(
         internal_alignment=internal_alignment,
         volume_strength=volume_strength,
         momentum_bias=momentum_bias,
-        group_weight=total_weight
+        group_weight=total_weight,
+        funding_sentiment=funding_sentiment,
+        liquidity_state=liquidity_state,
+        liquidation_risk=liquidation_risk,
+        volatility_state=volatility_state
     )
 
 def _calculate_dual_groups_alignment(
@@ -288,7 +343,7 @@ def _generate_dual_actionable_insight(
     lower: TimeframeGroupAnalysis,
     confidence_level: float
 ) -> str:
-    """Generate actionable insights from dual timeframe analysis."""
+    """Generate crypto-specific actionable insights."""
     if confidence_level < 0.5:
         return "<b>Analysis:</b>\nLow confidence signals across timeframes.\n<b>Recommendation:</b>\nReduce exposure and wait for clearer setups."
 
@@ -341,7 +396,34 @@ def _generate_dual_actionable_insight(
                 "Longs: Consider profit taking, avoid adding to positions."
             )
 
-    return f"<b>Analysis:</b>\n{base_signal}\n<b>Strategy:</b>\n{action_plan}"
+    # Add crypto-specific warnings and opportunities
+    risk_warnings = []
+    opportunities = []
+
+    # Liquidation cascade risks
+    if higher.liquidation_risk == LiquidationRisk.HIGH:
+        if higher.momentum_bias == MultiTimeframeDirection.BULLISH:
+            risk_warnings.append("High risk of short liquidations, potential for violent upside moves")
+        else:
+            risk_warnings.append("High risk of long liquidations, protect positions with strict stops")
+
+    # Funding rate opportunities
+    if abs(higher.funding_sentiment) > 0.7:
+        if higher.funding_sentiment > 0:
+            opportunities.append("High positive funding offers counter-trend short opportunities")
+        else:
+            opportunities.append("High negative funding offers counter-trend long opportunities")
+
+    # Liquidity-based insights
+    if higher.liquidity_state == MarketLiquidity.LOW:
+        risk_warnings.append("Low liquidity environment, expect higher slippage and volatile moves")
+        if higher.volatility_state == VolatilityState.HIGH:
+            risk_warnings.append("High volatility with low liquidity, reduce position sizes")
+
+    warnings = "\n<b>Risk Warnings:</b>\n" + "\n".join(f"- {w}" for w in risk_warnings) if risk_warnings else ""
+    opps = "\n<b>Opportunities:</b>\n" + "\n".join(f"- {o}" for o in opportunities) if opportunities else ""
+
+    return f"<b>Analysis:</b>\n{base_signal}\n<b>Strategy:</b>\n{action_plan}{warnings}{opps}"
 
 def _determine_dual_market_context(
     higher: TimeframeGroupAnalysis,

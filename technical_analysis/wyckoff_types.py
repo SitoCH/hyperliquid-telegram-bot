@@ -78,6 +78,18 @@ class FundingState(Enum):
     HIGHLY_NEGATIVE = "highly negative"
     UNKNOWN = "unknown"
 
+class MarketLiquidity(Enum):
+    HIGH = "high liquidity"
+    MODERATE = "moderate liquidity"
+    LOW = "low liquidity"
+    UNKNOWN = "unknown liquidity"
+
+class LiquidationRisk(Enum):
+    HIGH = "high liquidation risk"
+    MODERATE = "moderate liquidation risk"
+    LOW = "low liquidation risk"
+    UNKNOWN = "unknown risk"
+
 @dataclass
 class WyckoffState:
     phase: WyckoffPhase
@@ -93,6 +105,8 @@ class WyckoffState:
     wyckoff_sign: WyckoffSign
     funding_state: FundingState
     description: str
+    liquidity: MarketLiquidity = MarketLiquidity.UNKNOWN
+    liquidation_risk: LiquidationRisk = LiquidationRisk.UNKNOWN
 
     def to_dict(self):
         return {
@@ -108,7 +122,9 @@ class WyckoffState:
             'composite_action': self.composite_action.value,
             'wyckoff_sign': self.wyckoff_sign.value,
             'funding_state': self.funding_state.value,
-            'description': self.description
+            'description': self.description,
+            'liquidity': self.liquidity.value,
+            'liquidation_risk': self.liquidation_risk.value,
         }
 
     @staticmethod
@@ -126,7 +142,9 @@ class WyckoffState:
             composite_action=CompositeAction.UNKNOWN,
             wyckoff_sign=WyckoffSign.NONE,
             funding_state=FundingState.UNKNOWN,
-            description="Unknown market state"
+            description="Unknown market state",
+            liquidity=MarketLiquidity.UNKNOWN,
+            liquidation_risk=LiquidationRisk.UNKNOWN,
         )
 
 @dataclass
@@ -188,61 +206,61 @@ _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
         phase_weight=0.05,
         max_lookback=200,
-        ema_length=21,
-        atr_settings=(14, 8, 21, 5, 8),
-        supertrend_multiplier=2.8,
-        base_multiplier=0.8,
-        momentum_multiplier=0.7,
+        ema_length=13,  # Reduced for faster response to crypto volatility
+        atr_settings=(10, 6, 18, 4, 7),  # Faster ATR and MACD for quick moves
+        supertrend_multiplier=2.5,  # More sensitive to crypto volatility
+        base_multiplier=0.9,  # Slightly increased for better noise filtering
+        momentum_multiplier=0.8,  # Increased for stronger momentum signals
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
         phase_weight=0.10,
         max_lookback=175,
-        ema_length=22,
-        atr_settings=(18, 10, 24, 7, 9),
-        supertrend_multiplier=2.9,
-        base_multiplier=0.9,
-        momentum_multiplier=0.85,
+        ema_length=21,  # Standard setting works well here
+        atr_settings=(14, 8, 21, 5, 8),  # Balanced settings for medium-term
+        supertrend_multiplier=2.7,
+        base_multiplier=1.0,
+        momentum_multiplier=0.9,
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
         phase_weight=0.15,
         max_lookback=150,
-        ema_length=24,
-        atr_settings=(21, 12, 26, 9, 10),
-        supertrend_multiplier=3.0,
-        base_multiplier=1.0,
+        ema_length=24,  # Unchanged
+        atr_settings=(21, 12, 26, 9, 10),  # Unchanged
+        supertrend_multiplier=3.0,  # Good balance for hourly
+        base_multiplier=1.1,  # Slightly increased for better filtering
         momentum_multiplier=1.0,
         description="Hourly trend"
     ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.17,  # Slightly reduced from 0.175
+        phase_weight=0.17,
         max_lookback=100,
-        ema_length=28,
-        atr_settings=(28, 12, 32, 9, 12),
-        supertrend_multiplier=3.2,
-        base_multiplier=1.2,
-        momentum_multiplier=1.4,
+        ema_length=34,  # Increased for smoother trends
+        atr_settings=(34, 12, 34, 9, 14),  # Longer ATR period
+        supertrend_multiplier=3.3,  # More conservative
+        base_multiplier=1.3,
+        momentum_multiplier=1.5,  # Increased for stronger signals
         description="4h trend"
     ),
     Timeframe.HOURS_8: TimeframeSettings(
         phase_weight=0.16,
         max_lookback=80,
-        ema_length=31,
-        atr_settings=(30, 12, 36, 9, 13),
-        supertrend_multiplier=3.35,
-        base_multiplier=1.35,
-        momentum_multiplier=1.6,
+        ema_length=41,  # Increased for better trend following
+        atr_settings=(38, 12, 40, 9, 16),  # Longer periods for stability
+        supertrend_multiplier=3.5,
+        base_multiplier=1.4,
+        momentum_multiplier=1.7,
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
         phase_weight=0.15,
         max_lookback=60,
-        ema_length=34,
-        atr_settings=(34, 12, 40, 9, 14),
-        supertrend_multiplier=3.5,
-        base_multiplier=1.5,
-        momentum_multiplier=1.8,
+        ema_length=55,  # Much longer for daily trend stability
+        atr_settings=(41, 12, 48, 9, 21),  # Conservative settings
+        supertrend_multiplier=3.8,  # More conservative for daily
+        base_multiplier=1.6,
+        momentum_multiplier=2.0,  # Strong momentum requirement
         description="Daily trend"
     ),
 }
