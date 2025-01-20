@@ -22,7 +22,8 @@ def mock_fetch():
                 'o': 100 + i,
                 'h': 101 + i,
                 'l': 99 + i,
-                'c': 100 + i
+                'c': 100 + i,
+                'v': 1000 + i
             }
             for i in range(intervals)
         ]

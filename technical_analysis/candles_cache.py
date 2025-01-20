@@ -126,6 +126,12 @@ def update_cache(coin: str, timeframe: Timeframe, candles: List[Dict[str, Any]],
     
     _save_to_disk(coin, timeframe, (current_time, candles))
 
+def clear_cache() -> None:
+    """Clear disk cache"""
+    if CACHE_DIR.exists():
+        for cache_file in CACHE_DIR.glob('*_candles.json'):
+            cache_file.unlink()
+
 def _round_timestamp(ts: int, timeframe: Timeframe) -> int:
     """Round timestamp down to nearest interval based on timeframe"""
     ms_interval = timeframe.minutes * 60 * 1000
