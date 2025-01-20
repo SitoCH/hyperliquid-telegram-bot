@@ -60,12 +60,52 @@ def merge_candles(old_candles: List[Dict[str, Any]], new_candles: List[Dict[str,
     sorted_candles = sorted(merged.values(), key=lambda x: x['T'])
     return trim_candles(sorted_candles, lookback_days)
 
+def verify_candles(candles: List[Dict[str, Any]], timeframe: Timeframe) -> Tuple[bool, str]:
+    """
+    Verify the integrity of candles data.
+    Returns (is_valid, error_message)
+    """
+    if not candles:
+        return True, ""
+    
+    # Sort candles by timestamp to ensure chronological order
+    sorted_candles = sorted(candles, key=lambda x: x['T'])
+    
+    # Check required fields
+    required_fields = {'T', 'o', 'h', 'l', 'c', 'v'}
+    for candle in sorted_candles:
+        missing_fields = required_fields - set(candle.keys())
+        if missing_fields:
+            return False, f"Missing required fields: {missing_fields}"
+    
+    # Check timeframe intervals
+    interval_ms = timeframe.minutes * 60 * 1000
+    for i in range(1, len(sorted_candles)):
+        time_diff = sorted_candles[i]['T'] - sorted_candles[i-1]['T']
+        if time_diff != interval_ms:
+            return False, f"Invalid interval at index {i}: expected {interval_ms}ms, got {time_diff}ms"
+    
+    # Check for valid numerical values
+    for candle in sorted_candles:
+        try:
+            if not (float(candle['o']) and float(candle['h']) and 
+                   float(candle['l']) and float(candle['c'])):
+                return False, "Invalid numerical values found"
+            # Verify OHLC relationships
+            if not (float(candle['l']) <= float(candle['o']) <= float(candle['h']) and
+                   float(candle['l']) <= float(candle['c']) <= float(candle['h'])):
+                return False, f"Invalid OHLC relationships at timestamp {candle['T']}"
+        except (ValueError, TypeError):
+            return False, "Non-numeric values found in OHLCV data"
+    
+    return True, ""
+
 def update_cache(coin: str, timeframe: Timeframe, candles: List[Dict[str, Any]], current_time: int) -> None:
     """Update disk cache with new candles"""
     # Don't update cache if no new candles
     if not candles:
         return
-        
+
     cached_data = _load_from_disk(coin, timeframe)
     if cached_data is not None:
         _, existing_candles = cached_data
@@ -74,14 +114,17 @@ def update_cache(coin: str, timeframe: Timeframe, candles: List[Dict[str, Any]],
             min_timestamp = min(c['T'] for c in existing_candles)
             lookback_days = (current_time - min_timestamp) // 86400000
             candles = merge_candles(existing_candles, candles, lookback_days)
+            
+            # Verify merged data
+            is_valid, error_msg = verify_candles(candles, timeframe)
+            if not is_valid:
+                # Remove corrupt cache before raising error
+                cache_file = _get_cache_file_path(coin, timeframe)
+                if cache_file.exists():
+                    cache_file.unlink()
+                raise ValueError(f"Invalid merged candles data for {coin}: {error_msg}")
     
     _save_to_disk(coin, timeframe, (current_time, candles))
-
-def clear_cache() -> None:
-    """Clear disk cache"""
-    if CACHE_DIR.exists():
-        for cache_file in CACHE_DIR.glob('*_candles.json'):
-            cache_file.unlink()
 
 def _round_timestamp(ts: int, timeframe: Timeframe) -> int:
     """Round timestamp down to nearest interval based on timeframe"""
