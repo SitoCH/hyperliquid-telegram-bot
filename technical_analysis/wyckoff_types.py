@@ -204,33 +204,33 @@ class Timeframe(Enum):
 # Define settings after Timeframe class is fully defined
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.05,
+        phase_weight=0.07,  # Increased from 0.05 for better short-term influence
         max_lookback=200,
-        ema_length=13,  # Reduced for faster response to crypto volatility
-        atr_settings=(10, 6, 18, 4, 7),  # Faster ATR and MACD for quick moves
-        supertrend_multiplier=2.5,  # More sensitive to crypto volatility
-        base_multiplier=0.9,  # Slightly increased for better noise filtering
-        momentum_multiplier=0.8,  # Increased for stronger momentum signals
+        ema_length=8,  # Reduced from 13 for faster response
+        atr_settings=(8, 5, 13, 3, 5),  # Faster settings
+        supertrend_multiplier=2.2,  # More sensitive
+        base_multiplier=0.85,  # Slightly reduced for faster signals
+        momentum_multiplier=0.9,  # Increased from 0.8
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.10,
+        phase_weight=0.12,  # Increased from 0.10
         max_lookback=175,
-        ema_length=21,  # Standard setting works well here
-        atr_settings=(14, 8, 21, 5, 8),  # Balanced settings for medium-term
-        supertrend_multiplier=2.7,
-        base_multiplier=1.0,
-        momentum_multiplier=0.9,
+        ema_length=13,  # Reduced from 21
+        atr_settings=(10, 6, 18, 4, 6),  # Faster settings
+        supertrend_multiplier=2.5,  # More sensitive
+        base_multiplier=0.95,  # Slightly reduced
+        momentum_multiplier=1.0,  # Increased from 0.9
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.15,
+        phase_weight=0.18,  # Increased from 0.15
         max_lookback=150,
-        ema_length=24,  # Unchanged
-        atr_settings=(21, 12, 26, 9, 10),  # Unchanged
-        supertrend_multiplier=3.0,  # Good balance for hourly
-        base_multiplier=1.1,  # Slightly increased for better filtering
-        momentum_multiplier=1.0,
+        ema_length=21,  # Reduced from 24
+        atr_settings=(14, 9, 21, 7, 8),  # More responsive
+        supertrend_multiplier=2.8,  # More sensitive
+        base_multiplier=1.0,  # Reduced from 1.1
+        momentum_multiplier=1.1,  # Increased
         description="Hourly trend"
     ),
     Timeframe.HOURS_4: TimeframeSettings(
