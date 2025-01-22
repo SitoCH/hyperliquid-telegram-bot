@@ -30,7 +30,7 @@ async def execute_ta(update: Update, context: CallbackContext) -> int:
         return ConversationHandler.END
 
     if context.args and len(context.args) > 0:
-        coin = context.args[0].upper()
+        coin = context.args[0]
         await update.message.reply_text(text=f"Analyzing {coin}...")
         await analyze_candles_for_coin(context, coin, always_notify=True)
         return ConversationHandler.END
