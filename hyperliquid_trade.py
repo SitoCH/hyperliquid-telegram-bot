@@ -167,6 +167,7 @@ async def get_price_suggestions_text(context: Union[CallbackContext, ContextType
 
 
 async def send_stop_loss_suggestions(query: Any, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> None:
+    await query.edit_message_text(f"Loading price suggestions for {context.user_data['selected_coin']}...")
     await query.edit_message_text(await get_price_suggestions_text(context, True), parse_mode=ParseMode.HTML)
 
 
@@ -203,6 +204,7 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
         await update.message.reply_text("Invalid price. Please enter a number or 'cancel'.")
         return SELECTING_STOP_LOSS
 
+    await telegram_utils.reply(update, f"Loading price suggestions for {coin}...")
     await telegram_utils.reply(update, await get_price_suggestions_text(context, False), parse_mode=ParseMode.HTML)
 
 
