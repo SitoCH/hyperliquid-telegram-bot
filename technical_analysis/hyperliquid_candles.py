@@ -110,7 +110,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
             return
 
         candles_30m = get_candles_with_cache(coin, Timeframe.MINUTES_30, now, 110, hyperliquid_utils.info.candles_snapshot)
-        candles_1h = get_candles_with_cache(coin, Timeframe.HOUR_1, now, 250, hyperliquid_utils.info.candles_snapshot)
+        candles_1h = get_candles_with_cache(coin, Timeframe.HOUR_1, now, 350, hyperliquid_utils.info.candles_snapshot)
         candles_4h = get_candles_with_cache(coin, Timeframe.HOURS_4, now, 350, hyperliquid_utils.info.candles_snapshot)
         candles_8h = get_candles_with_cache(coin, Timeframe.HOURS_8, now, 450, hyperliquid_utils.info.candles_snapshot)
         candles_1d = get_candles_with_cache(coin, Timeframe.DAY_1, now, 750, hyperliquid_utils.info.candles_snapshot)
