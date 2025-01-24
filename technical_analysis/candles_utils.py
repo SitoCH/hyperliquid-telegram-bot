@@ -9,35 +9,14 @@ async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
     """Get the set of coins to analyze based on configuration."""
     coins_to_analyze: Set[str] = set()
     
+    # Get top N coins by open interest if configured
+    top_coins = os.environ.get("HTB_TOP_COINS_TO_ANALYZE")
+    if top_coins:
+        coins_to_analyze.update(hyperliquid_utils.get_coins_by_open_interest()[:int(top_coins)])
+
     # Add explicitly configured coins
     configured_coins = os.getenv("HTB_COINS_TO_ANALYZE", "").split(",")
     coins_to_analyze.update(coin for coin in configured_coins if coin and coin in all_mids)
-    
-    # Add coins from configured categories
-    if categories := os.getenv("HTB_CATEGORIES_TO_ANALYZE"):
-        for category in categories.split(","):
-            if not category.strip():
-                continue
-                
-            params = {
-                "vs_currency": "usd",
-                "order": "market_cap_desc",
-                "per_page": 30,
-                "sparkline": "false",
-                "category": category.strip(),
-                "price_change_percentage": "24h,30d,1y",
-            }
-            
-            try:
-                cryptos = hyperliquid_utils.fetch_cryptos(params)
-                coins_to_analyze.update(
-                    crypto["symbol"] for crypto in cryptos 
-                    if crypto["symbol"] in all_mids
-                )
-            except Exception as e:
-                logger.error(f"Error fetching cryptos for category {category}: {str(e)}", exc_info=True)
-            
-            time.sleep(5)
     
     # Add coins with open orders if configured
     if os.getenv('HTB_ANALYZE_COINS_WITH_OPEN_ORDERS', 'False') == 'True':
