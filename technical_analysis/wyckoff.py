@@ -12,16 +12,16 @@ from .wyckoff_description import generate_wyckoff_description
 from utils import log_execution_time
 
 # Constants for Wyckoff analysis
-VOLUME_THRESHOLD: Final[float] = 1.5  # Increased from 1.2 for crypto's higher volatility
-STRONG_DEV_THRESHOLD: Final[float] = 1.8  # Increased from 1.5 for wider price swings
-NEUTRAL_ZONE_THRESHOLD: Final[float] = 0.8  # Increased from 0.5 for crypto's wider ranging periods
-MOMENTUM_THRESHOLD: Final[float] = 0.5  # Decreased from 0.6 for faster momentum shifts
-EFFORT_THRESHOLD: Final[float] = 0.65  # Decreased from 0.7 for crypto's quick moves
-MIN_PERIODS: Final[int] = 30
-VOLUME_MA_THRESHOLD: Final[float] = 1.3  # Increased from 1.1
-VOLUME_SURGE_THRESHOLD: Final[float] = 2.0  # Increased from 1.5 for crypto's volume spikes
-VOLUME_TREND_SHORT: Final[int] = 5
-VOLUME_TREND_LONG: Final[int] = 10
+VOLUME_THRESHOLD: Final[float] = 1.7  # Increased from 1.5 for more significance with larger dataset
+STRONG_DEV_THRESHOLD: Final[float] = 2.0  # Increased from 1.8 for wider historical context
+NEUTRAL_ZONE_THRESHOLD: Final[float] = 1.0  # Increased from 0.8 for more stable neutral zone detection
+MOMENTUM_THRESHOLD: Final[float] = 0.6  # Increased from 0.5 for stronger momentum confirmation
+EFFORT_THRESHOLD: Final[float] = 0.7  # Increased from 0.65 for clearer effort vs result signals
+MIN_PERIODS: Final[int] = 40  # Increased from 30 to use more historical data
+VOLUME_MA_THRESHOLD: Final[float] = 1.5  # Increased from 1.3 for stronger volume signals
+VOLUME_SURGE_THRESHOLD: Final[float] = 2.2  # Increased from 2.0 for more significant volume events
+VOLUME_TREND_SHORT: Final[int] = 7  # Increased from 5 for smoother short-term trends
+VOLUME_TREND_LONG: Final[int] = 14  # Increased from 10 for longer-term trend context
 
 
 def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:

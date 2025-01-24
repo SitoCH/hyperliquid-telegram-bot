@@ -150,7 +150,6 @@ class WyckoffState:
 @dataclass
 class TimeframeSettings:
     phase_weight: float
-    max_lookback: int
     ema_length: int
     atr_settings: tuple[int, int, int, int, int]  # atr_length, macd_fast, macd_slow, macd_signal, st_length
     supertrend_multiplier: float
@@ -205,7 +204,6 @@ class Timeframe(Enum):
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
         phase_weight=0.07,  # Increased from 0.05 for better short-term influence
-        max_lookback=200,
         ema_length=8,  # Reduced from 13 for faster response
         atr_settings=(8, 5, 13, 3, 5),  # Faster settings
         supertrend_multiplier=2.2,  # More sensitive
@@ -215,7 +213,6 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
         phase_weight=0.12,  # Increased from 0.10
-        max_lookback=175,
         ema_length=13,  # Reduced from 21
         atr_settings=(10, 6, 18, 4, 6),  # Faster settings
         supertrend_multiplier=2.5,  # More sensitive
@@ -225,7 +222,6 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.HOUR_1: TimeframeSettings(
         phase_weight=0.18,  # Increased from 0.15
-        max_lookback=150,
         ema_length=21,  # Reduced from 24
         atr_settings=(14, 9, 21, 7, 8),  # More responsive
         supertrend_multiplier=2.8,  # More sensitive
@@ -235,7 +231,6 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.HOURS_4: TimeframeSettings(
         phase_weight=0.17,
-        max_lookback=100,
         ema_length=34,  # Increased for smoother trends
         atr_settings=(34, 12, 34, 9, 14),  # Longer ATR period
         supertrend_multiplier=3.3,  # More conservative
@@ -245,7 +240,6 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.HOURS_8: TimeframeSettings(
         phase_weight=0.16,
-        max_lookback=80,
         ema_length=41,  # Increased for better trend following
         atr_settings=(38, 12, 40, 9, 16),  # Longer periods for stability
         supertrend_multiplier=3.5,
@@ -255,7 +249,6 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.DAY_1: TimeframeSettings(
         phase_weight=0.15,
-        max_lookback=60,
         ema_length=55,  # Much longer for daily trend stability
         atr_settings=(41, 12, 48, 9, 21),  # Conservative settings
         supertrend_multiplier=3.8,  # More conservative for daily

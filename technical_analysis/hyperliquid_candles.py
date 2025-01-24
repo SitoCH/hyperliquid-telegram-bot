@@ -174,11 +174,10 @@ def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int,
     # Get base settings from timeframe
     settings = timeframe.settings
     atr_length, macd_fast, macd_slow, macd_signal, st_length = settings.atr_settings
-    max_length = min(data_length - 1, settings.max_lookback)
-
+    
     # Scale down if we don't have enough data
-    if max_length < atr_length * 2:
-        scale = max_length / (atr_length * 2)
+    if data_length < atr_length * 2:
+        scale = data_length / (atr_length * 2)
         atr_length = max(int(atr_length * scale), 5)
         macd_fast = max(int(macd_fast * scale), 5)
         macd_slow = max(int(macd_slow * scale), macd_fast + 4)
