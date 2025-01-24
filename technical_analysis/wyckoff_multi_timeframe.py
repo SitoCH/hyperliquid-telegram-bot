@@ -210,6 +210,7 @@ def _analyze_timeframe_group(
     bullish_signals = sum(1 for s in group.values() if (
         s.phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP] or 
         s.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.MARKING_UP] or
+        (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKDOWN) or  # Reversal from downtrend
         (s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH) or
         (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN)  # Potential short squeeze
     ))
@@ -217,15 +218,24 @@ def _analyze_timeframe_group(
     bearish_signals = sum(1 for s in group.values() if (
         s.phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] or 
         s.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.MARKING_DOWN] or
+        (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKUP) or  # Reversal from uptrend
         (s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH) or
         (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP)  # Potential long liquidation
     ))
 
-    momentum_bias = (
-        MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals else
-        MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals else
-        MultiTimeframeDirection.NEUTRAL
-    )
+    # Handle consolidation separately for more nuanced bias calculation
+    consolidation_count = sum(1 for s in group.values() if s.composite_action == CompositeAction.CONSOLIDATING)
+    total_signals = len(group)
+
+    # If more than 50% of signals show consolidation, bias towards neutral
+    if consolidation_count / total_signals > 0.5:
+        momentum_bias = MultiTimeframeDirection.NEUTRAL
+    else:
+        momentum_bias = (
+            MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals else
+            MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals else
+            MultiTimeframeDirection.NEUTRAL
+        )
 
     return TimeframeGroupAnalysis(
         dominant_phase=dominant_phase,
@@ -318,25 +328,46 @@ def _generate_dual_group_description(
 
     # Determine emoji based on market bias
     if higher.momentum_bias == lower.momentum_bias:
-        if higher.momentum_bias == MultiTimeframeDirection.BULLISH:
-            emoji = "📈"  # Chart increasing
-        elif higher.momentum_bias == MultiTimeframeDirection.BEARISH:
-            emoji = "📉"  # Chart decreasing
-        else:
-            emoji = "📊"  # Bar chart
+        emoji = {
+            MultiTimeframeDirection.BULLISH: "📈",
+            MultiTimeframeDirection.BEARISH: "📉",
+            MultiTimeframeDirection.NEUTRAL: "📊"
+        }[higher.momentum_bias]
     else:
-        emoji = "↔️"  # Left-right arrow for mixed signals
+        emoji = "↔️"
 
-    # Create narrative description with emoji
+    # Format higher timeframe description
+    higher_desc = f"{higher.dominant_phase.value} phase {_format_action_description(higher.dominant_action)}"
+    
+    # Format lower timeframe description
+    lower_desc = f"{lower.dominant_phase.value} phase {_format_action_description(lower.dominant_action)}"
+
+    # Create clearer narrative description
     description = (
-        f"{emoji} Market analysis shows a {trend_strength.lower()} {market_context.lower()} with {funding_state.value} funding.\n"
-        f"Higher timeframes indicate {higher.dominant_phase.value} phase with {higher.dominant_action.value}, "
-        f"while lower timeframes show {lower.dominant_phase.value} with {lower.dominant_action.value}.\n"
-        f"Overall alignment between timeframes is {alignment_pct} with {confidence_pct} confidence.\n"
+        f"{emoji} Market Structure Analysis:\n"
+        f"Trend: {trend_strength} {market_context}\n"
+        f"Funding Rate: {funding_state.value}\n"
+        f"Higher Timeframes: {higher_desc}\n"
+        f"Lower Timeframes: {lower_desc}\n"
+        f"Timeframe Alignment: {alignment_pct}\n"
+        f"Signal Confidence: {confidence_pct}\n"
         f"{actionable_insight}"
     )
 
     return description
+
+def _format_action_description(action: CompositeAction) -> str:
+    """Format composite action into a clearer description."""
+    action_descriptions = {
+        CompositeAction.MARKING_UP: "with bullish price action",
+        CompositeAction.MARKING_DOWN: "with bearish price action",
+        CompositeAction.ACCUMULATING: "showing accumulation signals",
+        CompositeAction.DISTRIBUTING: "showing distribution signals",
+        CompositeAction.CONSOLIDATING: "in consolidation",
+        CompositeAction.REVERSING: "with potential reversal signals",
+        CompositeAction.UNKNOWN: "with unclear direction"
+    }
+    return action_descriptions.get(action, str(action.value))
 
 def _generate_dual_actionable_insight(
     higher: TimeframeGroupAnalysis,
