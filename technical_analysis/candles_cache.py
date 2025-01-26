@@ -144,15 +144,18 @@ def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_d
         start_ts = _round_timestamp(end_ts - lookback_days * 86400000, timeframe)
         
         cached = get_cached_candles(coin, timeframe, start_ts, end_ts)
-        if cached and len(cached) > 0:
-            # If we have cached data, check if it's very recent (within 1 minute)
-            last_cached_ts = max(c['T'] for c in cached)
-            if last_cached_ts >= now - 60000:  # Within last minute
-                return cached
-                
-            # Only fetch missing candles, including incomplete ones
-            fetch_start = _round_timestamp(last_cached_ts + 1, timeframe)
+        if cached and len(cached) > 0:       
+            # Get the timestamp of the last complete candle
+            current_candle_start = _round_timestamp(now, timeframe)
+            last_complete_ts = current_candle_start - timeframe.minutes * 60 * 1000
+            
+            # Fetch the current (incomplete) candle and any missing candles
+            fetch_start = last_complete_ts
             new_candles = fetch_fn(coin, timeframe.name, fetch_start, end_ts)
+            
+            # Remove the last candle from cached data to avoid keeping partial data
+            cached = [c for c in cached if c['T'] < last_complete_ts]
+            
             merged = merge_candles(cached, new_candles, lookback_days)
             update_cache(coin, timeframe, merged, now)
             return merged

@@ -65,26 +65,33 @@ def test_get_candles_update_cache(mock_fetch):
     assert len(result) == 24
     assert result[-1]['T'] == new_end_ts - 3600000
 
-def test_get_candles_cache_hit(mock_fetch):
-    now = 1000000000000
-    first_result = get_candles_with_cache('BTC', Timeframe.HOUR_1, now, 1, mock_fetch)
+
+def test_partial_candle_updates(mock_fetch):
+    """Test that partial candles are properly updated when fetching multiple times"""
+    base_ts = 1000000000000
+    timeframe = Timeframe.HOUR_1
     
-    # Second call just 30 seconds later
-    slightly_later = now + 30000  # 30 seconds later
-    
-    # Mock get_cached_candles to return data with a very recent candle
-    def mock_get_cached_candles(*args):
-        candles = first_result.copy()
-        # Add a very recent candle
-        candles[-1] = {**candles[-1], 'T': slightly_later - 30000}  # Candle from 30s ago
+    # Create a mock fetch that returns different values for the current candle
+    def fetch_with_updates(coin: str, timeframe_str: str, start_ts: int, end_ts: int):
+        candles = mock_fetch(coin, timeframe_str, start_ts, end_ts)
+        if candles:
+            candles[-1].update({
+                'h': 999.99,  # Significantly different value to verify update
+                'c': 998.88
+            })
         return candles
     
-    import technical_analysis.candles_cache as cc
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(cc, 'get_cached_candles', mock_get_cached_candles)
+    # First fetch at exactly the start of a candle
+    now = _round_timestamp(base_ts, timeframe)
+    first_result = get_candles_with_cache('BTC', timeframe, now, 1, mock_fetch)
+    print(first_result)
     
-    mock_fetch_with_tracking = lambda *args: (mock_fetch(*args), pytest.fail("Should not be called"))[-1]
-    result = get_candles_with_cache('BTC', Timeframe.HOUR_1, slightly_later, 1, mock_fetch_with_tracking)
+    # Second fetch after the 60-second cache window
+    now += 65000  # 65 seconds later (just over the cache window)
+    second_result = get_candles_with_cache('BTC', timeframe, now, 1, fetch_with_updates)
+    print()
+    print(second_result)
     
-    assert len(result) == len(first_result)
-    assert result[-1]['T'] >= slightly_later - 60000  # Last candle should be within 1 minute
+    assert first_result[-1]['h'] != second_result[-1]['h'], "Last candle should be updated"
+    assert second_result[-1]['h'] == 999.99, "Last candle should have updated high value"
+    assert second_result[-1]['c'] == 998.88, "Last candle should have updated close value"
