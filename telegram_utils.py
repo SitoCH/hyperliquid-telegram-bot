@@ -2,6 +2,7 @@ import os
 import sys
 import datetime
 import logging
+import time
 from typing import Any, cast, Tuple, List, Sequence
 
 from telegram import (
@@ -147,6 +148,7 @@ class TelegramUtils:
 
     async def send_message_and_exit(self, context: ContextTypes.DEFAULT_TYPE):
         await self.send_message(context)
+        time.sleep(5)
         sys.exit()
 
 
