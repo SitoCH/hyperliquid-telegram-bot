@@ -190,12 +190,10 @@ def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_d
         
         cached = get_cached_candles(coin, timeframe, start_ts, end_ts)
         if cached and len(cached) > 0:
-            # Fetch just the current period to get the latest data
-            last_complete_ts = current_candle_start - timeframe.minutes * 60 * 1000
-            new_candles = fetch_fn(coin, timeframe.name, last_complete_ts, end_ts)
-            
-            # Remove the last candle from cache as it might be incomplete
-            cached = [c for c in cached if c['T'] < last_complete_ts]
+            # Find the timestamp of the last cached candle
+            last_cached_ts = max(c['T'] for c in cached)
+            # Fetch all candles since the last cached one
+            new_candles = fetch_fn(coin, timeframe.name, last_cached_ts, end_ts)
             
             # Merge all candles
             merged = merge_candles(cached, new_candles, lookback_days)
