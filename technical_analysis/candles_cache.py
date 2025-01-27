@@ -157,35 +157,49 @@ def _round_timestamp(ts: int, timeframe: Timeframe) -> int:
     return ts - (ts % ms_interval)
 
 def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_days: int, fetch_fn) -> List[Dict[str, Any]]:
-    """Get candles using cache with improved initial load handling"""
+    """
+    Get candles using cache, handling the incomplete current candle appropriately.
+    
+    Args:
+        coin: Trading pair symbol
+        timeframe: Timeframe enum value
+        now: Current timestamp in milliseconds
+        lookback_days: Number of days to look back
+        fetch_fn: Function to fetch candles from the exchange
+    """
     try:
         end_ts = now
         start_ts = _round_timestamp(end_ts - lookback_days * 86400000, timeframe)
+        current_candle_start = _round_timestamp(now, timeframe)
         
         cached = get_cached_candles(coin, timeframe, start_ts, end_ts)
-        if cached and len(cached) > 0:       
-            # Get the timestamp of the last complete candle
-            current_candle_start = _round_timestamp(now, timeframe)
+        if cached and len(cached) > 0:
+            # Fetch just the current period to get the latest data
             last_complete_ts = current_candle_start - timeframe.minutes * 60 * 1000
+            new_candles = fetch_fn(coin, timeframe.name, last_complete_ts, end_ts)
             
-            # Fetch the current (incomplete) candle and any missing candles
-            fetch_start = last_complete_ts
-            new_candles = fetch_fn(coin, timeframe.name, fetch_start, end_ts)
-            
-            # Remove the last candle from cached data to avoid keeping partial data
+            # Remove the last candle from cache as it might be incomplete
             cached = [c for c in cached if c['T'] < last_complete_ts]
             
+            # Merge all candles
             merged = merge_candles(cached, new_candles, lookback_days)
-            update_cache(coin, timeframe, merged, now)
+            
+            # Update cache but exclude the current incomplete candle
+            cache_update = [c for c in merged if c['T'] < current_candle_start]
+            if cache_update:
+                update_cache(coin, timeframe, cache_update, now)
+            
             return merged
 
-        # No cache or empty cache, fetch all candles (initial load)
+        # No cache or empty cache - fetch all data
         candles = fetch_fn(coin, timeframe.name, start_ts, end_ts)
-        if candles:  # Only update cache if we got data
-            update_cache(coin, timeframe, candles, now)
+        if candles:
+            # Cache everything except the current incomplete candle
+            cache_update = [c for c in candles if c['T'] < current_candle_start]
+            if cache_update:
+                update_cache(coin, timeframe, cache_update, now)
         return candles
         
     except Exception as e:
-        # Log error and return empty list
-        logger.error(f"Error fetching candles for {coin}: {str(e)}")
-        return []
+        logger.error(f"Error in get_candles_with_cache for {coin}: {str(e)}")
+        raise
