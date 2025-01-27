@@ -104,69 +104,88 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
 
         funding_rates = get_funding_with_cache(coin, now, 7)
 
-        candles_15m = get_candles_with_cache(coin, Timeframe.MINUTES_15, now, 75, hyperliquid_utils.info.candles_snapshot)
-        if len(candles_15m) == 0:
+        # Get candles for all timeframes
+        candles_data = {
+            Timeframe.MINUTES_15: get_candles_with_cache(coin, Timeframe.MINUTES_15, now, 75, hyperliquid_utils.info.candles_snapshot),
+            Timeframe.MINUTES_30: get_candles_with_cache(coin, Timeframe.MINUTES_30, now, 150, hyperliquid_utils.info.candles_snapshot),
+            Timeframe.HOUR_1: get_candles_with_cache(coin, Timeframe.HOUR_1, now, 300, hyperliquid_utils.info.candles_snapshot),
+            Timeframe.HOURS_4: get_candles_with_cache(coin, Timeframe.HOURS_4, now, 350, hyperliquid_utils.info.candles_snapshot),
+            Timeframe.HOURS_8: get_candles_with_cache(coin, Timeframe.HOURS_8, now, 450, hyperliquid_utils.info.candles_snapshot),
+            Timeframe.DAY_1: get_candles_with_cache(coin, Timeframe.DAY_1, now, 750, hyperliquid_utils.info.candles_snapshot)
+        }
+
+        # Check if we have enough data for basic analysis
+        if len(candles_data[Timeframe.MINUTES_15]) < 10:
             logger.warning(f"Insufficient candles for technical analysis on {coin}")
             return
 
-        candles_30m = get_candles_with_cache(coin, Timeframe.MINUTES_30, now, 150, hyperliquid_utils.info.candles_snapshot)
-        candles_1h = get_candles_with_cache(coin, Timeframe.HOUR_1, now, 300, hyperliquid_utils.info.candles_snapshot)
-        candles_4h = get_candles_with_cache(coin, Timeframe.HOURS_4, now, 350, hyperliquid_utils.info.candles_snapshot)
-        candles_8h = get_candles_with_cache(coin, Timeframe.HOURS_8, now, 450, hyperliquid_utils.info.candles_snapshot)
-        candles_1d = get_candles_with_cache(coin, Timeframe.DAY_1, now, 750, hyperliquid_utils.info.candles_snapshot)
-        
         local_tz = get_localzone()
-        df_15m = prepare_dataframe(candles_15m, local_tz)
-        df_30m = prepare_dataframe(candles_30m, local_tz)
-        df_1h = prepare_dataframe(candles_1h, local_tz)
-        df_4h = prepare_dataframe(candles_4h, local_tz)
-        df_8h = prepare_dataframe(candles_8h, local_tz)
-        df_1d = prepare_dataframe(candles_1d, local_tz)
+        dataframes = {
+            tf: prepare_dataframe(candles, local_tz) 
+            for tf, candles in candles_data.items()
+        }
 
-        # Apply indicators with Wyckoff analysis
+        # Apply indicators and get Wyckoff states
         states = {}
-        apply_indicators(df_15m, Timeframe.MINUTES_15, funding_rates)
-        states[Timeframe.MINUTES_15] = df_15m['wyckoff'].iloc[-1]
-
-        apply_indicators(df_30m, Timeframe.MINUTES_30, funding_rates)
-        states[Timeframe.MINUTES_30] = df_30m['wyckoff'].iloc[-1]
-        
-        apply_indicators(df_1h, Timeframe.HOUR_1, funding_rates)
-        states[Timeframe.HOUR_1] = df_1h['wyckoff'].iloc[-1]
-        
-        apply_indicators(df_4h, Timeframe.HOURS_4, funding_rates)
-        states[Timeframe.HOURS_4] = df_4h['wyckoff'].iloc[-1]
-
-        apply_indicators(df_8h, Timeframe.HOURS_8, funding_rates)
-        states[Timeframe.HOURS_8] = df_8h['wyckoff'].iloc[-1]
-        
-        apply_indicators(df_1d, Timeframe.DAY_1, funding_rates)
-        states[Timeframe.DAY_1] = df_1d['wyckoff'].iloc[-1]
+        for tf, df in dataframes.items():
+            if not df.empty:
+                apply_indicators(df, tf, funding_rates)
+                states[tf] = df['wyckoff'].iloc[-1]
+            else:
+                states[tf] = None
 
         # Add multi-timeframe analysis
         mtf_context = analyze_multi_timeframe(states)
 
         should_notify = (
-            always_notify or (mtf_context.confidence_level > 0.75 and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
+            always_notify or 
+            (mtf_context.confidence_level > 0.75 and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
         )
 
         if should_notify:
             mid = float(hyperliquid_utils.info.all_mids()[coin])
-            await send_trend_change_message(context, mid, df_15m, df_1h, df_4h, coin, always_notify, mtf_context)
+            await send_trend_change_message(
+                context, 
+                mid, 
+                dataframes[Timeframe.MINUTES_15],
+                dataframes[Timeframe.HOUR_1],
+                dataframes[Timeframe.HOURS_4],
+                coin, 
+                always_notify, 
+                mtf_context
+            )
 
     except Exception as e:
-        logger.error(e, exc_info=True)
-        await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
+        logger.error(f"Failed to analyze candles for {coin}: {str(e)}", exc_info=True)
+        if always_notify:
+            await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
+    
     logger.info(f"TA for {coin} done in {(time.time() - start_time):.2f} seconds")
 
 
 def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
-    df = pd.DataFrame(candles)
-    df["T"] = pd.to_datetime(df["T"], unit="ms", utc=True).dt.tz_convert(local_tz)
-    df["t"] = pd.to_datetime(df["t"], unit="ms", utc=True).dt.tz_convert(local_tz)
-    df[["c", "h", "l", "o", "v"]] = df[["c", "h", "l", "o", "v"]].astype(float)
-    df["n"] = df["n"].astype(int)
-    return df
+    """Prepare DataFrame from candles data with error handling"""
+    if not candles:
+        # Return empty DataFrame with expected columns
+        return pd.DataFrame(columns=["T", "t", "c", "h", "l", "o", "v", "n"])
+    
+    try:
+        df = pd.DataFrame(candles)
+        required_columns = {"T", "t", "c", "h", "l", "o", "v", "n"}
+        missing_columns = required_columns - set(df.columns)
+        
+        if missing_columns:
+            logger.warning(f"Missing columns in candles data: {missing_columns}")
+            return pd.DataFrame(columns=["T", "t", "c", "h", "l", "o", "v", "n"])
+        
+        df["T"] = pd.to_datetime(df["T"], unit="ms", utc=True).dt.tz_convert(local_tz)
+        df["t"] = pd.to_datetime(df["t"], unit="ms", utc=True).dt.tz_convert(local_tz)
+        df[["c", "h", "l", "o", "v"]] = df[["c", "h", "l", "o", "v"]].astype(float)
+        df["n"] = df["n"].astype(int)
+        return df
+    except Exception as e:
+        logger.warning(f"Error preparing DataFrame: {str(e)}")
+        return pd.DataFrame(columns=["T", "t", "c", "h", "l", "o", "v", "n"])
 
 
 def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int, int, int, int, int]:
