@@ -15,7 +15,13 @@ def fmt_price(price: float) -> str:
         return format(price, ',.0f')
     if price > 1:
         return format(price, ',.2f')
-    return format(price, ',.4f')
+    if price > 0.1:
+        return format(price, ',.4f')
+    if price > 0.01:
+        return format(price, ',.5f')
+    if price > 0.001:
+        return format(price, ',.6f')
+    return format(price, ',.7f')
 
 
 def fmt(value: float) -> str:
