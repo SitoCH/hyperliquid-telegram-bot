@@ -74,11 +74,22 @@ def merge_candles(old_candles: List[Dict[str, Any]], new_candles: List[Dict[str,
     
     return sorted_candles
 
-def verify_candles(candles: List[Dict[str, Any]], timeframe: Timeframe, is_initial_load: bool = False) -> Tuple[bool, str]:
+def verify_candles(coin: str, candles: List[Dict[str, Any]], timeframe: Timeframe, is_initial_load: bool = False) -> Tuple[bool, str]:
     """
     Verify the integrity of candles data.
     Returns (is_valid, error_message)
     """
+    def _clear_all_timeframe_caches(coin: str):
+        """Clear cache for all timeframes of a given coin"""
+        for tf in Timeframe:
+            cache_file = _get_cache_file_path(coin, tf)
+            if cache_file.exists():
+                try:
+                    cache_file.unlink()
+                    logger.warning(f"Cleared cache for {coin} {tf.name} due to data integrity issue")
+                except Exception as e:
+                    logger.error(f"Failed to clear cache for {coin} {tf.name}: {e}")
+
     if not candles:
         return True, ""
     
@@ -90,6 +101,7 @@ def verify_candles(candles: List[Dict[str, Any]], timeframe: Timeframe, is_initi
     for candle in sorted_candles:
         missing_fields = required_fields - set(candle.keys())
         if missing_fields:
+            _clear_all_timeframe_caches(coin)
             return False, f"Missing required fields: {missing_fields}"
     
     # Skip interval checks for initial data load
@@ -100,6 +112,7 @@ def verify_candles(candles: List[Dict[str, Any]], timeframe: Timeframe, is_initi
             time_diff = sorted_candles[i]['T'] - sorted_candles[i-1]['T']
             if time_diff != interval_ms:
                 time_diff_minutes = time_diff / (60 * 1000)
+                _clear_all_timeframe_caches(coin)
                 return False, f"Invalid interval at index {i}: expected {timeframe.minutes}min, got {time_diff_minutes}min"
     
     # Check for valid numerical values
@@ -107,12 +120,15 @@ def verify_candles(candles: List[Dict[str, Any]], timeframe: Timeframe, is_initi
         try:
             if not (float(candle['o']) and float(candle['h']) and 
                    float(candle['l']) and float(candle['c'])):
+                _clear_all_timeframe_caches(coin)
                 return False, "Invalid numerical values found"
             # Verify OHLC relationships
             if not (float(candle['l']) <= float(candle['o']) <= float(candle['h']) and
                    float(candle['l']) <= float(candle['c']) <= float(candle['h'])):
+                _clear_all_timeframe_caches(coin)
                 return False, f"Invalid OHLC relationships at timestamp {candle['T']}"
         except (ValueError, TypeError):
+            _clear_all_timeframe_caches(coin)
             return False, "Non-numeric values found in OHLCV data"
     
     return True, ""
@@ -135,7 +151,7 @@ def update_cache(coin: str, timeframe: Timeframe, candles: List[Dict[str, Any]],
             candles = merge_candles(existing_candles, candles, lookback_days)
     
     # Verify merged data
-    is_valid, error_msg = verify_candles(candles, timeframe, is_initial_load)
+    is_valid, error_msg = verify_candles(coin, candles, timeframe, is_initial_load)
     if not is_valid:
         # Remove corrupt cache before raising error
         cache_file = _get_cache_file_path(coin, timeframe)
