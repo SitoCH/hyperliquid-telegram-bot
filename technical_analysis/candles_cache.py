@@ -99,7 +99,8 @@ def verify_candles(candles: List[Dict[str, Any]], timeframe: Timeframe, is_initi
         for i in range(1, len(sorted_candles)):
             time_diff = sorted_candles[i]['T'] - sorted_candles[i-1]['T']
             if time_diff != interval_ms:
-                return False, f"Invalid interval at index {i}: expected {interval_ms}ms, got {time_diff}ms"
+                time_diff_minutes = time_diff / (60 * 1000)
+                return False, f"Invalid interval at index {i}: expected {timeframe.minutes}min, got {time_diff_minutes}min"
     
     # Check for valid numerical values
     for candle in sorted_candles:
