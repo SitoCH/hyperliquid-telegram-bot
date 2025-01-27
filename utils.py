@@ -12,16 +12,16 @@ OPERATION_CANCELLED = 'Operation cancelled'
 
 def fmt_price(price: float) -> str:
     if price > 1000:
-        return format(price, ',.0f')
+        return f"{price:,.0f}"
     if price > 1:
-        return format(price, ',.2f')
+        return f"{price:,.2f}"
     if price > 0.1:
-        return format(price, ',.4f')
+        return f"{price:,.4f}"
     if price > 0.01:
-        return format(price, ',.5f')
+        return f"{price:,.5f}"
     if price > 0.001:
-        return format(price, ',.6f')
-    return format(price, ',.7f')
+        return f"{price:,.6f}"
+    return f"{price:,.7f}"
 
 
 def fmt(value: float) -> str:
