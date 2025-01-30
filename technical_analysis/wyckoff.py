@@ -124,12 +124,15 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
     trend_strength = ((price_ma_short - price_ma_long) / price_ma_long).iloc[-1]
     price_strength = price_strength * 0.7 + trend_strength * 0.3
 
+    # Calculate recent price change before calling identify_wyckoff_phase
+    recent_change = df['c'].pct_change(3).iloc[-1]
+    
     # Phase identification for current period
     current_phase = identify_wyckoff_phase(
         is_spring, is_upthrust, curr_volume, volume_sma.iloc[-1],
         effort_vs_result.iloc[-1], volume_spread.iloc[-1], volume_spread_ma.iloc[-1],
         price_strength, momentum_strength, is_high_volume, volatility,
-        timeframe
+        timeframe, recent_change  # Add recent_change as parameter
     )
     
     effort_result = EffortResult.STRONG if abs(effort_vs_result.iloc[-1]) > effort_threshold else EffortResult.WEAK
@@ -168,12 +171,24 @@ def identify_wyckoff_phase(
     is_spring: bool, is_upthrust: bool, curr_volume: float, volume_sma: float,
     effort_vs_result: float, volume_spread: float, volume_spread_ma: float,
     price_strength: float, momentum_strength: float, is_high_volume: bool,
-    volatility: pd.Series, timeframe: Timeframe
+    volatility: pd.Series, timeframe: Timeframe, recent_change: float
 ) -> WyckoffPhase:
     """Enhanced Wyckoff phase identification with timeframe-specific adjustments."""
     # Get thresholds from timeframe settings
     volume_threshold, strong_dev_threshold, neutral_zone_threshold, \
     momentum_threshold, effort_threshold, _ = timeframe.settings.thresholds
+
+    # Use the passed recent_change instead of calculating it
+    is_strong_move = abs(recent_change) > 0.03  # 3% move in last 3 candles
+    is_very_strong_move = abs(recent_change) > 0.05  # 5% move in last 3 candles
+
+    # Adjust thresholds based on price movement
+    if is_very_strong_move:
+        momentum_threshold *= 0.6  # More sensitive to momentum
+        effort_threshold *= 0.7   # Lower effort requirement during strong moves
+    elif is_strong_move:
+        momentum_threshold *= 0.8
+        effort_threshold *= 0.85
 
     # Adaptive thresholds based on market volatility
     volatility_factor = min(2.0, 1.0 + volatility.iloc[-1] / volatility.mean())
@@ -217,6 +232,13 @@ def identify_wyckoff_phase(
             return WyckoffPhase.POSSIBLE_DISTRIBUTION
         return WyckoffPhase.POSSIBLE_ACCUMULATION
     
+    # Enhanced momentum analysis for strong moves
+    if is_very_strong_move:
+        if recent_change > 0:
+            return WyckoffPhase.MARKUP if momentum_strength > 0 else WyckoffPhase.POSSIBLE_DISTRIBUTION
+        else:
+            return WyckoffPhase.MARKDOWN if momentum_strength < 0 else WyckoffPhase.POSSIBLE_ACCUMULATION
+
     return determine_phase_by_price_strength(
         price_strength, momentum_strength, is_high_volume, volatility, timeframe
     )

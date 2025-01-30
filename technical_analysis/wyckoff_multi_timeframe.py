@@ -148,6 +148,10 @@ def _analyze_timeframe_group(
     distribution_signals = 0
     accumulation_signals = 0
 
+    # Track rapid movement signals
+    rapid_bullish_moves = 0
+    rapid_bearish_moves = 0
+    
     for tf, state in group.items():
         weight = get_phase_weight(tf)
         
@@ -185,6 +189,17 @@ def _analyze_timeframe_group(
                 upside_exhaustion += 1
             elif state.phase == WyckoffPhase.MARKDOWN:
                 downside_exhaustion += 1
+
+        # Detect rapid price movements
+        if state.phase == WyckoffPhase.MARKUP and state.volume == VolumeState.HIGH:
+            rapid_bullish_moves += 1
+        elif state.phase == WyckoffPhase.MARKDOWN and state.volume == VolumeState.HIGH:
+            rapid_bearish_moves += 1
+            
+        # Increase weight for strong directional moves
+        if state.pattern == MarketPattern.TRENDING:
+            if state.volume == VolumeState.HIGH:
+                weight *= 1.3  # 30% boost for high volume trends
         
         total_weight += weight
 
@@ -279,6 +294,12 @@ def _analyze_timeframe_group(
                 MultiTimeframeDirection.NEUTRAL
             )
 
+    # Modify momentum bias calculation
+    if rapid_bullish_moves >= len(group) // 2:
+        momentum_bias = MultiTimeframeDirection.BULLISH
+    elif rapid_bearish_moves >= len(group) // 2:
+        momentum_bias = MultiTimeframeDirection.BEARISH
+
     return TimeframeGroupAnalysis(
         dominant_phase=dominant_phase,
         dominant_action=dominant_action,
@@ -344,11 +365,20 @@ def _calculate_dual_confidence(
         0.3  # Minimal consistency during disagreement
     )
 
-    return (
+    # Add rapid movement bonus
+    rapid_movement_bonus = 0.0
+    if higher.momentum_bias == lower.momentum_bias:
+        if higher.volume_strength > 0.7 and lower.volume_strength > 0.7:
+            rapid_movement_bonus = 0.15  # 15% confidence boost for aligned strong moves
+
+    confidence = (
         groups_alignment * alignment_weight +
         volume_confirmation * volume_weight +
-        trend_consistency * consistency_weight
+        trend_consistency * consistency_weight +
+        rapid_movement_bonus
     )
+
+    return min(confidence, 1.0)  # Cap at 100%
 
 def _generate_dual_group_description(
     higher: TimeframeGroupAnalysis,
@@ -565,5 +595,10 @@ def _determine_direction(
     # Higher timeframe dominance with strong signals
     elif higher.internal_alignment > 0.7 and higher.volume_strength > 0.6:
         return higher.momentum_bias
+
+    # Lower threshold for strong volume conditions
+    if strong_volume and confidence_level > 0.55:  # Reduced from 0.65
+        if higher.momentum_bias == lower.momentum_bias:
+            return higher.momentum_bias
     
     return MultiTimeframeDirection.NEUTRAL

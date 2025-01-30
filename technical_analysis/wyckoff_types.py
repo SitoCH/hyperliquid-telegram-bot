@@ -205,7 +205,7 @@ class Timeframe(Enum):
 # Define settings after Timeframe class is fully defined
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.07,  # Increased from 0.05 for better short-term influence
+        phase_weight=0.15,  # Increased from 0.07 for faster signal detection
         ema_length=8,  # Reduced from 13 for faster response
         atr_settings=(8, 5, 13, 3, 5),  # Faster settings
         supertrend_multiplier=2.2,  # More sensitive
@@ -214,7 +214,7 @@ _TIMEFRAME_SETTINGS = {
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.12,  # Increased from 0.10
+        phase_weight=0.18,  # Increased from 0.12
         ema_length=13,  # Reduced from 21
         atr_settings=(10, 6, 18, 4, 6),  # Faster settings
         supertrend_multiplier=2.5,  # More sensitive
@@ -223,7 +223,7 @@ _TIMEFRAME_SETTINGS = {
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.18,  # Increased from 0.15
+        phase_weight=0.20,  # Increased from 0.18
         ema_length=21,  # Reduced from 24
         atr_settings=(14, 9, 21, 7, 8),  # More responsive
         supertrend_multiplier=2.8,  # More sensitive
@@ -250,7 +250,7 @@ _TIMEFRAME_SETTINGS = {
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.15,
+        phase_weight=0.14,  # Slightly decreased from 0.15
         ema_length=55,  # Much longer for daily trend stability
         atr_settings=(41, 12, 48, 9, 21),  # Conservative settings
         supertrend_multiplier=3.8,  # More conservative for daily
