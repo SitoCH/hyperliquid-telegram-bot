@@ -139,7 +139,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
 
         should_notify = (
             always_notify or 
-            (mtf_context.confidence_level > 0.75 and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
+            (mtf_context.confidence_level > 0.70 and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
         )
 
         if should_notify:
