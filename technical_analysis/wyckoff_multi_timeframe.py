@@ -5,7 +5,7 @@ import pandas as pd  # type: ignore[import]
 
 from .wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, 
-    CompositeAction, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
+    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
 )
 
 class MultiTimeframeDirection(Enum):
@@ -139,19 +139,53 @@ def _analyze_timeframe_group(
     phase_weights: Dict[WyckoffPhase, float] = {}
     action_weights: Dict[CompositeAction, float] = {}
     total_weight = 0.0
+    
+    # Track exhaustion signals
+    upside_exhaustion = 0
+    downside_exhaustion = 0
+    
+    # Track distribution/accumulation signals
+    distribution_signals = 0
+    accumulation_signals = 0
 
-    # Add volatility-based weight adjustment
     for tf, state in group.items():
         weight = get_phase_weight(tf)
         
-        # Increase weight for high volatility and volume conditions
-        if state.volatility == VolatilityState.HIGH and state.volume == VolumeState.HIGH:
-            weight *= 1.2  # 20% boost for high volatility + volume
-        
-        # Boost weight for spring/upthrust patterns
-        if state.is_spring or state.is_upthrust:
-            weight *= 1.15  # 15% boost for significant price action patterns
+        # Check for potential exhaustion signals
+        if state.phase == WyckoffPhase.DISTRIBUTION:
+            distribution_signals += 1
+        elif state.phase == WyckoffPhase.ACCUMULATION:
+            accumulation_signals += 1
             
+        # Detect potential exhaustion based on phase combinations
+        if (state.phase == WyckoffPhase.MARKUP and 
+            state.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.CONSOLIDATING]):
+            upside_exhaustion += 1
+            
+        if (state.phase == WyckoffPhase.MARKDOWN and 
+            state.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.CONSOLIDATING]):
+            downside_exhaustion += 1
+            
+        # Adjust weights based on exhaustion signals
+        if state.is_upthrust:
+            upside_exhaustion += 1
+            weight *= 1.2  # Increase weight for potential reversal signals
+        elif state.is_spring:
+            downside_exhaustion += 1
+            weight *= 1.2
+            
+        # Reduce weight if we see contrary volume signals
+        if (state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN] and 
+            state.volume == VolumeState.LOW):
+            weight *= 0.8
+            
+        # Factor in effort vs result analysis
+        if state.effort_vs_result == EffortResult.WEAK:
+            if state.phase == WyckoffPhase.MARKUP:
+                upside_exhaustion += 1
+            elif state.phase == WyckoffPhase.MARKDOWN:
+                downside_exhaustion += 1
+        
         total_weight += weight
 
         if not state.uncertain_phase:
@@ -167,8 +201,14 @@ def _analyze_timeframe_group(
     action_alignment = max(action_weights.values()) / total_weight if action_weights else 0
     internal_alignment = (phase_alignment + action_alignment) / 2
 
-    # Calculate volume strength
+    # Calculate volume strength with exhaustion consideration
     volume_strength = sum(1 for s in group.values() if s.volume == VolumeState.HIGH) / len(group)
+    
+    # Adjust volume strength based on exhaustion signals
+    if upside_exhaustion >= len(group) // 2:
+        volume_strength *= 0.7  # Reduce volume significance if exhaustion detected
+    elif downside_exhaustion >= len(group) // 2:
+        volume_strength *= 0.7
 
     # Calculate funding sentiment (-1 to 1)
     funding_signals = []
@@ -188,54 +228,56 @@ def _analyze_timeframe_group(
     
     funding_sentiment = sum(funding_signals) / len(funding_signals) if funding_signals else 0
 
-    # Analyze liquidity state
+    # Analyze market states
     liquidity_counts = {state.liquidity: 0 for state in group.values()}
+    risk_counts = {state.liquidation_risk: 0 for state in group.values()}
+    volatility_counts = {state.volatility: 0 for state in group.values()}
+    
     for state in group.values():
         liquidity_counts[state.liquidity] += 1
-    liquidity_state = max(liquidity_counts.items(), key=lambda x: x[1])[0]
-
-    # Analyze liquidation risk
-    risk_counts = {state.liquidation_risk: 0 for state in group.values()}
-    for state in group.values():
         risk_counts[state.liquidation_risk] += 1
-    liquidation_risk = max(risk_counts.items(), key=lambda x: x[1])[0]
-
-    # Analyze volatility state
-    volatility_counts = {state.volatility: 0 for state in group.values()}
-    for state in group.values():
         volatility_counts[state.volatility] += 1
+        
+    liquidity_state = max(liquidity_counts.items(), key=lambda x: x[1])[0]
+    liquidation_risk = max(risk_counts.items(), key=lambda x: x[1])[0]
     volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
 
-    # Enhance momentum bias calculation with funding and liquidation data
+    # Enhanced momentum bias calculation with exhaustion consideration
     bullish_signals = sum(1 for s in group.values() if (
-        s.phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP] or 
+        (s.phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP] and upside_exhaustion < len(group) // 2) or 
         s.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.MARKING_UP] or
-        (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKDOWN) or  # Reversal from downtrend
+        (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKDOWN) or
         (s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH) or
-        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN)  # Potential short squeeze
+        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN)
     ))
     
     bearish_signals = sum(1 for s in group.values() if (
-        s.phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] or 
+        (s.phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] and downside_exhaustion < len(group) // 2) or 
         s.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.MARKING_DOWN] or
-        (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKUP) or  # Reversal from uptrend
+        (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKUP) or
         (s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH) or
-        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP)  # Potential long liquidation
+        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP)
     ))
 
-    # Handle consolidation separately for more nuanced bias calculation
+    # Adjust momentum bias based on exhaustion signals
     consolidation_count = sum(1 for s in group.values() if s.composite_action == CompositeAction.CONSOLIDATING)
     total_signals = len(group)
 
-    # If more than 50% of signals show consolidation, bias towards neutral
+    # Modified momentum bias calculation
     if consolidation_count / total_signals > 0.5:
         momentum_bias = MultiTimeframeDirection.NEUTRAL
     else:
-        momentum_bias = (
-            MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals else
-            MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals else
-            MultiTimeframeDirection.NEUTRAL
-        )
+        # Factor in exhaustion signals
+        if upside_exhaustion >= len(group) // 2:
+            momentum_bias = MultiTimeframeDirection.NEUTRAL if bullish_signals > bearish_signals else MultiTimeframeDirection.BEARISH
+        elif downside_exhaustion >= len(group) // 2:
+            momentum_bias = MultiTimeframeDirection.NEUTRAL if bearish_signals > bullish_signals else MultiTimeframeDirection.BULLISH
+        else:
+            momentum_bias = (
+                MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals else
+                MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals else
+                MultiTimeframeDirection.NEUTRAL
+            )
 
     return TimeframeGroupAnalysis(
         dominant_phase=dominant_phase,
