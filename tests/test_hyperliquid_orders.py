@@ -65,7 +65,7 @@ async def test_get_open_orders_with_none_liquidation():
         mock_hl_utils.info.user_state.return_value = mock_user_state
         mock_hl_utils.address = "test_address"
         mock_tg_utils.reply = AsyncMock()
-        mock_tg_utils.get_link = MagicMock(side_effect=lambda context, link_text, link_action: link_text)
+        mock_tg_utils.get_link = MagicMock(side_effect=lambda link_text, link_action: link_text)
         
         # Execute the function
         await get_open_orders(update, context)
