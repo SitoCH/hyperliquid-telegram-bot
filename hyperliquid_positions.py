@@ -120,7 +120,7 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             for asset_position in sorted_positions:
                 coin = asset_position['position']['coin']
                 coin_message_lines = [
-                    f"<b>{telegram_utils.get_link(context, coin, f'TA_{coin}')}:</b>"
+                    f"<b>{telegram_utils.get_link(coin, f'TA_{coin}')}:</b>"
                 ]
                 table_data = []
                 table_data.append(

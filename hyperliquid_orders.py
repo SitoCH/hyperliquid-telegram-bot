@@ -87,7 +87,7 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         all_coins = set(list(grouped_data.keys()) + list(coins_with_positions.keys()))
 
         for coin in sorted(all_coins):
-            message_lines.append(f"<b>{telegram_utils.get_link(context, coin, f'TA_{coin}')}</b>")
+            message_lines.append(f"<b>{telegram_utils.get_link(coin, f'TA_{coin}')}</b>")
             mid = float(all_mids[coin])
             position = coins_with_positions.get(coin)
             

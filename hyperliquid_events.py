@@ -9,7 +9,7 @@ def get_fill_icon(closed_pnl: float) -> str:
 def get_fill_description(initial_message: str, coin: str, size: str, fee: float, fee_token: str, amount: float | None = None, closed_pnl: float | None = None) -> str:
     fill_description = [
         initial_message,
-        f"Coin: {coin}"
+        f"Coin: {telegram_utils.get_link(coin, f'TA_{coin}')}"
     ]
 
     if amount is not None:
