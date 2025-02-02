@@ -341,15 +341,15 @@ def _calculate_dual_confidence(
     lower: TimeframeGroupAnalysis,
     groups_alignment: float
 ) -> float:
-    """Calculate confidence level with enhanced lower timeframe reactivity."""
-    # Adjusted weight factors to be more reactive
-    alignment_weight = 0.35  # Reduced from 0.4
-    volume_weight = 0.35    # Increased from 0.3
-    consistency_weight = 0.3
+    """Calculate confidence level with enhanced intermediate timeframe focus."""
+    # Adjusted weight factors for more balanced analysis
+    alignment_weight = 0.40    # Increased from 0.35
+    volume_weight = 0.35       # Unchanged
+    consistency_weight = 0.25  # Reduced from 0.30
 
-    # Volume confirmation with dynamic weighting
-    # Increase lower timeframe influence when volume is significantly higher
-    lower_volume_factor = min(0.6, lower.volume_strength * 1.2)  # Can go up to 60% weight
+    # Volume confirmation with balanced weighting
+    # Give more weight to immediate timeframe volume signals
+    lower_volume_factor = min(0.55, lower.volume_strength * 1.1)  # Reduced max influence to 55%
     higher_volume_factor = 1.0 - lower_volume_factor
     
     volume_confirmation = (
@@ -357,19 +357,18 @@ def _calculate_dual_confidence(
         lower.volume_strength * lower_volume_factor
     )
 
-    # Enhanced trend consistency check
-    # Give more weight to lower timeframes during strong moves
+    # Enhanced trend consistency check with focus on intermediate timeframes
     trend_consistency = (
         1.0 if higher.momentum_bias == lower.momentum_bias else
-        0.7 if lower.volume_strength > 0.8 else  # Strong lower timeframe moves get 70% credit
-        0.3  # Minimal consistency during disagreement
+        0.8 if lower.volume_strength > 0.7 else  # Strong lower timeframe moves get 80% credit
+        0.4  # Increased base consistency during disagreement
     )
 
-    # Add rapid movement bonus
+    # Adjusted rapid movement bonus
     rapid_movement_bonus = 0.0
     if higher.momentum_bias == lower.momentum_bias:
-        if higher.volume_strength > 0.7 and lower.volume_strength > 0.7:
-            rapid_movement_bonus = 0.15  # 15% confidence boost for aligned strong moves
+        if higher.volume_strength > 0.65 and lower.volume_strength > 0.65:  # Reduced thresholds
+            rapid_movement_bonus = 0.12  # Reduced from 0.15
 
     confidence = (
         groups_alignment * alignment_weight +
@@ -378,7 +377,7 @@ def _calculate_dual_confidence(
         rapid_movement_bonus
     )
 
-    return min(confidence, 1.0)  # Cap at 100%
+    return min(confidence, 1.0)
 
 def _generate_dual_group_description(
     higher: TimeframeGroupAnalysis,
@@ -567,37 +566,31 @@ def _determine_direction(
     lower: TimeframeGroupAnalysis,
     confidence_level: float
 ) -> MultiTimeframeDirection:
-    """
-    Determine the trading direction with enhanced alignment to trend strength 
-    and market context analysis.
-    """
-    # Calculate composite strength similar to trend strength calculation
-    avg_alignment = (higher.internal_alignment * 0.6 + lower.internal_alignment * 0.4)
+    """Determine direction with emphasis on intermediate timeframes."""
+    avg_alignment = (higher.internal_alignment * 0.55 + lower.internal_alignment * 0.45)  # More balanced
     
-    # Use volume confirmation like market context
-    strong_volume = (higher.volume_strength > 0.7 and lower.volume_strength > 0.6)
-    moderate_volume = (higher.volume_strength > 0.5)
+    strong_volume = (higher.volume_strength > 0.65 and lower.volume_strength > 0.55)  # Reduced thresholds
+    moderate_volume = (higher.volume_strength > 0.45)  # Reduced threshold
     
-    # If confidence is too low, return neutral (increased threshold for better quality)
-    if confidence_level < 0.65:  # Slightly higher threshold
+    if confidence_level < 0.60:  # Reduced from 0.65
         return MultiTimeframeDirection.NEUTRAL
         
     # Strong conviction setup
-    if avg_alignment > 0.7 and strong_volume:  # Aligned with "Very Strong" trend
+    if avg_alignment > 0.65 and strong_volume:  # Reduced from 0.7
         if higher.momentum_bias == lower.momentum_bias:
             return higher.momentum_bias
     
     # Moderate conviction setup
-    elif avg_alignment > 0.5 and moderate_volume:  # Aligned with "Strong" trend
+    elif avg_alignment > 0.45 and moderate_volume:  # Reduced from 0.5
         if higher.momentum_bias == lower.momentum_bias:
             return higher.momentum_bias
     
     # Higher timeframe dominance with strong signals
-    elif higher.internal_alignment > 0.7 and higher.volume_strength > 0.6:
+    elif higher.internal_alignment > 0.65 and higher.volume_strength > 0.55:  # Reduced thresholds
         return higher.momentum_bias
 
     # Lower threshold for strong volume conditions
-    if strong_volume and confidence_level > 0.55:  # Reduced from 0.65
+    if strong_volume and confidence_level > 0.52:  # Reduced from 0.55
         if higher.momentum_bias == lower.momentum_bias:
             return higher.momentum_bias
     

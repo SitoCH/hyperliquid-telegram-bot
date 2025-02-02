@@ -205,57 +205,57 @@ class Timeframe(Enum):
 # Define settings after Timeframe class is fully defined
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.15,  # Increased from 0.07 for faster signal detection
-        ema_length=8,  # Reduced from 13 for faster response
-        atr_settings=(8, 5, 13, 3, 5),  # Faster settings
-        supertrend_multiplier=2.2,  # More sensitive
-        base_multiplier=0.85,  # Slightly reduced for faster signals
-        momentum_multiplier=0.9,  # Increased from 0.8
+        phase_weight=0.12,  # Increased from 0.07 for scalping signals
+        ema_length=8,      # Keep fast for quick signals
+        atr_settings=(8, 5, 13, 3, 5),  # Keep fast settings
+        supertrend_multiplier=2.0,  # More sensitive for quick moves
+        base_multiplier=0.85,
+        momentum_multiplier=0.9,
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.18,  # Increased from 0.12
-        ema_length=13,  # Reduced from 21
-        atr_settings=(10, 6, 18, 4, 6),  # Faster settings
-        supertrend_multiplier=2.5,  # More sensitive
-        base_multiplier=0.95,  # Slightly reduced
-        momentum_multiplier=1.0,  # Increased from 0.9
+        phase_weight=0.15,  # Increased from 0.12
+        ema_length=13,
+        atr_settings=(10, 6, 18, 4, 6),
+        supertrend_multiplier=2.3,  # More sensitive
+        base_multiplier=0.95,
+        momentum_multiplier=1.0,
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.20,  # Increased from 0.18
-        ema_length=21,  # Reduced from 24
-        atr_settings=(14, 9, 21, 7, 8),  # More responsive
-        supertrend_multiplier=2.8,  # More sensitive
-        base_multiplier=1.0,  # Reduced from 1.1
-        momentum_multiplier=1.1,  # Increased
+        phase_weight=0.25,  # Increased from 0.20 - now primary timeframe
+        ema_length=21,
+        atr_settings=(14, 9, 21, 7, 8),
+        supertrend_multiplier=2.6,  # More sensitive
+        base_multiplier=1.0,
+        momentum_multiplier=1.1,
         description="Hourly trend"
     ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.17,
-        ema_length=34,  # Increased for smoother trends
-        atr_settings=(34, 12, 34, 9, 14),  # Longer ATR period
-        supertrend_multiplier=3.3,  # More conservative
-        base_multiplier=1.3,
-        momentum_multiplier=1.5,  # Increased for stronger signals
+        phase_weight=0.22,  # Increased from 0.17
+        ema_length=34,
+        atr_settings=(34, 12, 34, 9, 14),
+        supertrend_multiplier=3.0,  # Reduced from 3.3
+        base_multiplier=1.2,  # Reduced from 1.3
+        momentum_multiplier=1.4,  # Reduced from 1.5
         description="4h trend"
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.16,
-        ema_length=41,  # Increased for better trend following
-        atr_settings=(38, 12, 40, 9, 16),  # Longer periods for stability
-        supertrend_multiplier=3.5,
-        base_multiplier=1.4,
-        momentum_multiplier=1.7,
+        phase_weight=0.16,  # Unchanged
+        ema_length=41,
+        atr_settings=(38, 12, 40, 9, 16),
+        supertrend_multiplier=3.2,  # Reduced from 3.5
+        base_multiplier=1.3,  # Reduced from 1.4
+        momentum_multiplier=1.6,  # Reduced from 1.7
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.14,  # Slightly decreased from 0.15
-        ema_length=55,  # Much longer for daily trend stability
-        atr_settings=(41, 12, 48, 9, 21),  # Conservative settings
-        supertrend_multiplier=3.8,  # More conservative for daily
-        base_multiplier=1.6,
-        momentum_multiplier=2.0,  # Strong momentum requirement
+        phase_weight=0.10,  # Significantly reduced from 0.14
+        ema_length=55,
+        atr_settings=(41, 12, 48, 9, 21),
+        supertrend_multiplier=3.5,  # Reduced from 3.8
+        base_multiplier=1.4,  # Reduced from 1.6
+        momentum_multiplier=1.8,  # Reduced from 2.0
         description="Daily trend"
     ),
 }
