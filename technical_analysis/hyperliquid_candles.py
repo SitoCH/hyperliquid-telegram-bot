@@ -72,13 +72,13 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     
     if not coins_to_analyze:
         return
-        
+
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
     loop = 0
     for coin in coins_to_analyze:
         context.application.job_queue.run_once( # type: ignore
             analyze_candles_for_coin_job,
-            when=loop * 8,
+            when=loop * 9,
             data={"coin": coin},
             job_kwargs={'misfire_grace_time': 180}
         )
