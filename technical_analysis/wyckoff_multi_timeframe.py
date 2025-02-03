@@ -403,9 +403,6 @@ def _generate_dual_group_description(
     alignment_pct = f"{groups_alignment * 100:.0f}%"
     confidence_pct = f"{confidence_level * 100:.0f}%"
 
-    # Get clear timeframe references
-    higher_timeframes = ", ".join([tf.name for tf in higher_tf.keys()])
-
     # Analyze timeframe-specific trends
     higher_trend = _get_timeframe_trend_description(higher)
     lower_trend = _get_timeframe_trend_description(lower)
@@ -428,7 +425,7 @@ def _generate_dual_group_description(
         f"{emoji} Market Structure Analysis:\n"
         f"Trend: {trend_strength} {market_context}\n"
         f"Market Structure: {structure}\n\n"
-        f"Higher Timeframes ({higher_timeframes}):\n{higher_trend}\n"
+        f"Higher Timeframes:\n{higher_trend}\n"
         f"Lower Timeframes:\n{lower_trend}\n\n"
         f"Funding Rate: {funding_state.value}\n"
         f"Timeframe Alignment: {alignment_pct}\n"
