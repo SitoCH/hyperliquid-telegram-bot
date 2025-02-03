@@ -25,7 +25,7 @@ VOLUME_TREND_LONG: Final[int] = 14  # Increased from 10 for longer-term trend co
 
 
 def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:
-    """Detect spring and upthrust patterns"""
+    """Enhanced spring/upthrust detection for crypto markets"""
     if idx < 4:
         return False, False
     
@@ -34,8 +34,30 @@ def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:
     high_point = window['h'].max()
     close = window['c'].iloc[-1]
     
-    is_spring = (window['l'].iloc[-1] < low_point) and (close > low_point) and (window['v'].iloc[-1] > window['v'].mean())
-    is_upthrust = (window['h'].iloc[-1] > high_point) and (close < high_point) and (window['v'].iloc[-1] > window['v'].mean())
+    # Calculate volatility context
+    atr = ta.atr(df['h'], df['l'], df['c'], length=14).iloc[-1]
+    price = df['c'].iloc[-1]
+    volatility_factor = atr / price  # Normalize ATR by price
+    
+    # Adaptive thresholds based on volatility
+    spring_threshold = 0.001 * (1 + volatility_factor * 10)
+    upthrust_threshold = 0.001 * (1 + volatility_factor * 10)
+    
+    # Enhanced spring detection
+    is_spring = (
+        window['l'].iloc[-1] < low_point and  # Makes new low
+        close > low_point and  # Closes above the low
+        window['v'].iloc[-1] > window['v'].mean() and  # Higher volume
+        abs(close - window['l'].iloc[-1]) > price * spring_threshold  # Significant bounce
+    )
+    
+    # Enhanced upthrust detection
+    is_upthrust = (
+        window['h'].iloc[-1] > high_point and  # Makes new high
+        close < high_point and  # Closes below the high
+        window['v'].iloc[-1] > window['v'].mean() and  # Higher volume
+        abs(window['h'].iloc[-1] - close) > price * upthrust_threshold  # Significant rejection
+    )
     
     return is_spring, is_upthrust
 
@@ -173,7 +195,7 @@ def identify_wyckoff_phase(
     price_strength: float, momentum_strength: float, is_high_volume: bool,
     volatility: pd.Series, timeframe: Timeframe, recent_change: float
 ) -> WyckoffPhase:
-    """Enhanced Wyckoff phase identification with timeframe-specific adjustments."""
+    """Enhanced Wyckoff phase identification for crypto markets."""
     # Get thresholds from timeframe settings
     volume_threshold, strong_dev_threshold, neutral_zone_threshold, \
     momentum_threshold, effort_threshold, _ = timeframe.settings.thresholds
@@ -239,6 +261,46 @@ def identify_wyckoff_phase(
         else:
             return WyckoffPhase.MARKDOWN if momentum_strength < 0 else WyckoffPhase.POSSIBLE_ACCUMULATION
 
+    # Add liquidation cascade detection
+    is_liquidation = (
+        abs(recent_change) > 0.1 and  # 10% move
+        curr_volume > volume_sma * 3 and  # Massive volume spike
+        abs(effort_vs_result) > 0.8  # Strong directional move
+    )
+    
+    if is_liquidation:
+        return (
+            WyckoffPhase.MARKUP if recent_change > 0 and momentum_strength > 50
+            else WyckoffPhase.MARKDOWN if recent_change < 0 and momentum_strength < -50
+            else WyckoffPhase.RANGING  # If momentum doesn't confirm the move
+        )
+    
+    # Add funding rate correlation checks
+    if 'funding_rate' in df.columns:
+        recent_funding = df['funding_rate'].iloc[-3:].mean()
+        funding_factor = abs(recent_funding) > 0.001  # 0.1% threshold
+        
+        if funding_factor:
+            # Adjust phase detection based on funding
+            if recent_funding > 0 and price_strength > strong_dev_threshold:
+                return WyckoffPhase.DISTRIBUTION  # High funding + high price = distribution
+            elif recent_funding < 0 and price_strength < -strong_dev_threshold:
+                return WyckoffPhase.ACCUMULATION  # Negative funding + low price = accumulation
+    
+    # Add volume profile analysis
+    volume_profile = df['v'].iloc[-24:].groupby(df['c'].iloc[-24:].round(2)).sum()
+    high_vol_price = volume_profile.idxmax()
+    current_price = df['c'].iloc[-1]
+    
+    # Check if price is moving away from high volume node
+    price_node_deviation = abs(current_price - high_vol_price) / high_vol_price
+    if price_node_deviation > 0.03:  # 3% threshold
+        if current_price > high_vol_price and momentum_strength > momentum_threshold:
+            return WyckoffPhase.MARKUP
+        elif current_price < high_vol_price and momentum_strength < -momentum_threshold:
+            return WyckoffPhase.MARKDOWN
+    
+    # Rest of the existing phase determination logic
     return determine_phase_by_price_strength(
         price_strength, momentum_strength, is_high_volume, volatility, timeframe
     )
