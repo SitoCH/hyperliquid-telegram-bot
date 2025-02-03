@@ -72,6 +72,10 @@ def analyze_multi_timeframe(
         higher_analysis = _analyze_timeframe_group(higher_tf)
         lower_analysis = _analyze_timeframe_group(lower_tf)
 
+        # Update group weights based on timeframe composition
+        higher_analysis.group_weight = _calculate_group_weight(higher_tf)
+        lower_analysis.group_weight = _calculate_group_weight(lower_tf)
+
         # Calculate alignment and confidence
         groups_alignment = _calculate_dual_groups_alignment(higher_analysis, lower_analysis)
         confidence_level = _calculate_dual_confidence(higher_analysis, lower_analysis, groups_alignment)
@@ -313,6 +317,10 @@ def _analyze_timeframe_group(
         volatility_state=volatility_state
     )
 
+def _calculate_group_weight(timeframes: Dict[Timeframe, WyckoffState]) -> float:
+    """Calculate total weight for a timeframe group based on phase weights."""
+    return sum(get_phase_weight(tf) for tf in timeframes.keys())
+
 def _calculate_dual_groups_alignment(
     higher: TimeframeGroupAnalysis,
     lower: TimeframeGroupAnalysis
@@ -324,14 +332,19 @@ def _calculate_dual_groups_alignment(
     # Calculate bias alignment
     bias_alignment = 1.0 if higher.momentum_bias == lower.momentum_bias else 0.0
 
+    # Calculate relative weights
+    total_weight = higher.group_weight + lower.group_weight
+    higher_weight = higher.group_weight / total_weight if total_weight > 0 else 0.5
+    lower_weight = lower.group_weight / total_weight if total_weight > 0 else 0.5
+
     # Calculate weighted alignment score
     alignment = (phase_alignment * 0.6) + (bias_alignment * 0.4)
 
-    # Apply internal alignment weights
+    # Apply internal alignment weights based on timeframe weights
     weighted_alignment = (
         alignment * 0.6 +
-        (higher.internal_alignment * 0.6 +
-         lower.internal_alignment * 0.4) * 0.4
+        (higher.internal_alignment * higher_weight +
+         lower.internal_alignment * lower_weight) * 0.4
     )
 
     return weighted_alignment
@@ -386,59 +399,86 @@ def _generate_dual_group_description(
     confidence_level: float,
     higher_tf: Dict[Timeframe, WyckoffState]
 ) -> str:
-    """Generate a narrative description for dual group analysis."""
+    """Generate a narrative description focused on timeframe relationships."""
     alignment_pct = f"{groups_alignment * 100:.0f}%"
     confidence_pct = f"{confidence_level * 100:.0f}%"
 
+    # Get clear timeframe references
+    higher_timeframes = ", ".join([tf.name for tf in higher_tf.keys()])
+
+    # Analyze timeframe-specific trends
+    higher_trend = _get_timeframe_trend_description(higher)
+    lower_trend = _get_timeframe_trend_description(lower)
+
+    # Determine market structure based on timeframe alignment
+    structure = _get_market_structure(higher, lower)
+
+    # Get dominant market conditions
     market_context = _determine_dual_market_context(higher, lower)
     trend_strength = _determine_dual_trend_strength(higher, lower)
     actionable_insight = _generate_dual_actionable_insight(higher, lower, confidence_level)
     
-    # Get funding state (same for all timeframes, so we can take from either group)
+    # Get funding state (same for all timeframes)
     funding_state = next(iter(higher_tf.values())).funding_state if higher_tf else FundingState.UNKNOWN
 
-    # Determine emoji based on market bias
-    if higher.momentum_bias == lower.momentum_bias:
-        emoji = {
-            MultiTimeframeDirection.BULLISH: "📈",
-            MultiTimeframeDirection.BEARISH: "📉",
-            MultiTimeframeDirection.NEUTRAL: "📊"
-        }[higher.momentum_bias]
-    else:
-        emoji = "↔️"
+    # Determine trend emoji based on timeframe alignment
+    emoji = _get_trend_emoji(higher, lower, confidence_level)
 
-    # Format higher timeframe description
-    higher_desc = f"{higher.dominant_phase.value} phase {_format_action_description(higher.dominant_action)}"
-    
-    # Format lower timeframe description
-    lower_desc = f"{lower.dominant_phase.value} phase {_format_action_description(lower.dominant_action)}"
-
-    # Create clearer narrative description
     description = (
         f"{emoji} Market Structure Analysis:\n"
         f"Trend: {trend_strength} {market_context}\n"
+        f"Market Structure: {structure}\n\n"
+        f"Higher Timeframes ({higher_timeframes}):\n{higher_trend}\n"
+        f"Lower Timeframes:\n{lower_trend}\n\n"
         f"Funding Rate: {funding_state.value}\n"
-        f"Higher Timeframes: {higher_desc}\n"
-        f"Lower Timeframes: {lower_desc}\n"
         f"Timeframe Alignment: {alignment_pct}\n"
-        f"Signal Confidence: {confidence_pct}\n"
+        f"Signal Confidence: {confidence_pct}\n\n"
         f"{actionable_insight}"
     )
 
     return description
 
-def _format_action_description(action: CompositeAction) -> str:
-    """Format composite action into a clearer description."""
-    action_descriptions = {
-        CompositeAction.MARKING_UP: "with bullish price action",
-        CompositeAction.MARKING_DOWN: "with bearish price action",
-        CompositeAction.ACCUMULATING: "showing accumulation signals",
-        CompositeAction.DISTRIBUTING: "showing distribution signals",
-        CompositeAction.CONSOLIDATING: "in consolidation",
-        CompositeAction.REVERSING: "with potential reversal signals",
-        CompositeAction.UNKNOWN: "with unclear direction"
-    }
-    return action_descriptions.get(action, str(action.value))
+def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
+    """Generate detailed trend description for a timeframe group."""
+    phase_desc = f"{analysis.dominant_phase.value}"
+    action_desc = analysis.dominant_action.value
+    
+    volume_desc = (
+        "strong volume" if analysis.volume_strength > 0.7 else
+        "moderate volume" if analysis.volume_strength > 0.4 else
+        "light volume"
+    )
+    
+    return f"• {phase_desc} phase {action_desc} with {volume_desc}"
+
+def _get_market_structure(higher: TimeframeGroupAnalysis, lower: TimeframeGroupAnalysis) -> str:
+    """Determine overall market structure based on timeframe relationships."""
+    if higher.dominant_phase == lower.dominant_phase:
+        return f"Aligned {higher.dominant_phase.value} structure across timeframes"
+        
+    if higher.momentum_bias == lower.momentum_bias:
+        return f"Mixed structure with aligned {higher.momentum_bias.value} momentum"
+        
+    higher_state = "bullish" if higher.momentum_bias == MultiTimeframeDirection.BULLISH else "bearish"
+    lower_state = "bullish" if lower.momentum_bias == MultiTimeframeDirection.BULLISH else "bearish"
+    return f"Transitional structure ({higher_state} → {lower_state})"
+
+def _get_trend_emoji(
+    higher: TimeframeGroupAnalysis,
+    lower: TimeframeGroupAnalysis,
+    confidence_level: float
+) -> str:
+    """Get appropriate trend emoji based on timeframe analysis."""
+    if confidence_level < 0.5:
+        return "📊"
+        
+    if higher.momentum_bias == lower.momentum_bias:
+        if higher.momentum_bias == MultiTimeframeDirection.BULLISH:
+            return "📈" if confidence_level > 0.7 else "↗️"
+        if higher.momentum_bias == MultiTimeframeDirection.BEARISH:
+            return "📉" if confidence_level > 0.7 else "↘️"
+    
+    return "↔️"
 
 def _generate_dual_actionable_insight(
     higher: TimeframeGroupAnalysis,
@@ -566,32 +606,59 @@ def _determine_direction(
     lower: TimeframeGroupAnalysis,
     confidence_level: float
 ) -> MultiTimeframeDirection:
-    """Determine direction with emphasis on intermediate timeframes."""
-    avg_alignment = (higher.internal_alignment * 0.55 + lower.internal_alignment * 0.45)  # More balanced
-    
-    strong_volume = (higher.volume_strength > 0.65 and lower.volume_strength > 0.55)  # Reduced thresholds
-    moderate_volume = (higher.volume_strength > 0.45)  # Reduced threshold
-    
-    if confidence_level < 0.60:  # Reduced from 0.65
+    """
+    Determine market direction with enhanced timeframe analysis.
+    Emphasizes alignment between timeframes and validates with volume.
+    """
+    # Immediate return on very low confidence
+    if confidence_level < 0.45:
         return MultiTimeframeDirection.NEUTRAL
-        
-    # Strong conviction setup
-    if avg_alignment > 0.65 and strong_volume:  # Reduced from 0.7
-        if higher.momentum_bias == lower.momentum_bias:
+
+    # Calculate relative weights from group weights
+    total_weight = higher.group_weight + lower.group_weight
+    higher_weight = higher.group_weight / total_weight if total_weight > 0 else 0.5
+    lower_weight = lower.group_weight / total_weight if total_weight > 0 else 0.5
+    
+    weighted_alignment = (
+        higher.internal_alignment * higher_weight +
+        lower.internal_alignment * lower_weight
+    )
+
+    # Volume confirmation thresholds
+    strong_higher_volume = higher.volume_strength > 0.65
+    strong_lower_volume = lower.volume_strength > 0.55
+    
+    # Perfect alignment scenario
+    if higher.momentum_bias == lower.momentum_bias:
+        # Strong conviction setup with weighted alignment
+        if weighted_alignment > 0.65 and strong_higher_volume and strong_lower_volume:
+            return higher.momentum_bias
+            
+        # Moderate conviction setup
+        if weighted_alignment > 0.55 and (strong_higher_volume or strong_lower_volume):
+            return higher.momentum_bias
+            
+        # Developing trend setup
+        if weighted_alignment > 0.45 and confidence_level > 0.60:
             return higher.momentum_bias
     
-    # Moderate conviction setup
-    elif avg_alignment > 0.45 and moderate_volume:  # Reduced from 0.5
-        if higher.momentum_bias == lower.momentum_bias:
+    # Higher timeframe dominance - weighted by timeframe importance
+    if higher.internal_alignment > 0.70 and strong_higher_volume:
+        if confidence_level > 0.65 and higher_weight > lower_weight:
             return higher.momentum_bias
     
-    # Higher timeframe dominance with strong signals
-    elif higher.internal_alignment > 0.65 and higher.volume_strength > 0.55:  # Reduced thresholds
+    # Lower timeframe momentum shift - requires stronger confirmation when weight is lower
+    if lower.internal_alignment > 0.75 and strong_lower_volume:
+        required_confidence = 0.70 + (higher_weight - lower_weight) * 0.2  # Increase required confidence if higher weight is much larger
+        if confidence_level > required_confidence and lower.momentum_bias != higher.momentum_bias:
+            # Potential reversal signal
+            return lower.momentum_bias
+    
+    # Transitional market
+    if weighted_alignment > 0.50 and confidence_level > 0.60:
+        # Favor higher timeframe unless lower shows very strong signals
+        if strong_lower_volume and lower.internal_alignment > 0.80 and lower_weight > 0.35:
+            return lower.momentum_bias
         return higher.momentum_bias
 
-    # Lower threshold for strong volume conditions
-    if strong_volume and confidence_level > 0.52:  # Reduced from 0.55
-        if higher.momentum_bias == lower.momentum_bias:
-            return higher.momentum_bias
-    
     return MultiTimeframeDirection.NEUTRAL
