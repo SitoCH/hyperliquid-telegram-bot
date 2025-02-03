@@ -153,6 +153,10 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
     # Calculate recent price change before calling identify_wyckoff_phase
     recent_change = df['c'].pct_change(3).iloc[-1]
     
+    # Calculate volume profile data before calling identify_wyckoff_phase
+    volume_profile = df['v'].iloc[-24:].groupby(df['c'].iloc[-24:].round(2)).sum()
+    high_vol_price = float(volume_profile.idxmax())
+    current_price = df['c'].iloc[-1]
     
     funding_state = analyze_funding_rates(funding_rates or [])
 
@@ -161,7 +165,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         is_spring, is_upthrust, curr_volume, volume_sma.iloc[-1],
         effort_vs_result.iloc[-1], volume_spread.iloc[-1], volume_spread_ma.iloc[-1],
         price_strength, momentum_strength, is_high_volume, volatility,
-        timeframe, recent_change, funding_state
+        timeframe, recent_change, high_vol_price, current_price
     )
     
     effort_result = EffortResult.STRONG if abs(effort_vs_result.iloc[-1]) > effort_threshold else EffortResult.WEAK
@@ -199,7 +203,7 @@ def identify_wyckoff_phase(
     effort_vs_result: float, volume_spread: float, volume_spread_ma: float,
     price_strength: float, momentum_strength: float, is_high_volume: bool,
     volatility: pd.Series, timeframe: Timeframe, recent_change: float,
-    funding_state: FundingState
+    high_vol_price: float, current_price: float
 ) -> WyckoffPhase:
     """Enhanced Wyckoff phase identification for crypto markets."""
     # Get thresholds from timeframe settings
@@ -281,24 +285,6 @@ def identify_wyckoff_phase(
             else WyckoffPhase.RANGING  # If momentum doesn't confirm the move
         )
     
-    # Use funding state directly from the parameter
-    if funding_state not in [FundingState.NEUTRAL, FundingState.UNKNOWN]:
-        # Use mean of recent funding rates
-        recent_funding = mean([rate.funding_rate for rate in funding_rates[-3:]]) if funding_rates else 0
-        funding_factor = abs(recent_funding) > 0.001  # 0.1% threshold
-        
-        if funding_factor:
-            # Adjust phase detection based on funding
-            if funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and price_strength > strong_dev_threshold:
-                return WyckoffPhase.DISTRIBUTION
-            elif funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and price_strength < -strong_dev_threshold:
-                return WyckoffPhase.ACCUMULATION
-    
-    # Add volume profile analysis
-    volume_profile = df['v'].iloc[-24:].groupby(df['c'].iloc[-24:].round(2)).sum()
-    high_vol_price = volume_profile.idxmax()
-    current_price = df['c'].iloc[-1]
-    
     # Check if price is moving away from high volume node
     price_node_deviation = abs(current_price - high_vol_price) / high_vol_price
     if price_node_deviation > 0.03:  # 3% threshold
@@ -306,7 +292,7 @@ def identify_wyckoff_phase(
             return WyckoffPhase.MARKUP
         elif current_price < high_vol_price and momentum_strength < -momentum_threshold:
             return WyckoffPhase.MARKDOWN
-    
+
     # Immediately classify extremely high volume_spread as RANGING
     if volume_spread > volume_spread_ma * 5.0:
         return WyckoffPhase.RANGING
