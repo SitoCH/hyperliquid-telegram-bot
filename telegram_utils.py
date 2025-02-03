@@ -144,6 +144,7 @@ class TelegramUtils:
                 chat_id=chat_id,
                 text=message,
                 reply_markup=self.reply_markup,
+                parse_mode=ParseMode.HTML
             )
 
     async def send_message_and_exit(self, context: ContextTypes.DEFAULT_TYPE):
