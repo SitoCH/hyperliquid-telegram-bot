@@ -43,6 +43,10 @@ def detect_spring_upthrust(df: pd.DataFrame, idx: int) -> tuple[bool, bool]:
     spring_threshold = 0.001 * (1 + volatility_factor * 10)
     upthrust_threshold = 0.001 * (1 + volatility_factor * 10)
     
+    # Check for extremely large candle wicks to avoid false signals
+    if (window['h'].max() - window['l'].min()) > df['c'].iloc[-1] * 0.2:
+        return False, False
+    
     # Enhanced spring detection
     is_spring = (
         window['l'].iloc[-1] < low_point and  # Makes new low
@@ -149,12 +153,15 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
     # Calculate recent price change before calling identify_wyckoff_phase
     recent_change = df['c'].pct_change(3).iloc[-1]
     
+    
+    funding_state = analyze_funding_rates(funding_rates or [])
+
     # Phase identification for current period
     current_phase = identify_wyckoff_phase(
         is_spring, is_upthrust, curr_volume, volume_sma.iloc[-1],
         effort_vs_result.iloc[-1], volume_spread.iloc[-1], volume_spread_ma.iloc[-1],
         price_strength, momentum_strength, is_high_volume, volatility,
-        timeframe, recent_change  # Add recent_change as parameter
+        timeframe, recent_change, funding_state
     )
     
     effort_result = EffortResult.STRONG if abs(effort_vs_result.iloc[-1]) > effort_threshold else EffortResult.WEAK
@@ -162,9 +169,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
     # Detect composite action and Wyckoff signs
     composite_action = detect_composite_action(df, price_strength, volume_trend_value, effort_vs_result.iloc[-1])
     wyckoff_sign = detect_wyckoff_signs(df, price_strength, volume_trend_value, is_spring, is_upthrust)
-    
-    funding_state = analyze_funding_rates(funding_rates or [])
-    
+        
     # Create WyckoffState instance
     wyckoff_state = WyckoffState(
         phase=current_phase,
@@ -193,7 +198,8 @@ def identify_wyckoff_phase(
     is_spring: bool, is_upthrust: bool, curr_volume: float, volume_sma: float,
     effort_vs_result: float, volume_spread: float, volume_spread_ma: float,
     price_strength: float, momentum_strength: float, is_high_volume: bool,
-    volatility: pd.Series, timeframe: Timeframe, recent_change: float
+    volatility: pd.Series, timeframe: Timeframe, recent_change: float,
+    funding_state: FundingState
 ) -> WyckoffPhase:
     """Enhanced Wyckoff phase identification for crypto markets."""
     # Get thresholds from timeframe settings
@@ -275,17 +281,18 @@ def identify_wyckoff_phase(
             else WyckoffPhase.RANGING  # If momentum doesn't confirm the move
         )
     
-    # Add funding rate correlation checks
-    if 'funding_rate' in df.columns:
-        recent_funding = df['funding_rate'].iloc[-3:].mean()
+    # Use funding state directly from the parameter
+    if funding_state not in [FundingState.NEUTRAL, FundingState.UNKNOWN]:
+        # Use mean of recent funding rates
+        recent_funding = mean([rate.funding_rate for rate in funding_rates[-3:]]) if funding_rates else 0
         funding_factor = abs(recent_funding) > 0.001  # 0.1% threshold
         
         if funding_factor:
             # Adjust phase detection based on funding
-            if recent_funding > 0 and price_strength > strong_dev_threshold:
-                return WyckoffPhase.DISTRIBUTION  # High funding + high price = distribution
-            elif recent_funding < 0 and price_strength < -strong_dev_threshold:
-                return WyckoffPhase.ACCUMULATION  # Negative funding + low price = accumulation
+            if funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and price_strength > strong_dev_threshold:
+                return WyckoffPhase.DISTRIBUTION
+            elif funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and price_strength < -strong_dev_threshold:
+                return WyckoffPhase.ACCUMULATION
     
     # Add volume profile analysis
     volume_profile = df['v'].iloc[-24:].groupby(df['c'].iloc[-24:].round(2)).sum()
@@ -299,6 +306,10 @@ def identify_wyckoff_phase(
             return WyckoffPhase.MARKUP
         elif current_price < high_vol_price and momentum_strength < -momentum_threshold:
             return WyckoffPhase.MARKDOWN
+    
+    # Immediately classify extremely high volume_spread as RANGING
+    if volume_spread > volume_spread_ma * 5.0:
+        return WyckoffPhase.RANGING
     
     # Rest of the existing phase determination logic
     return determine_phase_by_price_strength(
