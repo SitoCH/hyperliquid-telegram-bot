@@ -499,30 +499,39 @@ def _generate_dual_actionable_insight(
     higher_intensity = get_trend_intensity(higher.momentum_bias, higher.volume_strength)
     lower_intensity = get_trend_intensity(lower.momentum_bias, lower.volume_strength)
 
-    # Get base market condition with more nuanced descriptions
+    # Get base market condition with aligned terminology
     if higher.momentum_bias == lower.momentum_bias:
         if higher.momentum_bias == MultiTimeframeDirection.BULLISH:
-            base_signal = f"Market showing {higher_intensity} buying pressure with {lower_intensity} momentum on lower timeframes."
+            base_signal = (
+                f"Higher timeframes {higher.dominant_action.value} with {higher_intensity} strength, "
+                f"lower timeframes confirming with {lower_intensity} momentum."
+            )
             action_plan = (
                 "Longs: Maintain positions, add during dips to major support levels.\n"
                 "Shorts: Exercise caution, limit to quick reversals at key resistance."
             )
         elif higher.momentum_bias == MultiTimeframeDirection.BEARISH:
-            base_signal = f"Market exhibiting {higher_intensity} selling pressure with {lower_intensity} downside momentum."
+            base_signal = (
+                f"Higher timeframes {higher.dominant_action.value} with {higher_intensity} pressure, "
+                f"lower timeframes showing {lower_intensity} continuation."
+            )
             action_plan = (
                 "Shorts: Maintain positions, add during relief rallies to resistance.\n"
                 "Longs: Limited to quick scalps at major support levels."
             )
         else:
-            base_signal = f"Market in equilibrium with {lower_intensity} two-sided action."
+            base_signal = (
+                f"Market in equilibrium phase, higher timeframes {higher.dominant_action.value}, "
+                f"lower timeframes showing {lower_intensity} two-sided action."
+            )
             action_plan = (
                 "Both Directions: Focus on range extremes.\n"
                 "Monitor for range expansion and breakout opportunities."
             )
     else:
         base_signal = (
-            f"Potential trend shift: {higher_intensity} {higher.momentum_bias.value} on higher timeframes "
-            f"versus {lower_intensity} {lower.momentum_bias.value} on lower timeframes."
+            f"Timeframe divergence: higher timeframes {higher.dominant_action.value} ({higher_intensity}), "
+            f"while lower timeframes {lower.dominant_action.value} ({lower_intensity})."
         )
         if lower.momentum_bias == MultiTimeframeDirection.BULLISH:
             action_plan = (
@@ -535,25 +544,22 @@ def _generate_dual_actionable_insight(
                 "Longs: Consider profit taking, avoid adding to positions."
             )
 
-    # Add crypto-specific warnings and opportunities
+    # Add risk warnings and opportunities
     risk_warnings = []
     opportunities = []
 
-    # Liquidation cascade risks
     if higher.liquidation_risk == LiquidationRisk.HIGH:
         if higher.momentum_bias == MultiTimeframeDirection.BULLISH:
             risk_warnings.append("High risk of short liquidations, potential for violent upside moves")
         else:
             risk_warnings.append("High risk of long liquidations, protect positions with strict stops")
 
-    # Funding rate opportunities
     if abs(higher.funding_sentiment) > 0.7:
         if higher.funding_sentiment > 0:
             opportunities.append("High positive funding offers counter-trend short opportunities")
         else:
             opportunities.append("High negative funding offers counter-trend long opportunities")
 
-    # Liquidity-based insights
     if higher.liquidity_state == MarketLiquidity.LOW:
         risk_warnings.append("Low liquidity environment, expect higher slippage and volatile moves")
         if higher.volatility_state == VolatilityState.HIGH:
