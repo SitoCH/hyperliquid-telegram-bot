@@ -206,7 +206,7 @@ class Timeframe(Enum):
 # Rebalanced weights for intraday focus
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_5: TimeframeSettings(
-        phase_weight=0.15,  # High weight for quick signals
+        phase_weight=0.08,  # Reduced from 0.15 - less emphasis on very short term
         ema_length=5,      
         atr_settings=(5, 3, 8, 2, 3),  # Fast settings for quick moves
         supertrend_multiplier=1.8,  # More sensitive
@@ -215,7 +215,7 @@ _TIMEFRAME_SETTINGS = {
         description="5 min trend"
     ),
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.18,  # Increased from 0.12
+        phase_weight=0.12,  # Reduced from 0.18 - slightly less weight
         ema_length=8,      # Keep fast for quick signals
         atr_settings=(8, 5, 13, 3, 5),  # Keep fast settings
         supertrend_multiplier=2.0,  # More sensitive for quick moves
@@ -251,7 +251,7 @@ _TIMEFRAME_SETTINGS = {
         description="4h trend"
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.06,  # Reduced from 0.16
+        phase_weight=0.12,  # Increased from 0.06 - more emphasis on longer trends
         ema_length=41,
         atr_settings=(38, 12, 40, 9, 16),
         supertrend_multiplier=3.2,  # Reduced from 3.5
@@ -260,7 +260,7 @@ _TIMEFRAME_SETTINGS = {
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.04,  # Reduced from 0.10
+        phase_weight=0.08,  # Increased from 0.04 - doubled for better trend context
         ema_length=55,
         atr_settings=(41, 12, 48, 9, 21),
         supertrend_multiplier=3.5,  # Reduced from 3.8

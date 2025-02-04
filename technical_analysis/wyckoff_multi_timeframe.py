@@ -334,29 +334,39 @@ def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> floa
     return sum(weighted_alignments) / len(weighted_alignments) if weighted_alignments else 0.0
 
 def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
-    """Calculate overall confidence across all timeframe groups."""
+    """Calculate overall confidence across all timeframe groups with improved weighting."""
     total_weight = sum(analysis.group_weight for analysis in analyses)
     if total_weight == 0:
         return 0.0
 
-    # Weight factors
-    alignment_weight = 0.4
-    volume_weight = 0.35
-    consistency_weight = 0.25
+    # Updated weight factors with more emphasis on alignment and volume
+    alignment_weight = 0.45    # Increased from 0.40 - more importance to alignment
+    volume_weight = 0.35       # Unchanged
+    consistency_weight = 0.20  # Reduced from 0.25 - less weight on pure consistency
 
-    # Calculate weighted volume confirmation
+    # Enhanced volume confirmation with timeframe importance
     volume_confirmation = sum(
         analysis.volume_strength * (analysis.group_weight / total_weight)
         for analysis in analyses
     )
 
-    # Calculate trend consistency
-    consistent_direction = all(
-        analysis.momentum_bias == analyses[0].momentum_bias
-        for analysis in analyses
-    )
+    # Improved trend consistency check
+    bias_counts = {}
+    weighted_biases = {}
+    for analysis in analyses:
+        bias = analysis.momentum_bias
+        bias_counts[bias] = bias_counts.get(bias, 0) + 1
+        weighted_biases[bias] = weighted_biases.get(bias, 0) + analysis.group_weight
     
-    trend_consistency = 1.0 if consistent_direction else 0.4
+    # Calculate trend consistency score
+    max_bias_count = max(bias_counts.values()) if bias_counts else 0
+    max_weighted_bias = max(weighted_biases.values()) if weighted_biases else 0
+    
+    # Combine count-based and weight-based consistency
+    trend_consistency = (
+        (max_bias_count / len(analyses)) * 0.4 +  # How many timeframes agree
+        (max_weighted_bias / total_weight) * 0.6   # How important are the agreeing timeframes
+    )
 
     return min(
         (volume_confirmation * volume_weight +
