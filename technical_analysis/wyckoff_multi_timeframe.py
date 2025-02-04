@@ -351,8 +351,8 @@ def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> flo
     )
 
     # Improved trend consistency check
-    bias_counts = {}
-    weighted_biases = {}
+    bias_counts: Dict[MultiTimeframeDirection, int] = {}
+    weighted_biases: Dict[MultiTimeframeDirection, float] = {}
     for analysis in analyses:
         bias = analysis.momentum_bias
         bias_counts[bias] = bias_counts.get(bias, 0) + 1
