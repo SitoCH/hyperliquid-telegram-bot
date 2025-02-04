@@ -25,6 +25,15 @@ from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext, an
 
 SELECTING_COIN_FOR_TA = range(1)
 
+def get_significant_levels(coin: str, mid: float, timeframe: Timeframe, lookback_days: int) -> Tuple[List[float], List[float]]:
+    now = int(time.time() * 1000)
+    candles = get_candles_with_cache(coin, timeframe, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
+    df = prepare_dataframe(candles, get_localzone())
+    apply_indicators(df, timeframe, get_funding_with_cache(coin, now, 7))
+    df = df.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+    return find_significant_levels(df, mid)
+
+
 async def execute_ta(update: Update, context: CallbackContext) -> int:
     if not update.message:
         return ConversationHandler.END
@@ -61,7 +70,20 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
 
 
 async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
-    await analyze_candles_for_coin(context, context.job.data['coin'], always_notify=False) # type: ignore
+    """Process coins one at a time to avoid rate limits."""
+
+    coins_to_analyze = context.job.data['coins_to_analyze'] # type: ignore
+    coin = coins_to_analyze.pop()
+    await analyze_candles_for_coin(context, coin, always_notify=False)
+    
+    # Schedule next coin if any remain
+    if coins_to_analyze:
+        context.application.job_queue.run_once( # type: ignore
+            analyze_candles_for_coin_job,
+            when=5,
+            data={"coins_to_analyze": coins_to_analyze},
+            job_kwargs={'misfire_grace_time': 180}
+        )
 
 
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -74,26 +96,12 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
-    loop = 0
-    for coin in coins_to_analyze:
-        context.application.job_queue.run_once( # type: ignore
-            analyze_candles_for_coin_job,
-            when=loop * 10,
-            data={"coin": coin},
-            job_kwargs={'misfire_grace_time': 180}
-        )
-        loop += 1
-
-    logger.info(f"TA scheduled for {len(coins_to_analyze)} coins")
-
-
-def get_significant_levels(coin: str, mid: float, timeframe: Timeframe, lookback_days: int) -> Tuple[List[float], List[float]]:
-    now = int(time.time() * 1000)
-    candles = get_candles_with_cache(coin, timeframe, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
-    df = prepare_dataframe(candles, get_localzone())
-    apply_indicators(df, timeframe, get_funding_with_cache(coin, now, 7))
-    df = df.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    return find_significant_levels(df, mid)
+    context.application.job_queue.run_once( # type: ignore
+        analyze_candles_for_coin_job,
+        when=1,
+        data={"coins_to_analyze": coins_to_analyze},
+        job_kwargs={'misfire_grace_time': 180}
+    )
 
 
 async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, always_notify: bool) -> None:
