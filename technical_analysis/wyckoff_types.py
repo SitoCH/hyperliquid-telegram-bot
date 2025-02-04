@@ -173,6 +173,7 @@ class TimeframeSettings:
         )
 
 class Timeframe(Enum):
+    MINUTES_5 = ("5m", 5)  # New timeframe
     MINUTES_15 = ("15m", 15)
     MINUTES_30 = ("30m", 30)
     HOUR_1 = ("1h", 60)
@@ -202,10 +203,19 @@ class Timeframe(Enum):
     def __str__(self) -> str:
         return self._name
 
-# Define settings after Timeframe class is fully defined
+# Rebalanced weights for intraday focus
 _TIMEFRAME_SETTINGS = {
+    Timeframe.MINUTES_5: TimeframeSettings(
+        phase_weight=0.15,  # High weight for quick signals
+        ema_length=5,      
+        atr_settings=(5, 3, 8, 2, 3),  # Fast settings for quick moves
+        supertrend_multiplier=1.8,  # More sensitive
+        base_multiplier=0.80,
+        momentum_multiplier=0.85,
+        description="5 min trend"
+    ),
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.12,  # Increased from 0.07 for scalping signals
+        phase_weight=0.18,  # Increased from 0.12
         ema_length=8,      # Keep fast for quick signals
         atr_settings=(8, 5, 13, 3, 5),  # Keep fast settings
         supertrend_multiplier=2.0,  # More sensitive for quick moves
@@ -214,7 +224,7 @@ _TIMEFRAME_SETTINGS = {
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.15,  # Increased from 0.12
+        phase_weight=0.20,  # Increased from 0.15
         ema_length=13,
         atr_settings=(10, 6, 18, 4, 6),
         supertrend_multiplier=2.3,  # More sensitive
@@ -223,7 +233,7 @@ _TIMEFRAME_SETTINGS = {
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.25,  # Increased from 0.20 - now primary timeframe
+        phase_weight=0.22,  # Slightly reduced from 0.25
         ema_length=21,
         atr_settings=(14, 9, 21, 7, 8),
         supertrend_multiplier=2.6,  # More sensitive
@@ -232,7 +242,7 @@ _TIMEFRAME_SETTINGS = {
         description="Hourly trend"
     ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.22,  # Increased from 0.17
+        phase_weight=0.15,  # Reduced from 0.22
         ema_length=34,
         atr_settings=(34, 12, 34, 9, 14),
         supertrend_multiplier=3.0,  # Reduced from 3.3
@@ -241,7 +251,7 @@ _TIMEFRAME_SETTINGS = {
         description="4h trend"
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.16,  # Unchanged
+        phase_weight=0.06,  # Reduced from 0.16
         ema_length=41,
         atr_settings=(38, 12, 40, 9, 16),
         supertrend_multiplier=3.2,  # Reduced from 3.5
@@ -250,7 +260,7 @@ _TIMEFRAME_SETTINGS = {
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.10,  # Significantly reduced from 0.14
+        phase_weight=0.04,  # Reduced from 0.10
         ema_length=55,
         atr_settings=(41, 12, 48, 9, 21),
         supertrend_multiplier=3.5,  # Reduced from 3.8
