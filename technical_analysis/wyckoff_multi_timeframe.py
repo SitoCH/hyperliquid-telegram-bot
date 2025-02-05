@@ -48,7 +48,6 @@ def analyze_multi_timeframe(
 
         # Calculate overall alignment across all groups
         all_analysis = AllTimeframesAnalysis(
-            scalping=short_term_analysis,  # Keep field for compatibility
             short_term=short_term_analysis,
             intermediate=intermediate_analysis,
             long_term=long_term_analysis,

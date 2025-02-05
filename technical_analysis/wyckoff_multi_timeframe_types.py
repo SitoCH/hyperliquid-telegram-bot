@@ -34,7 +34,6 @@ class MultiTimeframeContext:
 
 @dataclass
 class AllTimeframesAnalysis:
-    scalping: TimeframeGroupAnalysis
     short_term: TimeframeGroupAnalysis
     intermediate: TimeframeGroupAnalysis
     long_term: TimeframeGroupAnalysis

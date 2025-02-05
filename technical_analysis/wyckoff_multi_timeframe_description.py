@@ -17,7 +17,6 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
     confidence_pct = f"{analysis.confidence_level * 100:.0f}%"
 
     # Get descriptions for all timeframe groups
-    scalping_desc = _get_timeframe_trend_description(analysis.scalping)
     short_term_desc = _get_timeframe_trend_description(analysis.short_term)
     intermediate_desc = _get_timeframe_trend_description(analysis.intermediate)
     long_term_desc = _get_timeframe_trend_description(analysis.long_term)
@@ -39,7 +38,6 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
         f"Long Term (8h-1d):\n{long_term_desc}\n"
         f"Intermediate (4h):\n{intermediate_desc}\n"
         f"Short Term (30m-1h):\n{short_term_desc}\n"
-        f"Scalping (5m-15m):\n{scalping_desc}\n\n"
         f"Timeframe Alignment: {alignment_pct}\n"
         f"Signal Confidence: {confidence_pct}\n\n"
         f"{insight}"
@@ -55,8 +53,7 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
     phases = [
         analysis.long_term.dominant_phase,
         analysis.intermediate.dominant_phase,
-        analysis.short_term.dominant_phase,
-        analysis.scalping.dominant_phase
+        analysis.short_term.dominant_phase
     ]
     dominant_phase = max(set(phases), key=phases.count)
     phase_alignment = phases.count(dominant_phase) / len(phases)
@@ -66,7 +63,6 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
         analysis.long_term.momentum_bias,
         analysis.intermediate.momentum_bias,
         analysis.short_term.momentum_bias,
-        analysis.scalping.momentum_bias
     ]
     dominant_bias = max(set(biases), key=biases.count)
     bias_alignment = biases.count(dominant_bias) / len(biases)
@@ -86,7 +82,6 @@ def _determine_market_context(analysis: AllTimeframesAnalysis) -> str:
     """
     # Weight by timeframe importance
     weights = [
-        analysis.scalping.group_weight,
         analysis.short_term.group_weight,
         analysis.intermediate.group_weight,
         analysis.long_term.group_weight
@@ -97,10 +92,9 @@ def _determine_market_context(analysis: AllTimeframesAnalysis) -> str:
 
     # Calculate weighted volume strength
     volume_strength = (
-        analysis.scalping.volume_strength * weights[0] +
-        analysis.short_term.volume_strength * weights[1] +
-        analysis.intermediate.volume_strength * weights[2] +
-        analysis.long_term.volume_strength * weights[3]
+        analysis.short_term.volume_strength * weights[0] +
+        analysis.intermediate.volume_strength * weights[1] +
+        analysis.long_term.volume_strength * weights[2]
     ) / total_weight
 
     if analysis.overall_direction == MultiTimeframeDirection.NEUTRAL:
@@ -122,13 +116,11 @@ def _determine_trend_strength(analysis: AllTimeframesAnalysis) -> str:
     """
     # Calculate weighted alignment
     alignments = [
-        analysis.scalping.internal_alignment,
         analysis.short_term.internal_alignment,
         analysis.intermediate.internal_alignment,
         analysis.long_term.internal_alignment
     ]
     weights = [
-        analysis.scalping.group_weight,
         analysis.short_term.group_weight,
         analysis.intermediate.group_weight,
         analysis.long_term.group_weight
@@ -162,8 +154,7 @@ def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     biases = [
         analysis.long_term.momentum_bias,
         analysis.intermediate.momentum_bias,
-        analysis.short_term.momentum_bias,
-        analysis.scalping.momentum_bias
+        analysis.short_term.momentum_bias
     ]
     bullish_count = sum(1 for b in biases if b == MultiTimeframeDirection.BULLISH)
     bearish_count = sum(1 for b in biases if b == MultiTimeframeDirection.BEARISH)
@@ -214,20 +205,20 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
     
     # Add timeframe-specific insights
     timeframe_insights = []
-    if analysis.scalping.momentum_bias != analysis.long_term.momentum_bias:
+    if analysis.short_term.momentum_bias != analysis.long_term.momentum_bias:
         timeframe_insights.append(
             f"Timeframe divergence: {analysis.long_term.momentum_bias.value} on higher timeframes "
-            f"vs {analysis.scalping.momentum_bias.value} on lower timeframes"
+            f"vs {analysis.short_term.momentum_bias.value} on lower timeframes"
         )
 
     # Add risk warnings
     risk_warnings = []
     if any(tf.liquidation_risk == LiquidationRisk.HIGH for tf in 
-           [analysis.scalping, analysis.short_term, analysis.intermediate, analysis.long_term]):
+           [analysis.short_term, analysis.intermediate, analysis.long_term]):
         risk_warnings.append("Multiple timeframes showing high liquidation risk")
 
     if any(tf.volatility_state == VolatilityState.HIGH for tf in 
-           [analysis.scalping, analysis.short_term]):
+           [analysis.short_term]):
         risk_warnings.append("High short-term volatility, adjust position sizes accordingly")
 
     # Format the complete insight
