@@ -281,8 +281,7 @@ def _calculate_group_weight(timeframes: Dict[Timeframe, WyckoffState]) -> float:
     return sum(get_phase_weight(tf) for tf in timeframes.keys())
 
 def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> float:
-    """Calculate alignment across all timeframe groups."""
-    # Filter out None values and empty groups
+    """Calculate alignment across all timeframe groups with improved weighting."""
     valid_analyses = [a for a in analyses if a is not None]
     if len(valid_analyses) < 2:
         return 0.0
@@ -290,59 +289,105 @@ def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> floa
     total_weight = sum(analysis.group_weight for analysis in valid_analyses)
     if total_weight == 0:
         return 0.0
-        
-    # Calculate weighted phase and action alignments
+    
+    # Enhanced alignment calculation with progressive thresholds
     weighted_alignments = []
     for i, analysis1 in enumerate(valid_analyses):
         for j, analysis2 in enumerate(valid_analyses[i+1:], i+1):
             weight = (analysis1.group_weight + analysis2.group_weight) / total_weight
-            phase_aligned = 1.0 if analysis1.dominant_phase == analysis2.dominant_phase else 0.0
-            bias_aligned = 1.0 if analysis1.momentum_bias == analysis2.momentum_bias else 0.0
-            weighted_alignments.append(weight * (phase_aligned * 0.6 + bias_aligned * 0.4))
+            
+            # Progressive phase alignment scoring
+            if analysis1.dominant_phase == analysis2.dominant_phase:
+                phase_aligned = 1.0
+            elif analysis1.dominant_phase.value.replace('~', '') == analysis2.dominant_phase.value.replace('~', ''):
+                phase_aligned = 0.8  # High similarity even with uncertainty
+            elif (analysis1.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.POSSIBLE_MARKUP] and 
+                  analysis2.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.POSSIBLE_MARKUP]):
+                phase_aligned = 0.7  # Same directional bias
+            elif (analysis1.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.POSSIBLE_MARKDOWN] and 
+                  analysis2.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.POSSIBLE_MARKDOWN]):
+                phase_aligned = 0.7  # Same directional bias
+            else:
+                phase_aligned = 0.0
+
+            # Enhanced bias alignment scoring
+            bias_aligned = (
+                1.0 if analysis1.momentum_bias == analysis2.momentum_bias else
+                0.5 if (analysis1.momentum_bias != MultiTimeframeDirection.NEUTRAL and 
+                       analysis2.momentum_bias != MultiTimeframeDirection.NEUTRAL) else
+                0.0
+            )
+
+            # Volume agreement bonus
+            volume_agreement = 0.1 if (
+                abs(analysis1.volume_strength - analysis2.volume_strength) < 0.3
+            ) else 0.0
+
+            # Composite score with volume consideration
+            alignment_score = (
+                phase_aligned * 0.5 +    # Phase alignment (50%)
+                bias_aligned * 0.4 +     # Bias alignment (40%)
+                volume_agreement         # Volume agreement (10%)
+            )
+            
+            weighted_alignments.append(weight * alignment_score)
     
     return sum(weighted_alignments) / len(weighted_alignments) if weighted_alignments else 0.0
 
 def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
-    """Calculate overall confidence across all timeframe groups with improved weighting."""
+    """Calculate overall confidence with improved crypto-specific weights."""
     total_weight = sum(analysis.group_weight for analysis in analyses)
     if total_weight == 0:
         return 0.0
 
-    # Updated weight factors with more emphasis on alignment and volume
-    alignment_weight = 0.45    # Increased from 0.40 - more importance to alignment
-    volume_weight = 0.35       # Unchanged
-    consistency_weight = 0.20  # Reduced from 0.25 - less weight on pure consistency
+    # Adjusted weights for crypto markets
+    alignment_weight = 0.40     # Slightly reduced - crypto can have legitimate timeframe divergence
+    volume_weight = 0.35        # Unchanged - volume remains important
+    consistency_weight = 0.25   # Increased - more emphasis on trend consistency
 
-    # Enhanced volume confirmation with timeframe importance
-    volume_confirmation = sum(
-        analysis.volume_strength * (analysis.group_weight / total_weight)
-        for analysis in analyses
-    )
+    # Enhanced volume confirmation with volatility consideration
+    volume_scores = []
+    for analysis in analyses:
+        # Higher volume requirement in high volatility conditions
+        vol_adjusted_threshold = (
+            0.6 if analysis.volatility_state == VolatilityState.HIGH else
+            0.5 if analysis.volatility_state == VolatilityState.NORMAL else
+            0.4
+        )
+        volume_score = analysis.volume_strength / vol_adjusted_threshold
+        volume_scores.append(min(volume_score * (analysis.group_weight / total_weight), 1.0))
+    
+    volume_confirmation = sum(volume_scores)
 
-    # Improved trend consistency check
-    bias_counts: Dict[MultiTimeframeDirection, int] = {}
-    weighted_biases: Dict[MultiTimeframeDirection, float] = {}
+    # Improved trend consistency check with momentum consideration
+    bias_scores: Dict[MultiTimeframeDirection, float] = {}
     for analysis in analyses:
         bias = analysis.momentum_bias
-        bias_counts[bias] = bias_counts.get(bias, 0) + 1
-        weighted_biases[bias] = weighted_biases.get(bias, 0) + analysis.group_weight
-    
-    # Calculate trend consistency score
-    max_bias_count = max(bias_counts.values()) if bias_counts else 0
-    max_weighted_bias = max(weighted_biases.values()) if weighted_biases else 0
-    
-    # Combine count-based and weight-based consistency
+        # Weight the bias by both group weight and internal alignment
+        score = analysis.group_weight * analysis.internal_alignment
+        bias_scores[bias] = bias_scores.get(bias, 0) + score
+
+    # Calculate trend consistency score with emphasis on clear direction
+    max_bias_score = max(bias_scores.values()) if bias_scores else 0
     trend_consistency = (
-        (max_bias_count / len(analyses)) * 0.4 +  # How many timeframes agree
-        (max_weighted_bias / total_weight) * 0.6   # How important are the agreeing timeframes
+        max_bias_score / total_weight if MultiTimeframeDirection.NEUTRAL not in bias_scores
+        else max_bias_score / total_weight * 0.7  # Penalty for neutral signals
     )
 
-    return min(
-        (volume_confirmation * volume_weight +
-         trend_consistency * consistency_weight +
-         _calculate_overall_alignment(analyses) * alignment_weight),
-        1.0
+    # Calculate final confidence with minimum threshold
+    raw_confidence = (
+        volume_confirmation * volume_weight +
+        trend_consistency * consistency_weight +
+        _calculate_overall_alignment(analyses) * alignment_weight
     )
+
+    # Apply minimum confidence if strong signals are present
+    min_confidence = 0.3 if any(
+        analysis.volume_strength > 0.8 and analysis.internal_alignment > 0.7
+        for analysis in analyses
+    ) else 0.0
+
+    return max(min(raw_confidence, 1.0), min_confidence)
 
 def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> MultiTimeframeDirection:
     """Determine overall direction considering all timeframe groups."""
