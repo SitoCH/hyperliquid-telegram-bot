@@ -80,7 +80,7 @@ async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
     if coins_to_analyze:
         context.application.job_queue.run_once( # type: ignore
             analyze_candles_for_coin_job,
-            when=4,
+            when=5,
             data={"coins_to_analyze": coins_to_analyze},
             job_kwargs={'misfire_grace_time': 180}
         )
