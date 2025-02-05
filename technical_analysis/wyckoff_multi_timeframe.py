@@ -1,8 +1,11 @@
+import pandas as pd  # type: ignore[import]
+
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from .wyckoff_multi_timeframe_description import generate_all_timeframes_description
-import pandas as pd  # type: ignore[import]
+from logging_utils import logger
+
 
 from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext
 
