@@ -80,7 +80,7 @@ async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
     if coins_to_analyze:
         context.application.job_queue.run_once( # type: ignore
             analyze_candles_for_coin_job,
-            when=5,
+            when=4,
             data={"coins_to_analyze": coins_to_analyze},
             job_kwargs={'misfire_grace_time': 180}
         )
@@ -114,7 +114,6 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
 
         # Get candles for all timeframes
         candles_data = {
-            Timeframe.MINUTES_5: get_candles_with_cache(coin, Timeframe.MINUTES_5, now, 15, hyperliquid_utils.info.candles_snapshot),
             Timeframe.MINUTES_15: get_candles_with_cache(coin, Timeframe.MINUTES_15, now, 30, hyperliquid_utils.info.candles_snapshot),
             Timeframe.MINUTES_30: get_candles_with_cache(coin, Timeframe.MINUTES_30, now, 50, hyperliquid_utils.info.candles_snapshot),
             Timeframe.HOUR_1: get_candles_with_cache(coin, Timeframe.HOUR_1, now, 90, hyperliquid_utils.info.candles_snapshot),

@@ -20,9 +20,8 @@ def analyze_multi_timeframe(
     states: Dict[Timeframe, WyckoffState]
 ) -> MultiTimeframeContext:
     """
-    Analyze Wyckoff states across all timeframe groups.
+    Analyze Wyckoff states across three timeframe groups.
     """
-    # Input validation
     if not states:
         return MultiTimeframeContext(
             alignment_score=0.0,
@@ -31,46 +30,46 @@ def analyze_multi_timeframe(
             direction=MultiTimeframeDirection.NEUTRAL
         )
 
-    # Group all timeframes with proper type handling
-    scalping = {tf: state for tf, state in states.items() if tf in {Timeframe.MINUTES_5, Timeframe.MINUTES_15}}
-    short_term = {tf: state for tf, state in states.items() if tf in {Timeframe.MINUTES_30, Timeframe.HOUR_1}}
-    intermediate = {tf: state for tf, state in states.items() if tf in {Timeframe.HOURS_4}}
+    # Group timeframes into three categories
+    short_term = {tf: state for tf, state in states.items() if tf in {Timeframe.MINUTES_15, Timeframe.MINUTES_30}}
+    intermediate = {tf: state for tf, state in states.items() if tf in {Timeframe.HOUR_1, Timeframe.HOURS_4}}
     long_term = {tf: state for tf, state in states.items() if tf in {Timeframe.HOURS_8, Timeframe.DAY_1}}
 
     try:
         # Analyze all groups
-        scalping_analysis = _analyze_timeframe_group(scalping)
         short_term_analysis = _analyze_timeframe_group(short_term)
         intermediate_analysis = _analyze_timeframe_group(intermediate)
         long_term_analysis = _analyze_timeframe_group(long_term)
 
-        # Update weights based on phase_weight
-        scalping_analysis.group_weight = _calculate_group_weight(scalping)
+        # Update weights
         short_term_analysis.group_weight = _calculate_group_weight(short_term)
         intermediate_analysis.group_weight = _calculate_group_weight(intermediate)
         long_term_analysis.group_weight = _calculate_group_weight(long_term)
 
         # Calculate overall alignment across all groups
         all_analysis = AllTimeframesAnalysis(
-            scalping=scalping_analysis,
+            scalping=short_term_analysis,  # Keep field for compatibility
             short_term=short_term_analysis,
             intermediate=intermediate_analysis,
             long_term=long_term_analysis,
             overall_direction=_determine_overall_direction([
-                scalping_analysis, short_term_analysis, 
-                intermediate_analysis, long_term_analysis
+                short_term_analysis, 
+                intermediate_analysis, 
+                long_term_analysis
             ]),
             confidence_level=_calculate_overall_confidence([
-                scalping_analysis, short_term_analysis, 
-                intermediate_analysis, long_term_analysis
+                short_term_analysis, 
+                intermediate_analysis, 
+                long_term_analysis
             ]),
             alignment_score=_calculate_overall_alignment([
-                scalping_analysis, short_term_analysis, 
-                intermediate_analysis, long_term_analysis
+                short_term_analysis, 
+                intermediate_analysis, 
+                long_term_analysis
             ])
         )
 
-        # Generate comprehensive description including all timeframes
+        # Generate comprehensive description
         description = generate_all_timeframes_description(all_analysis)
 
         return MultiTimeframeContext(
@@ -81,7 +80,6 @@ def analyze_multi_timeframe(
         )
         
     except Exception as e:
-        # Fallback in case of analysis errors
         return MultiTimeframeContext(
             alignment_score=0.0,
             confidence_level=0.0,

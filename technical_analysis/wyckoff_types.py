@@ -173,7 +173,6 @@ class TimeframeSettings:
         )
 
 class Timeframe(Enum):
-    MINUTES_5 = ("5m", 5)  # New timeframe
     MINUTES_15 = ("15m", 15)
     MINUTES_30 = ("30m", 30)
     HOUR_1 = ("1h", 60)
@@ -203,37 +202,28 @@ class Timeframe(Enum):
     def __str__(self) -> str:
         return self._name
 
-# Rebalanced weights for intraday focus
+# Rebalanced weights for crypto focus
 _TIMEFRAME_SETTINGS = {
-    Timeframe.MINUTES_5: TimeframeSettings(
-        phase_weight=0.08,  # Reduced from 0.15 - less emphasis on very short term
-        ema_length=5,      
-        atr_settings=(5, 3, 8, 2, 3),  # Fast settings for quick moves
-        supertrend_multiplier=1.8,  # More sensitive
-        base_multiplier=0.80,
-        momentum_multiplier=0.85,
-        description="5 min trend"
-    ),
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.12,  # Reduced from 0.18 - slightly less weight
-        ema_length=8,      # Keep fast for quick signals
-        atr_settings=(8, 5, 13, 3, 5),  # Keep fast settings
-        supertrend_multiplier=2.0,  # More sensitive for quick moves
+        phase_weight=0.15,  # Increased for short-term importance
+        ema_length=8,      
+        atr_settings=(8, 5, 13, 3, 5),
+        supertrend_multiplier=2.0,
         base_multiplier=0.85,
         momentum_multiplier=0.9,
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.20,  # Increased from 0.15
+        phase_weight=0.20,  # Increased for short-term validation
         ema_length=13,
         atr_settings=(10, 6, 18, 4, 6),
-        supertrend_multiplier=2.3,  # More sensitive
+        supertrend_multiplier=2.3,
         base_multiplier=0.95,
         momentum_multiplier=1.0,
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.22,  # Slightly reduced from 0.25
+        phase_weight=0.25,  # Key timeframe for crypto
         ema_length=21,
         atr_settings=(14, 9, 21, 7, 8),
         supertrend_multiplier=2.6,  # More sensitive
