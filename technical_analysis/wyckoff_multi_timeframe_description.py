@@ -47,10 +47,7 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
     return description
 
 def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
-    """
-    Get comprehensive market structure description across three timeframes.
-    """
-    # Count aligned phases
+    """Get comprehensive market structure description across three timeframes."""
     phases = [
         analysis.long_term.dominant_phase,
         analysis.intermediate.dominant_phase,
@@ -59,7 +56,6 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
     dominant_phase = max(set(phases), key=phases.count)
     phase_alignment = phases.count(dominant_phase) / len(phases)
 
-    # Count aligned biases
     biases = [
         analysis.long_term.momentum_bias,
         analysis.intermediate.momentum_bias,
@@ -68,12 +64,28 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
     dominant_bias = max(set(biases), key=biases.count)
     bias_alignment = biases.count(dominant_bias) / len(biases)
 
+    # New logic for handling conflicting signals
     if phase_alignment > 0.75 and bias_alignment > 0.75:
-        return f"Strong {dominant_phase.value} structure with {dominant_bias.value} momentum"
+        # Check for conflicting signals
+        is_conflict = (
+            (dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.POSSIBLE_MARKDOWN] and 
+             dominant_bias == MultiTimeframeDirection.BULLISH) or
+            (dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.POSSIBLE_MARKUP] and 
+             dominant_bias == MultiTimeframeDirection.BEARISH)
+        )
+        
+        if is_conflict:
+            if dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.POSSIBLE_MARKDOWN]:
+                return f"Potential reversal, {dominant_phase.value} showing bullish momentum"
+            else:
+                return f"Potential reversal, {dominant_phase.value} showing bearish momentum"
+        else:
+            return f"Strong {dominant_phase.value} structure with {dominant_bias.value} momentum"
+            
     elif bias_alignment > 0.75:
-        return f"Mixed phase structure with aligned {dominant_bias.value} momentum"
+        return f"Mixed structure with dominant {dominant_bias.value} momentum"
     elif phase_alignment > 0.75:
-        return f"Aligned {dominant_phase.value} structure with mixed momentum"
+        return f"Clear {dominant_phase.value} structure with mixed momentum"
     
     return "Complex structure with mixed signals across timeframes"
 
