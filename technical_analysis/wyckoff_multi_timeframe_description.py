@@ -12,7 +12,7 @@ from .wyckoff_types import (
 
 
 def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
-    """Generate comprehensive description including all timeframe groups."""
+    """Generate comprehensive description including three timeframe groups."""
     alignment_pct = f"{analysis.alignment_score * 100:.0f}%"
     confidence_pct = f"{analysis.confidence_level * 100:.0f}%"
 
@@ -35,11 +35,12 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
         f"{emoji} Market Structure Analysis:\n"
         f"Trend: {_determine_trend_strength(analysis)} {context}\n"
         f"Market Structure: {structure}\n\n"
-        f"Long Term (8h-1d):\n{long_term_desc}\n"
-        f"Intermediate (4h):\n{intermediate_desc}\n"
-        f"Short Term (30m-1h):\n{short_term_desc}\n"
-        f"Timeframe Alignment: {alignment_pct}\n"
-        f"Signal Confidence: {confidence_pct}\n\n"
+        f"Long-Term View (8h-1d):\n{long_term_desc}\n"
+        f"Mid-Term View (1h-4h):\n{intermediate_desc}\n"
+        f"Near-Term View (15m-30m):\n{short_term_desc}\n\n"
+        f"Signal Quality:\n"
+        f"• Timeframe Alignment: {alignment_pct}\n"
+        f"• Confidence Level: {confidence_pct}\n\n"
         f"{insight}"
     )
 
@@ -47,7 +48,7 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
 
 def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
     """
-    Get comprehensive market structure description across all timeframes.
+    Get comprehensive market structure description across three timeframes.
     """
     # Count aligned phases
     phases = [
@@ -78,7 +79,7 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
 
 def _determine_market_context(analysis: AllTimeframesAnalysis) -> str:
     """
-    Determine overall market context considering all timeframes.
+    Determine overall market context considering three timeframes.
     """
     # Weight by timeframe importance
     weights = [
@@ -112,7 +113,7 @@ def _determine_market_context(analysis: AllTimeframesAnalysis) -> str:
 
 def _determine_trend_strength(analysis: AllTimeframesAnalysis) -> str:
     """
-    Determine overall trend strength considering all timeframes.
+    Determine overall trend strength considering three timeframes.
     """
     # Calculate weighted alignment
     alignments = [
@@ -145,7 +146,7 @@ def _determine_trend_strength(analysis: AllTimeframesAnalysis) -> str:
 
 def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     """
-    Get appropriate trend emoji based on all timeframe analysis.
+    Get appropriate trend emoji based on three timeframe analysis.
     """
     if analysis.confidence_level < 0.5:
         return "📊"
