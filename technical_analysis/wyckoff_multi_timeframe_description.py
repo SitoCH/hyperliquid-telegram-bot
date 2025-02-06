@@ -158,26 +158,33 @@ def _determine_trend_strength(analysis: AllTimeframesAnalysis) -> str:
 
 def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     """
-    Get appropriate trend emoji based on three timeframe analysis.
+    Get appropriate trend emoji based on overall analysis state.
     """
-    if analysis.confidence_level < 0.5:
-        return "📊"
-
-    # Count directional biases
-    biases = [
-        analysis.long_term.momentum_bias,
-        analysis.intermediate.momentum_bias,
-        analysis.short_term.momentum_bias
-    ]
-    bullish_count = sum(1 for b in biases if b == MultiTimeframeDirection.BULLISH)
-    bearish_count = sum(1 for b in biases if b == MultiTimeframeDirection.BEARISH)
-
-    if bullish_count >= 3:  # Strong bullish alignment
-        return "📈" if analysis.confidence_level > 0.7 else "↗️"
-    elif bearish_count >= 3:  # Strong bearish alignment
-        return "📉" if analysis.confidence_level > 0.7 else "↘️"
+    # First check if we have enough confidence
+    if analysis.confidence_level < 0.4:
+        return "📊"  # Low confidence
+        
+    # Get the overall trend strength
+    trend_strength = analysis.alignment_score > 0.6 and analysis.confidence_level > 0.6
     
-    return "↔️"
+    match analysis.overall_direction:
+        case MultiTimeframeDirection.BULLISH:
+            if trend_strength:
+                return "📈"  # Strong bullish
+            return "↗️"  # Weak bullish
+            
+        case MultiTimeframeDirection.BEARISH:
+            if trend_strength:
+                return "📉"  # Strong bearish
+            return "↘️"  # Weak bearish
+            
+        case MultiTimeframeDirection.NEUTRAL:
+            # Check if we're in consolidation or in conflict
+            if analysis.alignment_score > 0.6:
+                return "↔️"  # Clear consolidation
+            return "🔄"  # Mixed signals
+            
+    return "📊"  # Fallback for unknown states
 
 def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     """

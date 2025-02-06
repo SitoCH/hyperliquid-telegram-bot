@@ -328,48 +328,70 @@ def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> floa
         return 0.0
     
     # Enhanced alignment calculation with progressive thresholds
-    weighted_alignments = []
+    alignment_scores = []
+    comparison_count = 0
+    
     for i, analysis1 in enumerate(valid_analyses):
         for j, analysis2 in enumerate(valid_analyses[i+1:], i+1):
+            comparison_count += 1
             weight = (analysis1.group_weight + analysis2.group_weight) / total_weight
             
             # Progressive phase alignment scoring
+            phase_aligned = 0.0
             if analysis1.dominant_phase == analysis2.dominant_phase:
                 phase_aligned = 1.0
             elif analysis1.dominant_phase.value.replace('~', '') == analysis2.dominant_phase.value.replace('~', ''):
-                phase_aligned = 0.8  # High similarity even with uncertainty
-            elif (analysis1.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.POSSIBLE_MARKUP] and 
-                  analysis2.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.POSSIBLE_MARKUP]):
-                phase_aligned = 0.7  # Same directional bias
-            elif (analysis1.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.POSSIBLE_MARKDOWN] and 
-                  analysis2.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.POSSIBLE_MARKDOWN]):
-                phase_aligned = 0.7  # Same directional bias
-            else:
-                phase_aligned = 0.0
+                phase_aligned = 0.8
+            # Add check for related phases
+            elif (analysis1.dominant_phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP] and 
+                  analysis2.dominant_phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP]):
+                phase_aligned = 0.6
+            elif (analysis1.dominant_phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] and 
+                  analysis2.dominant_phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN]):
+                phase_aligned = 0.6
 
-            # Enhanced bias alignment scoring
-            bias_aligned = (
-                1.0 if analysis1.momentum_bias == analysis2.momentum_bias else
-                0.5 if (analysis1.momentum_bias != MultiTimeframeDirection.NEUTRAL and 
-                       analysis2.momentum_bias != MultiTimeframeDirection.NEUTRAL) else
+            # Action alignment scoring
+            action_aligned = 0.0
+            if analysis1.dominant_action == analysis2.dominant_action:
+                action_aligned = 1.0
+            elif (analysis1.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.ACCUMULATING] and 
+                  analysis2.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.ACCUMULATING]):
+                action_aligned = 0.7
+            elif (analysis1.dominant_action in [CompositeAction.MARKING_DOWN, CompositeAction.DISTRIBUTING] and 
+                  analysis2.dominant_action in [CompositeAction.MARKING_DOWN, CompositeAction.DISTRIBUTING]):
+                action_aligned = 0.7
+
+            # Bias alignment with more granular scoring
+            bias_aligned = 0.0
+            if analysis1.momentum_bias == analysis2.momentum_bias:
+                bias_aligned = 1.0
+            elif (analysis1.momentum_bias != MultiTimeframeDirection.NEUTRAL and 
+                  analysis2.momentum_bias != MultiTimeframeDirection.NEUTRAL):
+                bias_aligned = 0.3  # Reduced from 0.5 to be more strict
+
+            # Volume pattern agreement
+            volume_agreement = (
+                0.2 if abs(analysis1.volume_strength - analysis2.volume_strength) < 0.2 else
+                0.1 if abs(analysis1.volume_strength - analysis2.volume_strength) < 0.3 else
                 0.0
             )
 
-            # Volume agreement bonus
-            volume_agreement = 0.1 if (
-                abs(analysis1.volume_strength - analysis2.volume_strength) < 0.3
-            ) else 0.0
-
-            # Composite score with volume consideration
+            # Composite score with adjusted weights
             alignment_score = (
-                phase_aligned * 0.5 +    # Phase alignment (50%)
-                bias_aligned * 0.4 +     # Bias alignment (40%)
-                volume_agreement         # Volume agreement (10%)
+                phase_aligned * 0.35 +    # Phase alignment (35%)
+                action_aligned * 0.25 +    # Action alignment (25%)
+                bias_aligned * 0.30 +      # Bias alignment (30%)
+                volume_agreement * 0.10    # Volume agreement (10%)
             )
             
-            weighted_alignments.append(weight * alignment_score)
+            alignment_scores.append(alignment_score * weight)
     
-    return sum(weighted_alignments) / len(weighted_alignments) if weighted_alignments else 0.0
+    # Calculate final alignment score
+    if not alignment_scores:
+        return 0.0
+        
+    # Use the number of comparisons for averaging
+    return sum(alignment_scores) / comparison_count
 
 def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
     """Calculate overall confidence with improved crypto-specific weights."""
