@@ -1,7 +1,7 @@
 import pandas as pd  # type: ignore[import]
 import pandas_ta as ta  # type: ignore[import]
 import numpy as np  # type: ignore[import]
-from typing import Final, Dict, List, Optional, Any
+from typing import Final, Dict, List, Optional, Any, Tuple
 from .wyckoff_types import (
     MarketPattern, VolatilityState, WyckoffState, WyckoffPhase, EffortResult, 
     CompositeAction, WyckoffSign, FundingState, VolumeState, Timeframe
@@ -210,25 +210,12 @@ def identify_wyckoff_phase(
     volume_threshold, strong_dev_threshold, neutral_zone_threshold, \
     momentum_threshold, effort_threshold, _ = timeframe.settings.thresholds
 
-    # Use the passed recent_change instead of calculating it
-    is_strong_move = abs(recent_change) > 0.03  # 3% move in last 3 candles
-    is_very_strong_move = abs(recent_change) > 0.05  # 5% move in last 3 candles
+    # Adjust thresholds based on price movement and volatility
+    momentum_threshold, effort_threshold, volume_threshold = _adjust_thresholds(
+        is_very_strong_move, is_strong_move, volatility, volatility.mean(),
+        momentum_threshold, effort_threshold, volume_threshold
+    )
 
-    # Adjust thresholds based on price movement
-    if is_very_strong_move:
-        momentum_threshold *= 0.6  # More sensitive to momentum
-        effort_threshold *= 0.7   # Lower effort requirement during strong moves
-    elif is_strong_move:
-        momentum_threshold *= 0.8
-        effort_threshold *= 0.85
-
-    # Adaptive thresholds based on market volatility
-    volatility_factor = min(2.0, 1.0 + volatility.iloc[-1] / volatility.mean())
-    
-    # Adjust thresholds based on volatility
-    volume_threshold = volume_threshold * volatility_factor
-    effort_threshold = effort_threshold * (1.0 / volatility_factor)
-    
     # Detect potential manipulation
     potential_manipulation = (
         volume_spread > volume_spread_ma * 3.0 and  # Extreme volume spread
@@ -275,6 +262,7 @@ def identify_wyckoff_phase(
     is_liquidation = (
         abs(recent_change) > 0.1 and  # 10% move
         curr_volume > volume_sma * 3 and  # Massive volume spike
+        volume_spread > volume_spread_ma * 2 and # High volume spread during cascade
         abs(effort_vs_result) > 0.8  # Strong directional move
     )
     
@@ -286,11 +274,12 @@ def identify_wyckoff_phase(
         )
     
     # Check if price is moving away from high volume node
-    price_node_deviation = abs(current_price - high_vol_price) / high_vol_price
-    if price_node_deviation > 0.03:  # 3% threshold
-        if current_price > high_vol_price and momentum_strength > momentum_threshold:
+    deviation_direction = 1 if current_price > high_vol_price else -1
+    price_node_deviation = (current_price - high_vol_price) / high_vol_price
+    if abs(price_node_deviation) > 0.03:  # 3% threshold
+        if deviation_direction > 0 and momentum_strength > momentum_threshold:
             return WyckoffPhase.MARKUP
-        elif current_price < high_vol_price and momentum_strength < -momentum_threshold:
+        elif deviation_direction < 0 and momentum_strength < -momentum_threshold:
             return WyckoffPhase.MARKDOWN
 
     # Immediately classify extremely high volume_spread as RANGING
@@ -301,6 +290,29 @@ def identify_wyckoff_phase(
     return determine_phase_by_price_strength(
         price_strength, momentum_strength, is_high_volume, volatility, timeframe
     )
+
+def _adjust_thresholds(
+    is_very_strong_move: bool, is_strong_move: bool,
+    volatility: pd.Series, avg_volatility: float,
+    momentum_threshold: float, effort_threshold: float, volume_threshold: float
+) -> Tuple[float, float, float]:
+    """Adjust thresholds based on price movement and volatility."""
+    # Adjust thresholds based on price movement
+    if is_very_strong_move:
+        momentum_threshold *= 0.6  # More sensitive to momentum
+        effort_threshold *= 0.7   # Lower effort requirement during strong moves
+    elif is_strong_move:
+        momentum_threshold *= 0.8
+        effort_threshold *= 0.85
+
+    # Adaptive thresholds based on market volatility
+    volatility_factor = min(2.0, 1.0 + volatility.iloc[-1] / avg_volatility)
+    
+    # Adjust thresholds based on volatility
+    volume_threshold = volume_threshold * volatility_factor
+    effort_threshold = effort_threshold * (1.0 / volatility_factor)
+    
+    return momentum_threshold, effort_threshold, volume_threshold
 
 def determine_phase_by_price_strength(
     price_strength: float, momentum_strength: float, 
