@@ -13,9 +13,9 @@ from utils import log_execution_time
 
 # Constants for Wyckoff analysis
 VOLUME_THRESHOLD: Final[float] = 1.7  # Increased from 1.5 for more significance with larger dataset
-STRONG_DEV_THRESHOLD: Final[float] = 2.0  # Increased from 1.8 for wider historical context
+STRONG_DEV_THRESHOLD: Final[float] = 1.9  # Increased from 1.8 for wider historical context
 NEUTRAL_ZONE_THRESHOLD: Final[float] = 1.0  # Increased from 0.8 for more stable neutral zone detection
-MOMENTUM_THRESHOLD: Final[float] = 0.6  # Increased from 0.5 for stronger momentum confirmation
+MOMENTUM_THRESHOLD: Final[float] = 0.55  # Increased from 0.5 for stronger momentum confirmation
 EFFORT_THRESHOLD: Final[float] = 0.7  # Increased from 0.65 for clearer effort vs result signals
 MIN_PERIODS: Final[int] = 40  # Increased from 30 to use more historical data
 VOLUME_MA_THRESHOLD: Final[float] = 1.5  # Increased from 1.3 for stronger volume signals
