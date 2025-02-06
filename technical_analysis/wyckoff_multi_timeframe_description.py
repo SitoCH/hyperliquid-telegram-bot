@@ -197,57 +197,120 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         """Get base signal and action plan based on all timeframes."""
         if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
             if analysis.confidence_level > 0.7:
-                return (
-                    "Strong bullish alignment across multiple timeframes with good volume support.",
-                    "Longs: Add on dips with defined risk.\nShorts: Avoid counter-trend positions."
+                base_signal = (
+                    f"Strong bullish alignment across multiple timeframes. "
+                    f"Intermediate timeframe shows {analysis.intermediate.dominant_phase.value} phase, "
+                    f"supported by {analysis.intermediate.dominant_action.value} and strong volume (strength: {analysis.intermediate.volume_strength:.2f}). "
+                    f"High conviction uptrend."
                 )
-            return (
-                "Developing bullish structure with mixed timeframe signals.",
-                "Longs: Scaled entries with tight risk management.\nShorts: Only at key resistance levels."
+                action_plan = (
+                    "Longs: Prioritize entries on dips with tight stop-losses below key support levels. "
+                    "Consider adding to positions as the trend strengthens.\n"
+                    "Shorts: Avoid, high risk of bull traps. If shorting, use extremely tight stop-losses."
                 )
+                return base_signal, action_plan
+
+            base_signal = (
+                f"Developing bullish structure with mixed timeframe signals. "
+                f"Intermediate timeframe shows {analysis.intermediate.dominant_phase.value} phase, "
+                f"indicating {analysis.intermediate.dominant_action.value}. "
+                f"Volume strength is moderate ({analysis.intermediate.volume_strength:.2f}). Watch for confirmation signals."
+            )
+            action_plan = (
+                "Longs: Scaled entries near support zones with careful risk management. "
+                "Use smaller position sizes due to mixed signals.\n"
+                "Shorts: Only consider at significant resistance with strong bearish signals. "
+                "Confirm with price action before entering."
+            )
+            return base_signal, action_plan
+
         elif analysis.overall_direction == MultiTimeframeDirection.BEARISH:
             if analysis.confidence_level > 0.7:
-                return (
-                    "Strong bearish alignment across multiple timeframes with sustained selling.",
-                    "Shorts: Add on rallies with defined risk.\nLongs: Avoid counter-trend positions."
+                base_signal = (
+                    f"Strong bearish alignment across multiple timeframes. "
+                    f"Intermediate timeframe shows {analysis.intermediate.dominant_phase.value} phase, "
+                    f"confirmed by {analysis.intermediate.dominant_action.value} and sustained selling pressure. "
+                    f"High conviction downtrend with volume strength of {analysis.intermediate.volume_strength:.2f}."
                 )
-            return (
-                "Developing bearish structure with mixed timeframe signals.",
-                "Shorts: Scaled entries with tight risk management.\nLongs: Only at key support levels."
+                action_plan = (
+                    "Shorts: Focus on entries during rallies with tight stop-losses above key resistance levels. "
+                    "Add to positions as the trend accelerates.\n"
+                    "Longs: Avoid, high risk of bear traps. If longing, use extremely tight stop-losses."
                 )
-        
-        return (
-            "Mixed signals across timeframes indicating a transitional or ranging market.",
-            "Both Directions: Focus on range extremes and wait for clearer directional signals."
+                return base_signal, action_plan
+
+            base_signal = (
+                f"Developing bearish structure with mixed timeframe signals. "
+                f"Intermediate timeframe shows {analysis.intermediate.dominant_phase.value} phase, "
+                f"indicating {analysis.intermediate.dominant_action.value}. "
+                f"Awaiting further bearish confirmation. Volume strength is {analysis.intermediate.volume_strength:.2f}."
+            )
+            action_plan = (
+                "Shorts: Scaled entries near resistance zones with strict risk control. "
+                "Confirm bearish signals with price action and volume.\n"
+                "Longs: Only attempt at major support with clear bullish reversal patterns. "
+                "Be cautious of potential bear traps."
+            )
+            return base_signal, action_plan
+
+        volume_context = "high-volume indecision" if analysis.intermediate.volume_strength > 0.7 else "low-volume consolidation"
+        base_signal = f"Mixed signals across timeframes indicating a transitional or ranging market. {volume_context}."
+        action_plan = (
+            "Both Directions: Trade range extremes with confirmation. "
+            "Use smaller position sizes and tighter stop-losses.\n"
+            "Avoid large positions until a clear trend emerges. "
+            "Focus on short-term trades."
         )
+        return base_signal, action_plan
 
     base_signal, action_plan = get_full_context()
-    
+
     # Add timeframe-specific insights
     timeframe_insights = []
     if analysis.short_term.momentum_bias != analysis.long_term.momentum_bias:
         timeframe_insights.append(
-            f"Timeframe divergence: {analysis.long_term.momentum_bias.value} on higher timeframes "
-            f"vs {analysis.short_term.momentum_bias.value} on lower timeframes"
+            f"Timeframe divergence: Long-term bias is {analysis.long_term.momentum_bias.value}, while short-term bias is {analysis.short_term.momentum_bias.value}. "
+            f"Potential for trend reversal or continuation based on breakout direction. "
+            f"Watch for a break of key levels to confirm the direction."
+        )
+    if analysis.short_term.dominant_phase != analysis.intermediate.dominant_phase:
+        timeframe_insights.append(
+            f"Phase mismatch: Short-term in {analysis.short_term.dominant_phase.value}, but mid-term in {analysis.intermediate.dominant_phase.value}. "
+            f"Expect volatility as market seeks equilibrium. "
+            f"Be prepared for rapid price swings and adjust stop-losses accordingly."
         )
 
     # Add risk warnings
     risk_warnings = []
-    if any(tf.liquidation_risk == LiquidationRisk.HIGH for tf in 
-           [analysis.short_term, analysis.intermediate, analysis.long_term]):
-        risk_warnings.append("Multiple timeframes showing high liquidation risk")
+    high_liq_risks = [tf.dominant_phase.value for tf in [analysis.short_term, analysis.intermediate, analysis.long_term] if tf.liquidation_risk == LiquidationRisk.HIGH]
+    if high_liq_risks:
+        risk_warnings.append(
+            f"High liquidation risk on {', '.join(high_liq_risks)}. "
+            f"Reduce leverage significantly to avoid forced liquidations. "
+            f"Consider using isolated margin."
+        )
 
-    if any(tf.volatility_state == VolatilityState.HIGH for tf in 
-           [analysis.short_term]):
-        risk_warnings.append("High short-term volatility, adjust position sizes accordingly")
+    if analysis.short_term.volatility_state == VolatilityState.HIGH:
+        risk_warnings.append(
+            "High short-term volatility. "
+            "Use smaller position sizes and wider stop-losses to account for rapid price swings. "
+            "Avoid over-leveraging."
+        )
+
+    # Combine risk warnings if both high liquidation risk and high volatility are present
+    if high_liq_risks and analysis.short_term.volatility_state == VolatilityState.HIGH:
+        risk_warnings.append(
+            "Combined high liquidation risk and high short-term volatility. "
+            "Extreme caution is advised. Consider staying out of the market until conditions stabilize."
+        )
 
     # Format the complete insight
-    insights = [f"<b>Analysis:</b>\n{base_signal}"]
+    insights = [f"<b>Market Overview:</b>\n{base_signal}"]
     if timeframe_insights:
-        insights.append("\n<b>Timeframe Notes:</b>\n" + "\n".join(f"- {i}" for i in timeframe_insights))
-    insights.append(f"\n<b>Strategy:</b>\n{action_plan}")
+        insights.append("\n<b>Timeframe Analysis:</b>\n" + "\n".join(f"- {i}" for i in timeframe_insights))
+    insights.append(f"\n<b>Trading Strategy:</b>\n{action_plan}")
     if risk_warnings:
-        insights.append("\n<b>Risk Warnings:</b>\n" + "\n".join(f"- {w}" for w in risk_warnings))
+        insights.append("\n<b>Risk Management:</b>\n" + "\n".join(f"- {w}" for w in risk_warnings))
 
     return "\n".join(insights)
 
