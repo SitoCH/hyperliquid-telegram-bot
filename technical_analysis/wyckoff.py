@@ -210,6 +210,10 @@ def identify_wyckoff_phase(
     volume_threshold, strong_dev_threshold, neutral_zone_threshold, \
     momentum_threshold, effort_threshold, _ = timeframe.settings.thresholds
 
+    # Use the passed recent_change instead of calculating it
+    is_strong_move = abs(recent_change) > 0.03  # 3% move in last 3 candles
+    is_very_strong_move = abs(recent_change) > 0.05  # 5% move in last 3 candles
+
     # Adjust thresholds based on price movement and volatility
     momentum_threshold, effort_threshold, volume_threshold = _adjust_thresholds(
         is_very_strong_move, is_strong_move, volatility, volatility.mean(),
