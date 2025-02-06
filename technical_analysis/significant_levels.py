@@ -32,7 +32,9 @@ def cluster_points(
         if not min_price <= price <= max_price:
             continue
             
-        recency_weight = 1 / (1 + np.exp(-5 * (timestamps[idx] / len(timestamps) - 0.5)))
+        # Add a decay factor to the recency weight
+        time_decay = 0.95 ** (len(timestamps) - timestamps[idx])
+        recency_weight = (1 / (1 + np.exp(-5 * (timestamps[idx] / len(timestamps) - 0.5)))) * time_decay
         nearby_price = next((p for p in clusters if abs(p - price) <= tolerance), None)
         
         if nearby_price:
@@ -61,6 +63,10 @@ def score_level(
     """
     Enhanced scoring that incorporates Wyckoff analysis and adjusts for available data
     """
+    # Check if max_vol is zero to avoid division by zero
+    if max_vol == 0:
+        return 0.0
+    
     volume_score = expit(cluster['vol_sum'] / max_vol * 3) * 0.4
     
     # Adjust touch thresholds based on available periods
@@ -72,7 +78,8 @@ def score_level(
     touch_score = (1 - 1/(1 + np.log1p(touch_ratio * 100))) * 0.35
     
     price_deviation = abs(cluster['price'] - current_price) / current_price
-    proximity_score = norm.pdf(price_deviation, scale=0.05) * 0.25  # Decreased from 0.3 to 0.25
+    # Use a more robust method for proximity score calculation
+    proximity_score = max(0, 1 - (price_deviation / 0.05)**2) * 0.25
     
     score = volume_score + touch_score + proximity_score
     
@@ -104,10 +111,13 @@ def score_level(
 def find_significant_levels(
     df: pd.DataFrame,
     current_price: float,
-    n_levels: int = 4, 
+    n_levels: int = 4,
     min_score: float = 0.2
 ) -> Tuple[List[float], List[float]]:
-    """Get significant price levels aligned with Wyckoff analysis"""
+    """
+    Find significant price levels (resistance and support) based on price and volume action,
+    incorporating Wyckoff phase analysis to adjust level scoring.
+    """
     if len(df) < MIN_PERIODS:
         return [], []
     
@@ -147,26 +157,35 @@ def find_significant_levels(
     total_periods = len(recent_df)
 
     def filter_levels(clusters: Dict[float, Dict[str, float]], is_resistance: bool) -> List[float]:
-        # First, get all valid levels with their scores
-        all_scored_levels = []
-        for cluster in clusters.values():
-            price = cluster['price']
-            score = score_level(cluster, max_vol, current_price, wyckoff_state, total_periods)
-            all_scored_levels.append((price, score))
-        
-        # Sort by price (high to low for resistance, low to high for support)
-        sorted_levels = sorted(all_scored_levels, key=lambda x: x[0], reverse=is_resistance)
-        
+        """Filters and scores clustered price levels to identify significant resistance or support."""
+        if not clusters:
+            return []
+
+        scored_levels: List[Tuple[float, float]] = [
+            (cluster['price'], score_level(cluster, max_vol, current_price, wyckoff_state, total_periods))
+            for cluster in clusters.values()
+        ]
+
+        # Sort by score, then by price (high to low for resistance, low to high for support)
+        sorted_levels: List[Tuple[float, float]] = sorted(
+            scored_levels,
+            key=lambda x: (x[1], x[0] if is_resistance else -x[0]),
+            reverse=True
+        )
+
         # Filter by position relative to current price and minimum score
-        valid_levels = [
-            (price, score) for price, score in sorted_levels
-            if ((is_resistance and price > current_price) or 
-                (not is_resistance and price < current_price)) and
+        valid_levels: List[float] = [
+            price for price, score in sorted_levels
+            if (is_resistance and price > current_price or
+                not is_resistance and price < current_price) and
             score > min_score
         ]
-        
-        # Now take the top n_levels
-        return [price for price, _ in valid_levels[:n_levels]]
+
+        # Check if valid_levels is empty
+        if not valid_levels:
+            return []
+
+        return valid_levels[:n_levels]
     
     return (
         filter_levels(clusters['resistance'], True),
