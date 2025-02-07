@@ -204,91 +204,77 @@ def identify_wyckoff_phase(
     volatility: pd.Series, timeframe: Timeframe, recent_change: float,
     high_vol_price: float, current_price: float
 ) -> WyckoffPhase:
-    """Enhanced Wyckoff phase identification for crypto markets."""
-    # Get thresholds from timeframe settings
+    """Enhanced Wyckoff phase identification optimized for intraday crypto trading."""
+    
+    # Get standard thresholds
     volume_threshold, strong_dev_threshold, neutral_zone_threshold, \
     momentum_threshold, effort_threshold, _ = timeframe.settings.thresholds
 
-    # Use the passed recent_change instead of calculating it
-    is_strong_move = abs(recent_change) > 0.03  # 3% move in last 3 candles
-    is_very_strong_move = abs(recent_change) > 0.05  # 5% move in last 3 candles
+    # Detect scalping opportunities based on timeframe
+    is_scalp_timeframe = timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]
+    if is_scalp_timeframe:
+        # Short-term breakout detection
+        breakout_threshold = 0.015  # 1.5% move for short timeframes
+        if abs(recent_change) > breakout_threshold and is_high_volume:
+            return (WyckoffPhase.MARKUP if recent_change > 0 
+                   else WyckoffPhase.MARKDOWN)
 
-    # Adjust thresholds based on price movement and volatility
-    momentum_threshold, effort_threshold, volume_threshold = _adjust_thresholds(
-        is_very_strong_move, is_strong_move, volatility, volatility.mean(),
-        momentum_threshold, effort_threshold, volume_threshold
-    )
-
-    # Detect potential manipulation
-    potential_manipulation = (
-        volume_spread > volume_spread_ma * 3.0 and  # Extreme volume spread
-        abs(effort_vs_result) < effort_threshold * 0.5  # Low price result
-    )
-    
-    if potential_manipulation:
-        return (WyckoffPhase.POSSIBLE_DISTRIBUTION if price_strength > 0 
-                else WyckoffPhase.POSSIBLE_ACCUMULATION)
-    
-    # Spring/Upthrust detection with volume confirmation
-    if is_spring and curr_volume > volume_sma * volume_threshold:
-        # Check for fake springs (common in crypto)
-        if effort_vs_result < -effort_threshold:
-            return WyckoffPhase.POSSIBLE_MARKDOWN
-        return WyckoffPhase.ACCUMULATION
-        
-    if is_upthrust and curr_volume > volume_sma * volume_threshold:
-        # Check for fake upthrusts
-        if effort_vs_result > effort_threshold:
-            return WyckoffPhase.POSSIBLE_MARKUP
-        return WyckoffPhase.DISTRIBUTION
-    
-    # Add divergence detection
-    volume_price_divergence = (
-        abs(volume_spread - volume_spread_ma) / volume_spread_ma > 1.5 and
-        abs(effort_vs_result) < effort_threshold * 0.5
-    )
-    
-    if volume_price_divergence:
-        # Potential reversal signal
-        if price_strength > 0:
-            return WyckoffPhase.POSSIBLE_DISTRIBUTION
-        return WyckoffPhase.POSSIBLE_ACCUMULATION
-    
-    # Enhanced momentum analysis for strong moves
-    if is_very_strong_move:
-        if recent_change > 0:
-            return WyckoffPhase.MARKUP if momentum_strength > 0 else WyckoffPhase.POSSIBLE_DISTRIBUTION
-        else:
-            return WyckoffPhase.MARKDOWN if momentum_strength < 0 else WyckoffPhase.POSSIBLE_ACCUMULATION
-
-    # Add liquidation cascade detection
+    # Enhanced liquidation cascade detection
+    volume_impulse = curr_volume / (volume_sma + 1e-8)
+    price_velocity = abs(recent_change) / (volatility.mean() + 1e-8)
     is_liquidation = (
-        abs(recent_change) > 0.1 and  # 10% move
-        curr_volume > volume_sma * 3 and  # Massive volume spike
-        volume_spread > volume_spread_ma * 2 and # High volume spread during cascade
-        abs(effort_vs_result) > 0.8  # Strong directional move
+        abs(recent_change) > 0.05 and  # 5% move
+        volume_impulse > 2.5 and       # Sharp volume spike
+        price_velocity > 2.0 and       # Fast price movement
+        abs(effort_vs_result) > 0.7    # Strong directional move
     )
-    
-    if is_liquidation:
-        return (
-            WyckoffPhase.MARKUP if recent_change > 0 and momentum_strength > 50
-            else WyckoffPhase.MARKDOWN if recent_change < 0 and momentum_strength < -50
-            else WyckoffPhase.RANGING  # If momentum doesn't confirm the move
-        )
-    
-    # Check if price is moving away from high volume node
-    deviation_direction = 1 if current_price > high_vol_price else -1
-    price_node_deviation = (current_price - high_vol_price) / high_vol_price
-    if abs(price_node_deviation) > 0.03:  # 3% threshold
-        if deviation_direction > 0 and momentum_strength > momentum_threshold:
-            return WyckoffPhase.MARKUP
-        elif deviation_direction < 0 and momentum_strength < -momentum_threshold:
-            return WyckoffPhase.MARKDOWN
 
-    # Immediately classify extremely high volume_spread as RANGING
-    if volume_spread > volume_spread_ma * 5.0:
+    if is_liquidation:
+        # Check for potential reversal after liquidation
+        if abs(recent_change) > 0.08:  # 8% move
+            return (WyckoffPhase.POSSIBLE_DISTRIBUTION if recent_change > 0
+                   else WyckoffPhase.POSSIBLE_ACCUMULATION)
+        return (WyckoffPhase.MARKUP if recent_change > 0
+                else WyckoffPhase.MARKDOWN)
+
+    # Mean reversion signals for ranging markets
+    price_deviation = (current_price - high_vol_price) / high_vol_price
+    is_mean_reversion = (
+        abs(price_deviation) > 0.02 and    # 2% away from VWAP
+        volume_impulse < 1.2 and           # Lower volume
+        abs(momentum_strength) < 30         # Weak momentum
+    )
+
+    if is_mean_reversion:
+        if abs(price_deviation) > 0.035:  # 3.5% deviation
+            return (WyckoffPhase.POSSIBLE_MARKDOWN if price_deviation > 0
+                   else WyckoffPhase.POSSIBLE_MARKUP)
         return WyckoffPhase.RANGING
+
+    # Short-term support/resistance breaks
+    if is_scalp_timeframe:
+        # Detect strong breaks with volume confirmation
+        is_strong_break = (
+            abs(recent_change) > 0.02 and  # 2% move
+            volume_impulse > 1.5 and       # Above average volume
+            abs(momentum_strength) > 50     # Strong momentum
+        )
+        if is_strong_break:
+            return (WyckoffPhase.MARKUP if recent_change > 0
+                   else WyckoffPhase.MARKDOWN)
+
+    # Volatility regime detection
+    current_volatility = volatility.iloc[-1]
+    volatility_percentile = (current_volatility - volatility.min()) / (volatility.max() - volatility.min() + 1e-8)
     
+    # Adjust thresholds based on volatility regime
+    if volatility_percentile > 0.7:  # High volatility regime
+        strong_dev_threshold *= 0.8
+        momentum_threshold *= 0.7
+    elif volatility_percentile < 0.3:  # Low volatility regime
+        strong_dev_threshold *= 1.2
+        momentum_threshold *= 1.3
+
     # Rest of the existing phase determination logic
     return determine_phase_by_price_strength(
         price_strength, momentum_strength, is_high_volume, volatility, timeframe
@@ -299,60 +285,90 @@ def _adjust_thresholds(
     volatility: pd.Series, avg_volatility: float,
     momentum_threshold: float, effort_threshold: float, volume_threshold: float
 ) -> Tuple[float, float, float]:
-    """Adjust thresholds based on price movement and volatility."""
-    # Adjust thresholds based on price movement
+    """Adjust thresholds with enhanced intraday sensitivity."""
+    
+    # Calculate intraday volatility ratio
+    recent_volatility = volatility.iloc[-12:].std()  # Last 12 periods
+    volatility_ratio = recent_volatility / volatility.std()
+    
+    # Dynamic adjustments based on intraday volatility
+    if volatility_ratio > 1.5:  # High intraday volatility
+        momentum_threshold *= 0.7  # More sensitive
+        effort_threshold *= 0.8
+        volume_threshold *= 1.2  # Require more volume confirmation
+    elif volatility_ratio < 0.7:  # Low intraday volatility
+        momentum_threshold *= 1.2  # Less sensitive
+        effort_threshold *= 1.1
+        volume_threshold *= 0.9  # Accept lower volume
+
+    # Existing price movement adjustments
     if is_very_strong_move:
-        momentum_threshold *= 0.6  # More sensitive to momentum
-        effort_threshold *= 0.7   # Lower effort requirement during strong moves
+        momentum_threshold *= 0.6
+        effort_threshold *= 0.7
     elif is_strong_move:
         momentum_threshold *= 0.8
         effort_threshold *= 0.85
 
-    # Adaptive thresholds based on market volatility
-    volatility_factor = min(2.0, 1.0 + volatility.iloc[-1] / avg_volatility)
+    # Enhanced volatility factor calculation
+    volatility_factor = min(2.0, (1.0 + volatility.iloc[-1] / avg_volatility) * volatility_ratio)
     
-    # Adjust thresholds based on volatility
-    volume_threshold = volume_threshold * volatility_factor
-    effort_threshold = effort_threshold * (1.0 / volatility_factor)
-
-    # Dynamic momentum threshold based on volatility
-    momentum_threshold = momentum_threshold * (1.0 + volatility_factor * 0.2)
-    
-    return momentum_threshold, effort_threshold, volume_threshold
+    # Final adjustments with volatility factor
+    return (
+        momentum_threshold * (1.0 + volatility_factor * 0.2),
+        effort_threshold * (1.0 / volatility_factor),
+        volume_threshold * volatility_factor
+    )
 
 def determine_phase_by_price_strength(
     price_strength: float, momentum_strength: float, 
     is_high_volume: bool, volatility: pd.Series,
     timeframe: Timeframe
 ) -> WyckoffPhase:
-    """Determine the Wyckoff phase based on price strength and other indicators."""
-    # Get thresholds from timeframe settings
+    """Enhanced phase determination with better trend confirmation."""
+    # Get thresholds
     _, strong_dev_threshold, neutral_zone_threshold, \
     momentum_threshold, _, _ = timeframe.settings.thresholds
 
+    # Calculate trend consistency
+    vol_ratio = volatility.iloc[-1] / volatility.mean()
+    
+    # Adjust thresholds for intraday volatility
+    if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]:
+        strong_dev_threshold *= 0.85  # More sensitive for short timeframes
+        neutral_zone_threshold *= 1.2  # Wider neutral zone for noise
+        momentum_threshold *= 0.9  # More sensitive momentum
+
+    # Detect potential reversal zones
+    is_reversal_zone = abs(price_strength) > strong_dev_threshold * 1.5
+
     if price_strength > strong_dev_threshold:
         if momentum_strength < -momentum_threshold and is_high_volume:
-            return WyckoffPhase.DISTRIBUTION
+            return WyckoffPhase.DISTRIBUTION if is_reversal_zone else WyckoffPhase.POSSIBLE_DISTRIBUTION
         return WyckoffPhase.POSSIBLE_DISTRIBUTION
     
     if price_strength < -strong_dev_threshold:
         if momentum_strength > momentum_threshold and is_high_volume:
-            return WyckoffPhase.ACCUMULATION
+            return WyckoffPhase.ACCUMULATION if is_reversal_zone else WyckoffPhase.POSSIBLE_ACCUMULATION
         return WyckoffPhase.POSSIBLE_ACCUMULATION
-    
+
+    # Enhanced ranging detection
     if abs(price_strength) <= neutral_zone_threshold:
-        if abs(momentum_strength) < momentum_threshold and volatility.iloc[-1] < volatility.mean():
+        is_low_volatility = vol_ratio < 0.8
+        if abs(momentum_strength) < momentum_threshold and is_low_volatility:
             return WyckoffPhase.RANGING
-        return WyckoffPhase.POSSIBLE_RANGING
-    
-    # Transitional zones
+        return WyckoffPhase.POSSIBLE_RANGING if vol_ratio < 1.2 else WyckoffPhase.POSSIBLE_MARKUP
+
+    # Improved trend confirmation
+    trend_strength = abs(momentum_strength) / momentum_threshold
+    is_strong_trend = trend_strength > 1.5 and is_high_volume
+
     if price_strength > 0:
         if momentum_strength > momentum_threshold:
-            return WyckoffPhase.MARKUP
+            return WyckoffPhase.MARKUP if is_strong_trend else WyckoffPhase.POSSIBLE_MARKUP
         return WyckoffPhase.POSSIBLE_MARKUP
     
     if momentum_strength < -momentum_threshold:
-        return WyckoffPhase.MARKDOWN
+        return WyckoffPhase.MARKDOWN if is_strong_trend else WyckoffPhase.POSSIBLE_MARKDOWN
     return WyckoffPhase.POSSIBLE_MARKDOWN
 
 
