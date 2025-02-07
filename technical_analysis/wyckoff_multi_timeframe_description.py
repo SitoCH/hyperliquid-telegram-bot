@@ -15,26 +15,30 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
     """Generate comprehensive description including three timeframe groups."""
     alignment_pct = f"{analysis.alignment_score * 100:.0f}%"
     confidence_pct = f"{analysis.confidence_level * 100:.0f}%"
+    
+    # Get overall momentum strength
+    momentum = _calculate_momentum_strength(analysis)
+    
+    # Get descriptions for all timeframe groups with momentum context
+    short_term_desc = _get_timeframe_trend_description(analysis.short_term, "Near-Term")
+    intermediate_desc = _get_timeframe_trend_description(analysis.intermediate, "Mid-Term")
+    long_term_desc = _get_timeframe_trend_description(analysis.long_term, "Long-Term")
 
-    # Get descriptions for all timeframe groups
-    short_term_desc = _get_timeframe_trend_description(analysis.short_term)
-    intermediate_desc = _get_timeframe_trend_description(analysis.intermediate)
-    long_term_desc = _get_timeframe_trend_description(analysis.long_term)
-
-    # Get market structure and context
+    # Enhanced market analysis
     structure = _get_full_market_structure(analysis)
     context = _determine_market_context(analysis)
+    sentiment = _analyze_market_sentiment(analysis)
     
-    # Get appropriate emoji
     emoji = _get_trend_emoji_all_timeframes(analysis)
-
-    # Generate action plan
     insight = _generate_actionable_insight_all_timeframes(analysis)
 
     description = (
-        f"{emoji} Market Structure Analysis:\n"
+        f"{emoji} <b>Market Analysis:</b>\n"
         f"Trend: {_determine_trend_strength(analysis)} {context}\n"
-        f"Market Structure: {structure}\n\n"
+        f"Market Structure: {structure}\n"
+        f"Momentum: {momentum}\n"
+        f"Sentiment: {sentiment}\n\n"
+        f"Timeframe Analysis:\n"
         f"Long-Term View (8h-1d):\n{long_term_desc}\n"
         f"Mid-Term View (1h-4h):\n{intermediate_desc}\n"
         f"Near-Term View (15m-30m):\n{short_term_desc}\n\n"
@@ -45,6 +49,124 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
     )
 
     return description
+
+def _calculate_momentum_strength(analysis: AllTimeframesAnalysis) -> str:
+    """
+    Calculate overall momentum strength across timeframes with enhanced weighting.
+    
+    Returns a descriptive string of the momentum strength considering:
+    - Weighted timeframe bias alignment
+    - Volume strength correlation
+    - Phase confirmation
+    """
+    # Define timeframe weights (sum = 1.0)
+    weights = {
+        "long": 0.45,    # Long-term carries most weight
+        "mid": 0.35,     # Mid-term secondary importance
+        "short": 0.20    # Short-term least weight but still significant
+    }
+    
+    # Calculate directional alignment with overall trend
+    timeframe_scores = {
+        "long": (
+            1.0 if analysis.long_term.momentum_bias == analysis.overall_direction
+            else 0.5 if analysis.long_term.momentum_bias == MultiTimeframeDirection.NEUTRAL
+            else 0.0
+        ),
+        "mid": (
+            1.0 if analysis.intermediate.momentum_bias == analysis.overall_direction
+            else 0.5 if analysis.intermediate.momentum_bias == MultiTimeframeDirection.NEUTRAL
+            else 0.0
+        ),
+        "short": (
+            1.0 if analysis.short_term.momentum_bias == analysis.overall_direction
+            else 0.5 if analysis.short_term.momentum_bias == MultiTimeframeDirection.NEUTRAL
+            else 0.0
+        )
+    }
+    
+    # Calculate volume-weighted momentum
+    volume_scores = {
+        "long": analysis.long_term.volume_strength,
+        "mid": analysis.intermediate.volume_strength,
+        "short": analysis.short_term.volume_strength
+    }
+    
+    # Calculate phase confirmation bonus
+    phase_bonus = {
+        "long": 0.2 if _is_phase_confirming_momentum(analysis.long_term) else 0.0,
+        "mid": 0.2 if _is_phase_confirming_momentum(analysis.intermediate) else 0.0,
+        "short": 0.2 if _is_phase_confirming_momentum(analysis.short_term) else 0.0
+    }
+    
+    # Calculate final weighted score
+    final_score = sum(
+        (timeframe_scores[tf] * 0.5 +      # 50% weight to directional alignment
+         volume_scores[tf] * 0.3 +         # 30% weight to volume confirmation
+         phase_bonus[tf] * 0.2) *          # 20% weight to phase confirmation
+        weights[tf]                        # Apply timeframe weight
+        for tf in weights.keys()
+    )
+    
+    # Return descriptive strength
+    if final_score > 0.85:
+        return "Extremely Strong"
+    elif final_score > 0.70:
+        return "Very Strong"
+    elif final_score > 0.55:
+        return "Strong"
+    elif final_score > 0.40:
+        return "Moderate"
+    elif final_score > 0.25:
+        return "Weak"
+    return "Very Weak"
+
+def _is_phase_confirming_momentum(analysis: TimeframeGroupAnalysis) -> bool:
+    """Check if the Wyckoff phase confirms the momentum bias."""
+    bullish_phases = {WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION}
+    bearish_phases = {WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION}
+    
+    if analysis.momentum_bias == MultiTimeframeDirection.BULLISH:
+        return analysis.dominant_phase in bullish_phases
+    elif analysis.momentum_bias == MultiTimeframeDirection.BEARISH:
+        return analysis.dominant_phase in bearish_phases
+    return False
+
+def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
+    """Analyze overall market sentiment considering multiple factors."""
+    factors = []
+    
+    # Analyze funding rates
+    avg_funding = (
+        analysis.short_term.funding_sentiment +
+        analysis.intermediate.funding_sentiment +
+        analysis.long_term.funding_sentiment
+    ) / 3
+    
+    if abs(avg_funding) > 0.7:
+        factors.append("Extreme" if avg_funding > 0 else "Very Negative")
+    elif abs(avg_funding) > 0.4:
+        factors.append("Bullish" if avg_funding > 0 else "Bearish")
+    
+    # Analyze liquidation risks
+    high_risk_count = sum(
+        1 for group in [analysis.short_term, analysis.intermediate, analysis.long_term]
+        if group.liquidation_risk == LiquidationRisk.HIGH
+    )
+    
+    if high_risk_count >= 2:
+        factors.append("High Risk")
+    
+    # Analyze volatility
+    if all(group.volatility_state == VolatilityState.HIGH 
+           for group in [analysis.short_term, analysis.intermediate]):
+        factors.append("Highly Volatile")
+    
+    # Combine factors
+    if not factors:
+        return "Neutral"
+    return " | ".join(factors)
+
 
 def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
     """Get comprehensive market structure description across three timeframes."""
@@ -315,10 +437,27 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
     return "\n".join(insights)
 
  
-def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
-    """Generate trend description for a timeframe group."""
-    return f"• {analysis.dominant_phase.value} phase {analysis.dominant_action.value} with " + (
+def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis, timeframe_name: str) -> str:
+    """Generate enhanced trend description for a timeframe group."""
+    volume_desc = (
         "strong volume" if analysis.volume_strength > 0.7 else
         "moderate volume" if analysis.volume_strength > 0.4 else
         "light volume"
+    )
+    
+    risk_warning = ""
+    if analysis.liquidation_risk == LiquidationRisk.HIGH:
+        risk_warning = " ⚠️ High liquidation risk"
+    
+    volatility = ""
+    if analysis.volatility_state == VolatilityState.HIGH:
+        volatility = " | High volatility"
+    
+    funding = ""
+    if abs(analysis.funding_sentiment) > 0.5:
+        funding = f" | {'Bullish' if analysis.funding_sentiment > 0 else 'Bearish'} funding"
+    
+    return (
+        f"• {analysis.dominant_phase.value} phase {analysis.dominant_action.value}\n"
+        f"  └─ {volume_desc}{volatility}{funding}{risk_warning}"
     )
