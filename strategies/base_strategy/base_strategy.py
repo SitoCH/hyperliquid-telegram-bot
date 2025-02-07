@@ -398,7 +398,7 @@ class BaseStrategy(ABC):
             
             # Calculate available balance after keeping target USDC
             available_usdc = max(0, usdc_balance - usdc_target_balance)
-            if available_usdc < self.config.min_position_size:  # Minimum amount to trade
+            if (available_usdc * self.config.leverage) < self.config.min_position_size:  # Minimum amount to trade
                 await telegram_utils.reply(
                     update, 
                     f"Insufficient balance for trading. Available: {fmt(available_usdc)} USDC after keeping {fmt(usdc_target_balance)} USDC as reserve"
