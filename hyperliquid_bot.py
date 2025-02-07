@@ -123,6 +123,7 @@ async def start(update, context):
 
 async def shutdown(application):
     logger.info("Shutting down Hyperliquid Telegram bot...")
+    hyperliquid_utils.info.disconnect_websocket()
     os._exit(0)
 
 if __name__ == "__main__":
