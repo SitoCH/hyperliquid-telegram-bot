@@ -151,18 +151,18 @@ class WyckoffState:
 
 @dataclass
 class TimeframeSettings:
-    phase_weight: float
-    ema_length: int
-    atr_settings: tuple[int, int, int, int, int]  # atr_length, macd_fast, macd_slow, macd_signal, st_length
-    supertrend_multiplier: float
-    base_multiplier: float
-    momentum_multiplier: float
-    description: str
-    
+    """Settings for technical analysis parameters per timeframe"""
+    phase_weight: float              # Used in get_phase_weight()
+    ema_length: int                  # Used in apply_indicators() for EMA calculation
+    atr_settings: tuple[int, int, int, int, int]  # Used in get_indicator_settings()
+    supertrend_multiplier: float     # Used in apply_indicators() for Supertrend
+    base_multiplier: float          # Used in thresholds property
+    momentum_multiplier: float      # Used in thresholds property
+    description: str                # Used for logging/display purposes
+
     @property
     def thresholds(self) -> tuple[float, float, float, float, float, float]:
-        """Returns (volume_threshold, strong_dev_threshold, neutral_zone_threshold, 
-                   momentum_threshold, effort_threshold, volume_surge_threshold)"""
+        """Returns standardized thresholds using multipliers"""
         return (
             1.5 * self.base_multiplier,      # volume_threshold
             1.8 * self.base_multiplier,      # strong_dev_threshold

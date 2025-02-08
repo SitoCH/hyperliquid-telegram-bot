@@ -218,6 +218,9 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
 
+    # Get optimized settings based on timeframe and data length
+    atr_length, macd_fast, macd_slow, macd_signal, st_length = get_indicator_settings(timeframe, len(df))
+
     # Add volume normalization
     df['v_sma'] = df['v'].rolling(window=20).mean()
     df['v_std'] = df['v'].rolling(window=20).std()
@@ -226,9 +229,6 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     
     # Volume trend strength
     df['v_trend'] = df['v'].rolling(window=5).mean() / df['v'].rolling(window=20).mean()
-
-    # Get optimized settings based on timeframe and data length
-    atr_length, macd_fast, macd_slow, macd_signal, st_length = get_indicator_settings(timeframe, len(df))
 
     # ATR for volatility analysis
     atr_calc = ta.atr(df["h"], df["l"], df["c"], length=atr_length)
@@ -269,7 +269,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
         df["MACD"] = df["MACD_Signal"] = df["MACD_Hist"] = 0.0
 
     # EMA length based on timeframe
-    df["EMA"] = ta.ema(df["c"], length=min(timeframe.settings.ema_length, len(df) - 1))
+    df["EMA"] = ta.ema(df["c"], length=timeframe.settings.ema_length)
     
     # Wyckoff Phase Detection
     detect_wyckoff_phase(df, timeframe, funding_rates)
