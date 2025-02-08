@@ -51,14 +51,7 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
     return description
 
 def _calculate_momentum_strength(analysis: AllTimeframesAnalysis) -> str:
-    """
-    Calculate overall momentum strength across timeframes with enhanced weighting.
-    
-    Returns a descriptive string of the momentum strength considering:
-    - Weighted timeframe bias alignment
-    - Volume strength correlation
-    - Phase confirmation
-    """
+    """Calculate and describe momentum in plain English."""
     # Define timeframe weights (sum = 1.0)
     weights = {
         "long": 0.45,    # Long-term carries most weight
@@ -108,18 +101,24 @@ def _calculate_momentum_strength(analysis: AllTimeframesAnalysis) -> str:
         for tf in weights.keys()
     )
     
-    # Return descriptive strength
+    # Replace basic strength descriptions with more detailed explanations
     if final_score > 0.85:
-        return "Extremely Strong"
+        if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
+            return "Strong buying pressure across all timeframes"
+        return "Strong selling pressure across all timeframes"
     elif final_score > 0.70:
-        return "Very Strong"
+        if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
+            return "Steady accumulation with increasing volume"
+        return "Sustained distribution with good volume"
     elif final_score > 0.55:
-        return "Strong"
+        if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
+            return "Moderate upward pressure"
+        return "Moderate downward pressure"
     elif final_score > 0.40:
-        return "Moderate"
+        return "Mixed momentum with no clear direction"
     elif final_score > 0.25:
-        return "Weak"
-    return "Very Weak"
+        return "Low momentum, possible consolidation phase"
+    return "Very low momentum, market likely ranging"
 
 def _is_phase_confirming_momentum(analysis: TimeframeGroupAnalysis) -> bool:
     """Check if the Wyckoff phase confirms the momentum bias."""
@@ -133,8 +132,8 @@ def _is_phase_confirming_momentum(analysis: TimeframeGroupAnalysis) -> bool:
     return False
 
 def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
-    """Analyze overall market sentiment considering multiple factors."""
-    factors = []
+    """Analyze overall market sentiment in clear terms."""
+    signals = []
     
     # Analyze funding rates
     avg_funding = (
@@ -143,29 +142,57 @@ def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
         analysis.long_term.funding_sentiment
     ) / 3
     
+    # Funding rate analysis
     if abs(avg_funding) > 0.7:
-        factors.append("Extreme" if avg_funding > 0 else "Very Negative")
+        if avg_funding > 0:
+            signals.append("Extremely high funding rates suggesting potential long squeeze")
+        else:
+            signals.append("Very negative funding rates suggesting potential short squeeze")
     elif abs(avg_funding) > 0.4:
-        factors.append("Bullish" if avg_funding > 0 else "Bearish")
+        if avg_funding > 0:
+            signals.append("Longs paying high premiums")
+        else:
+            signals.append("Shorts paying high premiums")
     
-    # Analyze liquidation risks
+    # Liquidation risk analysis
     high_risk_count = sum(
         1 for group in [analysis.short_term, analysis.intermediate, analysis.long_term]
         if group.liquidation_risk == LiquidationRisk.HIGH
     )
     
     if high_risk_count >= 2:
-        factors.append("High Risk")
+        signals.append("High liquidation risk, cascading liquidations possible")
     
-    # Analyze volatility
+    # Volatility analysis with timeframe context
     if all(group.volatility_state == VolatilityState.HIGH 
            for group in [analysis.short_term, analysis.intermediate]):
-        factors.append("Highly Volatile")
+        if analysis.long_term.volatility_state == VolatilityState.HIGH:
+            signals.append("Extreme volatility across all timeframes")
+        else:
+            signals.append("High short-term volatility, choppy conditions")
     
-    # Combine factors
-    if not factors:
-        return "Neutral"
-    return " | ".join(factors)
+    # Volume context
+    volume_signals = []
+    for group in [analysis.short_term, analysis.intermediate, analysis.long_term]:
+        if group.volume_strength > 0.8:
+            volume_signals.append(1)
+        elif group.volume_strength < 0.3:
+            volume_signals.append(-1)
+        else:
+            volume_signals.append(0)
+    
+    avg_volume = sum(volume_signals) / len(volume_signals)
+    if abs(avg_volume) > 0.5:
+        if avg_volume > 0:
+            signals.append("Strong volume confirming moves")
+        else:
+            signals.append("Low volume suggesting weak conviction")
+    
+    # Combine all signals into a readable format
+    if not signals:
+        return "Neutral market conditions"
+    
+    return " • ".join(signals)
 
 
 def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
