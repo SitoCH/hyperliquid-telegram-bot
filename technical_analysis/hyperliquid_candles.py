@@ -218,6 +218,15 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
 
+    # Add volume normalization
+    df['v_sma'] = df['v'].rolling(window=20).mean()
+    df['v_std'] = df['v'].rolling(window=20).std()
+    df['v_normalized'] = (df['v'] - df['v_sma']) / df['v_std']
+    df['v_ratio'] = df['v'] / df['v_sma']
+    
+    # Volume trend strength
+    df['v_trend'] = df['v'].rolling(window=5).mean() / df['v'].rolling(window=20).mean()
+
     # Get optimized settings based on timeframe and data length
     atr_length, macd_fast, macd_slow, macd_signal, st_length = get_indicator_settings(timeframe, len(df))
 

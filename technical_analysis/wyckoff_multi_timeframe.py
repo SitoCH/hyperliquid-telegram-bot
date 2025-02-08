@@ -216,9 +216,29 @@ def _analyze_timeframe_group(
     action_alignment = max(action_weights.values()) / total_weight if action_weights else 0
     internal_alignment = (phase_alignment + action_alignment) / 2
 
-    # Calculate volume strength with exhaustion consideration
-    volume_strength = sum(1 for s in group.values() if s.volume == VolumeState.HIGH) / len(group)
+    # Enhanced volume strength calculation
+    volume_factors = []
+    for state in group.values():
+        base_strength = 1.0 if state.volume == VolumeState.HIGH else 0.5
+        
+        # Adjust based on effort vs result
+        if state.effort_vs_result == EffortResult.STRONG:
+            base_strength *= 1.2
+        elif state.effort_vs_result == EffortResult.WEAK:
+            base_strength *= 0.8
+            
+        # Adjust for phase confirmation
+        if state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN]:
+            if state.composite_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
+                base_strength *= 1.3
+                
+        volume_factors.append(base_strength)
     
+    volume_strength = sum(volume_factors) / len(volume_factors)
+    
+    # Clamp volume strength between 0 and 1
+    volume_strength = max(0.0, min(1.0, volume_strength))
+
     # Adjust volume strength based on exhaustion signals
     if upside_exhaustion >= len(group) // 2:
         volume_strength *= 0.7  # Reduce volume significance if exhaustion detected
@@ -382,7 +402,7 @@ def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> floa
 
 
 def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
-    """Calculate overall confidence with improved crypto-specific weights."""
+    """Calculate overall confidence with improved volume handling."""
     if not analyses:
         return 0.0
 
@@ -390,30 +410,60 @@ def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> flo
     if total_weight == 0:
         return 0.0
 
-    # Adjusted weights for crypto markets
-    alignment_weight = 0.35  # Reduced emphasis on alignment
-    volume_weight = 0.40  # Increased emphasis on volume
-    consistency_weight = 0.25  # Trend consistency remains important
+    # Adjusted weights for better balance
+    alignment_weight = 0.30
+    volume_weight = 0.35
+    consistency_weight = 0.35
 
-    # Volume Confirmation: Simplified calculation
-    volume_confirmation = sum(analysis.volume_strength * analysis.group_weight for analysis in analyses) / total_weight
+    # Enhanced volume confirmation
+    volume_scores = []
+    for analysis in analyses:
+        # Base volume score
+        base_score = analysis.volume_strength
+        
+        # Boost score if volume aligns with momentum
+        if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL:
+            if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
+                base_score *= 1.2
+            elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
+                base_score *= 1.1
+                
+        volume_scores.append(base_score * (analysis.group_weight / total_weight))
+    
+    volume_confirmation = sum(volume_scores)
 
-    # Trend Consistency: Focus on directional agreement
-    directional_agreement = sum(
-        (1 if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL else 0) * analysis.group_weight for analysis in analyses
-    ) / total_weight
+    # Enhanced trend consistency calculation
+    directional_scores = []
+    prev_bias = None
+    for analysis in sorted(analyses, key=lambda x: x.group_weight, reverse=True):
+        score = 1.0 if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL else 0.5
+        
+        # Check for bias alignment with higher timeframes
+        if prev_bias and analysis.momentum_bias == prev_bias:
+            score *= 1.2
+        
+        directional_scores.append(score * (analysis.group_weight / total_weight))
+        prev_bias = analysis.momentum_bias
+    
+    directional_agreement = sum(directional_scores)
 
-    # Final Confidence: Revised formula
+    # Calculate alignment score
+    alignment_score = _calculate_overall_alignment(analyses)
+
+    # Combine scores with dynamic minimum threshold
     raw_confidence = (
         volume_confirmation * volume_weight +
         directional_agreement * consistency_weight +
-        _calculate_overall_alignment(analyses) * alignment_weight
+        alignment_score * alignment_weight
     )
 
-    # Minimum Confidence Threshold: Simplified
-    min_confidence = 0.2 if all(analysis.volume_strength > 0.6 for analysis in analyses) else 0.0
-
-    return max(min(raw_confidence, 1.0), min_confidence)
+    # Dynamic minimum confidence based on volume and alignment
+    min_confidence = 0.3 if all(a.volume_strength > 0.7 and a.internal_alignment > 0.6 for a in analyses) else 0.0
+    
+    # Apply sigmoid-like scaling to emphasize strong signals
+    scaled_confidence = 1 / (1 + pow(2.0, -5 * (raw_confidence - 0.5)))
+    
+    return max(min(scaled_confidence, 1.0), min_confidence)
 
 def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> MultiTimeframeDirection:
     """Determine overall direction considering all timeframe groups."""
