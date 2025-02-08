@@ -5,7 +5,7 @@ description = "-"
 readme = "README.md"
 requires-python = ">=3.10, < 3.11"
 dependencies = [
-    "hyperliquid-python-sdk>=0.7.1",
+    "hyperliquid-python-sdk<0.10.0",
     "matplotlib>=3.9.2",
     "mplfinance>=0.12.10b0",
     "pandas-stubs>=2.2.3.241126",

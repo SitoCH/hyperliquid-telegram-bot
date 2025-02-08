@@ -43,7 +43,7 @@ class HyperliquidUtils:
 
     def on_websocket_close(self, ws, close_status_code, close_msg):
         logger.warning(f"Websocket closed: {close_msg}")
-        # telegram_utils.send_and_exit("Websocket error, restarting the application...")
+        telegram_utils.send_and_exit("Websocket error, restarting the application...")
 
     def get_exchange(self):
         key_file = os.environ.get("HTB_KEY_FILE")
