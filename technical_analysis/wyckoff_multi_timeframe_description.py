@@ -20,9 +20,9 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
     momentum = _calculate_momentum_strength(analysis)
     
     # Get descriptions for all timeframe groups with momentum context
-    short_term_desc = _get_timeframe_trend_description(analysis.short_term, "Near-Term")
-    intermediate_desc = _get_timeframe_trend_description(analysis.intermediate, "Mid-Term")
-    long_term_desc = _get_timeframe_trend_description(analysis.long_term, "Long-Term")
+    short_term_desc = _get_timeframe_trend_description(analysis.short_term)
+    intermediate_desc = _get_timeframe_trend_description(analysis.intermediate)
+    long_term_desc = _get_timeframe_trend_description(analysis.long_term)
 
     # Enhanced market analysis
     structure = _get_full_market_structure(analysis)
@@ -38,11 +38,11 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
         f"Market Structure: {structure}\n"
         f"Momentum: {momentum}\n"
         f"Sentiment: {sentiment}\n\n"
-        f"Timeframe Analysis:\n"
+        f"<b>Timeframe Analysis:</b>\n"
         f"Long-Term View (8h-1d):\n{long_term_desc}\n"
         f"Mid-Term View (1h-4h):\n{intermediate_desc}\n"
         f"Near-Term View (15m-30m):\n{short_term_desc}\n\n"
-        f"Signal Quality:\n"
+        f"<b>Signal Quality:</b>\n"
         f"• Timeframe Alignment: {alignment_pct}\n"
         f"• Confidence Level: {confidence_pct}\n\n"
         f"{insight}"
@@ -261,8 +261,8 @@ def _determine_market_context(analysis: AllTimeframesAnalysis) -> str:
 
     if analysis.overall_direction == MultiTimeframeDirection.NEUTRAL:
         if volume_strength > 0.7:
-            return "high-volume ranging market"
-        return "low-volume consolidation"
+            return "high volume ranging market"
+        return "low volume consolidation"
 
     context = analysis.overall_direction.value
     if volume_strength > 0.7 and analysis.confidence_level > 0.7:
@@ -342,77 +342,47 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
     if analysis.confidence_level < 0.5:
         return "<b>Analysis:</b>\nLow confidence signals across timeframes.\n<b>Recommendation:</b>\nReduce exposure and wait for clearer setups."
 
-    def get_full_context() -> tuple[str, str]:
+    def get_action_plan() -> str:
         """Get base signal and action plan based on all timeframes."""
         if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
             if analysis.confidence_level > 0.7:
-                base_signal = (
-                    f"Strong bullish alignment across multiple timeframes. "
-                    f"Intermediate timeframe shows {analysis.intermediate.dominant_phase.value} phase, "
-                    f"supported by {analysis.intermediate.dominant_action.value} and strong volume (strength: {analysis.intermediate.volume_strength:.2f}). "
-                    f"High conviction uptrend."
-                )
-                action_plan = (
+                return (
                     "Longs: Prioritize entries on dips with tight stop-losses below key support levels. "
                     "Consider adding to positions as the trend strengthens.\n"
                     "Shorts: Avoid, high risk of bull traps. If shorting, use extremely tight stop-losses."
                 )
-                return base_signal, action_plan
 
-            base_signal = (
-                f"Developing bullish structure with mixed timeframe signals. "
-                f"Intermediate timeframe shows {analysis.intermediate.dominant_phase.value} phase, "
-                f"indicating {analysis.intermediate.dominant_action.value}. "
-                f"Volume strength is moderate ({analysis.intermediate.volume_strength:.2f}). Watch for confirmation signals."
-            )
-            action_plan = (
+            return (
                 "Longs: Scaled entries near support zones with careful risk management. "
                 "Use smaller position sizes due to mixed signals.\n"
                 "Shorts: Only consider at significant resistance with strong bearish signals. "
                 "Confirm with price action before entering."
             )
-            return base_signal, action_plan
 
         elif analysis.overall_direction == MultiTimeframeDirection.BEARISH:
             if analysis.confidence_level > 0.7:
-                base_signal = (
-                    f"Strong bearish alignment across multiple timeframes. "
-                    f"Intermediate timeframe shows {analysis.intermediate.dominant_phase.value} phase, "
-                    f"confirmed by {analysis.intermediate.dominant_action.value} and sustained selling pressure. "
-                    f"High conviction downtrend with volume strength of {analysis.intermediate.volume_strength:.2f}."
-                )
-                action_plan = (
+                return (
                     "Shorts: Focus on entries during rallies with tight stop-losses above key resistance levels. "
                     "Add to positions as the trend accelerates.\n"
                     "Longs: Avoid, high risk of bear traps. If longing, use extremely tight stop-losses."
                 )
-                return base_signal, action_plan
 
-            base_signal = (
-                f"Developing bearish structure with mixed timeframe signals. "
-                f"Intermediate timeframe shows {analysis.intermediate.dominant_phase.value} phase, "
-                f"indicating {analysis.intermediate.dominant_action.value}. "
-                f"Awaiting further bearish confirmation. Volume strength is {analysis.intermediate.volume_strength:.2f}."
-            )
-            action_plan = (
+            return (
                 "Shorts: Scaled entries near resistance zones with strict risk control. "
                 "Confirm bearish signals with price action and volume.\n"
                 "Longs: Only attempt at major support with clear bullish reversal patterns. "
                 "Be cautious of potential bear traps."
             )
-            return base_signal, action_plan
 
-        volume_context = "high-volume indecision" if analysis.intermediate.volume_strength > 0.7 else "low-volume consolidation"
-        base_signal = f"Mixed signals across timeframes indicating a transitional or ranging market. {volume_context}."
         action_plan = (
             "Both Directions: Trade range extremes with confirmation. "
             "Use smaller position sizes and tighter stop-losses.\n"
             "Avoid large positions until a clear trend emerges. "
             "Focus on short-term trades."
         )
-        return base_signal, action_plan
+        return action_plan
 
-    base_signal, action_plan = get_full_context()
+    action_plan = get_action_plan()
 
     # Add timeframe-specific insights
     timeframe_insights = []
@@ -454,9 +424,9 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         )
 
     # Format the complete insight
-    insights = [f"<b>Market Overview:</b>\n{base_signal}"]
+    insights = []
     if timeframe_insights:
-        insights.append("\n<b>Timeframe Analysis:</b>\n" + "\n".join(f"- {i}" for i in timeframe_insights))
+        insights.append("<b>Timeframe Analysis:</b>\n" + "\n".join(f"- {i}" for i in timeframe_insights))
     insights.append(f"\n<b>Trading Strategy:</b>\n{action_plan}")
     if risk_warnings:
         insights.append("\n<b>Risk Management:</b>\n" + "\n".join(f"- {w}" for w in risk_warnings))
@@ -464,7 +434,7 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
     return "\n".join(insights)
 
  
-def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis, timeframe_name: str) -> str:
+def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
     """Generate enhanced trend description for a timeframe group."""
     volume_desc = (
         "strong volume" if analysis.volume_strength > 0.7 else
