@@ -1,4 +1,5 @@
 import io
+import os
 import time
 from tzlocal import get_localzone
 from typing import List, Dict, Any, cast, Tuple
@@ -41,7 +42,7 @@ async def execute_ta(update: Update, context: CallbackContext) -> int:
     if context.args and len(context.args) > 0:
         coin = context.args[0]
         await update.message.reply_text(text=f"Analyzing {coin}...")
-        await analyze_candles_for_coin(context, coin, always_notify=True)
+        await analyze_candles_for_coin(context, coin, True)
         return ConversationHandler.END
     
     await update.message.reply_text("Choose a coin to analyze:", reply_markup=hyperliquid_utils.get_coins_reply_markup())
@@ -64,7 +65,7 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
         return ConversationHandler.END
 
     await query.edit_message_text(text=f"Analyzing {coin}...")
-    await analyze_candles_for_coin(context, coin, always_notify=True)
+    await analyze_candles_for_coin(context, coin, True)
     await query.delete_message()
     return ConversationHandler.END
 
@@ -74,7 +75,7 @@ async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
 
     coins_to_analyze = context.job.data['coins_to_analyze'] # type: ignore
     coin = coins_to_analyze.pop()
-    await analyze_candles_for_coin(context, coin, always_notify=False)
+    await analyze_candles_for_coin(context, coin, False)
     
     # Schedule next coin if any remain
     if coins_to_analyze:
@@ -104,7 +105,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, always_notify: bool) -> None:
+async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:
     start_time = time.time()
     logger.info(f"Running TA for {coin}")
     try:
@@ -145,9 +146,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         # Add multi-timeframe analysis
         mtf_context = analyze_multi_timeframe(states)
 
+        min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
         should_notify = (
-            always_notify or 
-            (mtf_context.confidence_level > 0.70 and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
+            interactive_analysis or 
+            (mtf_context.confidence_level > min_confidence and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
         )
 
         if should_notify:
@@ -159,13 +161,13 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
                 dataframes[Timeframe.HOUR_1],
                 dataframes[Timeframe.HOURS_4],
                 coin, 
-                always_notify, 
+                interactive_analysis, 
                 mtf_context
             )
 
     except Exception as e:
         logger.error(f"Failed to analyze candles for {coin}: {str(e)}", exc_info=True)
-        if always_notify:
+        if interactive_analysis:
             await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
     
     logger.info(f"TA for {coin} done in {(time.time() - start_time):.2f} seconds")
