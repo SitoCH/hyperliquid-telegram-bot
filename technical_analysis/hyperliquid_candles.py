@@ -149,7 +149,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
         should_notify = (
             interactive_analysis or 
-            (mtf_context.confidence_level > min_confidence and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
+            (mtf_context.confidence_level >= min_confidence and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
         )
 
         if should_notify:
