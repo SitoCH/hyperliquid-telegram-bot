@@ -144,7 +144,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
                 states[tf] = None
 
         # Add multi-timeframe analysis
-        mtf_context = analyze_multi_timeframe(states)
+        mtf_context = analyze_multi_timeframe(states, interactive_analysis)
 
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
         should_notify = (

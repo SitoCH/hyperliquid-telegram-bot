@@ -11,20 +11,16 @@ from .wyckoff_types import (
 )
 
 
-def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
+def generate_all_timeframes_description(analysis: AllTimeframesAnalysis, interactive_analysis: bool) -> str:
     """Generate comprehensive description including three timeframe groups."""
     alignment_pct = f"{analysis.alignment_score * 100:.0f}%"
     confidence_pct = f"{analysis.confidence_level * 100:.0f}%"
     
-    # Get overall momentum strength
     momentum = _calculate_momentum_strength(analysis)
-    
-    # Get descriptions for all timeframe groups with momentum context
     short_term_desc = _get_timeframe_trend_description(analysis.short_term)
     intermediate_desc = _get_timeframe_trend_description(analysis.intermediate)
     long_term_desc = _get_timeframe_trend_description(analysis.long_term)
 
-    # Enhanced market analysis
     structure = _get_full_market_structure(analysis)
     context = _determine_market_context(analysis)
     sentiment = _analyze_market_sentiment(analysis)
@@ -32,12 +28,19 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
     emoji = _get_trend_emoji_all_timeframes(analysis)
     insight = _generate_actionable_insight_all_timeframes(analysis)
 
-    description = (
+    base_description = (
         f"{emoji} <b>Market Analysis:</b>\n"
         f"Trend: {_determine_trend_strength(analysis)} {context}\n"
         f"Market Structure: {structure}\n"
         f"Momentum: {momentum}\n"
-        f"Sentiment: {sentiment}\n\n"
+        f"Sentiment: {sentiment}\n"
+    )
+
+    if not interactive_analysis:
+        return base_description
+
+    full_description = (
+        f"{base_description}\n"
         f"<b>Timeframe Analysis:</b>\n"
         f"Long-Term View (8h-1d):\n{long_term_desc}\n"
         f"Mid-Term View (1h-4h):\n{intermediate_desc}\n"
@@ -48,7 +51,7 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis) -> str:
         f"{insight}"
     )
 
-    return description
+    return full_description
 
 def _calculate_momentum_strength(analysis: AllTimeframesAnalysis) -> str:
     """Calculate and describe momentum in plain English."""
