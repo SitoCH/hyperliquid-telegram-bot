@@ -205,16 +205,16 @@ class Timeframe(Enum):
 # Rebalanced weights for crypto focus
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.15,  # 15%
-        ema_length=8,      
+        phase_weight=0.10,
+        ema_length=8,
         atr_settings=(8, 5, 13, 3, 5),
         supertrend_multiplier=2.0,
         base_multiplier=1.05,
-        momentum_multiplier=1.15,
+        momentum_multiplier=1.2,
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.20,  # 20%
+        phase_weight=0.15,
         ema_length=13,
         atr_settings=(10, 6, 18, 4, 6),
         supertrend_multiplier=2.3,
@@ -223,16 +223,16 @@ _TIMEFRAME_SETTINGS = {
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.25,  # 25%
+        phase_weight=0.30,
         ema_length=21,
         atr_settings=(14, 9, 21, 7, 8),
-        supertrend_multiplier=2.6,  # More sensitive
+        supertrend_multiplier=2.6,
         base_multiplier=1.25,
         momentum_multiplier=1.35,
         description="Hourly trend"
     ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.17,  # Adjusted from 0.15 to 17%
+        phase_weight=0.25,
         ema_length=34,
         atr_settings=(34, 12, 34, 9, 14),
         supertrend_multiplier=3.0,  # Reduced from 3.3
@@ -241,7 +241,7 @@ _TIMEFRAME_SETTINGS = {
         description="4h trend"
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.13,  # Adjusted from 0.12 to 13%
+        phase_weight=0.12,
         ema_length=41,
         atr_settings=(38, 12, 40, 9, 16),
         supertrend_multiplier=3.2,  # Reduced from 3.5
@@ -250,7 +250,7 @@ _TIMEFRAME_SETTINGS = {
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.10,  # Adjusted from 0.08 to 10%
+        phase_weight=0.08,
         ema_length=55,
         atr_settings=(41, 12, 48, 9, 21),
         supertrend_multiplier=3.5,  # Reduced from 3.8
