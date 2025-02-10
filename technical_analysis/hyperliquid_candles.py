@@ -31,9 +31,9 @@ def get_significant_levels(coin: str, mid: float, timeframe: Timeframe, lookback
     candles = get_candles_with_cache(coin, timeframe, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
     local_tz = get_localzone()
     df = prepare_dataframe(candles, local_tz)
-    funding_rates = get_funding_with_cache(coin, now, 7)
-    apply_indicators(df, timeframe, funding_rates, local_tz)
+    apply_indicators(df, timeframe)
     df = df.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+    funding_rates = get_funding_with_cache(coin, now, 7)
     return find_significant_levels(df, detect_wyckoff_phase(remove_partial_candle(df, local_tz), timeframe, funding_rates), mid)
 
 
@@ -140,7 +140,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         states = {}
         for tf, df in dataframes.items():
             if not df.empty:
-                apply_indicators(df, tf, funding_rates, local_tz)
+                apply_indicators(df, tf)
                 states[tf] = detect_wyckoff_phase(remove_partial_candle(df, local_tz), tf, funding_rates)
             else:
                 states[tf] = WyckoffState.unknown()
@@ -244,7 +244,6 @@ def remove_partial_candle(df: pd.DataFrame, local_tz: Any) -> pd.DataFrame:
         
         if last_candle_time + candle_duration > now:
             df = df.iloc[:-1]
-            logger.debug(f"Removed partial candle at {last_candle_time}")
         
         return df
     except Exception as e:
@@ -252,7 +251,7 @@ def remove_partial_candle(df: pd.DataFrame, local_tz: Any) -> pd.DataFrame:
         return df
 
 
-def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry], local_tz: Any) -> None:
+def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
     """Apply technical indicators with Wyckoff-optimized settings"""
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
