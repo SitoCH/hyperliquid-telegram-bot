@@ -110,6 +110,7 @@ def score_level(
 
 def find_significant_levels(
     df: pd.DataFrame,
+    wyckoff_state: WyckoffState,
     current_price: float,
     n_levels: int = 4,
     min_score: float = 0.2
@@ -143,8 +144,6 @@ def find_significant_levels(
         volumes=recent_df['Volume'].values,
         timestamps=np.arange(len(recent_df))
     )
-
-    wyckoff_state = df['wyckoff'].iloc[-1]
 
     clusters = {
         'resistance': cluster_points(np.asarray(data['highs']), np.asarray(data['volumes']), np.asarray(data['timestamps']),

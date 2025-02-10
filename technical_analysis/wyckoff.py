@@ -116,12 +116,11 @@ def detect_spring_upthrust(df: pd.DataFrame, idx: int, vol_metrics: VolumeMetric
         logger.error(f"Error in spring/upthrust detection: {e}")
         return False, False
 
-def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> None:
+def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> WyckoffState:
     """Analyze and store Wyckoff phase data incorporating funding rates."""
     # Safety check for minimum required periods
     if len(df) < MIN_PERIODS:
-        df.loc[df.index[-1:], 'wyckoff'] = WyckoffState.unknown()
-        return
+        return WyckoffState.unknown()
 
     try:
         # Calculate volume metrics first
@@ -257,10 +256,10 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
             )
         )
 
-        df.loc[df.index[-1], 'wyckoff'] = wyckoff_state # type: ignore
+        return wyckoff_state # type: ignore
     except Exception as e:
         logger.error(f"Error in Wyckoff phase detection: {e}")
-        df.loc[df.index[-1:], 'wyckoff'] = WyckoffState.unknown()
+        return WyckoffState.unknown()
 
 def identify_wyckoff_phase(
     is_spring: bool, is_upthrust: bool, curr_volume: float, volume_sma: float,

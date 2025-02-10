@@ -18,7 +18,7 @@ from technical_analysis.significant_levels import find_significant_levels
 from technical_analysis.wyckoff import detect_wyckoff_phase
 from technical_analysis.candles_utils import get_coins_to_analyze
 from technical_analysis.candles_cache import get_candles_with_cache
-from technical_analysis.wyckoff_types import Timeframe
+from technical_analysis.wyckoff_types import Timeframe, WyckoffState
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from technical_analysis.wykcoff_chart import generate_chart
 from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe, MultiTimeframeDirection
@@ -29,10 +29,12 @@ SELECTING_COIN_FOR_TA = range(1)
 def get_significant_levels(coin: str, mid: float, timeframe: Timeframe, lookback_days: int) -> Tuple[List[float], List[float]]:
     now = int(time.time() * 1000)
     candles = get_candles_with_cache(coin, timeframe, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
-    df = prepare_dataframe(candles, get_localzone())
-    apply_indicators(df, timeframe, get_funding_with_cache(coin, now, 7))
+    local_tz = get_localzone()
+    df = prepare_dataframe(candles, local_tz)
+    funding_rates = get_funding_with_cache(coin, now, 7)
+    apply_indicators(df, timeframe, funding_rates, local_tz)
     df = df.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-    return find_significant_levels(df, mid)
+    return find_significant_levels(df, detect_wyckoff_phase(remove_partial_candle(df, local_tz), timeframe, funding_rates), mid)
 
 
 async def execute_ta(update: Update, context: CallbackContext) -> int:
@@ -138,10 +140,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         states = {}
         for tf, df in dataframes.items():
             if not df.empty:
-                apply_indicators(df, tf, funding_rates)
-                states[tf] = df['wyckoff'].iloc[-1]
+                apply_indicators(df, tf, funding_rates, local_tz)
+                states[tf] = detect_wyckoff_phase(remove_partial_candle(df, local_tz), tf, funding_rates)
             else:
-                states[tf] = None
+                states[tf] = WyckoffState.unknown()
 
         # Add multi-timeframe analysis
         mtf_context = analyze_multi_timeframe(states, interactive_analysis)
@@ -157,9 +159,8 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
             await send_trend_change_message(
                 context, 
                 mid, 
-                dataframes[Timeframe.MINUTES_15],
-                dataframes[Timeframe.HOUR_1],
-                dataframes[Timeframe.HOURS_4],
+                dataframes,
+                states,
                 coin, 
                 interactive_analysis, 
                 mtf_context
@@ -215,7 +216,43 @@ def get_indicator_settings(timeframe: Timeframe, data_length: int) -> tuple[int,
 
     return atr_length, macd_fast, macd_slow, macd_signal, st_length
 
-def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> None:
+
+def remove_partial_candle(df: pd.DataFrame, local_tz: Any) -> pd.DataFrame:
+    """
+    Remove the last candle if it's partial (incomplete).
+    
+    Args:
+        df: DataFrame containing candle data
+        local_tz: Local timezone for timestamp comparison
+    
+    Returns:
+        DataFrame with partial candle removed if present
+    """
+    if df.empty:
+        return df
+        
+    try:
+        now = pd.Timestamp.now(tz=local_tz)
+        last_candle_time = df.index[-1]
+        
+        # Calculate expected duration
+        if len(df) >= 2:
+            previous_time = df.index[-2]
+            candle_duration = last_candle_time - previous_time
+        else:
+            candle_duration = pd.Timedelta(minutes=1)
+        
+        if last_candle_time + candle_duration > now:
+            df = df.iloc[:-1]
+            logger.debug(f"Removed partial candle at {last_candle_time}")
+        
+        return df
+    except Exception as e:
+        logger.error(f"Error removing partial candle: {str(e)}", exc_info=True)
+        return df
+
+
+def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry], local_tz: Any) -> None:
     """Apply technical indicators with Wyckoff-optimized settings"""
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
@@ -272,21 +309,18 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List
 
     # EMA length based on timeframe
     df["EMA"] = ta.ema(df["c"], length=timeframe.settings.ema_length)
-    
-    # Wyckoff Phase Detection
-    detect_wyckoff_phase(df, timeframe, funding_rates)
 
 
-async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str, send_charts: bool, mtf_context: MultiTimeframeContext) -> None:
+async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, dataframes: dict[Timeframe, pd.DataFrame], states: dict[Timeframe, WyckoffState], coin: str, send_charts: bool, mtf_context: MultiTimeframeContext) -> None:
     
     if send_charts:
         charts = []
         try:
-            charts = generate_chart(df_15m, df_1h, df_4h, coin, mid)
+            charts = generate_chart(dataframes, states, coin, mid)
             
-            results_15m = get_ta_results(df_15m, mid)
-            results_1h = get_ta_results(df_1h, mid)
-            results_4h = get_ta_results(df_4h, mid)
+            results_15m = get_ta_results(dataframes[Timeframe.MINUTES_15], states[Timeframe.MINUTES_15], mid)
+            results_1h = get_ta_results(dataframes[Timeframe.HOUR_1], states[Timeframe.HOUR_1], mid)
+            results_4h = get_ta_results(dataframes[Timeframe.HOURS_4], states[Timeframe.HOURS_4], mid)
 
             no_wyckoff_data_available = 'No Wyckoff data available'
 
@@ -341,7 +375,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
     )
 
 
-def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
+def get_ta_results(df: pd.DataFrame, wyckoff: WyckoffState, mid: float) -> Dict[str, Any]:
     # Check if we have enough data points
     if len(df["SuperTrend"]) < 2 or len(df["VWAP"]) < 2:
         logger.warning("Insufficient data for technical analysis results")
@@ -359,8 +393,6 @@ def get_ta_results(df: pd.DataFrame, mid: float) -> Dict[str, Any]:
 
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
     vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
-
-    wyckoff = df['wyckoff'].iloc[-1]
 
     return {
         "supertrend_prev": supertrend_prev,

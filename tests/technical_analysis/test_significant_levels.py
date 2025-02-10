@@ -33,8 +33,7 @@ def test_find_significant_levels_with_single_data_point():
         'Low': [95.0],
         'Close': [102.0],
         'Volume': [1000.0],
-        'ATR': [2.0],
-        'wyckoff': wyckoff_state
+        'ATR': [2.0]
     }
     
     # Create DataFrame with single timestamp index
@@ -42,7 +41,7 @@ def test_find_significant_levels_with_single_data_point():
                      index=[pd.Timestamp('2025-01-02 21:45:58', tz=timezone.utc)])
     
     # Test the function with current_price parameter
-    resistance_levels, support_levels = find_significant_levels(df, current_price=102.0)
+    resistance_levels, support_levels = find_significant_levels(df, wyckoff_state, current_price=102.0)
     
     # Assert that we get empty lists for both levels when there's insufficient data
     assert len(resistance_levels) == 0
@@ -73,8 +72,7 @@ def test_find_significant_levels_with_multiple_data_points():
         'Low': [95.0, 97.0],
         'Close': [102.0, 104.0],
         'Volume': [1000.0, 1100.0],
-        'ATR': [2.0, 2.1],
-        'wyckoff': wyckoff_state
+        'ATR': [2.0, 2.1]
     }
     
     # Create DataFrame with multiple timestamp indices
@@ -85,7 +83,7 @@ def test_find_significant_levels_with_multiple_data_points():
                      ])
     
     # Test the function with current_price parameter
-    resistance_levels, support_levels = find_significant_levels(df, current_price=104.0)
+    resistance_levels, support_levels = find_significant_levels(df, wyckoff_state, current_price=104.0)
     
     # Assert that we get some levels when there's sufficient data
     assert isinstance(resistance_levels, list)

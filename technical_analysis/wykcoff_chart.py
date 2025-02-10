@@ -6,6 +6,7 @@ import mplfinance as mpf  # type: ignore[import]
 import numpy as np  # type: ignore[import]
 
 from utils import fmt_price
+from technical_analysis.wyckoff_types import WyckoffState, Timeframe
 from technical_analysis.significant_levels import find_significant_levels
 
 
@@ -28,14 +29,14 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
 
     return ha_df
 
-def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta, mid: float) -> io.BytesIO:
+def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, chart_image_time_delta, mid: float) -> io.BytesIO:
     # Calculate thresholds from full dataset
     df['MACD_Hist'] = df['MACD_Hist'].fillna(0)
     strong_positive_threshold = max(df['MACD_Hist'].max() * 0.4, 0.000001)
     strong_negative_threshold = min(df['MACD_Hist'].min() * 0.4, -0.000001)
     
     # Calculate significant levels using full dataset
-    resistance_levels, support_levels = find_significant_levels(df, mid)
+    resistance_levels, support_levels = find_significant_levels(df, wyckoff, mid)
 
     # Now filter for plotting window
     from_time = df['t'].max() - chart_image_time_delta
@@ -113,20 +114,20 @@ def save_to_buffer(df: pd.DataFrame, title: str, chart_image_time_delta, mid: fl
     return buf
 
 
-def generate_chart(df_15m: pd.DataFrame, df_1h: pd.DataFrame, df_4h: pd.DataFrame, coin: str, mid: float) -> List[io.BytesIO]:
+def generate_chart(dataframes: dict[Timeframe, pd.DataFrame], states: dict[Timeframe, WyckoffState], coin: str, mid: float) -> List[io.BytesIO]:
     chart_buffers = []
 
     plt.switch_backend('Agg')
 
     try:
-        df_15m_plot = df_15m.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-        chart_buffers.append(save_to_buffer(df_15m_plot, f"{coin} - 15M Chart", pd.Timedelta(hours=48), mid))
+        df_15m_plot = dataframes[Timeframe.MINUTES_15].rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        chart_buffers.append(save_to_buffer(df_15m_plot, states[Timeframe.MINUTES_15], f"{coin} - 15M Chart", pd.Timedelta(hours=48), mid))
 
-        df_1h_plot = df_1h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-        chart_buffers.append(save_to_buffer(df_1h_plot, f"{coin} - 1H Chart", pd.Timedelta(days=7), mid))
+        df_1h_plot = dataframes[Timeframe.HOUR_1].rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        chart_buffers.append(save_to_buffer(df_1h_plot, states[Timeframe.HOUR_1], f"{coin} - 1H Chart", pd.Timedelta(days=7), mid))
 
-        df_4h_plot = df_4h.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
-        chart_buffers.append(save_to_buffer(df_4h_plot, f"{coin} - 4H Chart", pd.Timedelta(days=21), mid))
+        df_4h_plot = dataframes[Timeframe.HOURS_4].rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        chart_buffers.append(save_to_buffer(df_4h_plot, states[Timeframe.HOURS_4], f"{coin} - 4H Chart", pd.Timedelta(days=21), mid))
 
     except Exception as e:
         # Clean up on error
