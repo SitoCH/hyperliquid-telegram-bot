@@ -42,11 +42,11 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis, mid: fl
 
     full_description = (
         f"{base_description}\n"
-        f"<b>Timeframe Analysis:</b>\n"
+        f"<b>🔍 Timeframe Analysis:</b>\n"
         f"Long-Term View (8h-1d):\n{long_term_desc}\n"
         f"Mid-Term View (1h-4h):\n{intermediate_desc}\n"
         f"Near-Term View (15m-30m):\n{short_term_desc}\n\n"
-        f"<b>Signal Quality:</b>\n"
+        f"<b>🎯 Signal Quality:</b>\n"
         f"• Timeframe Alignment: {alignment_pct}\n"
         f"• Confidence Level: {confidence_pct}\n\n"
         f"{insight}"
@@ -434,10 +434,10 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
     # Format the complete insight
     insights = []
     if timeframe_insights:
-        insights.append("<b>Timeframe Analysis:</b>\n" + "\n".join(f"- {i}" for i in timeframe_insights))
-    insights.append(f"\n<b>Trading Strategy:</b>\n{action_plan}")
+        insights.append("<b>⚡ Timeframe Analysis:</b>\n" + "\n".join(f"- {i}" for i in timeframe_insights))
+    insights.append(f"\n<b>📝 Trading Strategy:</b>\n{action_plan}")
     if risk_warnings:
-        insights.append("\n<b>Risk Management:</b>\n" + "\n".join(f"- {w}" for w in risk_warnings))
+        insights.append("\n<b>⚠️ Risk Management:</b>\n" + "\n".join(f"- {w}" for w in risk_warnings))
 
     return "\n".join(insights)
 
@@ -492,7 +492,7 @@ def _get_trade_suggestion(direction: MultiTimeframeDirection, mid: float, resist
         sl_pct = abs((sl - entry) / entry) * 100
         
         return (
-            f"<b>{side} Trade Setup:</b>\n"
+            f"<b>💰 {side} Trade Setup:</b>\n"
             f"Take Profit: {fmt_price(tp)} USDC (+{tp_pct:.1f}%)\n"
             f"Stop Loss: {fmt_price(sl)} USDC (-{sl_pct:.1f}%)"
         )
