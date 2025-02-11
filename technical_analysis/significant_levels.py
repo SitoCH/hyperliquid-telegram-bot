@@ -122,8 +122,8 @@ def find_significant_levels(
     if len(df) < MIN_PERIODS:
         return [], []
     
-    price_sma = df['Close'].rolling(window=MIN_PERIODS).mean()
-    price_std = df['Close'].rolling(window=MIN_PERIODS).std()
+    price_sma = df['c'].rolling(window=MIN_PERIODS).mean()
+    price_std = df['c'].rolling(window=MIN_PERIODS).std()
     volatility = (price_std / price_sma).iloc[-1]
     
     # Use full dataset instead of limited lookback
@@ -139,9 +139,9 @@ def find_significant_levels(
     tolerance = base_tolerance * (1 + length_factor)
     
     data = dict(
-        highs=recent_df['High'].values,
-        lows=recent_df['Low'].values,
-        volumes=recent_df['Volume'].values,
+        highs=recent_df['h'].values,
+        lows=recent_df['l'].values,
+        volumes=recent_df['v'].values,
         timestamps=np.arange(len(recent_df))
     )
 

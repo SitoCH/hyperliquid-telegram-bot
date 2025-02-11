@@ -32,7 +32,6 @@ def get_significant_levels(coin: str, mid: float, timeframe: Timeframe, lookback
     local_tz = get_localzone()
     df = prepare_dataframe(candles, local_tz)
     apply_indicators(df, timeframe)
-    df = df.rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
     funding_rates = get_funding_with_cache(coin, now, 7)
     return find_significant_levels(df, detect_wyckoff_phase(remove_partial_candle(df, local_tz), timeframe, funding_rates), mid)
 
@@ -118,7 +117,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         # Get candles for all timeframes
         candles_data = {
             Timeframe.MINUTES_15: get_candles_with_cache(coin, Timeframe.MINUTES_15, now, 30, hyperliquid_utils.info.candles_snapshot),
-            Timeframe.MINUTES_30: get_candles_with_cache(coin, Timeframe.MINUTES_30, now, 50, hyperliquid_utils.info.candles_snapshot),
+            Timeframe.MINUTES_30: get_candles_with_cache(coin, Timeframe.MINUTES_30, now, 60, hyperliquid_utils.info.candles_snapshot),
             Timeframe.HOUR_1: get_candles_with_cache(coin, Timeframe.HOUR_1, now, 90, hyperliquid_utils.info.candles_snapshot),
             Timeframe.HOURS_2: get_candles_with_cache(coin, Timeframe.HOURS_2, now, 100, hyperliquid_utils.info.candles_snapshot),
             Timeframe.HOURS_4: get_candles_with_cache(coin, Timeframe.HOURS_4, now, 110, hyperliquid_utils.info.candles_snapshot),
@@ -147,7 +146,9 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
                 states[tf] = WyckoffState.unknown()
 
         # Add multi-timeframe analysis
-        mtf_context = analyze_multi_timeframe(states, interactive_analysis)
+        mid = float(hyperliquid_utils.info.all_mids()[coin])
+        resistance_levels, support_levels = find_significant_levels(dataframes[Timeframe.MINUTES_30], states[Timeframe.MINUTES_30], mid)
+        mtf_context = analyze_multi_timeframe(states, mid, resistance_levels, support_levels, interactive_analysis)
 
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
         should_notify = (
@@ -156,7 +157,6 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         )
 
         if should_notify:
-            mid = float(hyperliquid_utils.info.all_mids()[coin])
             await send_trend_change_message(
                 context, 
                 mid, 

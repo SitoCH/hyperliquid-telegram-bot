@@ -19,8 +19,9 @@ def get_phase_weight(timeframe: Timeframe) -> float:
     """Get the weight for each timeframe's contribution to analysis."""
     return timeframe.settings.phase_weight
 
+
 def analyze_multi_timeframe(
-    states: Dict[Timeframe, WyckoffState], interactive_analysis: bool
+    states: Dict[Timeframe, WyckoffState], mid: float, resistance_levels: List[float], support_levels: List[float], interactive_analysis: bool
 ) -> MultiTimeframeContext:
     """
     Analyze Wyckoff states across three timeframe groups.
@@ -72,7 +73,7 @@ def analyze_multi_timeframe(
         )
 
         # Generate comprehensive description
-        description = generate_all_timeframes_description(all_analysis, interactive_analysis)
+        description = generate_all_timeframes_description(all_analysis, mid, resistance_levels, support_levels, interactive_analysis)
 
         return MultiTimeframeContext(
             alignment_score=all_analysis.alignment_score,

@@ -11,21 +11,21 @@ from technical_analysis.significant_levels import find_significant_levels
 
 
 def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
-    ha_close = (df['Open'] + df['High'] + df['Low'] + df['Close']) / 4
+    ha_close = (df['o'] + df['h'] + df['l'] + df['c']) / 4
 
-    ha_df = pd.DataFrame(dict(Close=ha_close, Volume=df['Volume']))
+    ha_df = pd.DataFrame(dict(c=ha_close, v=df['v']))
 
-    ha_df['Open'] = [0.0] * len(df)
+    ha_df['o'] = [0.0] * len(df)
 
     prekey = df.index[0]
-    ha_df.at[prekey, 'Open'] = df.at[prekey, 'Open']
+    ha_df.at[prekey, 'o'] = df.at[prekey, 'o']
 
     for key in df.index[1:]:
-        ha_df.at[key, 'Open'] = (ha_df.at[prekey, 'Open'] + ha_df.at[prekey, 'Close']) / 2.0
+        ha_df.at[key, 'o'] = (ha_df.at[prekey, 'o'] + ha_df.at[prekey, 'c']) / 2.0
         prekey = key
 
-    ha_df['High'] = pd.concat([ha_df.Open, df.High], axis=1).max(axis=1)
-    ha_df['Low'] = pd.concat([ha_df.Open, df.Low], axis=1).min(axis=1)
+    ha_df['h'] = pd.concat([ha_df.o, df.h], axis=1).max(axis=1)
+    ha_df['l'] = pd.concat([ha_df.o, df.l], axis=1).min(axis=1)
 
     return ha_df
 
@@ -46,12 +46,12 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, chart_im
     fig, ax = plt.subplots(2, 1, figsize=(10, 6), gridspec_kw={'height_ratios': [3, 1]})
 
     df_plot['SuperTrend_Green'] = np.where(
-        df_plot['Close'] > df_plot['SuperTrend'],
+        df_plot['c'] > df_plot['SuperTrend'],
         df_plot['SuperTrend'],
         np.nan
     )
     df_plot['SuperTrend_Red'] = np.where(
-        df_plot['Close'] <= df_plot['SuperTrend'],
+        df_plot['c'] <= df_plot['SuperTrend'],
         df_plot['SuperTrend'],
         np.nan
     )
@@ -82,7 +82,7 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, chart_im
         level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
                                             label=f'S {fmt_price(level)}', linestyle=':'))
 
-    is_ha_bullish = ha_df['Close'].iloc[-1] >= ha_df['Open'].iloc[-1]
+    is_ha_bullish = ha_df['c'].iloc[-1] >= ha_df['o'].iloc[-1]
     current_price_line = pd.Series([mid] * len(df_plot), index=df_plot.index)
     level_lines.append(mpf.make_addplot(current_price_line, ax=ax[0], 
                                         color='green' if is_ha_bullish else 'red', 
@@ -91,6 +91,7 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, chart_im
 
     mpf.plot(ha_df,
             type='candle',
+            columns=['o', 'h', 'l', 'c', 'v'],
             ax=ax[0],
             volume=False,
             axtitle=title,
@@ -120,13 +121,13 @@ def generate_chart(dataframes: dict[Timeframe, pd.DataFrame], states: dict[Timef
     plt.switch_backend('Agg')
 
     try:
-        df_15m_plot = dataframes[Timeframe.MINUTES_15].rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        df_15m_plot = dataframes[Timeframe.MINUTES_15]
         chart_buffers.append(save_to_buffer(df_15m_plot, states[Timeframe.MINUTES_15], f"{coin} - 15M Chart", pd.Timedelta(hours=48), mid))
 
-        df_1h_plot = dataframes[Timeframe.HOUR_1].rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        df_1h_plot = dataframes[Timeframe.HOUR_1]
         chart_buffers.append(save_to_buffer(df_1h_plot, states[Timeframe.HOUR_1], f"{coin} - 1H Chart", pd.Timedelta(days=7), mid))
 
-        df_4h_plot = dataframes[Timeframe.HOURS_4].rename(columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"})
+        df_4h_plot = dataframes[Timeframe.HOURS_4]
         chart_buffers.append(save_to_buffer(df_4h_plot, states[Timeframe.HOURS_4], f"{coin} - 4H Chart", pd.Timedelta(days=21), mid))
 
     except Exception as e:

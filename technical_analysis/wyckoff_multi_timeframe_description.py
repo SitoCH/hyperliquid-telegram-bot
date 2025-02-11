@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 import pandas as pd  # type: ignore[import]
+from utils import fmt_price
 
 from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis
 
@@ -11,7 +12,7 @@ from .wyckoff_types import (
 )
 
 
-def generate_all_timeframes_description(analysis: AllTimeframesAnalysis, interactive_analysis: bool) -> str:
+def generate_all_timeframes_description(analysis: AllTimeframesAnalysis, mid: float, resistance_levels: List[float], support_levels: List[float], interactive_analysis: bool) -> str:
     """Generate comprehensive description including three timeframe groups."""
     alignment_pct = f"{analysis.alignment_score * 100:.0f}%"
     confidence_pct = f"{analysis.confidence_level * 100:.0f}%"
@@ -50,6 +51,10 @@ def generate_all_timeframes_description(analysis: AllTimeframesAnalysis, interac
         f"• Confidence Level: {confidence_pct}\n\n"
         f"{insight}"
     )
+
+    trade_suggestion = _get_trade_suggestion(analysis.overall_direction, mid, resistance_levels, support_levels)
+    if trade_suggestion:
+        full_description += f"\n\n{trade_suggestion}"
 
     return full_description
 
@@ -461,3 +466,42 @@ def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
         f"• {analysis.dominant_phase.value} phase {analysis.dominant_action.value}\n"
         f"  └─ {volume_desc}{volatility}{funding}{risk_warning}"
     )
+
+def _get_trade_suggestion(direction: MultiTimeframeDirection, mid: float, resistance_levels: List[float], support_levels: List[float]) -> Optional[str]:
+    """Generate trade suggestion with stop loss and take profit based on nearby levels."""
+    if direction == MultiTimeframeDirection.NEUTRAL:
+        return None
+
+    # Filter levels within 1.5-6% range
+    min_distance = mid * 0.015
+    max_distance = mid * 0.06
+    
+    valid_resistances = [r for r in resistance_levels if min_distance < abs(r - mid) < max_distance]
+    valid_supports = [s for s in support_levels if min_distance < abs(s - mid) < max_distance]
+    
+    if not valid_resistances or not valid_supports:
+        return None
+
+    def format_trade(side: str, entry: float, tp: float, sl: float) -> Optional[str]:
+        """Format trade suggestion with consistent calculations and layout."""
+        if (side == "Long" and (tp <= entry or sl >= entry)) or \
+           (side == "Short" and (tp >= entry or sl <= entry)):
+            return None
+            
+        tp_pct = abs((tp - entry) / entry) * 100
+        sl_pct = abs((sl - entry) / entry) * 100
+        
+        return (
+            f"<b>{side} Trade Setup:</b>\n"
+            f"Take Profit: {fmt_price(tp)} USDC (+{tp_pct:.1f}%)\n"
+            f"Stop Loss: {fmt_price(sl)} USDC (-{sl_pct:.1f}%)"
+        )
+
+    if direction == MultiTimeframeDirection.BULLISH:
+        tp = min(valid_resistances, key=lambda x: abs(x - mid))
+        sl = max(valid_supports, key=lambda x: abs(x - mid))
+        return format_trade("Long", mid, tp, sl)
+    else:  # BEARISH
+        tp = max(valid_supports, key=lambda x: abs(x - mid))
+        sl = min(valid_resistances, key=lambda x: abs(x - mid))
+        return format_trade("Short", mid, tp, sl)
