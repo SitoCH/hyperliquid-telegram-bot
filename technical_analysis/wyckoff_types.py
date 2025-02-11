@@ -176,6 +176,7 @@ class Timeframe(Enum):
     MINUTES_15 = ("15m", 15)
     MINUTES_30 = ("30m", 30)
     HOUR_1 = ("1h", 60)
+    HOURS_2 = ("2h", 120)  # New timeframe
     HOURS_4 = ("4h", 240)
     HOURS_8 = ("8h", 480)
     DAY_1 = ("1d", 1440)
@@ -205,7 +206,7 @@ class Timeframe(Enum):
 # Rebalanced weights for crypto focus
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.10,
+        phase_weight=0.08,  # Reduced from 0.10
         ema_length=8,
         atr_settings=(8, 5, 13, 3, 5),
         supertrend_multiplier=2.0,
@@ -214,7 +215,7 @@ _TIMEFRAME_SETTINGS = {
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.15,
+        phase_weight=0.12,  # Reduced from 0.15
         ema_length=13,
         atr_settings=(10, 6, 18, 4, 6),
         supertrend_multiplier=2.3,
@@ -223,7 +224,7 @@ _TIMEFRAME_SETTINGS = {
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.30,
+        phase_weight=0.20,  # Reduced from 0.30
         ema_length=21,
         atr_settings=(14, 9, 21, 7, 8),
         supertrend_multiplier=2.6,
@@ -231,31 +232,40 @@ _TIMEFRAME_SETTINGS = {
         momentum_multiplier=1.35,
         description="Hourly trend"
     ),
+    Timeframe.HOURS_2: TimeframeSettings(
+        phase_weight=0.18,  # Adjusted from 0.20
+        ema_length=28,
+        atr_settings=(20, 10, 25, 8, 10),
+        supertrend_multiplier=2.8,
+        base_multiplier=1.35,
+        momentum_multiplier=1.45,
+        description="2h trend"
+    ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.25,
+        phase_weight=0.20,  # Reduced from 0.25
         ema_length=34,
         atr_settings=(34, 12, 34, 9, 14),
-        supertrend_multiplier=3.0,  # Reduced from 3.3
-        base_multiplier=1.45,  # Reduced from 1.3
-        momentum_multiplier=1.65,  # Reduced from 1.5
+        supertrend_multiplier=3.0,
+        base_multiplier=1.45,
+        momentum_multiplier=1.65,
         description="4h trend"
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.12,
+        phase_weight=0.12,  # Unchanged
         ema_length=41,
         atr_settings=(38, 12, 40, 9, 16),
-        supertrend_multiplier=3.2,  # Reduced from 3.5
-        base_multiplier=1.55,  # Reduced from 1.4
-        momentum_multiplier=1.75,  # Reduced from 1.7
+        supertrend_multiplier=3.2,
+        base_multiplier=1.55,
+        momentum_multiplier=1.75,
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.08,
+        phase_weight=0.10,  # Increased from 0.08
         ema_length=55,
         atr_settings=(41, 12, 48, 9, 21),
-        supertrend_multiplier=3.5,  # Reduced from 3.8
-        base_multiplier=1.65,  # Reduced from 1.6
-        momentum_multiplier=1.95,  # Reduced from 2.0
+        supertrend_multiplier=3.5,
+        base_multiplier=1.65,
+        momentum_multiplier=1.95,
         description="Daily trend"
     ),
 }
