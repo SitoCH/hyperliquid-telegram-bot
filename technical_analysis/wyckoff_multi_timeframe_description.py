@@ -487,15 +487,15 @@ def _get_trade_suggestion(direction: MultiTimeframeDirection, mid: float, resist
         
         return (
             f"<b>💰 {side} Trade Setup:</b>\n"
-            f"Take Profit: {fmt_price(tp)} USDC (+{tp_pct:.1f}%)\n"
-            f"Stop Loss: {fmt_price(sl)} USDC (-{sl_pct:.1f}%)"
+            f"Stop Loss: {fmt_price(sl)} USDC (-{sl_pct:.1f}%)\n"
+            f"Take Profit: {fmt_price(tp)} USDC (+{tp_pct:.1f}%)"
         )
 
     if direction == MultiTimeframeDirection.BULLISH:
         tp = min(valid_resistances, key=lambda x: abs(x - mid))
         sl = max(valid_supports, key=lambda x: abs(x - mid))
         return format_trade("Long", mid, tp, sl)
-    else:  # BEARISH
+    else:
         tp = max(valid_supports, key=lambda x: abs(x - mid))
         sl = min(valid_resistances, key=lambda x: abs(x - mid))
         return format_trade("Short", mid, tp, sl)
