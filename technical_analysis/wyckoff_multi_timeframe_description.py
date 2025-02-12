@@ -356,30 +356,24 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
             if analysis.confidence_level > 0.7:
                 return (
                     "Longs: Prioritize entries on dips with tight stop-losses below key support levels. "
-                    "Consider adding to positions as the trend strengthens.\n"
-                    "Shorts: Avoid, high risk of bull traps. If shorting, use extremely tight stop-losses."
+                    "Consider adding to positions as the trend strengthens."
                 )
 
             return (
-                "Longs: Scaled entries near support zones with careful risk management. "
-                "Use smaller position sizes due to mixed signals.\n"
-                "Shorts: Only consider at significant resistance with strong bearish signals. "
-                "Confirm with price action before entering."
+                "Longs: Scaled entries near support zones with careful risk management."
+                "Use smaller position sizes due to mixed signals."
             )
 
         elif analysis.overall_direction == MultiTimeframeDirection.BEARISH:
             if analysis.confidence_level > 0.7:
                 return (
-                    "Shorts: Focus on entries during rallies with tight stop-losses above key resistance levels. "
-                    "Add to positions as the trend accelerates.\n"
-                    "Longs: Avoid, high risk of bear traps. If longing, use extremely tight stop-losses."
+                    "Shorts: Focus on entries during rallies with tight stop-losses above key resistance levels."
+                    "Add to positions as the trend accelerates."
                 )
 
             return (
                 "Shorts: Scaled entries near resistance zones with strict risk control. "
-                "Confirm bearish signals with price action and volume.\n"
-                "Longs: Only attempt at major support with clear bullish reversal patterns. "
-                "Be cautious of potential bear traps."
+                "Confirm bearish signals with price action and volume."
             )
 
         action_plan = (
