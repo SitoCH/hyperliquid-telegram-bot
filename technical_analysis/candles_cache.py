@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 CACHE_DIR = PROJECT_ROOT / 'cache' / 'candles'
 
 # Initialize rate limiter with specified weights
-candles_rate_limiter = RateLimiter(max_weight_per_minute=1100, weight_per_call=20)
+candles_rate_limiter = RateLimiter(max_weight_per_minute=1000, weight_per_call=20)
 
 def _get_cache_file_path(coin: str, timeframe: Timeframe) -> Path:
     """Get the path for the cache file of a specific coin and timeframe"""
