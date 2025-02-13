@@ -468,9 +468,8 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
     if direction == MultiTimeframeDirection.NEUTRAL:
         return None
 
-    # Filter levels within 1.5-6% range
-    min_distance = mid * 0.015
-    max_distance = mid * 0.06
+    min_distance = mid * 0.0175
+    max_distance = mid * 0.055
     
     valid_resistances = [r for r in resistance_levels if min_distance < abs(r - mid) < max_distance]
     valid_supports = [s for s in support_levels if min_distance < abs(s - mid) < max_distance]
