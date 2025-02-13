@@ -3,6 +3,7 @@ import datetime
 import importlib
 import os
 import random
+import base64
 from tzlocal import get_localzone
 
 from logging_utils import logger
@@ -26,7 +27,21 @@ def main() -> None:
         {"type": "userEvents", "user": hyperliquid_utils.address}, on_user_events
     )
     
-    telegram_utils.add_handler(CommandHandler("start", start))
+    enter_position_states = {
+            SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+            SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
+            SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
+            SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
+            SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
+        }
+
+    start_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states=enter_position_states, # type: ignore
+        fallbacks=[CommandHandler('cancel', conversation_cancel)]
+    )
+    telegram_utils.add_handler(start_conv_handler)
+
     telegram_utils.add_handler(CommandHandler(telegram_utils.overview_command, get_overview))
     telegram_utils.add_handler(CommandHandler("positions", get_positions))
     telegram_utils.add_handler(CommandHandler("orders", get_open_orders))
@@ -71,26 +86,14 @@ def main() -> None:
 
         enter_long_conv_handler = ConversationHandler(
             entry_points=[CommandHandler('long', enter_long)],
-            states={
-                SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
-                SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
-                SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
-                SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
-                SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
-            },
+            states=enter_position_states, # type: ignore
             fallbacks=[CommandHandler('cancel', conversation_cancel)]
         )
         telegram_utils.add_handler(enter_long_conv_handler)
 
         enter_short_conv_handler = ConversationHandler(
             entry_points=[CommandHandler('short', enter_short)],
-            states={
-                SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
-                SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
-                SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
-                SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
-                SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
-            },
+            states=enter_position_states, # type: ignore
             fallbacks=[CommandHandler('cancel', conversation_cancel)]
         )
         telegram_utils.add_handler(enter_short_conv_handler)
@@ -118,8 +121,18 @@ async def start(update, context):
             context.args = [raw_param[3:]]
             await update.message.delete()
             await execute_ta(update, context)    
+        elif raw_param.startswith("TRD_"):
+            await update.message.delete()
+            decoded_params = base64.b64decode(raw_param[3:]).decode('utf-8')
+            side, coin, sl, tp = decoded_params.split('_')
+            context.args = [coin, sl, tp]
+            if side == 'L':
+                return await enter_long(update, context)
+            elif side == 'S':
+                return await enter_short(update, context)
     else:
         await telegram_utils.reply(update, "Welcome! Click the button below to check the account's positions.")
+    return ConversationHandler.END
 
 async def shutdown(application):
     logger.info("Shutting down Hyperliquid Telegram bot...")

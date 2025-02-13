@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional, Union, NamedTuple
+from typing import Dict, Any, List, Optional, Union, NamedTuple, Tuple
 from logging_utils import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
@@ -12,17 +12,25 @@ from tabulate import tabulate, simple_separated_format
 
 EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT, SELECTING_LEVERAGE = range(6)
 
+async def enter_position(update: Update, context: CallbackContext, enter_mode: str) -> int:
+    context.user_data["enter_mode"] = enter_mode
+    if context.args and len(context.args) > 2:
+        context.user_data["selected_coin"] = context.args[0]
+        context.user_data["stop_loss_price"] = float(context.args[1])
+        context.user_data["take_profit_price"] = float(context.args[2])
+        message, reply_markup = await get_amount_suggestions(context)
+        await update.message.reply_text(message, reply_markup=reply_markup)
+        return SELECTING_AMOUNT
+
+    await update.message.reply_text(f'Choose a coin to {enter_mode}:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
+    return SELECTING_COIN
 
 async def enter_long(update: Update, context: CallbackContext) -> int:
-    context.user_data["enter_mode"] = "long"
-    await update.message.reply_text('Choose a coin to long:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
-    return SELECTING_COIN
+    return await enter_position(update, context, "long")
 
 
 async def enter_short(update: Update, context: CallbackContext) -> int:
-    context.user_data["enter_mode"] = "short"
-    await update.message.reply_text('Choose a coin to short:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
-    return SELECTING_COIN
+    return await enter_position(update, context, "short")
 
 
 def ger_price_estimate(mid: float, decrease: bool, percentage: float) -> str:
@@ -97,6 +105,9 @@ async def selected_leverage(update: Update, context: Union[CallbackContext, Cont
     except ValueError:
         await query.edit_message_text("Invalid leverage.")
         return ConversationHandler.END
+
+    if context.user_data.get('stop_loss_price') and context.user_data.get('take_profit_price'):
+        return await open_order(update, context)
 
     await send_stop_loss_suggestions(query, context)
     return SELECTING_STOP_LOSS
@@ -221,9 +232,17 @@ async def selected_coin(update: Update, context: Union[CallbackContext, ContextT
         return ConversationHandler.END
 
     await query.edit_message_text("Loading...")
+    context.user_data["selected_coin"] = coin
+
+    message, reply_markup = await get_amount_suggestions(context)
+    await query.edit_message_text(message, reply_markup=reply_markup)
+
+    return SELECTING_AMOUNT
+
+
+async def get_amount_suggestions(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> Tuple[str, InlineKeyboardMarkup]:
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     withdrawable = float(user_state['withdrawable'])
-    context.user_data["selected_coin"] = coin
 
     keyboard = [
         [InlineKeyboardButton(f"{amount}% (~{fmt(withdrawable * amount / 100.0)} USDC)", callback_data=str(amount))]
@@ -231,12 +250,7 @@ async def selected_coin(update: Update, context: Union[CallbackContext, ContextT
     ]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
-        f"You selected {coin}. Please enter the amount to {context.user_data['enter_mode']}:",
-        reply_markup=reply_markup
-    )
-
-    return SELECTING_AMOUNT
+    return f"You selected {context.user_data['selected_coin']}. Please enter the amount to {context.user_data['enter_mode']}:", reply_markup
 
 
 async def selected_take_profit(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
@@ -266,10 +280,15 @@ async def selected_take_profit(update: Update, context: Union[CallbackContext, C
             await update.message.reply_text("Take profit price must be below current market price for short positions.")
             return SELECTING_TAKE_PROFIT
 
+        context.user_data["take_profit_price"] = take_profit_price
+
     except ValueError:
         await update.message.reply_text("Invalid price. Please enter a number or 'cancel'.")
         return SELECTING_TAKE_PROFIT
 
+    return await open_order(update, context)
+
+async def open_order(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     amount = context.user_data.get('amount')
     if not amount:
         await update.message.reply_text("Error: No amount selected. Please restart the process.")
@@ -278,6 +297,11 @@ async def selected_take_profit(update: Update, context: Union[CallbackContext, C
     stop_loss_price = context.user_data.get('stop_loss_price')
     if not stop_loss_price:
         await update.message.reply_text("Error: No stop loss selected. Please restart the process.")
+        return ConversationHandler.END
+
+    take_profit_price = context.user_data.get('take_profit_price')
+    if not take_profit_price:
+        await update.message.reply_text("Error: No take profit selected. Please restart the process.")
         return ConversationHandler.END
 
     selected_coin = context.user_data.get('selected_coin')

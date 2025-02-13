@@ -148,7 +148,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         # Add multi-timeframe analysis
         mid = float(hyperliquid_utils.info.all_mids()[coin])
         resistance_levels, support_levels = find_significant_levels(dataframes[Timeframe.MINUTES_30], states[Timeframe.MINUTES_30], mid)
-        mtf_context = analyze_multi_timeframe(states, mid, resistance_levels, support_levels, interactive_analysis)
+        mtf_context = analyze_multi_timeframe(states, coin, mid, resistance_levels, support_levels, interactive_analysis)
 
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
         should_notify = (
