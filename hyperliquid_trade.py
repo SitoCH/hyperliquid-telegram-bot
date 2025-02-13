@@ -106,8 +106,8 @@ async def selected_leverage(update: Update, context: Union[CallbackContext, Cont
         await query.edit_message_text("Invalid leverage.")
         return ConversationHandler.END
 
-    if context.user_data.get('stop_loss_price') and context.user_data.get('take_profit_price'):
-        return await open_order(update, context)
+    if 'stop_loss_price' in context.user_data and 'take_profit_price' in context.user_data:
+        return await open_order(context)
 
     await send_stop_loss_suggestions(query, context)
     return SELECTING_STOP_LOSS
@@ -218,7 +218,6 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
     await telegram_utils.reply(update, f"Loading price suggestions for {coin}...")
     await telegram_utils.reply(update, await get_price_suggestions_text(context, False), parse_mode=ParseMode.HTML)
 
-
     return SELECTING_TAKE_PROFIT
 
 
@@ -286,30 +285,30 @@ async def selected_take_profit(update: Update, context: Union[CallbackContext, C
         await update.message.reply_text("Invalid price. Please enter a number or 'cancel'.")
         return SELECTING_TAKE_PROFIT
 
-    return await open_order(update, context)
+    return await open_order(context)
 
-async def open_order(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
+async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     amount = context.user_data.get('amount')
     if not amount:
-        await update.message.reply_text("Error: No amount selected. Please restart the process.")
+        await telegram_utils.send("Error: No amount selected. Please restart the process.")
         return ConversationHandler.END
 
     stop_loss_price = context.user_data.get('stop_loss_price')
     if not stop_loss_price:
-        await update.message.reply_text("Error: No stop loss selected. Please restart the process.")
+        await telegram_utils.send("Error: No stop loss selected. Please restart the process.")
         return ConversationHandler.END
 
     take_profit_price = context.user_data.get('take_profit_price')
     if not take_profit_price:
-        await update.message.reply_text("Error: No take profit selected. Please restart the process.")
+        await telegram_utils.send("Error: No take profit selected. Please restart the process.")
         return ConversationHandler.END
 
     selected_coin = context.user_data.get('selected_coin')
     if not selected_coin:
-        await update.message.reply_text("Error: No coin selected. Please restart the process.")
+        await telegram_utils.send("Error: No coin selected. Please restart the process.")
         return ConversationHandler.END
 
-    await update.message.reply_text(f"Opening {context.user_data['enter_mode']} for {selected_coin}...")
+    await telegram_utils.send(f"Opening {context.user_data['enter_mode']} for {selected_coin}...")
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
@@ -322,7 +321,7 @@ async def open_order(update: Update, context: Union[CallbackContext, ContextType
             sz_decimals = hyperliquid_utils.get_sz_decimals()
             sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
             if sz * mid < 10.0:
-                await update.message.reply_text(text="The order value is less than 10 USDC and can't be executed")
+                await telegram_utils.send(text="The order value is less than 10 USDC and can't be executed")
                 return ConversationHandler.END
 
             is_long = context.user_data["enter_mode"] == "long"
@@ -331,12 +330,12 @@ async def open_order(update: Update, context: Union[CallbackContext, ContextType
 
             await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
 
-            await update.message.reply_text(text=f"Opened {context.user_data['enter_mode']} for {sz} units on {selected_coin} ({leverage}x)")
+            await telegram_utils.send(f"Opened {context.user_data['enter_mode']} for {sz} units on {selected_coin} ({leverage}x)")
         else:
-            await update.message.reply_text(text="Exchange is not enabled")
+            await telegram_utils.send("Exchange is not enabled")
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await update.message.reply_text(text=f"Failed to update orders: {str(e)}")
+        await telegram_utils.send(text=f"Failed to update orders: {str(e)}")
 
     return ConversationHandler.END
 
