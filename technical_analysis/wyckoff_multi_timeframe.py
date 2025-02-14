@@ -1,9 +1,10 @@
 import pandas as pd  # type: ignore[import]
 
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from .wyckoff_multi_timeframe_description import generate_all_timeframes_description
+from .wyckoff_types import SignificantLevelsData
 from logging_utils import logger
 
 
@@ -21,7 +22,7 @@ def get_phase_weight(timeframe: Timeframe) -> float:
 
 
 def analyze_multi_timeframe(
-    states: Dict[Timeframe, WyckoffState], coin: str, mid: float, resistance_levels: List[float], support_levels: List[float], interactive_analysis: bool
+    states: Dict[Timeframe, WyckoffState], coin: str, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData], interactive_analysis: bool
 ) -> MultiTimeframeContext:
     """
     Analyze Wyckoff states across three timeframe groups.
@@ -73,7 +74,7 @@ def analyze_multi_timeframe(
         )
 
         # Generate comprehensive description
-        description = generate_all_timeframes_description(coin, all_analysis, mid, resistance_levels, support_levels, interactive_analysis)
+        description = generate_all_timeframes_description(coin, all_analysis, mid, significant_levels, interactive_analysis)
 
         return MultiTimeframeContext(
             alignment_score=all_analysis.alignment_score,

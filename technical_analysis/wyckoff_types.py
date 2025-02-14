@@ -1,6 +1,6 @@
 from enum import Enum, auto
 from dataclasses import dataclass
-from typing import Optional, Dict
+from typing import Optional, Dict, TypedDict, List
 
 class WyckoffPhase(Enum):
     """
@@ -269,3 +269,7 @@ _TIMEFRAME_SETTINGS = {
         description="Daily trend"
     ),
 }
+
+class SignificantLevelsData(TypedDict):
+    resistance: List[float]
+    support: List[float]

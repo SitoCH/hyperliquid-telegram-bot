@@ -9,12 +9,12 @@ from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframe
 from utils import exchange_enabled
 
 from .wyckoff_types import (
-    WyckoffState, WyckoffPhase, MarketPattern, 
+    WyckoffState, WyckoffPhase, MarketPattern, SignificantLevelsData,
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
 )
 
 
-def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalysis, mid: float, resistance_levels: List[float], support_levels: List[float], interactive_analysis: bool) -> str:
+def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalysis, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData], interactive_analysis: bool) -> str:
     """Generate comprehensive description including three timeframe groups."""
     alignment_pct = f"{analysis.alignment_score * 100:.0f}%"
     confidence_pct = f"{analysis.confidence_level * 100:.0f}%"
@@ -54,7 +54,7 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
         f"{insight}"
     )
 
-    trade_suggestion = _get_trade_suggestion(coin, analysis.overall_direction, mid, resistance_levels, support_levels)
+    trade_suggestion = _get_trade_suggestion(coin, analysis.overall_direction, mid, significant_levels)
     if trade_suggestion:
         full_description += f"\n\n{trade_suggestion}"
 
@@ -463,19 +463,20 @@ def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
         f"  └─ {volume_desc}{volatility}{funding}{risk_warning}"
     )
 
-def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: float, resistance_levels: List[float], support_levels: List[float]) -> Optional[str]:
+def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData]) -> Optional[str]:
     """Generate trade suggestion with stop loss and take profit based on nearby levels."""
-    if direction == MultiTimeframeDirection.NEUTRAL:
-        return None
+    def get_valid_levels(timeframe: Timeframe, min_dist: float, max_dist: float) -> tuple[List[float], List[float]]:
+        """Get valid support and resistance levels for a specific timeframe."""
+        return (
+            [r for r in significant_levels[timeframe]['resistance'] if min_dist < abs(r - mid) < max_dist],
+            [s for s in significant_levels[timeframe]['support'] if min_dist < abs(s - mid) < max_dist]
+        )
 
-    min_distance = mid * 0.0175
-    max_distance = mid * 0.055
-    
-    valid_resistances = [r for r in resistance_levels if min_distance < abs(r - mid) < max_distance]
-    valid_supports = [s for s in support_levels if min_distance < abs(s - mid) < max_distance]
-    
-    if not valid_resistances or not valid_supports:
-        return None
+    def get_trade_levels(direction: MultiTimeframeDirection, resistances: List[float], supports: List[float]) -> tuple[str, float, float]:
+        """Get trade type, take profit and stop loss levels based on direction."""
+        if direction == MultiTimeframeDirection.BULLISH:
+            return "Long", min(resistances, key=lambda x: abs(x - mid)), max(supports, key=lambda x: abs(x - mid))
+        return "Short", max(supports, key=lambda x: abs(x - mid)), min(resistances, key=lambda x: abs(x - mid))
 
     def format_trade(coin: str, side: str, entry: float, tp: float, sl: float) -> Optional[str]:
         """Format trade suggestion with consistent calculations and layout."""
@@ -496,11 +497,17 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
             f"Take Profit: {fmt_price(tp)} USDC (+{tp_pct:.1f}%)"
         )
 
-    if direction == MultiTimeframeDirection.BULLISH:
-        tp = min(valid_resistances, key=lambda x: abs(x - mid))
-        sl = max(valid_supports, key=lambda x: abs(x - mid))
-        return format_trade(coin, "Long", mid, tp, sl)
-    else:
-        tp = max(valid_supports, key=lambda x: abs(x - mid))
-        sl = min(valid_resistances, key=lambda x: abs(x - mid))
-        return format_trade(coin, "Short", mid, tp, sl)
+    if direction == MultiTimeframeDirection.NEUTRAL:
+        return None
+
+    min_distance = mid * 0.015
+    max_distance = mid * 0.06
+
+    # Try with 30min timeframe first, then 1h if needed
+    for timeframe in [Timeframe.MINUTES_30, Timeframe.HOUR_1]:
+        resistances, supports = get_valid_levels(timeframe, min_distance, max_distance)
+        if resistances and supports:
+            side, tp, sl = get_trade_levels(direction, resistances, supports)
+            return format_trade(coin, side, mid, tp, sl)
+
+    return None

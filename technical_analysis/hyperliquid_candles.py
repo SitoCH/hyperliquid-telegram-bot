@@ -2,7 +2,7 @@ import io
 import os
 import time
 from tzlocal import get_localzone
-from typing import List, Dict, Any, cast, Tuple
+from typing import List, Dict, Any, cast, Tuple, TypedDict
 import pandas as pd  # type: ignore[import]
 import pandas_ta as ta  # type: ignore[import]
 
@@ -18,13 +18,14 @@ from technical_analysis.significant_levels import find_significant_levels
 from technical_analysis.wyckoff import detect_wyckoff_phase
 from technical_analysis.candles_utils import get_coins_to_analyze
 from technical_analysis.candles_cache import get_candles_with_cache
-from technical_analysis.wyckoff_types import Timeframe, WyckoffState
+from technical_analysis.wyckoff_types import Timeframe, WyckoffState, SignificantLevelsData
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from technical_analysis.wykcoff_chart import generate_chart
 from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe, MultiTimeframeDirection
 
 
 SELECTING_COIN_FOR_TA = range(1)
+
 
 def get_significant_levels(coin: str, mid: float, timeframe: Timeframe, lookback_days: int) -> Tuple[List[float], List[float]]:
     now = int(time.time() * 1000)
@@ -147,8 +148,27 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
 
         # Add multi-timeframe analysis
         mid = float(hyperliquid_utils.info.all_mids()[coin])
-        resistance_levels, support_levels = find_significant_levels(dataframes[Timeframe.MINUTES_30], states[Timeframe.MINUTES_30], mid)
-        mtf_context = analyze_multi_timeframe(states, coin, mid, resistance_levels, support_levels, interactive_analysis)
+        significant_levels: Dict[Timeframe, SignificantLevelsData] = { }
+        
+        resistance_30m, support_30m = find_significant_levels(dataframes[Timeframe.MINUTES_30], states[Timeframe.MINUTES_30], mid)
+        significant_levels[Timeframe.MINUTES_30] = {
+            'resistance': resistance_30m,
+            'support': support_30m
+        }
+
+        resistance_1h, support_1h = find_significant_levels(dataframes[Timeframe.HOUR_1], states[Timeframe.HOUR_1], mid)
+        significant_levels[Timeframe.HOUR_1] = {
+            'resistance': resistance_1h,
+            'support': support_1h
+        }
+       
+        mtf_context = analyze_multi_timeframe(
+            states, 
+            coin, 
+            mid, 
+            significant_levels,
+            interactive_analysis
+        )
 
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
         should_notify = (
