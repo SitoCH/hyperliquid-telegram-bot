@@ -8,7 +8,8 @@ from typing import Any, cast, Tuple, List, Sequence
 from telegram import (
     KeyboardButton,
     ReplyKeyboardMarkup,
-    Message,
+    InlineKeyboardMarkup,
+    Message
 )
 
 from telegram._utils.types import ODVInput
@@ -101,11 +102,11 @@ class TelegramUtils:
 
 
     async def reply(
-        self, update: Update, message: str, parse_mode: ODVInput[str] = None
+        self, update: Update, message: str, parse_mode: ODVInput[str] = None, reply_markup: Optional[InlineKeyboardMarkup] = None
     ) -> None:
         if update.message:
             await update.message.reply_text(
-                message, parse_mode=parse_mode, reply_markup=self.reply_markup
+                message, parse_mode=parse_mode, reply_markup=(reply_markup if reply_markup is not None else self.reply_markup)
             )
 
 

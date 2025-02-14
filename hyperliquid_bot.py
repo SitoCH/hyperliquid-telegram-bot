@@ -120,7 +120,7 @@ async def start(update, context):
         if raw_param.startswith("TA_"):
             context.args = [raw_param[3:]]
             await update.message.delete()
-            await execute_ta(update, context)    
+            return await execute_ta(update, context)    
         elif raw_param.startswith("TRD_"):
             await update.message.delete()
             decoded_params = base64.b64decode(raw_param[3:]).decode('utf-8')

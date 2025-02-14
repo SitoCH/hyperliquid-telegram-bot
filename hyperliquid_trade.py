@@ -1,6 +1,6 @@
 from typing import Dict, Any, List, Optional, Union, NamedTuple, Tuple
 from logging_utils import logger
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
 from telegram_utils import telegram_utils
 from hyperliquid_utils import hyperliquid_utils
@@ -13,16 +13,17 @@ from tabulate import tabulate, simple_separated_format
 EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT, SELECTING_LEVERAGE = range(6)
 
 async def enter_position(update: Update, context: CallbackContext, enter_mode: str) -> int:
+    context.user_data.clear()
     context.user_data["enter_mode"] = enter_mode
     if context.args and len(context.args) > 2:
         context.user_data["selected_coin"] = context.args[0]
         context.user_data["stop_loss_price"] = float(context.args[1])
         context.user_data["take_profit_price"] = float(context.args[2])
         message, reply_markup = await get_amount_suggestions(context)
-        await update.message.reply_text(message, reply_markup=reply_markup)
+        await telegram_utils.reply(update, message, reply_markup=reply_markup)
         return SELECTING_AMOUNT
 
-    await update.message.reply_text(f'Choose a coin to {enter_mode}:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
+    await telegram_utils.reply(update, f'Choose a coin to {enter_mode}:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
     return SELECTING_COIN
 
 async def enter_long(update: Update, context: CallbackContext) -> int:
@@ -38,14 +39,14 @@ def ger_price_estimate(mid: float, decrease: bool, percentage: float) -> str:
 
 
 async def selected_amount(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
-    query = update.callback_query
+    query: CallbackQuery = update.callback_query # type: ignore
     if not query:
         return ConversationHandler.END
     await query.answer()
 
     amount = query.data
     if not amount or amount == 'cancel':
-        await query.edit_message_text(text=OPERATION_CANCELLED)
+        await query.edit_message_text(OPERATION_CANCELLED)
         return ConversationHandler.END
 
     try:
@@ -92,12 +93,12 @@ async def selected_amount(update: Update, context: Union[CallbackContext, Contex
 
 
 async def selected_leverage(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
-    query = update.callback_query
+    query: CallbackQuery = update.callback_query # type: ignore
     await query.answer()
 
     leverage = query.data
     if leverage == 'cancel':
-        await query.edit_message_text(text=OPERATION_CANCELLED)
+        await query.edit_message_text(OPERATION_CANCELLED)
         return ConversationHandler.END
 
     try:
@@ -188,13 +189,13 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
 
     stop_loss = update.message.text
     if stop_loss.lower() == 'cancel':
-        await update.message.reply_text(text=OPERATION_CANCELLED)
+        await telegram_utils.reply(update, OPERATION_CANCELLED)
         return ConversationHandler.END
 
     try:
         stop_loss_price = float(stop_loss)
         if stop_loss_price < 0:
-            await update.message.reply_text("Price must be zero or greater.")
+            await telegram_utils.reply(update, "Price must be zero or greater.")
             return SELECTING_STOP_LOSS
 
         # Only validate stop loss price if it's not zero
@@ -204,15 +205,15 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
             is_long = context.user_data["enter_mode"] == "long"
             
             if is_long and stop_loss_price >= mid:
-                await update.message.reply_text("Stop loss price must be below current market price for long positions.")
+                await telegram_utils.reply(update, "Stop loss price must be below current market price for long positions.")
                 return SELECTING_STOP_LOSS
             elif not is_long and stop_loss_price <= mid:
-                await update.message.reply_text("Stop loss price must be above current market price for short positions.")
+                await telegram_utils.reply(update, "Stop loss price must be above current market price for short positions.")
                 return SELECTING_STOP_LOSS
 
         context.user_data["stop_loss_price"] = stop_loss_price
     except ValueError:
-        await update.message.reply_text("Invalid price. Please enter a number or 'cancel'.")
+        await telegram_utils.reply(update, "Invalid price. Please enter a number or 'cancel'.")
         return SELECTING_STOP_LOSS
 
     await telegram_utils.reply(update, f"Loading price suggestions for {coin}...")
@@ -222,12 +223,12 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
 
 
 async def selected_coin(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
-    query = update.callback_query
+    query: CallbackQuery = update.callback_query # type: ignore
     await query.answer()
 
     coin = query.data
     if coin == 'cancel':
-        await query.edit_message_text(text=OPERATION_CANCELLED)
+        await query.edit_message_text(OPERATION_CANCELLED)
         return ConversationHandler.END
 
     await query.edit_message_text("Loading...")
@@ -258,13 +259,13 @@ async def selected_take_profit(update: Update, context: Union[CallbackContext, C
 
     take_profit = update.message.text
     if take_profit.lower() == 'cancel':
-        await update.message.reply_text(text=OPERATION_CANCELLED)
+        await telegram_utils.reply(update, OPERATION_CANCELLED)
         return ConversationHandler.END
 
     try:
         take_profit_price = float(take_profit)
         if take_profit_price <= 0:
-            await update.message.reply_text("Price must be greater than 0.")
+            await telegram_utils.reply(update, "Price must be greater than 0.")
             return SELECTING_TAKE_PROFIT
 
         # Validate take profit price based on position direction
@@ -273,16 +274,16 @@ async def selected_take_profit(update: Update, context: Union[CallbackContext, C
         is_long = context.user_data["enter_mode"] == "long"
         
         if is_long and take_profit_price <= mid:
-            await update.message.reply_text("Take profit price must be above current market price for long positions.")
+            await telegram_utils.reply(update, "Take profit price must be above current market price for long positions.")
             return SELECTING_TAKE_PROFIT
         elif not is_long and take_profit_price >= mid:
-            await update.message.reply_text("Take profit price must be below current market price for short positions.")
+            await telegram_utils.reply(update, "Take profit price must be below current market price for short positions.")
             return SELECTING_TAKE_PROFIT
 
         context.user_data["take_profit_price"] = take_profit_price
 
     except ValueError:
-        await update.message.reply_text("Invalid price. Please enter a number or 'cancel'.")
+        await telegram_utils.reply(update, "Invalid price. Please enter a number or 'cancel'.")
         return SELECTING_TAKE_PROFIT
 
     return await open_order(context)
@@ -321,7 +322,7 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE])
             sz_decimals = hyperliquid_utils.get_sz_decimals()
             sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
             if sz * mid < 10.0:
-                await telegram_utils.send(text="The order value is less than 10 USDC and can't be executed")
+                await telegram_utils.send("The order value is less than 10 USDC and can't be executed")
                 return ConversationHandler.END
 
             is_long = context.user_data["enter_mode"] == "long"
@@ -335,7 +336,7 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE])
             await telegram_utils.send("Exchange is not enabled")
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await telegram_utils.send(text=f"Failed to update orders: {str(e)}")
+        await telegram_utils.send(f"Failed to update orders: {str(e)}")
 
     return ConversationHandler.END
 
@@ -394,10 +395,10 @@ async def exit_all_positions(update: Update, context: Union[CallbackContext, Con
                 coin = asset_position['position']['coin']
                 exchange.market_close(coin)
         else:
-            await update.message.reply_text(text="Exchange is not enabled")
+            await telegram_utils.reply(update, "Exchange is not enabled")
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await update.message.reply_text(text=f"Failed to exit all positions: {str(e)}")
+        await telegram_utils.reply(update, f"Failed to exit all positions: {str(e)}")
 
 
 async def exit_position(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
@@ -411,29 +412,29 @@ async def exit_position(update: Update, context: Union[CallbackContext, ContextT
     keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Choose a coin to sell:', reply_markup=reply_markup)
+    await telegram_utils.reply(update, 'Choose a coin to sell:', reply_markup=reply_markup)
     return EXIT_CHOOSING
 
 
 async def exit_selected_coin(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
-    query = update.callback_query
+    query: CallbackQuery = update.callback_query # type: ignore
     await query.answer()
 
     coin = query.data
     if coin == 'cancel':
-        await query.edit_message_text(text='Operation cancelled')
+        await query.edit_message_text('Operation cancelled')
         return ConversationHandler.END
 
-    await query.edit_message_text(text=f"Closing {coin}...")
+    await query.edit_message_text(f"Closing {coin}...")
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
             exchange.market_close(coin)
             await query.delete_message()
         else:
-            await query.edit_message_text(text="Exchange is not enabled")
+            await query.edit_message_text("Exchange is not enabled")
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await query.edit_message_text(text=f"Failed to exit {coin}: {str(e)}")
+        await query.edit_message_text(f"Failed to exit {coin}: {str(e)}")
 
     return ConversationHandler.END
