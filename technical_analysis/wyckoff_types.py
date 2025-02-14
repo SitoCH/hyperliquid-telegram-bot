@@ -210,8 +210,8 @@ _TIMEFRAME_SETTINGS = {
         ema_length=8,
         atr_settings=(8, 5, 13, 3, 5),
         supertrend_multiplier=2.0,
-        base_multiplier=1.05,
-        momentum_multiplier=1.2,
+        base_multiplier=0.95,  # Decreased from 1.05 for higher sensitivity
+        momentum_multiplier=1.3,  # Increased from 1.2 for faster reaction
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
@@ -219,8 +219,8 @@ _TIMEFRAME_SETTINGS = {
         ema_length=13,
         atr_settings=(10, 6, 18, 4, 6),
         supertrend_multiplier=2.3,
-        base_multiplier=1.15,
-        momentum_multiplier=1.25,
+        base_multiplier=1.05,  # Decreased from 1.15
+        momentum_multiplier=1.35,  # Increased from 1.25
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
@@ -228,8 +228,8 @@ _TIMEFRAME_SETTINGS = {
         ema_length=21,
         atr_settings=(14, 9, 21, 7, 8),
         supertrend_multiplier=2.6,
-        base_multiplier=1.25,
-        momentum_multiplier=1.35,
+        base_multiplier=1.15,  # Decreased from 1.25
+        momentum_multiplier=1.45,  # Increased from 1.35
         description="Hourly trend"
     ),
     Timeframe.HOURS_2: TimeframeSettings(
@@ -237,8 +237,8 @@ _TIMEFRAME_SETTINGS = {
         ema_length=28,
         atr_settings=(20, 10, 25, 8, 10),
         supertrend_multiplier=2.8,
-        base_multiplier=1.35,
-        momentum_multiplier=1.45,
+        base_multiplier=1.25,  # Decreased from 1.35
+        momentum_multiplier=1.55,  # Increased from 1.45
         description="2h trend"
     ),
     Timeframe.HOURS_4: TimeframeSettings(
@@ -246,8 +246,8 @@ _TIMEFRAME_SETTINGS = {
         ema_length=34,
         atr_settings=(34, 12, 34, 9, 14),
         supertrend_multiplier=3.0,
-        base_multiplier=1.45,
-        momentum_multiplier=1.65,
+        base_multiplier=1.35,  # Decreased from 1.45
+        momentum_multiplier=1.75,  # Increased from 1.65
         description="4h trend"
     ),
     Timeframe.HOURS_8: TimeframeSettings(
@@ -255,8 +255,8 @@ _TIMEFRAME_SETTINGS = {
         ema_length=41,
         atr_settings=(38, 12, 40, 9, 16),
         supertrend_multiplier=3.2,
-        base_multiplier=1.55,
-        momentum_multiplier=1.75,
+        base_multiplier=1.45,  # Decreased from 1.55
+        momentum_multiplier=1.85,  # Increased from 1.75
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
@@ -264,8 +264,8 @@ _TIMEFRAME_SETTINGS = {
         ema_length=55,
         atr_settings=(41, 12, 48, 9, 21),
         supertrend_multiplier=3.5,
-        base_multiplier=1.65,
-        momentum_multiplier=1.95,
+        base_multiplier=1.55,  # Decreased from 1.65
+        momentum_multiplier=2.05,  # Increased from 1.95
         description="Daily trend"
     ),
 }
