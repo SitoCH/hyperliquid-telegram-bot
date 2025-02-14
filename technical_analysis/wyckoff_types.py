@@ -206,7 +206,7 @@ class Timeframe(Enum):
 # Rebalanced weights for crypto focus
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.10,
+        phase_weight=0.12,
         ema_length=8,
         atr_settings=(8, 5, 13, 3, 5),
         supertrend_multiplier=2.0,
@@ -215,7 +215,7 @@ _TIMEFRAME_SETTINGS = {
         description="15 min trend"
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.14,
+        phase_weight=0.16,
         ema_length=13,
         atr_settings=(10, 6, 18, 4, 6),
         supertrend_multiplier=2.3,
@@ -224,7 +224,7 @@ _TIMEFRAME_SETTINGS = {
         description="30 min trend"
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.22,
+        phase_weight=0.24,
         ema_length=21,
         atr_settings=(14, 9, 21, 7, 8),
         supertrend_multiplier=2.6,
@@ -233,7 +233,7 @@ _TIMEFRAME_SETTINGS = {
         description="Hourly trend"
     ),
     Timeframe.HOURS_2: TimeframeSettings(
-        phase_weight=0.18,
+        phase_weight=0.16,
         ema_length=28,
         atr_settings=(20, 10, 25, 8, 10),
         supertrend_multiplier=2.8,
@@ -251,7 +251,7 @@ _TIMEFRAME_SETTINGS = {
         description="4h trend"
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.10,
+        phase_weight=0.08,
         ema_length=41,
         atr_settings=(38, 12, 40, 9, 16),
         supertrend_multiplier=3.2,
@@ -260,7 +260,7 @@ _TIMEFRAME_SETTINGS = {
         description="8h trend"
     ),
     Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.08,
+        phase_weight=0.06,
         ema_length=55,
         atr_settings=(41, 12, 48, 9, 21),
         supertrend_multiplier=3.5,
