@@ -161,6 +161,12 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
             'resistance': resistance_1h,
             'support': support_1h
         }
+
+        resistance_4h, support_4h = find_significant_levels(dataframes[Timeframe.HOURS_4], states[Timeframe.HOURS_4], mid)
+        significant_levels[Timeframe.HOURS_4] = {
+            'resistance': resistance_4h,
+            'support': support_4h
+        }
        
         mtf_context = analyze_multi_timeframe(
             states, 
