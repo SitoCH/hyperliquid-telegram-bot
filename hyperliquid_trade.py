@@ -108,6 +108,7 @@ async def selected_leverage(update: Update, context: Union[CallbackContext, Cont
         return ConversationHandler.END
 
     if 'stop_loss_price' in context.user_data and 'take_profit_price' in context.user_data:
+        query.delete_message()
         return await open_order(context)
 
     await send_stop_loss_suggestions(query, context)
