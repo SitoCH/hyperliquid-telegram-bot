@@ -2,7 +2,7 @@ import time
 from typing import Optional
 
 class HyperliquidRateLimiter:
-    def __init__(self, max_weight_per_minute: int = 950):
+    def __init__(self, max_weight_per_minute: int = 900):
         self.max_weight_per_minute = max_weight_per_minute
         self.current_minute: int = 0
         self.current_weight: int = 0
