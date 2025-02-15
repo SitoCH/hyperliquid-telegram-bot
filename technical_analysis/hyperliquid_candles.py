@@ -22,6 +22,7 @@ from technical_analysis.wyckoff_types import Timeframe, WyckoffState, Significan
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from technical_analysis.wykcoff_chart import generate_chart
 from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe, MultiTimeframeDirection
+from .hyperliquid_ratelimiter import hyperliquid_rate_limiter
 
 
 SELECTING_COIN_FOR_TA = range(1)
@@ -73,17 +74,22 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
 
 
 async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
-    """Process coins one at a time to avoid rate limits."""
+    """Process coins one at a time with rate limiting."""
 
     coins_to_analyze = context.job.data['coins_to_analyze'] # type: ignore
     coin = coins_to_analyze.pop()
+        
     await analyze_candles_for_coin(context, coin, False)
-    
+ 
     # Schedule next coin if any remain
     if coins_to_analyze:
+        weight_per_analysis = 150
+        next_available = hyperliquid_rate_limiter.get_next_available_time(weight_per_analysis)
+        delay = max(2, next_available)
+        hyperliquid_rate_limiter.add_weight(weight_per_analysis)
         context.application.job_queue.run_once( # type: ignore
             analyze_candles_for_coin_job,
-            when=2,
+            when=delay,
             data={"coins_to_analyze": coins_to_analyze},
             job_kwargs={'misfire_grace_time': 180}
         )

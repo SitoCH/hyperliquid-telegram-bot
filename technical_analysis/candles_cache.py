@@ -5,14 +5,10 @@ from typing import Dict, List, Any, Optional, Tuple
 from utils import log_execution_time
 from .wyckoff_types import Timeframe
 from logging_utils import logger
-from .rate_limiter import RateLimiter
 
 # Calculate cache directory relative to project root
 PROJECT_ROOT = Path(__file__).parent.parent
 CACHE_DIR = PROJECT_ROOT / 'cache' / 'candles'
-
-# Initialize rate limiter with specified weights
-candles_rate_limiter = RateLimiter(max_weight_per_minute=950, weight_per_call=20)
 
 def _get_cache_file_path(coin: str, timeframe: Timeframe) -> Path:
     """Get the path for the cache file of a specific coin and timeframe"""
@@ -195,9 +191,7 @@ def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_d
         if cached and len(cached) > 0:
             # Find the timestamp of the last cached candle
             last_cached_ts = max(c['T'] for c in cached)
-            # Wait for rate limit before fetching
-            candles_rate_limiter.wait_if_needed()
-            # Fetch all candles since the last cached one
+
             new_candles = fetch_fn(coin, timeframe.name, last_cached_ts, end_ts)
             
             # Merge all candles
@@ -210,8 +204,6 @@ def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_d
             
             return merged
 
-        # No cache or empty cache - fetch all data
-        candles_rate_limiter.wait_if_needed()
         candles = fetch_fn(coin, timeframe.name, start_ts, end_ts)
         if candles:
             # Cache everything except the current incomplete candle
