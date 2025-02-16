@@ -113,74 +113,79 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+def get_candles_for_timeframes(coin: str, now: int) -> Dict[Timeframe, List[Dict[str, Any]]]:
+    """Get candles data for all timeframes with optimized lookback periods."""
+    timeframe_lookbacks = {
+        Timeframe.MINUTES_15: 40,
+        Timeframe.MINUTES_30: 70,
+        Timeframe.HOUR_1: 90,
+        Timeframe.HOURS_2: 100,
+        Timeframe.HOURS_4: 110,
+        Timeframe.HOURS_8: 150,
+        Timeframe.DAY_1: 200
+    }
+    return {
+        tf: get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
+        for tf, lookback in timeframe_lookbacks.items()
+    }
+
+def analyze_timeframe_data(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry], local_tz: Any) -> WyckoffState:
+    """Process data for a single timeframe."""
+    if df.empty:
+        return WyckoffState.unknown()
+    
+    apply_indicators(df, timeframe)
+    return detect_wyckoff_phase(remove_partial_candle(df, local_tz), timeframe, funding_rates)
+
+def calculate_significant_levels(
+    dataframes: Dict[Timeframe, pd.DataFrame], 
+    states: Dict[Timeframe, WyckoffState], 
+    mid: float
+) -> Dict[Timeframe, SignificantLevelsData]:
+    """Calculate significant levels for specified timeframes."""
+    significant_timeframes = [Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4]
+    return {
+        tf: {
+            'resistance': resistance,
+            'support': support
+        }
+        for tf in significant_timeframes
+        for resistance, support in [find_significant_levels(dataframes[tf], states[tf], mid, tf)]
+    }
+
 async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:
     start_time = time.time()
     logger.info(f"Running TA for {coin}")
+    
     try:
         now = int(time.time() * 1000)
-
         funding_rates = get_funding_with_cache(coin, now, 7)
+        local_tz = get_localzone()
 
         # Get candles for all timeframes
-        candles_data = {
-            Timeframe.MINUTES_15: get_candles_with_cache(coin, Timeframe.MINUTES_15, now, 40, hyperliquid_utils.info.candles_snapshot),
-            Timeframe.MINUTES_30: get_candles_with_cache(coin, Timeframe.MINUTES_30, now, 70, hyperliquid_utils.info.candles_snapshot),
-            Timeframe.HOUR_1: get_candles_with_cache(coin, Timeframe.HOUR_1, now, 90, hyperliquid_utils.info.candles_snapshot),
-            Timeframe.HOURS_2: get_candles_with_cache(coin, Timeframe.HOURS_2, now, 100, hyperliquid_utils.info.candles_snapshot),
-            Timeframe.HOURS_4: get_candles_with_cache(coin, Timeframe.HOURS_4, now, 110, hyperliquid_utils.info.candles_snapshot),
-            Timeframe.HOURS_8: get_candles_with_cache(coin, Timeframe.HOURS_8, now, 150, hyperliquid_utils.info.candles_snapshot),
-            Timeframe.DAY_1: get_candles_with_cache(coin, Timeframe.DAY_1, now, 200, hyperliquid_utils.info.candles_snapshot)
-        }
+        candles_data = get_candles_for_timeframes(coin, now)
 
         # Check if we have enough data for basic analysis
         if len(candles_data[Timeframe.MINUTES_15]) < 10:
             logger.warning(f"Insufficient candles for technical analysis on {coin}")
             return
 
-        local_tz = get_localzone()
+        # Prepare dataframes and analyze states
         dataframes = {
             tf: prepare_dataframe(candles, local_tz) 
             for tf, candles in candles_data.items()
         }
 
-        # Apply indicators and get Wyckoff states
-        states = {}
-        for tf, df in dataframes.items():
-            if not df.empty:
-                apply_indicators(df, tf)
-                states[tf] = detect_wyckoff_phase(remove_partial_candle(df, local_tz), tf, funding_rates)
-            else:
-                states[tf] = WyckoffState.unknown()
+        states = {
+            tf: analyze_timeframe_data(df, tf, funding_rates, local_tz)
+            for tf, df in dataframes.items()
+        }
 
         # Add multi-timeframe analysis
         mid = float(hyperliquid_utils.info.all_mids()[coin])
-        significant_levels: Dict[Timeframe, SignificantLevelsData] = { }
+        significant_levels = calculate_significant_levels(dataframes, states, mid)
         
-        resistance_30m, support_30m = find_significant_levels(dataframes[Timeframe.MINUTES_30], states[Timeframe.MINUTES_30], mid, Timeframe.MINUTES_30)
-        significant_levels[Timeframe.MINUTES_30] = {
-            'resistance': resistance_30m,
-            'support': support_30m
-        }
-
-        resistance_1h, support_1h = find_significant_levels(dataframes[Timeframe.HOUR_1], states[Timeframe.HOUR_1], mid, Timeframe.HOUR_1)
-        significant_levels[Timeframe.HOUR_1] = {
-            'resistance': resistance_1h,
-            'support': support_1h
-        }
-
-        resistance_4h, support_4h = find_significant_levels(dataframes[Timeframe.HOURS_4], states[Timeframe.HOURS_4], mid, Timeframe.HOURS_4)
-        significant_levels[Timeframe.HOURS_4] = {
-            'resistance': resistance_4h,
-            'support': support_4h
-        }
-       
-        mtf_context = analyze_multi_timeframe(
-            states, 
-            coin, 
-            mid, 
-            significant_levels,
-            interactive_analysis
-        )
+        mtf_context = analyze_multi_timeframe(states, coin, mid, significant_levels, interactive_analysis)
 
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
         should_notify = (
@@ -189,15 +194,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         )
 
         if should_notify:
-            await send_trend_change_message(
-                context, 
-                mid, 
-                dataframes,
-                states,
-                coin, 
-                interactive_analysis, 
-                mtf_context
-            )
+            await send_trend_change_message(context, mid, dataframes, states, coin, interactive_analysis, mtf_context)
 
     except Exception as e:
         logger.error(f"Failed to analyze candles for {coin}: {str(e)}", exc_info=True)
