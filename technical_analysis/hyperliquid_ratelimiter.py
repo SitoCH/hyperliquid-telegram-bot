@@ -1,37 +1,37 @@
 import time
-from typing import Optional
+from math import floor
 
 class HyperliquidRateLimiter:
-    def __init__(self, max_weight_per_minute: int = 900):
+    def __init__(self, max_weight_per_minute=1000):
         self.max_weight_per_minute = max_weight_per_minute
-        self.current_minute: int = 0
-        self.current_weight: int = 0
-
-    def add_weight(self, weight: int) -> None:
-        current_minute = int(time.time() / 60)
-        if current_minute != self.current_minute:
-            self.current_minute = current_minute
+        self.current_minute = self._get_current_minute()
+        self.current_weight = 0
+    
+    def _get_current_minute(self) -> int:
+        """Get the current minute timestamp by rounding down to nearest minute"""
+        return floor(time.time() / 60) * 60
+    
+    def _reset_if_new_minute(self) -> None:
+        current = self._get_current_minute()
+        if current > self.current_minute:
+            self.current_minute = current
             self.current_weight = 0
+    
+    def add_weight(self, weight: int) -> None:
+        self._reset_if_new_minute()
         self.current_weight += weight
-
+    
     def get_next_available_time(self, weight: int) -> float:
-        """
-        Returns the number of seconds to wait before the next request can be made.
-        If the weight would exceed the limit, returns seconds until next minute.
-        """
-        current_minute = int(time.time() / 60)
-        current_second = time.time() % 60
+        """Returns seconds until the weight can be accommodated"""
+        self._reset_if_new_minute()
         
-        if current_minute != self.current_minute:
-            # New minute started, no wait needed
-            return 0
-            
         if self.current_weight + weight <= self.max_weight_per_minute:
-            # Can execute immediately
             return 0
             
-        # Need to wait until next minute
-        return 60 - current_second
+        # Calculate time until next minute
+        current_time = time.time()
+        next_minute = self.current_minute + 60
+        return max(0, next_minute - current_time)
 
-# Global rate limiter instance
+# Global instance
 hyperliquid_rate_limiter = HyperliquidRateLimiter()
