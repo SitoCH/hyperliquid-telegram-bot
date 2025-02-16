@@ -5,7 +5,7 @@ from technical_analysis.significant_levels import find_significant_levels
 from technical_analysis.wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, VolatilityState, 
     VolumeState, EffortResult, CompositeAction, WyckoffSign,
-    FundingState
+    FundingState, Timeframe
 )
 
 def test_find_significant_levels_with_single_data_point():
@@ -41,7 +41,7 @@ def test_find_significant_levels_with_single_data_point():
                      index=[pd.Timestamp('2025-01-02 21:45:58', tz=timezone.utc)])
     
     # Test the function with current_price parameter
-    resistance_levels, support_levels = find_significant_levels(df, wyckoff_state, current_price=102.0)
+    resistance_levels, support_levels = find_significant_levels(df, wyckoff_state, 102.0, Timeframe.HOUR_1)
     
     # Assert that we get empty lists for both levels when there's insufficient data
     assert len(resistance_levels) == 0
@@ -83,7 +83,7 @@ def test_find_significant_levels_with_multiple_data_points():
                      ])
     
     # Test the function with current_price parameter
-    resistance_levels, support_levels = find_significant_levels(df, wyckoff_state, current_price=104.0)
+    resistance_levels, support_levels = find_significant_levels(df, wyckoff_state, 104.0, Timeframe.HOUR_1)
     
     # Assert that we get some levels when there's sufficient data
     assert isinstance(resistance_levels, list)

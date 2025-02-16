@@ -29,17 +29,18 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
 
     return ha_df
 
-def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, chart_image_time_delta, mid: float) -> io.BytesIO:
+def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, timeframe: Timeframe, mid: float) -> io.BytesIO:
+    """Use timeframe settings for chart window."""
     # Calculate thresholds from full dataset
     df['MACD_Hist'] = df['MACD_Hist'].fillna(0)
     strong_positive_threshold = max(df['MACD_Hist'].max() * 0.4, 0.000001)
     strong_negative_threshold = min(df['MACD_Hist'].min() * 0.4, -0.000001)
     
     # Calculate significant levels using full dataset
-    resistance_levels, support_levels = find_significant_levels(df, wyckoff, mid)
+    resistance_levels, support_levels = find_significant_levels(df, wyckoff, mid, timeframe)
 
-    # Now filter for plotting window
-    from_time = df['t'].max() - chart_image_time_delta
+    # Now filter for plotting window using timeframe settings
+    from_time = df['t'].max() - timeframe.settings.chart_image_time_delta
     df_plot = df.loc[df['t'] >= from_time].copy()
 
     buf = io.BytesIO()
@@ -122,13 +123,13 @@ def generate_chart(dataframes: dict[Timeframe, pd.DataFrame], states: dict[Timef
 
     try:
         df_15m_plot = dataframes[Timeframe.MINUTES_15]
-        chart_buffers.append(save_to_buffer(df_15m_plot, states[Timeframe.MINUTES_15], f"{coin} - 15M Chart", pd.Timedelta(hours=48), mid))
+        chart_buffers.append(save_to_buffer(df_15m_plot, states[Timeframe.MINUTES_15], f"{coin} - 15M Chart", Timeframe.MINUTES_15, mid))
 
         df_1h_plot = dataframes[Timeframe.HOUR_1]
-        chart_buffers.append(save_to_buffer(df_1h_plot, states[Timeframe.HOUR_1], f"{coin} - 1H Chart", pd.Timedelta(days=7), mid))
+        chart_buffers.append(save_to_buffer(df_1h_plot, states[Timeframe.HOUR_1], f"{coin} - 1H Chart", Timeframe.HOUR_1, mid))
 
         df_4h_plot = dataframes[Timeframe.HOURS_4]
-        chart_buffers.append(save_to_buffer(df_4h_plot, states[Timeframe.HOURS_4], f"{coin} - 4H Chart", pd.Timedelta(days=21), mid))
+        chart_buffers.append(save_to_buffer(df_4h_plot, states[Timeframe.HOURS_4], f"{coin} - 4H Chart", Timeframe.HOURS_4, mid))
 
     except Exception as e:
         # Clean up on error

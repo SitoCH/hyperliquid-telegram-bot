@@ -1,6 +1,7 @@
 from enum import Enum, auto
 from dataclasses import dataclass
 from typing import Optional, Dict, TypedDict, List
+import pandas as pd  # type: ignore[import]
 
 class WyckoffPhase(Enum):
     """
@@ -159,6 +160,16 @@ class TimeframeSettings:
     base_multiplier: float          # Used in thresholds property
     momentum_multiplier: float      # Used in thresholds property
     description: str                # Used for logging/display purposes
+    # Add new settings
+    volume_ma_window: int                 # From wyckoff.py calculate_volume_metrics()
+    volume_short_ma_window: int           # From wyckoff.py calculate_volume_metrics()
+    volume_long_ma_window: int            # From wyckoff.py calculate_volume_metrics()
+    spring_upthrust_window: int           # From wyckoff.py detect_spring_upthrust()
+    volume_trend_window: int              # From wyckoff.py calculate_volume_metrics()
+    price_strength_ma_window: int         # From wyckoff.py determine_phase_by_price_strength()
+    price_change_window: int              # From wyckoff.py determine_phase_by_price_strength()
+    support_resistance_lookback: int      # From significant_levels.py find_significant_levels()
+    chart_image_time_delta: pd.Timedelta  # From wyckoff_chart.py save_to_buffer()
 
     @property
     def thresholds(self) -> tuple[float, float, float, float, float, float]:
@@ -212,7 +223,17 @@ _TIMEFRAME_SETTINGS = {
         supertrend_multiplier=2.0,
         base_multiplier=0.95,  # Decreased from 1.05 for higher sensitivity
         momentum_multiplier=1.3,  # Increased from 1.2 for faster reaction
-        description="15 min trend"
+        description="15 min trend",
+        # Add new settings
+        volume_ma_window=20,
+        volume_short_ma_window=3,
+        volume_long_ma_window=8,
+        spring_upthrust_window=4,
+        volume_trend_window=5,
+        price_strength_ma_window=8,
+        price_change_window=3,
+        support_resistance_lookback=40,
+        chart_image_time_delta=pd.Timedelta(hours=48)
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
         phase_weight=0.16,
@@ -221,7 +242,17 @@ _TIMEFRAME_SETTINGS = {
         supertrend_multiplier=2.3,
         base_multiplier=1.05,  # Decreased from 1.15
         momentum_multiplier=1.35,  # Increased from 1.25
-        description="30 min trend"
+        description="30 min trend",
+        # Add new settings
+        volume_ma_window=20,
+        volume_short_ma_window=3,
+        volume_long_ma_window=8,
+        spring_upthrust_window=4,
+        volume_trend_window=5,
+        price_strength_ma_window=8,
+        price_change_window=3,
+        support_resistance_lookback=40,
+        chart_image_time_delta=pd.Timedelta(hours=48)
     ),
     Timeframe.HOUR_1: TimeframeSettings(
         phase_weight=0.24,
@@ -230,7 +261,17 @@ _TIMEFRAME_SETTINGS = {
         supertrend_multiplier=2.6,
         base_multiplier=1.15,  # Decreased from 1.25
         momentum_multiplier=1.45,  # Increased from 1.35
-        description="Hourly trend"
+        description="Hourly trend",
+        # Add new settings
+        volume_ma_window=20,
+        volume_short_ma_window=3,
+        volume_long_ma_window=8,
+        spring_upthrust_window=4,
+        volume_trend_window=5,
+        price_strength_ma_window=8,
+        price_change_window=3,
+        support_resistance_lookback=40,
+        chart_image_time_delta=pd.Timedelta(hours=48)
     ),
     Timeframe.HOURS_2: TimeframeSettings(
         phase_weight=0.16,
@@ -239,7 +280,17 @@ _TIMEFRAME_SETTINGS = {
         supertrend_multiplier=2.8,
         base_multiplier=1.25,  # Decreased from 1.35
         momentum_multiplier=1.55,  # Increased from 1.45
-        description="2h trend"
+        description="2h trend",
+        # Add new settings
+        volume_ma_window=20,
+        volume_short_ma_window=3,
+        volume_long_ma_window=8,
+        spring_upthrust_window=4,
+        volume_trend_window=5,
+        price_strength_ma_window=8,
+        price_change_window=3,
+        support_resistance_lookback=40,
+        chart_image_time_delta=pd.Timedelta(hours=48)
     ),
     Timeframe.HOURS_4: TimeframeSettings(
         phase_weight=0.18,
@@ -248,7 +299,17 @@ _TIMEFRAME_SETTINGS = {
         supertrend_multiplier=3.0,
         base_multiplier=1.35,  # Decreased from 1.45
         momentum_multiplier=1.75,  # Increased from 1.65
-        description="4h trend"
+        description="4h trend",
+        # Add new settings
+        volume_ma_window=20,
+        volume_short_ma_window=3,
+        volume_long_ma_window=8,
+        spring_upthrust_window=4,
+        volume_trend_window=5,
+        price_strength_ma_window=8,
+        price_change_window=3,
+        support_resistance_lookback=40,
+        chart_image_time_delta=pd.Timedelta(hours=48)
     ),
     Timeframe.HOURS_8: TimeframeSettings(
         phase_weight=0.08,
@@ -257,7 +318,17 @@ _TIMEFRAME_SETTINGS = {
         supertrend_multiplier=3.2,
         base_multiplier=1.45,  # Decreased from 1.55
         momentum_multiplier=1.85,  # Increased from 1.75
-        description="8h trend"
+        description="8h trend",
+        # Add new settings
+        volume_ma_window=20,
+        volume_short_ma_window=3,
+        volume_long_ma_window=8,
+        spring_upthrust_window=4,
+        volume_trend_window=5,
+        price_strength_ma_window=8,
+        price_change_window=3,
+        support_resistance_lookback=40,
+        chart_image_time_delta=pd.Timedelta(hours=48)
     ),
     Timeframe.DAY_1: TimeframeSettings(
         phase_weight=0.06,
@@ -266,7 +337,17 @@ _TIMEFRAME_SETTINGS = {
         supertrend_multiplier=3.5,
         base_multiplier=1.55,  # Decreased from 1.65
         momentum_multiplier=2.05,  # Increased from 1.95
-        description="Daily trend"
+        description="Daily trend",
+        # Add new settings
+        volume_ma_window=20,
+        volume_short_ma_window=3,
+        volume_long_ma_window=8,
+        spring_upthrust_window=4,
+        volume_trend_window=5,
+        price_strength_ma_window=8,
+        price_change_window=3,
+        support_resistance_lookback=40,
+        chart_image_time_delta=pd.Timedelta(hours=48)
     ),
 }
 

@@ -35,7 +35,7 @@ def get_significant_levels(coin: str, mid: float, timeframe: Timeframe, lookback
     df = prepare_dataframe(candles, local_tz)
     apply_indicators(df, timeframe)
     funding_rates = get_funding_with_cache(coin, now, 7)
-    return find_significant_levels(df, detect_wyckoff_phase(remove_partial_candle(df, local_tz), timeframe, funding_rates), mid)
+    return find_significant_levels(df, detect_wyckoff_phase(remove_partial_candle(df, local_tz), timeframe, funding_rates), mid, timeframe)
 
 
 async def execute_ta(update: Update, context: CallbackContext) -> int:
@@ -156,19 +156,19 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         mid = float(hyperliquid_utils.info.all_mids()[coin])
         significant_levels: Dict[Timeframe, SignificantLevelsData] = { }
         
-        resistance_30m, support_30m = find_significant_levels(dataframes[Timeframe.MINUTES_30], states[Timeframe.MINUTES_30], mid)
+        resistance_30m, support_30m = find_significant_levels(dataframes[Timeframe.MINUTES_30], states[Timeframe.MINUTES_30], mid, Timeframe.MINUTES_30)
         significant_levels[Timeframe.MINUTES_30] = {
             'resistance': resistance_30m,
             'support': support_30m
         }
 
-        resistance_1h, support_1h = find_significant_levels(dataframes[Timeframe.HOUR_1], states[Timeframe.HOUR_1], mid)
+        resistance_1h, support_1h = find_significant_levels(dataframes[Timeframe.HOUR_1], states[Timeframe.HOUR_1], mid, Timeframe.HOUR_1)
         significant_levels[Timeframe.HOUR_1] = {
             'resistance': resistance_1h,
             'support': support_1h
         }
 
-        resistance_4h, support_4h = find_significant_levels(dataframes[Timeframe.HOURS_4], states[Timeframe.HOURS_4], mid)
+        resistance_4h, support_4h = find_significant_levels(dataframes[Timeframe.HOURS_4], states[Timeframe.HOURS_4], mid, Timeframe.HOURS_4)
         significant_levels[Timeframe.HOURS_4] = {
             'resistance': resistance_4h,
             'support': support_4h

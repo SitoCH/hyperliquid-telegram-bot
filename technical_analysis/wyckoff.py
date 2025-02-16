@@ -37,20 +37,20 @@ class VolumeMetrics:
     long_ma: float     # Long-term moving average
     trend_strength: float  # Trend strength indicator
 
-def calculate_volume_metrics(df: pd.DataFrame) -> VolumeMetrics:
+def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMetrics:
     """Calculate normalized volume metrics."""
     try:
-        # Calculate moving averages
-        volume_sma = df['v'].rolling(window=20).mean()
-        volume_std = df['v'].rolling(window=20).std()
-        volume_short_ma = df['v'].rolling(window=3).mean()
-        volume_long_ma = df['v'].rolling(window=8).mean()
+        # Use timeframe settings instead of hardcoded values
+        volume_sma = df['v'].rolling(window=timeframe.settings.volume_ma_window).mean()
+        volume_std = df['v'].rolling(window=timeframe.settings.volume_ma_window).std()
+        volume_short_ma = df['v'].rolling(window=timeframe.settings.volume_short_ma_window).mean()
+        volume_long_ma = df['v'].rolling(window=timeframe.settings.volume_long_ma_window).mean()
         
         # Avoid division by zero
         last_std = max(volume_std.iloc[-1], 1e-8)
         last_sma = max(volume_sma.iloc[-1], 1e-8)
         
-        # Calculate volume trend
+        # Use timeframe settings for trend window
         volume_trend = ((volume_short_ma - volume_long_ma) / volume_long_ma).fillna(0)
         
         # Calculate volume consistency
@@ -124,7 +124,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
 
     try:
         # Calculate volume metrics first
-        vol_metrics = calculate_volume_metrics(df)
+        vol_metrics = calculate_volume_metrics(df, timeframe)
         
         # Define is_high_volume using normalized metrics
         is_high_volume = (

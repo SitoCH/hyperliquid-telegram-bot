@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import norm # type: ignore[import]
 from scipy.special import expit # type: ignore[import]
-from .wyckoff_types import WyckoffState, WyckoffPhase, CompositeAction, FundingState
+from .wyckoff_types import WyckoffState, WyckoffPhase, CompositeAction, FundingState, Timeframe
 from .wyckoff import MIN_PERIODS, STRONG_DEV_THRESHOLD
 
 def cluster_points(
@@ -112,18 +112,18 @@ def find_significant_levels(
     df: pd.DataFrame,
     wyckoff_state: WyckoffState,
     current_price: float,
+    timeframe: Timeframe,
     n_levels: int = 4,
     min_score: float = 0.2
 ) -> Tuple[List[float], List[float]]:
     """
-    Find significant price levels (resistance and support) based on price and volume action,
-    incorporating Wyckoff phase analysis to adjust level scoring.
+    Find significant price levels using timeframe-specific lookback.
     """
-    if len(df) < MIN_PERIODS:
+    if len(df) < timeframe.settings.support_resistance_lookback:
         return [], []
     
-    price_sma = df['c'].rolling(window=MIN_PERIODS).mean()
-    price_std = df['c'].rolling(window=MIN_PERIODS).std()
+    price_sma = df['c'].rolling(window=timeframe.settings.support_resistance_lookback).mean()
+    price_std = df['c'].rolling(window=timeframe.settings.support_resistance_lookback).std()
     volatility = (price_std / price_sma).iloc[-1]
     
     # Use full dataset instead of limited lookback
@@ -135,7 +135,7 @@ def find_significant_levels(
     
     # Scale tolerance with dataset length
     base_tolerance = recent_df['ATR'].iloc[-1] * (0.3 + volatility * 0.2)
-    length_factor = np.log1p(len(recent_df) / MIN_PERIODS) / 2
+    length_factor = np.log1p(len(recent_df) / timeframe.settings.support_resistance_lookback) / 2
     tolerance = base_tolerance * (1 + length_factor)
     
     data = dict(
