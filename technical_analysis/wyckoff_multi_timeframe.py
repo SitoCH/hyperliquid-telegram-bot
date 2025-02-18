@@ -1,7 +1,7 @@
 import pandas as pd  # type: ignore[import]
 
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Final
 from dataclasses import dataclass
 from .wyckoff_multi_timeframe_description import generate_all_timeframes_description
 from .wyckoff_types import SignificantLevelsData
@@ -15,10 +15,28 @@ from .wyckoff_types import (
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
 )
 
+from .wyckoff_multi_timeframe_types import (
+    STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
+    MIXED_MOMENTUM, LOW_MOMENTUM,
+    SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT,
+    DIRECTIONAL_WEIGHT, VOLUME_WEIGHT, PHASE_WEIGHT
+)
 
 def get_phase_weight(timeframe: Timeframe) -> float:
     """Get the weight for each timeframe's contribution to analysis."""
     return timeframe.settings.phase_weight
+
+
+def _is_phase_confirming_momentum(analysis: TimeframeGroupAnalysis) -> bool:
+    """Check if the Wyckoff phase confirms the momentum bias."""
+    bullish_phases = {WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION}
+    bearish_phases = {WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION}
+    
+    if analysis.momentum_bias == MultiTimeframeDirection.BULLISH:
+        return analysis.dominant_phase in bullish_phases
+    elif analysis.momentum_bias == MultiTimeframeDirection.BEARISH:
+        return analysis.dominant_phase in bearish_phases
+    return False
 
 
 def analyze_multi_timeframe(
@@ -32,7 +50,8 @@ def analyze_multi_timeframe(
             alignment_score=0.0,
             confidence_level=0.0,
             description="No timeframe data available for analysis",
-            direction=MultiTimeframeDirection.NEUTRAL
+            direction=MultiTimeframeDirection.NEUTRAL,
+            momentum_intensity=0.0
         )
 
     # Group timeframes into three categories
@@ -50,6 +69,51 @@ def analyze_multi_timeframe(
         short_term_analysis.group_weight = _calculate_group_weight(short_term)
         intermediate_analysis.group_weight = _calculate_group_weight(intermediate)
         long_term_analysis.group_weight = _calculate_group_weight(long_term)
+
+        # Calculate momentum intensity with aligned weights
+        timeframe_weights = {
+            "short": SHORT_TERM_WEIGHT,
+            "mid": INTERMEDIATE_WEIGHT, 
+            "long": LONG_TERM_WEIGHT
+        }
+        
+        timeframe_scores = {
+            "short": (
+                1.0 if short_term_analysis.momentum_bias == short_term_analysis.momentum_bias
+                else 0.5 if short_term_analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL
+                else 0.0
+            ),
+            "mid": (
+                1.0 if intermediate_analysis.momentum_bias == intermediate_analysis.momentum_bias
+                else 0.5 if intermediate_analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL
+                else 0.0
+            ),
+            "long": (
+                1.0 if long_term_analysis.momentum_bias == long_term_analysis.momentum_bias
+                else 0.5 if long_term_analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL
+                else 0.0
+            )
+        }
+        
+        volume_scores = {
+            "short": short_term_analysis.volume_strength,
+            "mid": intermediate_analysis.volume_strength,
+            "long": long_term_analysis.volume_strength
+        }
+        
+        phase_bonus = {
+            "short": 0.2 if _is_phase_confirming_momentum(short_term_analysis) else 0.0,
+            "mid": 0.2 if _is_phase_confirming_momentum(intermediate_analysis) else 0.0,
+            "long": 0.2 if _is_phase_confirming_momentum(long_term_analysis) else 0.0
+        }
+        
+        momentum_intensity = sum(
+            (timeframe_scores[tf] * DIRECTIONAL_WEIGHT +
+             volume_scores[tf] * VOLUME_WEIGHT +
+             phase_bonus[tf] * PHASE_WEIGHT) *
+            timeframe_weights[tf]
+            for tf in timeframe_weights.keys()
+        )
 
         # Calculate overall alignment across all groups
         all_analysis = AllTimeframesAnalysis(
@@ -80,7 +144,8 @@ def analyze_multi_timeframe(
             alignment_score=all_analysis.alignment_score,
             confidence_level=all_analysis.confidence_level,
             description=description,
-            direction=all_analysis.overall_direction
+            direction=all_analysis.overall_direction,
+            momentum_intensity=momentum_intensity
         )
         
     except Exception as e:
@@ -88,7 +153,8 @@ def analyze_multi_timeframe(
             alignment_score=0.0,
             confidence_level=0.0,
             description=f"Error analyzing timeframes: {str(e)}",
-            direction=MultiTimeframeDirection.NEUTRAL
+            direction=MultiTimeframeDirection.NEUTRAL,
+            momentum_intensity=0.0
         )
 
 

@@ -5,7 +5,6 @@ import pandas as pd  # type: ignore[import]
 from utils import fmt_price
 from telegram_utils import telegram_utils
 import base64
-from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis
 from utils import exchange_enabled
 
 from .wyckoff_types import (
@@ -13,6 +12,11 @@ from .wyckoff_types import (
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
 )
 
+from .wyckoff_multi_timeframe_types import (
+    AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis,
+    STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
+    MIXED_MOMENTUM, LOW_MOMENTUM
+)
 
 def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalysis, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData], interactive_analysis: bool) -> str:
     """Generate comprehensive description including three timeframe groups."""
@@ -62,84 +66,26 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
 
 def _calculate_momentum_strength(analysis: AllTimeframesAnalysis) -> str:
     """Calculate and describe momentum in plain English."""
-    # Define timeframe weights (sum = 1.0)
-    weights = {
-        "long": 0.45,    # Long-term carries most weight
-        "mid": 0.35,     # Mid-term secondary importance
-        "short": 0.20    # Short-term least weight but still significant
-    }
-    
-    # Calculate directional alignment with overall trend
-    timeframe_scores = {
-        "long": (
-            1.0 if analysis.long_term.momentum_bias == analysis.overall_direction
-            else 0.5 if analysis.long_term.momentum_bias == MultiTimeframeDirection.NEUTRAL
-            else 0.0
-        ),
-        "mid": (
-            1.0 if analysis.intermediate.momentum_bias == analysis.overall_direction
-            else 0.5 if analysis.intermediate.momentum_bias == MultiTimeframeDirection.NEUTRAL
-            else 0.0
-        ),
-        "short": (
-            1.0 if analysis.short_term.momentum_bias == analysis.overall_direction
-            else 0.5 if analysis.short_term.momentum_bias == MultiTimeframeDirection.NEUTRAL
-            else 0.0
-        )
-    }
-    
-    # Calculate volume-weighted momentum
-    volume_scores = {
-        "long": analysis.long_term.volume_strength,
-        "mid": analysis.intermediate.volume_strength,
-        "short": analysis.short_term.volume_strength
-    }
-    
-    # Calculate phase confirmation bonus
-    phase_bonus = {
-        "long": 0.2 if _is_phase_confirming_momentum(analysis.long_term) else 0.0,
-        "mid": 0.2 if _is_phase_confirming_momentum(analysis.intermediate) else 0.0,
-        "short": 0.2 if _is_phase_confirming_momentum(analysis.short_term) else 0.0
-    }
-    
-    # Calculate final weighted score
-    final_score = sum(
-        (timeframe_scores[tf] * 0.5 +      # 50% weight to directional alignment
-         volume_scores[tf] * 0.3 +         # 30% weight to volume confirmation
-         phase_bonus[tf] * 0.2) *          # 20% weight to phase confirmation
-        weights[tf]                        # Apply timeframe weight
-        for tf in weights.keys()
-    )
     
     # Replace basic strength descriptions with more detailed explanations
-    if final_score > 0.85:
+    if analysis.momentum_intensity > STRONG_MOMENTUM:
         if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
             return "Strong buying pressure across all timeframes"
         return "Strong selling pressure across all timeframes"
-    elif final_score > 0.70:
+    elif analysis.momentum_intensity > MODERATE_MOMENTUM:
         if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
             return "Steady accumulation with increasing volume"
         return "Sustained distribution with good volume"
-    elif final_score > 0.55:
+    elif analysis.momentum_intensity > WEAK_MOMENTUM:
         if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
             return "Moderate upward pressure"
         return "Moderate downward pressure"
-    elif final_score > 0.40:
+    elif analysis.momentum_intensity > MIXED_MOMENTUM:
         return "Mixed momentum with no clear direction"
-    elif final_score > 0.25:
+    elif analysis.momentum_intensity > LOW_MOMENTUM:
         return "Low momentum, possible consolidation phase"
     return "Very low momentum, market likely ranging"
 
-def _is_phase_confirming_momentum(analysis: TimeframeGroupAnalysis) -> bool:
-    """Check if the Wyckoff phase confirms the momentum bias."""
-    bullish_phases = {WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION}
-    bearish_phases = {WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION}
-    
-    if analysis.momentum_bias == MultiTimeframeDirection.BULLISH:
-        return analysis.dominant_phase in bullish_phases
-    elif analysis.momentum_bias == MultiTimeframeDirection.BEARISH:
-        return analysis.dominant_phase in bearish_phases
-    return False
 
 def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
     """Analyze overall market sentiment in clear terms."""
