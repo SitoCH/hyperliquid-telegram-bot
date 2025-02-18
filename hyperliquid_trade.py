@@ -60,6 +60,11 @@ async def selected_amount(update: Update, context: Union[CallbackContext, Contex
     current_leverage = hyperliquid_utils.get_leverage(user_state, coin)
     if current_leverage is not None:
         context.user_data["leverage"] = int(current_leverage)
+        
+        if 'stop_loss_price' in context.user_data and 'take_profit_price' in context.user_data:
+            await query.delete_message()
+            return await open_order(context)
+
         await send_stop_loss_suggestions(query, context)
         return SELECTING_STOP_LOSS
 
