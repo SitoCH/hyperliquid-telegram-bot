@@ -149,6 +149,7 @@ def analyze_multi_timeframe(
         )
         
     except Exception as e:
+        logger.error(e, exc_info=True)
         return MultiTimeframeContext(
             alignment_score=0.0,
             confidence_level=0.0,
