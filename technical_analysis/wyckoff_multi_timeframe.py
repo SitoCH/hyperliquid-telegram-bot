@@ -77,19 +77,27 @@ def analyze_multi_timeframe(
             "long": LONG_TERM_WEIGHT
         }
         
+        # First determine overall direction for reference
+        overall_direction = _determine_overall_direction([
+            short_term_analysis, 
+            intermediate_analysis, 
+            long_term_analysis
+        ])
+        
+        # Now calculate momentum intensity using the overall direction as reference
         timeframe_scores = {
             "short": (
-                1.0 if short_term_analysis.momentum_bias == short_term_analysis.momentum_bias
+                1.0 if short_term_analysis.momentum_bias == overall_direction
                 else 0.5 if short_term_analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL
                 else 0.0
             ),
             "mid": (
-                1.0 if intermediate_analysis.momentum_bias == intermediate_analysis.momentum_bias
+                1.0 if intermediate_analysis.momentum_bias == overall_direction
                 else 0.5 if intermediate_analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL
                 else 0.0
             ),
             "long": (
-                1.0 if long_term_analysis.momentum_bias == long_term_analysis.momentum_bias
+                1.0 if long_term_analysis.momentum_bias == overall_direction
                 else 0.5 if long_term_analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL
                 else 0.0
             )
@@ -120,12 +128,8 @@ def analyze_multi_timeframe(
             short_term=short_term_analysis,
             intermediate=intermediate_analysis,
             long_term=long_term_analysis,
+            overall_direction=overall_direction,  # Use the same overall_direction
             momentum_intensity=momentum_intensity,
-            overall_direction=_determine_overall_direction([
-                short_term_analysis, 
-                intermediate_analysis, 
-                long_term_analysis
-            ]),
             confidence_level=_calculate_overall_confidence([
                 short_term_analysis, 
                 intermediate_analysis, 
