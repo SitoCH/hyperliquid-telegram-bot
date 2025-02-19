@@ -120,6 +120,7 @@ def analyze_multi_timeframe(
             short_term=short_term_analysis,
             intermediate=intermediate_analysis,
             long_term=long_term_analysis,
+            momentum_intensity=momentum_intensity,
             overall_direction=_determine_overall_direction([
                 short_term_analysis, 
                 intermediate_analysis, 
