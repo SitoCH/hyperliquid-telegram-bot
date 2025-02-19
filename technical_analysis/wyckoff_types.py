@@ -216,136 +216,136 @@ class Timeframe(Enum):
 
 # Rebalanced weights for crypto focus
 _TIMEFRAME_SETTINGS = {
-    # Short-term group (35% total weight)
+    # Short-term group (40% total weight) - Increased from 35%
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.15,          # 15% weight
-        ema_length=8,
-        atr_settings=(8, 5, 13, 3, 5),
-        supertrend_multiplier=1.8,  # Decreased from 2.0 for faster signals
-        base_multiplier=0.85,       # More sensitive to short-term moves
-        momentum_multiplier=1.4,    # Increased for faster momentum signals
+        phase_weight=0.18,          # Increased from 0.15
+        ema_length=6,               # Faster EMA
+        atr_settings=(6, 4, 10, 3, 4),  # More responsive ATR
+        supertrend_multiplier=1.6,  # More sensitive
+        base_multiplier=0.80,       # More sensitive to moves
+        momentum_multiplier=1.5,    # More reactive
         description="15min scalping",
-        volume_ma_window=14,        # Shorter for faster volume signals
+        volume_ma_window=10,        # Shorter for faster signals
         volume_short_ma_window=3,
-        volume_long_ma_window=7,    # Shorter for faster trend detection
-        spring_upthrust_window=3,   # Faster reaction to reversals
+        volume_long_ma_window=6,    # Shorter for faster trend detection
+        spring_upthrust_window=3,   # Quick reversal detection
         volume_trend_window=4,
-        price_strength_ma_window=6,
+        price_strength_ma_window=5,
         price_change_window=3,
-        support_resistance_lookback=30,
-        chart_image_time_delta=pd.Timedelta(hours=24)
+        support_resistance_lookback=24,  # Less noise in shorter lookback
+        chart_image_time_delta=pd.Timedelta(hours=12)  # Shorter view for day trading
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.20,          # 20% weight
-        ema_length=13,
-        atr_settings=(10, 6, 18, 4, 6),
-        supertrend_multiplier=2.0,  # Decreased from 2.3
-        base_multiplier=0.95,       # More sensitive
-        momentum_multiplier=1.45,   # Increased from 1.35
+        phase_weight=0.22,          # Increased from 0.20
+        ema_length=10,              # Faster EMA
+        atr_settings=(8, 5, 14, 4, 5),
+        supertrend_multiplier=1.8,  # More sensitive
+        base_multiplier=0.90,       # More reactive
+        momentum_multiplier=1.4,    # Faster momentum detection
         description="30min swings",
-        volume_ma_window=16,
+        volume_ma_window=12,
         volume_short_ma_window=3,
         volume_long_ma_window=8,
         spring_upthrust_window=4,
         volume_trend_window=5,
-        price_strength_ma_window=8,
+        price_strength_ma_window=7,
         price_change_window=3,
-        support_resistance_lookback=40,
-        chart_image_time_delta=pd.Timedelta(hours=36)
+        support_resistance_lookback=36,
+        chart_image_time_delta=pd.Timedelta(hours=24)
     ),
     
-    # Intermediate group (43% total weight)
+    # Intermediate group (45% total weight) - Increased from 43%
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.25,          # 25% weight (primary timeframe)
-        ema_length=21,
-        atr_settings=(14, 9, 21, 7, 8),
-        supertrend_multiplier=2.3,  # Decreased from 2.6
-        base_multiplier=1.05,       # More balanced
-        momentum_multiplier=1.55,   # Increased from 1.45
+        phase_weight=0.30,          # Increased from 0.25 (primary timeframe)
+        ema_length=16,              # Faster for crypto
+        atr_settings=(12, 8, 18, 6, 7),
+        supertrend_multiplier=2.1,  # More sensitive
+        base_multiplier=1.0,        # Balanced
+        momentum_multiplier=1.5,    # More reactive
         description="1h trend",
-        volume_ma_window=20,
+        volume_ma_window=16,
         volume_short_ma_window=3,
         volume_long_ma_window=10,
         spring_upthrust_window=4,
         volume_trend_window=6,
-        price_strength_ma_window=10,
+        price_strength_ma_window=8,
         price_change_window=4,
-        support_resistance_lookback=50,
+        support_resistance_lookback=48,
         chart_image_time_delta=pd.Timedelta(hours=48)
     ),
     Timeframe.HOURS_2: TimeframeSettings(
-        phase_weight=0.18,          # 18% weight
-        ema_length=28,
-        atr_settings=(20, 10, 25, 8, 10),
-        supertrend_multiplier=2.5,  # Decreased from 2.8
-        base_multiplier=1.15,       # More balanced
-        momentum_multiplier=1.65,   # Increased from 1.55
+        phase_weight=0.15,          # Reduced from 0.18
+        ema_length=24,              # Faster
+        atr_settings=(16, 8, 21, 7, 8),
+        supertrend_multiplier=2.3,
+        base_multiplier=1.1,
+        momentum_multiplier=1.6,
         description="2h trend",
-        volume_ma_window=24,
+        volume_ma_window=20,
         volume_short_ma_window=4,
         volume_long_ma_window=12,
         spring_upthrust_window=5,
         volume_trend_window=8,
-        price_strength_ma_window=12,
+        price_strength_ma_window=10,
         price_change_window=4,
-        support_resistance_lookback=60,
+        support_resistance_lookback=56,
         chart_image_time_delta=pd.Timedelta(hours=72)
     ),
     
-    # Long-term group (22% total weight)
+    # Long-term group (15% total weight) - Reduced from 22%
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.12,          # 12% weight
-        ema_length=34,
-        atr_settings=(34, 12, 34, 9, 14),
-        supertrend_multiplier=2.8,  # Decreased from 3.0
-        base_multiplier=1.25,       # More conservative
-        momentum_multiplier=1.85,   # Increased from 1.75
+        phase_weight=0.08,          # Reduced from 0.12
+        ema_length=30,              # Faster
+        atr_settings=(24, 10, 28, 8, 12),
+        supertrend_multiplier=2.6,
+        base_multiplier=1.2,
+        momentum_multiplier=1.8,
         description="4h trend",
-        volume_ma_window=30,
+        volume_ma_window=24,
         volume_short_ma_window=4,
-        volume_long_ma_window=15,
+        volume_long_ma_window=14,
         spring_upthrust_window=5,
         volume_trend_window=10,
-        price_strength_ma_window=15,
+        price_strength_ma_window=12,
         price_change_window=5,
-        support_resistance_lookback=80,
-        chart_image_time_delta=pd.Timedelta(days=5)
+        support_resistance_lookback=72,
+        chart_image_time_delta=pd.Timedelta(days=4)
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.06,          # 6% weight
-        ema_length=41,
-        atr_settings=(38, 12, 40, 9, 16),
-        supertrend_multiplier=3.0,  # Decreased from 3.2
-        base_multiplier=1.35,       # More conservative
-        momentum_multiplier=1.95,   # Increased from 1.85
+        phase_weight=0.04,          # Reduced from 0.06
+        ema_length=38,
+        atr_settings=(32, 12, 36, 9, 14),
+        supertrend_multiplier=2.8,
+        base_multiplier=1.3,
+        momentum_multiplier=1.9,
         description="8h trend",
+        volume_ma_window=32,
+        volume_short_ma_window=5,
+        volume_long_ma_window=18,
+        spring_upthrust_window=6,
+        volume_trend_window=12,
+        price_strength_ma_window=16,
+        price_change_window=6,
+        support_resistance_lookback=96,
+        chart_image_time_delta=pd.Timedelta(days=6)
+    ),
+    Timeframe.DAY_1: TimeframeSettings(
+        phase_weight=0.03,          # Reduced from 0.04
+        ema_length=48,              # Faster
+        atr_settings=(38, 12, 44, 9, 18),
+        supertrend_multiplier=3.0,
+        base_multiplier=1.4,
+        momentum_multiplier=2.0,
+        description="Daily trend",
         volume_ma_window=40,
         volume_short_ma_window=5,
         volume_long_ma_window=20,
-        spring_upthrust_window=6,
-        volume_trend_window=12,
-        price_strength_ma_window=20,
-        price_change_window=6,
-        support_resistance_lookback=100,
-        chart_image_time_delta=pd.Timedelta(days=7)
-    ),
-    Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.04,          # 4% weight
-        ema_length=55,
-        atr_settings=(41, 12, 48, 9, 21),
-        supertrend_multiplier=3.2,  # Decreased from 3.5
-        base_multiplier=1.45,       # More conservative
-        momentum_multiplier=2.15,   # Increased from 2.05
-        description="Daily trend",
-        volume_ma_window=50,
-        volume_short_ma_window=5,
-        volume_long_ma_window=25,
         spring_upthrust_window=7,
         volume_trend_window=15,
-        price_strength_ma_window=25,
+        price_strength_ma_window=20,
         price_change_window=7,
         support_resistance_lookback=120,
-        chart_image_time_delta=pd.Timedelta(days=14)
+        chart_image_time_delta=pd.Timedelta(days=10)
     ),
 }
 
