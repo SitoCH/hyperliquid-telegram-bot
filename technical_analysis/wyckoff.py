@@ -230,15 +230,26 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         
         # Calculate time-weighted volume profile
         def calculate_weighted_volume_profile(df: pd.DataFrame) -> float:
-            recent_data = df.iloc[-24:]  # Last 24 candles
+            """
+            Calculate volume profile using exponentially weighted volume across all available data.
+            More recent volumes have higher weights but all data contributes to the analysis.
             
-            # Create exponential weights (more recent = higher weight)
-            weights = np.exp(np.linspace(-1, 0, len(recent_data)))
+            Args:
+                df: DataFrame with OHLCV data
+            
+            Returns:
+                Price level with highest weighted volume
+            """
+            # Create exponential weights for all data points
+            # Using exponential decay where most recent point has weight 1.0
+            # and weight decays by half every ~100 periods
+            decay_factor = -np.log(2) / 100  # Half-life of 100 periods
+            weights = np.exp(np.linspace(decay_factor * len(df), 0, len(df)))
             weights = weights / weights.sum()  # Normalize weights
             
             # Calculate volume-weighted price levels
-            weighted_volumes = recent_data['v'] * weights
-            volume_profile = weighted_volumes.groupby(recent_data['c'].round(2)).sum()
+            weighted_volumes = df['v'] * weights
+            volume_profile = weighted_volumes.groupby(df['c'].round(2)).sum()
             
             # Get price level with highest weighted volume
             return float(volume_profile.idxmax())
