@@ -376,19 +376,18 @@ wheels = [
 
 [[package]]
 name = "hyperliquid-python-sdk"
-version = "0.9.0"
+version = "0.10.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "eth-abi" },
     { name = "eth-account" },
     { name = "eth-utils" },
     { name = "msgpack" },
     { name = "requests" },
     { name = "websocket-client" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ae/01/6676666672a7c0ad3df119f62833a219a4aca525316f2ee67f3d7761c9c5/hyperliquid_python_sdk-0.9.0.tar.gz", hash = "sha256:e5b5f867ebd02175d6fe9bc4b147858d360dad6110e7cf7fbd9691071b04fc72", size = 20133 }
+sdist = { url = "https://files.pythonhosted.org/packages/e9/8f/22294bbd3a6a57c990045d740cf91f53c450edccff7f1ca4d1b824e94de4/hyperliquid_python_sdk-0.10.1.tar.gz", hash = "sha256:0353cc732ba96358ec499e67733ac5e78aefbfe12bca381c834cc8e3c61c1dea", size = 20362 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/30/fb/600ecf2d6ac5439529c2cb1d502d3e77dff09e223843e92a93f20970bda7/hyperliquid_python_sdk-0.9.0-py3-none-any.whl", hash = "sha256:b25a256c30c57ffa597ad01df4c3b0b0ef473685afcead53d47e1b07560fe410", size = 19664 },
+    { url = "https://files.pythonhosted.org/packages/84/7a/c86ecbffeead6803f16942e56f61b4afbdb78bf5f5d8b9846ef82d6d2528/hyperliquid_python_sdk-0.10.1-py3-none-any.whl", hash = "sha256:6756edd3993a7bd1574ad10d9d651b43b935f5f9bb6db76ff6af6d1a4c812501", size = 19980 },
 ]
 
 [[package]]
@@ -418,7 +417,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "dacite", specifier = ">=1.8.1" },
-    { name = "hyperliquid-python-sdk", specifier = "<0.10.0" },
+    { name = "hyperliquid-python-sdk", specifier = ">=0.10.1" },
     { name = "matplotlib", specifier = ">=3.9.2" },
     { name = "mplfinance", specifier = ">=0.12.10b0" },
     { name = "pandas-stubs", specifier = ">=2.2.3.241126" },

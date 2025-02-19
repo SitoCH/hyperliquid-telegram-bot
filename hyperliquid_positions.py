@@ -29,28 +29,16 @@ def _calculate_spot_balance(spot_state: Dict[str, Any], token_prices: Dict[str, 
         for balance in spot_state.get('balances', [])
     )
 
-def _calculate_stacked_balance(delegator_info: Dict[str, float], token_prices: Dict[str, float]) -> float:
+def _calculate_stacked_balance(staking_summary: Dict[str, float], token_prices: Dict[str, float]) -> float:
     """Calculate total stacked balance from delegator info and token prices."""
     hype_price = token_prices.get("HYPE", 0.0)
     
-    delegated_value = delegator_info["delegated"] * hype_price
-    undelegated_value = delegator_info["undelegated"] * hype_price
-    pending_value = delegator_info["pending_withdrawal"] * hype_price
+    delegated_value = float(staking_summary["delegated"]) * hype_price
+    undelegated_value = float(staking_summary["undelegated"]) * hype_price
+    pending_value = float(staking_summary["totalPendingWithdrawal"]) * hype_price
     
     return delegated_value + undelegated_value + pending_value
 
-def _get_delegator_summary(address: str) -> Dict[str, float]:
-    """Get delegator summary information for an address."""
-    response = requests.post(
-        "https://api-ui.hyperliquid.xyz/info",
-        json={"type": "delegatorSummary", "user": address}
-    ).json()
-    
-    return {
-        "delegated": float(response.get("delegated", "0.0")),
-        "undelegated": float(response.get("undelegated", "0.0")),
-        "pending_withdrawal": float(response.get("totalPendingWithdrawal", "0.0"))
-    }
 
 def _get_portfolio_balance() -> PortfolioBalance:
     """Get current portfolio balance information."""
@@ -58,13 +46,13 @@ def _get_portfolio_balance() -> PortfolioBalance:
     perp_state = hyperliquid_utils.info.user_state(address)
     spot_state = hyperliquid_utils.info.spot_user_state(address)
     token_prices = _get_token_prices()
-    delegator_info = _get_delegator_summary(address)
+    staking_summary = hyperliquid_utils.info.user_staking_summary(address)
     
     return PortfolioBalance(
         perp_total=float(perp_state['marginSummary']['accountValue']),
         perp_available=float(perp_state['withdrawable']),
         spot_total=_calculate_spot_balance(spot_state, token_prices),
-        stacked_total=_calculate_stacked_balance(delegator_info, token_prices),
+        stacked_total=_calculate_stacked_balance(staking_summary, token_prices),
     )
 
 def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
