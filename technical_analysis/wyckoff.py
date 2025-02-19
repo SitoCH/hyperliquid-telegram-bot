@@ -214,9 +214,23 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         # Calculate recent price change before calling identify_wyckoff_phase
         recent_change = df['c'].pct_change(3).iloc[-1]
         
-        # Calculate volume profile data before calling identify_wyckoff_phase
-        volume_profile = df['v'].iloc[-24:].groupby(df['c'].iloc[-24:].round(2)).sum()
-        high_vol_price = float(volume_profile.idxmax())
+        # Calculate time-weighted volume profile
+        def calculate_weighted_volume_profile(df: pd.DataFrame) -> float:
+            recent_data = df.iloc[-24:]  # Last 24 candles
+            
+            # Create exponential weights (more recent = higher weight)
+            weights = np.exp(np.linspace(-1, 0, len(recent_data)))
+            weights = weights / weights.sum()  # Normalize weights
+            
+            # Calculate volume-weighted price levels
+            weighted_volumes = recent_data['v'] * weights
+            volume_profile = weighted_volumes.groupby(recent_data['c'].round(2)).sum()
+            
+            # Get price level with highest weighted volume
+            return float(volume_profile.idxmax())
+
+        high_vol_price = calculate_weighted_volume_profile(df)
+
         current_price = df['c'].iloc[-1]
         
         funding_state = analyze_funding_rates(funding_rates or [])
