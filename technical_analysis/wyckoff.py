@@ -24,6 +24,12 @@ VOLUME_SURGE_THRESHOLD: Final[float] = 2.2  # Increased from 2.0 for more signif
 VOLUME_TREND_SHORT: Final[int] = 7  # Increased from 5 for smoother short-term trends
 VOLUME_TREND_LONG: Final[int] = 14  # Increased from 10 for longer-term trend context
 
+# Add new constants after existing ones
+EFFORT_VOLUME_THRESHOLD: Final[float] = 1.5  # Volume threshold for effort analysis
+RESULT_MIN_MOVE: Final[float] = 0.001  # Minimum price move to consider (0.1%)
+HIGH_EFFICIENCY_THRESHOLD: Final[float] = 0.8  # High efficiency threshold
+LOW_EFFICIENCY_THRESHOLD: Final[float] = 0.4  # Low efficiency threshold
+
 @dataclass
 class VolumeMetrics:
     """Container for volume-related metrics"""
@@ -36,6 +42,14 @@ class VolumeMetrics:
     short_ma: float    # Short-term moving average
     long_ma: float     # Long-term moving average
     trend_strength: float  # Trend strength indicator
+
+@dataclass
+class EffortAnalysis:
+    """Container for effort vs result analysis"""
+    efficiency: float          # How efficiently volume translates to price movement
+    volume_quality: float     # Quality of the volume (considering spread and consistency)
+    price_impact: float      # Actual price impact relative to volume
+    result: EffortResult     # Final effort classification
 
 def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMetrics:
     """Calculate normalized volume metrics."""
@@ -243,7 +257,9 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
             timeframe, recent_change, high_vol_price, current_price
         )
         
-        effort_result = EffortResult.STRONG if abs(effort_vs_result.iloc[-1]) > effort_threshold else EffortResult.WEAK
+        # Replace simple effort_result calculation with new analysis
+        effort_analysis = analyze_effort_result(df, vol_metrics, timeframe)
+        effort_result = effort_analysis.result
         
         # Detect composite action and Wyckoff signs
         composite_action = detect_composite_action(df, price_strength, vol_metrics, effort_vs_result.iloc[-1])
@@ -682,3 +698,71 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
         return FundingState.SLIGHTLY_NEGATIVE
     else:
         return FundingState.NEUTRAL
+
+def analyze_effort_result(
+    df: pd.DataFrame,
+    vol_metrics: VolumeMetrics,
+    timeframe: Timeframe
+) -> EffortAnalysis:
+    """
+    Enhanced effort vs result analysis considering multiple factors.
+    
+    Args:
+        df: Price and volume data
+        vol_metrics: Volume metrics from calculate_volume_metrics
+        timeframe: Current timeframe for context
+    """
+    try:
+        # Get recent data
+        recent_df = df.iloc[-5:]  # Look at last 5 candles
+        
+        # Calculate normalized price movement
+        price_change = abs(recent_df['c'].iloc[-1] - recent_df['o'].iloc[-1])
+        price_range = recent_df['h'].iloc[-1] - recent_df['l'].iloc[-1]
+        
+        # Skip tiny moves to avoid noise
+        if price_change < RESULT_MIN_MOVE:
+            return EffortAnalysis(0.0, 0.0, 0.0, EffortResult.WEAK)
+        
+        # Calculate volume quality
+        volume_consistency = vol_metrics.consistency
+        spread_quality = 1.0 - (abs(recent_df['c'] - recent_df['o']) / (recent_df['h'] - recent_df['l'])).mean()
+        volume_quality = (volume_consistency + spread_quality) / 2
+        
+        # Calculate price impact
+        avg_price = recent_df['c'].mean()
+        price_impact = price_change / (avg_price * vol_metrics.ratio)
+        
+        # Calculate efficiency score
+        base_efficiency = price_change / (price_range + 1e-8)  # Avoid division by zero
+        volume_weighted_efficiency = base_efficiency * (1 + vol_metrics.strength * 0.2)
+        
+        # Adjust efficiency based on timeframe context
+        if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]:
+            # More forgiving for short timeframes
+            volume_weighted_efficiency *= 1.2
+        elif timeframe in [Timeframe.HOURS_4, Timeframe.HOURS_8, Timeframe.DAY_1]:
+            # Stricter for longer timeframes
+            volume_weighted_efficiency *= 0.8
+        
+        # Final efficiency score
+        efficiency = min(1.0, volume_weighted_efficiency)
+        
+        # Determine effort result
+        result = (
+            EffortResult.STRONG if efficiency > HIGH_EFFICIENCY_THRESHOLD and volume_quality > 0.6
+            else EffortResult.WEAK if efficiency < LOW_EFFICIENCY_THRESHOLD or volume_quality < 0.3
+            else EffortResult.STRONG if price_impact > 1.2 and vol_metrics.ratio > EFFORT_VOLUME_THRESHOLD
+            else EffortResult.WEAK
+        )
+        
+        return EffortAnalysis(
+            efficiency=efficiency,
+            volume_quality=volume_quality,
+            price_impact=price_impact,
+            result=result
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in effort vs result analysis: {e}")
+        return EffortAnalysis(0.0, 0.0, 0.0, EffortResult.WEAK)
