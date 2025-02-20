@@ -540,23 +540,82 @@ def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> flo
     return max(min(scaled_confidence, 1.0), min_confidence)
 
 def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> MultiTimeframeDirection:
-    """Determine overall direction considering all timeframe groups."""
-    total_weight = sum(analysis.group_weight for analysis in analyses)
-    if total_weight == 0:
+    """Determine overall direction considering Wyckoff phase weights for each timeframe group."""
+    if not analyses:
         return MultiTimeframeDirection.NEUTRAL
 
-    weighted_signals = {
-        direction: sum(
-            analysis.group_weight / total_weight
-            for analysis in analyses
-            if analysis.momentum_bias == direction
-        )
-        for direction in MultiTimeframeDirection
+    # Group timeframes by their actual category rather than weight
+    timeframe_groups: Any = {
+        'short': [],    # Will contain 15m and 30m analyses
+        'mid': [],      # Will contain 1h and 2h analyses
+        'long': []      # Will contain 4h, 8h, and 1d analyses
     }
 
-    # Require stronger consensus for directional bias
-    strongest_direction = max(weighted_signals.items(), key=lambda x: x[1])
-    if strongest_direction[1] > 0.6:  # Require 60% weight agreement
-        return strongest_direction[0]
-    
+    for analysis in analyses:
+        if analysis.group_weight <= SHORT_TERM_WEIGHT:
+            timeframe_groups['short'].append(analysis)
+        elif analysis.group_weight <= SHORT_TERM_WEIGHT + INTERMEDIATE_WEIGHT:
+            timeframe_groups['mid'].append(analysis)
+        else:
+            timeframe_groups['long'].append(analysis)
+
+    def get_weighted_direction(group: List[TimeframeGroupAnalysis]) -> Tuple[MultiTimeframeDirection, float, float]:
+        if not group:
+            return MultiTimeframeDirection.NEUTRAL, 0.0, 0.0
+            
+        group_total_weight = sum(a.group_weight for a in group)
+        if group_total_weight == 0:
+            return MultiTimeframeDirection.NEUTRAL, 0.0, 0.0
+        
+        weighted_signals = {
+            direction: sum(
+                (a.group_weight / group_total_weight) * 
+                (1 + a.volume_strength * 0.3) *  # Volume boost
+                (1.2 if a.volatility_state == VolatilityState.HIGH else 1.0)  # Volatility adjustment
+                for a in group
+                if a.momentum_bias == direction
+            )
+            for direction in MultiTimeframeDirection
+        }
+        
+        strongest = max(weighted_signals.items(), key=lambda x: x[1])
+        avg_volume = sum(a.volume_strength for a in group) / len(group)
+        
+        return strongest[0], strongest[1], avg_volume
+
+    # Get weighted directions with volume context
+    st_dir, st_weight, st_vol = get_weighted_direction(timeframe_groups['short'])
+    mid_dir, mid_weight, mid_vol = get_weighted_direction(timeframe_groups['mid'])
+    lt_dir, lt_weight, _ = get_weighted_direction(timeframe_groups['long'])
+
+    # Check for high-conviction intraday moves first
+    if st_dir != MultiTimeframeDirection.NEUTRAL:
+        if st_weight > 0.8 and st_vol > 0.7:  # Strong short-term move with volume
+            if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_dir != st_dir:
+                return MultiTimeframeDirection.NEUTRAL  # Conflict with intermediate trend
+            return st_dir
+
+    # Check for strong intermediate trend
+    if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_weight > 0.7:
+        # Allow counter-trend short-term moves if volume is low
+        if st_dir != MultiTimeframeDirection.NEUTRAL and st_dir != mid_dir:
+            if st_vol < 0.5:  # Low volume counter-trend move
+                return mid_dir
+            return MultiTimeframeDirection.NEUTRAL  # High volume conflict
+        return mid_dir
+
+    # Consider longer-term trend with confirmation
+    if lt_dir != MultiTimeframeDirection.NEUTRAL and lt_weight > 0.6:
+        # Need confirmation from either shorter timeframe
+        if mid_dir == lt_dir or st_dir == lt_dir:
+            return lt_dir
+        # Check if counter-trend moves are weak
+        if mid_vol < 0.5 and st_vol < 0.5:
+            return lt_dir
+
+    # Check for aligned moves even with lower weights
+    if st_dir == mid_dir and mid_dir == lt_dir and st_dir != MultiTimeframeDirection.NEUTRAL:
+        if (st_weight + mid_weight + lt_weight) / 3 > 0.5:  # Average weight threshold
+            return st_dir
+
     return MultiTimeframeDirection.NEUTRAL
