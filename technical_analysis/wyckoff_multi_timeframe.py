@@ -11,11 +11,12 @@ from logging_utils import logger
 from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext
 
 from .wyckoff_types import (
-    WyckoffState, WyckoffPhase, MarketPattern, 
+    WyckoffState, WyckoffPhase, MarketPattern, _TIMEFRAME_SETTINGS,
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
 )
 
 from .wyckoff_multi_timeframe_types import (
+    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES,
     STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
     MIXED_MOMENTUM, LOW_MOMENTUM,
     SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT,
@@ -543,21 +544,16 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
     """Determine overall direction considering Wyckoff phase weights for each timeframe group."""
     if not analyses:
         return MultiTimeframeDirection.NEUTRAL
-
-    # Group timeframes by their actual category rather than weight
-    timeframe_groups: Any = {
-        'short': [],    # Will contain 15m and 30m analyses
-        'mid': [],      # Will contain 1h and 2h analyses
-        'long': []      # Will contain 4h, 8h, and 1d analyses
+    
+    # Group timeframes by their actual settings in _TIMEFRAME_SETTINGS
+    timeframe_groups = {
+        'short': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight 
+                                                           for tf in SHORT_TERM_TIMEFRAMES}],
+        'mid': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight 
+                                                         for tf in INTERMEDIATE_TIMEFRAMES}],
+        'long': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight 
+                                                          for tf in LONG_TERM_TIMEFRAMES}]
     }
-
-    for analysis in analyses:
-        if analysis.group_weight <= SHORT_TERM_WEIGHT:
-            timeframe_groups['short'].append(analysis)
-        elif analysis.group_weight <= SHORT_TERM_WEIGHT + INTERMEDIATE_WEIGHT:
-            timeframe_groups['mid'].append(analysis)
-        else:
-            timeframe_groups['long'].append(analysis)
 
     def get_weighted_direction(group: List[TimeframeGroupAnalysis]) -> Tuple[MultiTimeframeDirection, float, float]:
         if not group:

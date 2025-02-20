@@ -3,27 +3,31 @@ from dataclasses import dataclass
 from typing import Final
 
 from .wyckoff_types import (
-    WyckoffState, WyckoffPhase, MarketPattern, 
-    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
+    WyckoffPhase, CompositeAction, MarketLiquidity,
+    LiquidationRisk, VolatilityState, Timeframe, _TIMEFRAME_SETTINGS
 )
 
-# Timeframe group weights aligned with existing settings
-SHORT_TERM_WEIGHT: Final[float] = 0.35  # 15m + 30m combined weight
-INTERMEDIATE_WEIGHT: Final[float] = 0.43  # 1h + 2h combined weight
-LONG_TERM_WEIGHT: Final[float] = 0.22  # 4h + 8h + 1d combined weight
+# Calculate timeframe group weights from settings
+SHORT_TERM_TIMEFRAMES = {Timeframe.MINUTES_15, Timeframe.MINUTES_30}
+INTERMEDIATE_TIMEFRAMES = {Timeframe.HOUR_1, Timeframe.HOURS_2}
+LONG_TERM_TIMEFRAMES = {Timeframe.HOURS_4, Timeframe.HOURS_8, Timeframe.DAY_1}
 
-# Momentum scoring components weights
-DIRECTIONAL_WEIGHT: Final[float] = 0.50  # Weight for directional alignment
-VOLUME_WEIGHT: Final[float] = 0.30      # Weight for volume confirmation
-PHASE_WEIGHT: Final[float] = 0.20       # Weight for phase confirmation
+# Dynamic calculation of group weights
+SHORT_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES)
+INTERMEDIATE_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES)
+LONG_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES)
 
-# Momentum thresholds for description
-STRONG_MOMENTUM: Final[float] = 0.85
-MODERATE_MOMENTUM: Final[float] = 0.70
-WEAK_MOMENTUM: Final[float] = 0.55
-MIXED_MOMENTUM: Final[float] = 0.40
-LOW_MOMENTUM: Final[float] = 0.25
+# Momentum thresholds
+STRONG_MOMENTUM: Final[float] = 0.75  # Reduced from 0.8 to account for crypto volatility
+MODERATE_MOMENTUM: Final[float] = 0.5  # Reduced from 0.6 for more sensitive signals
+WEAK_MOMENTUM: Final[float] = 0.3     # Reduced from 0.4 to catch early moves
+MIXED_MOMENTUM: Final[float] = 0.15   # Reduced from 0.2 for noise filtering
+LOW_MOMENTUM: Final[float] = 0.05     # Reduced from 0.1 to better identify ranging periods
 
+# Analysis weight factors
+DIRECTIONAL_WEIGHT: Final[float] = 0.50
+VOLUME_WEIGHT: Final[float] = 0.35
+PHASE_WEIGHT: Final[float] = 0.15
 
 class MultiTimeframeDirection(Enum):
     BULLISH = "bullish"
