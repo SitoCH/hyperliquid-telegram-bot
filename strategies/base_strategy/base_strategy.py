@@ -6,7 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 from telegram.constants import ParseMode
 from tabulate import simple_separated_format, tabulate
-from hyperliquid_utils import hyperliquid_utils
+from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 from hyperliquid_trade import exit_all_positions
 from logging_utils import logger

@@ -1,7 +1,7 @@
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
-from hyperliquid_utils import hyperliquid_utils
+from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 from utils import fmt
 from logging_utils import logger

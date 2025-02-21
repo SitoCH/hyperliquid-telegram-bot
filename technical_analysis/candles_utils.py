@@ -2,7 +2,7 @@ import os
 import time
 
 from typing import Set, List, Dict, Any, Optional, cast, Tuple
-from hyperliquid_utils import hyperliquid_utils
+from hyperliquid_utils.utils import hyperliquid_utils
 from logging_utils import logger
 
 async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:

@@ -12,7 +12,7 @@ from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandl
 from technical_analysis.hyperliquid_candles import SELECTING_COIN_FOR_TA, analyze_candles, execute_ta, selected_coin_for_ta
 from hyperliquid_orders import get_open_orders
 from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_LEVERAGE, enter_long, enter_short, exit_all_positions, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit, selected_leverage
-from hyperliquid_utils import hyperliquid_utils
+from hyperliquid_utils.utils import hyperliquid_utils
 from hyperliquid_positions import get_positions, get_overview
 from hyperliquid_alerts import check_profit_percentage
 from hyperliquid_events import on_user_events

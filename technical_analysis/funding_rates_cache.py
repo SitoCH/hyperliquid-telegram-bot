@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from dacite import from_dict # type: ignore
-from hyperliquid_utils import hyperliquid_utils
+from hyperliquid_utils.utils import hyperliquid_utils
 from typing import Dict, List, Any, Optional, Tuple, TypedDict, Callable
 from utils import log_execution_time
 

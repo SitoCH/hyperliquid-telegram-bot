@@ -12,7 +12,7 @@ from telegram.constants import ParseMode
 
 from logging_utils import logger
 from telegram_utils import telegram_utils
-from hyperliquid_utils import hyperliquid_utils
+from hyperliquid_utils.utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt_price, log_execution_time
 from technical_analysis.significant_levels import find_significant_levels
 from technical_analysis.wyckoff import detect_wyckoff_phase
@@ -22,7 +22,7 @@ from technical_analysis.wyckoff_types import Timeframe, WyckoffState, Significan
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from technical_analysis.wykcoff_chart import generate_chart
 from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe, MultiTimeframeDirection
-from .hyperliquid_ratelimiter import hyperliquid_rate_limiter
+from hyperliquid_utils.hyperliquid_ratelimiter import hyperliquid_rate_limiter
 from .wyckoff_multi_timeframe_types import MODERATE_MOMENTUM
 
 

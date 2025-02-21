@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes, CommandHandler
 from typing import List, Dict, Set, Tuple
 from strategies.base_strategy.base_strategy import BaseStrategy, BaseStrategyConfig
 from logging_utils import logger
-from hyperliquid_utils import hyperliquid_utils
+from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 from utils import fmt
 

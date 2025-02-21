@@ -13,6 +13,7 @@ from hyperliquid.info import Info
 from hyperliquid.utils import constants
 
 from telegram_utils import telegram_utils
+from .hyperliquid_info_proxy import InfoProxy
 
 
 class HyperliquidUtils:
@@ -28,22 +29,26 @@ class HyperliquidUtils:
         user_vault = os.environ.get("HTB_USER_VAULT")
         self.address = user_vault if user_vault is not None else user_wallet
 
-        self.info = Info(constants.MAINNET_API_URL, True)
+        self.info = InfoProxy(Info(constants.MAINNET_API_URL, True))
+
 
     def init_websocket(self):
         """Initialize WebSocket connection for live data."""
-        self.info = Info(constants.MAINNET_API_URL, False)
-        if hasattr(self.info, 'ws_manager') and self.info.ws_manager:
-            self.info.ws_manager.ws.on_error = self.on_websocket_error
-            self.info.ws_manager.ws.on_close = self.on_websocket_close
+        self.info = InfoProxy(Info(constants.MAINNET_API_URL, False))
+        if hasattr(self.info._info, 'ws_manager') and self.info._info.ws_manager:
+            self.info._info.ws_manager.ws.on_error = self.on_websocket_error
+            self.info._info.ws_manager.ws.on_close = self.on_websocket_close
+
 
     def on_websocket_error(self, ws, error):
         logger.error(f"Websocket error: {error}")
         telegram_utils.send_and_exit("Websocket error, restarting the application...")
 
+
     def on_websocket_close(self, ws, close_status_code, close_msg):
         logger.warning(f"Websocket closed: {close_msg}")
         telegram_utils.send_and_exit("Websocket error, restarting the application...")
+
 
     def get_exchange(self):
         key_file = os.environ.get("HTB_KEY_FILE")
@@ -52,6 +57,7 @@ class HyperliquidUtils:
                 file_content = file.read()
                 account: LocalAccount = eth_account.Account.from_key(file_content)
                 return Exchange(account, constants.MAINNET_API_URL, vault_address=os.environ.get("HTB_USER_VAULT"), account_address=os.environ["HTB_USER_WALLET"])
+
 
     def get_sz_decimals(self):
         meta = self.info.meta()
@@ -68,17 +74,21 @@ class HyperliquidUtils:
             None
         )
 
+
     def get_size(self, user_state, selected_coin) -> float:
         position = self._get_asset_position(user_state, selected_coin)
         return float(position['szi']) if position else 0.0
 
+
     def get_entry_px_str(self, user_state, selected_coin) -> float:
         position = self._get_asset_position(user_state, selected_coin)
-        return position['entryPx'] if position else None
+        return position['entryPx'] if position else None # type: ignore
+
 
     def get_liquidation_px_str(self, user_state, selected_coin) -> float:
         position = self._get_asset_position(user_state, selected_coin)
-        return position['liquidationPx'] if position else None
+        return position['liquidationPx'] if position else None # type: ignore
+
 
     def get_entry_px(self, user_state, selected_coin) -> float:
         position = self._get_asset_position(user_state, selected_coin)
@@ -106,6 +116,7 @@ class HyperliquidUtils:
         user_state = self.info.user_state(self.address)
         return [asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])]
 
+
     def get_coins_by_open_interest(self) -> List[str]:
         response_data = self.info.meta_and_asset_ctxs()
         universe, coin_data = response_data[0]['universe'], response_data[1]
@@ -114,11 +125,13 @@ class HyperliquidUtils:
         sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
         return [coin[0] for coin in reversed(sorted_coins[:75])]
 
+
     def get_coins_reply_markup(self):
         coins = self.get_coins_by_open_interest()
         keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
         keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
         return InlineKeyboardMarkup(keyboard)
+
 
     def get_hyperliquid_symbol(self, symbol: str) -> str:
         """Convert standard symbol to Hyperliquid format if needed."""
@@ -129,6 +142,7 @@ class HyperliquidUtils:
             "BONK": "kBONK"
         }
         return symbol_mapping.get(symbol, symbol)
+
 
     def fetch_cryptos(self, params: Dict[str, Any], page_count: int = 1) -> List[Dict]:
         """Fetch crypto data from CoinGecko API with configurable pagination."""
@@ -147,5 +161,6 @@ class HyperliquidUtils:
         except requests.RequestException as e:
             logger.error(f"Error fetching crypto data: {e}")
             return []
+
 
 hyperliquid_utils = HyperliquidUtils()

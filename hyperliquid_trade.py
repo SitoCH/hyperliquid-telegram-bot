@@ -3,7 +3,7 @@ from logging_utils import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
 from telegram_utils import telegram_utils
-from hyperliquid_utils import hyperliquid_utils
+from hyperliquid_utils.utils import hyperliquid_utils
 from telegram.constants import ParseMode
 from utils import OPERATION_CANCELLED, fmt, px_round, fmt_price
 from technical_analysis.hyperliquid_candles import get_significant_levels
