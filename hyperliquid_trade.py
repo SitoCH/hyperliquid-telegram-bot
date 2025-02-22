@@ -17,8 +17,8 @@ async def enter_position(update: Update, context: CallbackContext, enter_mode: s
     context.user_data["enter_mode"] = enter_mode
     if context.args and len(context.args) > 2:
         context.user_data["selected_coin"] = context.args[0]
-        context.user_data["stop_loss_price"] = float(context.args[1])
-        context.user_data["take_profit_price"] = float(context.args[2])
+        context.user_data["stop_loss_price"] = float(context.args[1].replace(",", ""))
+        context.user_data["take_profit_price"] = float(context.args[2].replace(",", ""))
         message, reply_markup = await get_amount_suggestions(context)
         await telegram_utils.reply(update, message, reply_markup=reply_markup)
         return SELECTING_AMOUNT
