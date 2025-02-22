@@ -58,7 +58,8 @@ def score_level(
     max_vol: float, 
     current_price: float,
     wyckoff_state: WyckoffState,
-    total_periods: int
+    total_periods: int,
+    df: pd.DataFrame  # Add df parameter to access BB data
 ) -> float:
     """
     Enhanced scoring that incorporates Wyckoff analysis and adjusts for available data
@@ -106,6 +107,23 @@ def score_level(
         if wyckoff_state.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.HIGHLY_NEGATIVE]:
             score *= 0.8  # Reduce level confidence when funding is extreme
             
+    # Add Bollinger Band context if available
+    if df is not None and all(col in df.columns for col in ['BB_upper', 'BB_lower']):
+        price = cluster['price']
+        bb_touch_count = sum(
+            1 for idx in range(-min(20, len(df)), 0)
+            if (df['h'].iloc[idx] >= df['BB_upper'].iloc[idx] and price >= df['h'].iloc[idx]) or
+               (df['l'].iloc[idx] <= df['BB_lower'].iloc[idx] and price <= df['l'].iloc[idx])
+        )
+        
+        # Boost score if level aligns with BB touches
+        if bb_touch_count >= 2:
+            score *= 1.15
+        
+        # Reduce score for levels far outside bands
+        if price > df['BB_upper'].iloc[-1] * 1.1 or price < df['BB_lower'].iloc[-1] * 0.9:
+            score *= 0.85
+            
     return min(score, 1.0)
 
 def find_significant_levels(
@@ -117,14 +135,21 @@ def find_significant_levels(
     min_score: float = 0.2
 ) -> Tuple[List[float], List[float]]:
     """
-    Find significant price levels using timeframe-specific lookback.
+    Find significant price levels using timeframe-specific lookback and Bollinger Bands.
     """
     if len(df) < timeframe.settings.support_resistance_lookback:
         return [], []
     
+    # Use BB width for dynamic volatility adjustment
+    volatility_multiplier = 1.0
+    if 'BB_width' in df.columns:  # Check if BB indicators are available
+        recent_bb_width = df['BB_width'].iloc[-1]
+        if recent_bb_width > df['BB_width'].mean():
+            volatility_multiplier = 1.2  # Wider tolerance during high volatility
+    
     price_sma = df['c'].rolling(window=timeframe.settings.support_resistance_lookback).mean()
     price_std = df['c'].rolling(window=timeframe.settings.support_resistance_lookback).std()
-    volatility = (price_std / price_sma).iloc[-1]
+    volatility = (price_std / price_sma).iloc[-1] * volatility_multiplier
     
     # Use full dataset instead of limited lookback
     recent_df = df.copy()
@@ -161,7 +186,7 @@ def find_significant_levels(
             return []
 
         scored_levels: List[Tuple[float, float]] = [
-            (cluster['price'], score_level(cluster, max_vol, current_price, wyckoff_state, total_periods))
+            (cluster['price'], score_level(cluster, max_vol, current_price, wyckoff_state, total_periods, df))
             for cluster in clusters.values()
         ]
 

@@ -290,6 +290,15 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
     # Get optimized settings based on timeframe and data length
     atr_length, macd_fast, macd_slow, macd_signal, st_length = get_indicator_settings(timeframe, len(df))
 
+    # Add Bollinger Bands calculation
+    bb_period = min(20, len(df) // 3)  # Adaptive period
+    bb_std = 2.0
+    df['BB_middle'] = df['c'].rolling(window=bb_period).mean()
+    bb_std_dev = df['c'].rolling(window=bb_period).std()
+    df['BB_upper'] = df['BB_middle'] + (bb_std_dev * bb_std)
+    df['BB_lower'] = df['BB_middle'] - (bb_std_dev * bb_std)
+    df['BB_width'] = (df['BB_upper'] - df['BB_lower']) / df['BB_middle']
+
     # Add volume normalization
     df['v_sma'] = df['v'].rolling(window=20).mean()
     df['v_std'] = df['v'].rolling(window=20).std()

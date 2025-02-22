@@ -420,9 +420,22 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
 
     def get_trade_levels(direction: MultiTimeframeDirection, resistances: List[float], supports: List[float]) -> tuple[str, float, float]:
         """Get trade type, take profit and stop loss levels based on direction."""
+        buffer_pct = 0.001  # 0.1% buffer for trigger levels
+        
         if direction == MultiTimeframeDirection.BULLISH:
-            return "Long", min(resistances, key=lambda x: abs(x - mid)), max(supports, key=lambda x: abs(x - mid))
-        return "Short", max(supports, key=lambda x: abs(x - mid)), min(resistances, key=lambda x: abs(x - mid))
+            # For longs: TP slightly above resistance, SL slightly below support
+            closest_resistance = min(resistances, key=lambda x: abs(x - mid))
+            closest_support = max(supports, key=lambda x: abs(x - mid))
+            tp = closest_resistance * (1 + buffer_pct)  # TP slightly above resistance
+            sl = closest_support * (1 - buffer_pct)     # SL slightly below support
+            return "Long", tp, sl
+        
+        # For shorts: TP slightly below support, SL slightly above resistance
+        closest_support = max(supports, key=lambda x: abs(x - mid))
+        closest_resistance = min(resistances, key=lambda x: abs(x - mid))
+        tp = closest_support * (1 - buffer_pct)     # TP slightly below support
+        sl = closest_resistance * (1 + buffer_pct)  # SL slightly above resistance
+        return "Short", tp, sl
 
     def format_trade(coin: str, side: str, entry: float, tp: float, sl: float) -> Optional[str]:
         """Format trade suggestion with consistent calculations and layout."""
