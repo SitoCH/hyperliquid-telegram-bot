@@ -116,13 +116,13 @@ def score_level(
                (df['l'].iloc[idx] <= df['BB_lower'].iloc[idx] and price <= df['l'].iloc[idx])
         )
         
-        # Boost score if level aligns with BB touches
+        # Adjusted BB score impacts
         if bb_touch_count >= 2:
-            score *= 1.15
+            score *= 1.1  # Reduced from 1.15
         
-        # Reduce score for levels far outside bands
-        if price > df['BB_upper'].iloc[-1] * 1.1 or price < df['BB_lower'].iloc[-1] * 0.9:
-            score *= 0.85
+        # More tolerant of levels outside BBs for crypto
+        if price > df['BB_upper'].iloc[-1] * 1.15 or price < df['BB_lower'].iloc[-1] * 0.85:
+            score *= 0.9  # Changed thresholds and impact
             
     return min(score, 1.0)
 
@@ -142,10 +142,9 @@ def find_significant_levels(
     
     # Use BB width for dynamic volatility adjustment
     volatility_multiplier = 1.0
-    if 'BB_width' in df.columns:  # Check if BB indicators are available
-        recent_bb_width = df['BB_width'].iloc[-1]
-        if recent_bb_width > df['BB_width'].mean():
-            volatility_multiplier = 1.2  # Wider tolerance during high volatility
+    recent_bb_width = df['BB_width'].iloc[-1]
+    if recent_bb_width > df['BB_width'].mean():
+        volatility_multiplier = 1.3  # Increased from 1.2
     
     price_sma = df['c'].rolling(window=timeframe.settings.support_resistance_lookback).mean()
     price_std = df['c'].rolling(window=timeframe.settings.support_resistance_lookback).std()
@@ -158,8 +157,8 @@ def find_significant_levels(
     min_price = current_price * (1 - max_deviation)
     max_price = current_price * (1 + max_deviation)
     
-    # Scale tolerance with dataset length
-    base_tolerance = recent_df['ATR'].iloc[-1] * (0.3 + volatility * 0.2)
+    # More sensitive base tolerance
+    base_tolerance = recent_df['ATR'].iloc[-1] * (0.25 + volatility * 0.25)  # Changed from 0.3 and 0.2
     length_factor = np.log1p(len(recent_df) / timeframe.settings.support_resistance_lookback) / 2
     tolerance = base_tolerance * (1 + length_factor)
     
