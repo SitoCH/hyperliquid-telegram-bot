@@ -19,7 +19,7 @@ from .wyckoff_multi_timeframe_types import (
 )
 
 def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalysis, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData], interactive_analysis: bool) -> str:
-    """Generate comprehensive description including three timeframe groups."""
+    """Generate comprehensive description including four timeframe groups."""
     alignment_pct = f"{analysis.alignment_score * 100:.0f}%"
     confidence_pct = f"{analysis.confidence_level * 100:.0f}%"
     
@@ -27,6 +27,7 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
     short_term_desc = _get_timeframe_trend_description(analysis.short_term)
     intermediate_desc = _get_timeframe_trend_description(analysis.intermediate)
     long_term_desc = _get_timeframe_trend_description(analysis.long_term)
+    context_desc = _get_timeframe_trend_description(analysis.context)
 
     structure = _get_full_market_structure(analysis)
     context = _determine_market_context(analysis)
@@ -49,9 +50,10 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
     full_description = (
         f"{base_description}\n"
         f"<b>🔍 Timeframes:</b>\n"
-        f"Long-Term view:\n{long_term_desc}\n"
-        f"Mid-Term view:\n{intermediate_desc}\n"
-        f"Near-Term view:\n{short_term_desc}\n\n"
+        f"Market Context (>4h):\n{context_desc}\n"
+        f"Main Trend (1-4h):\n{long_term_desc}\n"
+        f"Intraday (30m):\n{intermediate_desc}\n"
+        f"Near-Term (15m):\n{short_term_desc}\n\n"
         f"<b>🎯 Signal Quality:</b>\n"
         f"• Timeframe Alignment: {alignment_pct}\n"
         f"• Confidence Level: {confidence_pct}\n\n"
@@ -152,47 +154,48 @@ def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
 
 
 def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
-    """Get comprehensive market structure description across three timeframes."""
+    """Get comprehensive market structure description across four timeframes."""
     phases = [
-        analysis.long_term.dominant_phase,
-        analysis.intermediate.dominant_phase,
-        analysis.short_term.dominant_phase
+        analysis.context.dominant_phase,      # Structural context
+        analysis.long_term.dominant_phase,    # Main trend
+        analysis.intermediate.dominant_phase, # Intraday swings
+        analysis.short_term.dominant_phase    # Quick signals
     ]
     dominant_phase = max(set(phases), key=phases.count)
     phase_alignment = phases.count(dominant_phase) / len(phases)
 
     biases = [
-        analysis.long_term.momentum_bias,
-        analysis.intermediate.momentum_bias,
-        analysis.short_term.momentum_bias,
+        analysis.context.momentum_bias,      # Structural bias
+        analysis.long_term.momentum_bias,    # Main trend bias
+        analysis.intermediate.momentum_bias, # Intraday bias
+        analysis.short_term.momentum_bias    # Quick signals bias
     ]
     dominant_bias = max(set(biases), key=biases.count)
     bias_alignment = biases.count(dominant_bias) / len(biases)
 
-    # New logic for handling conflicting signals
+    # Check for time-horizon conflicts
+    short_term_conflict = (analysis.short_term.momentum_bias != 
+                          analysis.intermediate.momentum_bias)
+    trend_conflict = (analysis.long_term.momentum_bias != 
+                     analysis.intermediate.momentum_bias)
+    structural_conflict = (analysis.context.momentum_bias != 
+                          analysis.long_term.momentum_bias)
+
     if phase_alignment > 0.75 and bias_alignment > 0.75:
-        # Check for conflicting signals
-        is_conflict = (
-            (dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.POSSIBLE_MARKDOWN] and 
-             dominant_bias == MultiTimeframeDirection.BULLISH) or
-            (dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.POSSIBLE_MARKUP] and 
-             dominant_bias == MultiTimeframeDirection.BEARISH)
-        )
-        
-        if is_conflict:
-            if dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.POSSIBLE_MARKDOWN]:
-                return f"Potential reversal, {dominant_phase.value} showing bullish momentum"
-            else:
-                return f"Potential reversal, {dominant_phase.value} showing bearish momentum"
-        else:
-            return f"Strong {dominant_phase.value} structure with {dominant_bias.value} momentum"
-            
-    elif bias_alignment > 0.75:
-        return f"Mixed structure with dominant {dominant_bias.value} momentum"
-    elif phase_alignment > 0.75:
-        return f"Clear {dominant_phase.value} structure with mixed momentum"
-    
-    return "Complex structure with mixed signals across timeframes"
+        # Strong alignment across all timeframes
+        return f"Strong {dominant_phase.value} structure with {dominant_bias.value} momentum"
+    elif short_term_conflict and trend_conflict:
+        # Significant divergence across timeframes
+        return "Mixed signals across multiple timeframes - transition likely"
+    elif structural_conflict:
+        # Potential major trend change
+        return f"Possible trend reversal - {analysis.short_term.dominant_phase.value} forming"
+    elif short_term_conflict:
+        # Short-term deviation
+        return f"{analysis.long_term.dominant_phase.value} with short-term {analysis.short_term.momentum_bias.value} move"
+    else:
+        # Default case
+        return f"Developing {dominant_phase.value} structure with mixed momentum"
 
 def _determine_market_context(analysis: AllTimeframesAnalysis) -> str:
     """
