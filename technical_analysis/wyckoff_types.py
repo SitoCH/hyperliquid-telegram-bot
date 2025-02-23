@@ -216,9 +216,9 @@ class Timeframe(Enum):
 
 # Rebalanced weights for crypto focus
 _TIMEFRAME_SETTINGS = {
-    # Short-term group (40% total weight) - Increased from 35%
+    # Short-term group (35% total) - Last hour's action
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.18,          # Increased from 0.15
+        phase_weight=0.15,          # Quick scalping signals
         ema_length=6,               # Faster EMA
         atr_settings=(6, 4, 10, 3, 4),  # More responsive ATR
         supertrend_multiplier=1.6,  # More sensitive
@@ -236,7 +236,7 @@ _TIMEFRAME_SETTINGS = {
         chart_image_time_delta=pd.Timedelta(hours=12)  # Shorter view for day trading
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.22,          # Increased from 0.20
+        phase_weight=0.20,          # Recent momentum
         ema_length=10,              # Faster EMA
         atr_settings=(8, 5, 14, 4, 5),
         supertrend_multiplier=1.8,  # More sensitive
@@ -254,9 +254,9 @@ _TIMEFRAME_SETTINGS = {
         chart_image_time_delta=pd.Timedelta(hours=24)
     ),
     
-    # Intermediate group (45% total weight) - Increased from 43%
+    # Intermediate group (30% total) - Recent trend
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.30,          # Increased from 0.25 (primary timeframe)
+        phase_weight=0.30,          # Primary decision timeframe
         ema_length=16,              # Faster for crypto
         atr_settings=(12, 8, 18, 6, 7),
         supertrend_multiplier=2.1,  # More sensitive
@@ -273,8 +273,10 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=48,
         chart_image_time_delta=pd.Timedelta(hours=48)
     ),
+    
+    # Long-term group (25% total) - Established trend
     Timeframe.HOURS_2: TimeframeSettings(
-        phase_weight=0.15,          # Reduced from 0.18
+        phase_weight=0.15,          # Trend confirmation
         ema_length=24,              # Faster
         atr_settings=(16, 8, 21, 7, 8),
         supertrend_multiplier=2.3,
@@ -291,10 +293,8 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=56,
         chart_image_time_delta=pd.Timedelta(hours=72)
     ),
-    
-    # Long-term group (15% total weight) - Reduced from 22%
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.08,          # Reduced from 0.12
+        phase_weight=0.10,          # Trend context
         ema_length=30,              # Faster
         atr_settings=(24, 10, 28, 8, 12),
         supertrend_multiplier=2.6,
@@ -311,8 +311,10 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=72,
         chart_image_time_delta=pd.Timedelta(days=4)
     ),
+    
+    # Context group (10% total) - Market structure
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.04,          # Reduced from 0.06
+        phase_weight=0.10,          # Keep for structure
         ema_length=38,
         atr_settings=(32, 12, 36, 9, 14),
         supertrend_multiplier=2.8,
@@ -329,8 +331,10 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=96,
         chart_image_time_delta=pd.Timedelta(days=6)
     ),
+    
+    # Remove daily timeframe completely
     Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.03,          # Reduced from 0.04
+        phase_weight=0.0,           # Not needed for hourly analysis
         ema_length=48,              # Faster
         atr_settings=(38, 12, 44, 9, 18),
         supertrend_multiplier=3.0,

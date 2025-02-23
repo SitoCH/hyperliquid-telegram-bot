@@ -16,7 +16,7 @@ from .wyckoff_types import (
 )
 
 from .wyckoff_multi_timeframe_types import (
-    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES,
+    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
     STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
     MIXED_MOMENTUM, LOW_MOMENTUM,
     SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT,
@@ -40,7 +40,7 @@ def _is_phase_confirming_momentum(analysis: TimeframeGroupAnalysis) -> bool:
     return False
 
 
-def analyze_multi_timeframe(
+async def analyze_multi_timeframe(
     states: Dict[Timeframe, WyckoffState], coin: str, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData], interactive_analysis: bool
 ) -> MultiTimeframeContext:
     """
@@ -52,91 +52,60 @@ def analyze_multi_timeframe(
             shoud_notify=False
         )
 
-    # Group timeframes into three categories
+    # Group timeframes into four categories
     short_term = {tf: state for tf, state in states.items() if tf in SHORT_TERM_TIMEFRAMES}
     intermediate = {tf: state for tf, state in states.items() if tf in INTERMEDIATE_TIMEFRAMES}
     long_term = {tf: state for tf, state in states.items() if tf in LONG_TERM_TIMEFRAMES}
+    context = {tf: state for tf, state in states.items() if tf in CONTEXT_TIMEFRAMES}
 
     try:
         # Analyze all groups
         short_term_analysis = _analyze_timeframe_group(short_term)
         intermediate_analysis = _analyze_timeframe_group(intermediate)
         long_term_analysis = _analyze_timeframe_group(long_term)
+        context_analysis = _analyze_timeframe_group(context)
 
         # Update weights
         short_term_analysis.group_weight = _calculate_group_weight(short_term)
         intermediate_analysis.group_weight = _calculate_group_weight(intermediate)
         long_term_analysis.group_weight = _calculate_group_weight(long_term)
+        context_analysis.group_weight = _calculate_group_weight(context)
 
-        # Calculate momentum intensity with aligned weights
-        timeframe_weights = {
-            "short": SHORT_TERM_WEIGHT,
-            "mid": INTERMEDIATE_WEIGHT, 
-            "long": LONG_TERM_WEIGHT
-        }
-        
-        # First determine overall direction for reference
+        # Calculate overall direction with all timeframes
         overall_direction = _determine_overall_direction([
             short_term_analysis, 
             intermediate_analysis, 
-            long_term_analysis
+            long_term_analysis,
+            context_analysis
         ])
-        
-        # Now calculate momentum intensity using the overall direction as reference
-        timeframe_scores = {
-            "short": (
-                1.0 if short_term_analysis.momentum_bias == overall_direction
-                else 0.5 if short_term_analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL
-                else 0.0
-            ),
-            "mid": (
-                1.0 if intermediate_analysis.momentum_bias == overall_direction
-                else 0.5 if intermediate_analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL
-                else 0.0
-            ),
-            "long": (
-                1.0 if long_term_analysis.momentum_bias == overall_direction
-                else 0.5 if long_term_analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL
-                else 0.0
-            )
-        }
-        
-        volume_scores = {
-            "short": short_term_analysis.volume_strength,
-            "mid": intermediate_analysis.volume_strength,
-            "long": long_term_analysis.volume_strength
-        }
-        
-        phase_bonus = {
-            "short": 0.2 if _is_phase_confirming_momentum(short_term_analysis) else 0.0,
-            "mid": 0.2 if _is_phase_confirming_momentum(intermediate_analysis) else 0.0,
-            "long": 0.2 if _is_phase_confirming_momentum(long_term_analysis) else 0.0
-        }
-        
-        momentum_intensity = sum(
-            (timeframe_scores[tf] * DIRECTIONAL_WEIGHT +
-             volume_scores[tf] * VOLUME_WEIGHT +
-             phase_bonus[tf] * PHASE_WEIGHT) *
-            timeframe_weights[tf]
-            for tf in timeframe_weights.keys()
-        )
+
+        # Calculate momentum intensity with all timeframes
+        momentum_intensity = _calculate_momentum_intensity([
+            short_term_analysis,
+            intermediate_analysis,
+            long_term_analysis,
+            context_analysis
+        ], overall_direction)
 
         # Calculate overall alignment across all groups
         all_analysis = AllTimeframesAnalysis(
             short_term=short_term_analysis,
             intermediate=intermediate_analysis,
             long_term=long_term_analysis,
+            context=context_analysis,
             overall_direction=overall_direction,
             momentum_intensity=momentum_intensity,
             confidence_level=_calculate_overall_confidence([
                 short_term_analysis, 
                 intermediate_analysis, 
-                long_term_analysis
+                long_term_analysis,
+                context_analysis
             ]),
             alignment_score=_calculate_overall_alignment([
                 short_term_analysis, 
                 intermediate_analysis, 
-                long_term_analysis
+                long_term_analysis,
+                context_analysis
             ])
         )
 
@@ -612,3 +581,70 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
             return st_dir
 
     return MultiTimeframeDirection.NEUTRAL
+
+def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overall_direction: MultiTimeframeDirection) -> float:
+    """
+    Calculate momentum intensity across all timeframe groups with hourly optimization.
+    
+    Args:
+        analyses: List of timeframe group analyses
+        overall_direction: Previously determined overall market direction
+    
+    Returns:
+        float: Momentum intensity score (0.0 to 1.0)
+    """
+    if not analyses:
+        return 0.0
+
+    # Get directional scores for each timeframe group
+    directional_scores = []
+    hourly_volume_boost = 1.0  # Will be adjusted based on short-term volume
+
+    for analysis in analyses:
+        # Base directional alignment with overall trend
+        if analysis.momentum_bias == overall_direction:
+            base_score = 1.0
+        elif analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL:
+            base_score = 0.5
+        else:
+            base_score = 0.0
+
+        # Volume confirmation boost
+        volume_boost = 1.0 + (analysis.volume_strength * 0.3)
+        
+        # Phase confirmation bonus
+        phase_aligned = False
+        if overall_direction == MultiTimeframeDirection.BULLISH:
+            phase_aligned = analysis.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]
+        elif overall_direction == MultiTimeframeDirection.BEARISH:
+            phase_aligned = analysis.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]
+        
+        phase_boost = 1.2 if phase_aligned else 1.0
+
+        # Funding rate impact (more weight for shorter timeframes)
+        funding_impact = abs(analysis.funding_sentiment) * 0.2
+        if (analysis.funding_sentiment > 0 and overall_direction == MultiTimeframeDirection.BULLISH) or \
+           (analysis.funding_sentiment < 0 and overall_direction == MultiTimeframeDirection.BEARISH):
+            funding_boost = 1.0 + funding_impact
+        else:
+            funding_boost = 1.0 - funding_impact
+
+        # Calculate final score with all factors
+        score = base_score * volume_boost * phase_boost * funding_boost
+        directional_scores.append((score, analysis.group_weight))
+
+        # Track hourly volume for potential boost
+        if analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
+            if analysis.volume_strength > 0.7:
+                hourly_volume_boost = 1.2
+
+    # Calculate weighted average with hourly volume boost
+    total_weight = sum(weight for _, weight in directional_scores)
+    if total_weight == 0:
+        return 0.0
+
+    weighted_momentum = sum(score * weight for score, weight in directional_scores) / total_weight
+    
+    # Apply hourly volume boost and clamp final value
+    final_momentum = min(1.0, weighted_momentum * hourly_volume_boost)
+    return max(0.0, final_momentum)

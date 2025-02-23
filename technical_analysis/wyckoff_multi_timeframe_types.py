@@ -7,15 +7,17 @@ from .wyckoff_types import (
     LiquidationRisk, VolatilityState, Timeframe, _TIMEFRAME_SETTINGS
 )
 
-# Calculate timeframe group weights from settings
-SHORT_TERM_TIMEFRAMES = {Timeframe.MINUTES_15, Timeframe.MINUTES_30}
-INTERMEDIATE_TIMEFRAMES = {Timeframe.HOUR_1, Timeframe.HOURS_2}
-LONG_TERM_TIMEFRAMES = {Timeframe.HOURS_4, Timeframe.HOURS_8, Timeframe.DAY_1}
+# Update timeframe groups for hourly analysis
+SHORT_TERM_TIMEFRAMES = {Timeframe.MINUTES_15}  # Scalping (last hour)
+INTERMEDIATE_TIMEFRAMES = {Timeframe.MINUTES_30}  # Swing trades (1-2 hours)
+LONG_TERM_TIMEFRAMES = {Timeframe.HOUR_1, Timeframe.HOURS_2}  # Trend (2-4 hours)
+CONTEXT_TIMEFRAMES = {Timeframe.HOURS_4, Timeframe.HOURS_8}  # Market structure (>4 hours)
 
-# Dynamic calculation of group weights
+# Recalculate group weights
 SHORT_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES)
 INTERMEDIATE_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES)
 LONG_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES)
+CONTEXT_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES)
 
 # Momentum thresholds
 STRONG_MOMENTUM: Final[float] = 0.75  # Reduced from 0.8 to account for crypto volatility
@@ -54,9 +56,10 @@ class MultiTimeframeContext:
 
 @dataclass
 class AllTimeframesAnalysis:
-    short_term: TimeframeGroupAnalysis
-    intermediate: TimeframeGroupAnalysis
-    long_term: TimeframeGroupAnalysis
+    short_term: TimeframeGroupAnalysis    # 15m - Quick signals
+    intermediate: TimeframeGroupAnalysis  # 30m - Swing trades
+    long_term: TimeframeGroupAnalysis    # 1h/2h - Main trend
+    context: TimeframeGroupAnalysis      # 4h/8h - Market structure
     overall_direction: MultiTimeframeDirection
     confidence_level: float
     alignment_score: float
