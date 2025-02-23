@@ -86,7 +86,7 @@ async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
     if coins_to_analyze:
         weight_per_analysis = 175
         next_available = hyperliquid_rate_limiter.get_next_available_time(weight_per_analysis)
-        delay = max(2, next_available)
+        delay = max(3, next_available)
         context.application.job_queue.run_once( # type: ignore
             analyze_candles_for_coin_job,
             when=delay,
