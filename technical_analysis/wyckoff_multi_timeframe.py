@@ -1,5 +1,5 @@
 import pandas as pd  # type: ignore[import]
-
+import os
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any, Final
 from dataclasses import dataclass
@@ -48,11 +48,8 @@ def analyze_multi_timeframe(
     """
     if not states:
         return MultiTimeframeContext(
-            alignment_score=0.0,
-            confidence_level=0.0,
             description="No timeframe data available for analysis",
-            direction=MultiTimeframeDirection.NEUTRAL,
-            momentum_intensity=0.0
+            shoud_notify=False
         )
 
     # Group timeframes into three categories
@@ -129,7 +126,7 @@ def analyze_multi_timeframe(
             short_term=short_term_analysis,
             intermediate=intermediate_analysis,
             long_term=long_term_analysis,
-            overall_direction=overall_direction,  # Use the same overall_direction
+            overall_direction=overall_direction,
             momentum_intensity=momentum_intensity,
             confidence_level=_calculate_overall_confidence([
                 short_term_analysis, 
@@ -146,22 +143,22 @@ def analyze_multi_timeframe(
         # Generate comprehensive description
         description = generate_all_timeframes_description(coin, all_analysis, mid, significant_levels, interactive_analysis)
 
+        min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
+        shoud_notify = (all_analysis.confidence_level >= min_confidence and 
+            momentum_intensity > MODERATE_MOMENTUM and 
+            all_analysis.short_term.volatility_state != VolatilityState.HIGH and
+            all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL)
+
         return MultiTimeframeContext(
-            alignment_score=all_analysis.alignment_score,
-            confidence_level=all_analysis.confidence_level,
             description=description,
-            direction=all_analysis.overall_direction,
-            momentum_intensity=momentum_intensity
+            shoud_notify=shoud_notify
         )
         
     except Exception as e:
         logger.error(e, exc_info=True)
         return MultiTimeframeContext(
-            alignment_score=0.0,
-            confidence_level=0.0,
             description=f"Error analyzing timeframes: {str(e)}",
-            direction=MultiTimeframeDirection.NEUTRAL,
-            momentum_intensity=0.0
+            shoud_notify=False
         )
 
 

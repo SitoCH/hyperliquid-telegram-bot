@@ -49,11 +49,8 @@ class TimeframeGroupAnalysis:
 
 @dataclass
 class MultiTimeframeContext:
-    alignment_score: float  # 0 to 1, indicating how well timeframes align
-    confidence_level: float  # 0 to 1, indicating strength of signals
     description: str
-    direction: MultiTimeframeDirection
-    momentum_intensity: float
+    shoud_notify: bool
 
 @dataclass
 class AllTimeframesAnalysis:

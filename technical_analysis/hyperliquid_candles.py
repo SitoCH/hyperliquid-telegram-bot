@@ -187,14 +187,10 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         
         mtf_context = analyze_multi_timeframe(states, coin, mid, significant_levels, interactive_analysis)
 
-        min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
-        should_notify = (
-            interactive_analysis or 
-            (mtf_context.confidence_level >= min_confidence and mtf_context.momentum_intensity > MODERATE_MOMENTUM and mtf_context.direction != MultiTimeframeDirection.NEUTRAL)
-        )
+        should_notify = interactive_analysis or mtf_context.shoud_notify
 
         if should_notify:
-            await send_trend_change_message(context, mid, dataframes, states, coin, interactive_analysis, mtf_context)
+            await send_trend_change_message(context, mid, dataframes, states, coin, interactive_analysis, mtf_context.description)
 
     except Exception as e:
         logger.error(f"Failed to analyze candles for {coin}: {str(e)}", exc_info=True)
@@ -349,7 +345,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
     df["EMA"] = ta.ema(df["c"], length=timeframe.settings.ema_length)
 
 
-async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, dataframes: dict[Timeframe, pd.DataFrame], states: dict[Timeframe, WyckoffState], coin: str, send_charts: bool, mtf_context: MultiTimeframeContext) -> None:
+async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: float, dataframes: dict[Timeframe, pd.DataFrame], states: dict[Timeframe, WyckoffState], coin: str, send_charts: bool, mtf_description: str) -> None:
     
     if send_charts:
         charts = []
@@ -408,7 +404,7 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
     await telegram_utils.send(
         f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n"
         f"Market price: {fmt_price(mid)} USDC\n"
-        f"{mtf_context.description}",
+        f"{mtf_description}",
         parse_mode=ParseMode.HTML
     )
 
