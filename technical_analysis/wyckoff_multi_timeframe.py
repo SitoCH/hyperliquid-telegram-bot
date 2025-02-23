@@ -53,9 +53,9 @@ def analyze_multi_timeframe(
         )
 
     # Group timeframes into three categories
-    short_term = {tf: state for tf, state in states.items() if tf in {Timeframe.MINUTES_15, Timeframe.MINUTES_30}}
-    intermediate = {tf: state for tf, state in states.items() if tf in {Timeframe.HOUR_1, Timeframe.HOURS_2}}
-    long_term = {tf: state for tf, state in states.items() if tf in {Timeframe.HOURS_4, Timeframe.HOURS_8, Timeframe.DAY_1}}
+    short_term = {tf: state for tf, state in states.items() if tf in SHORT_TERM_TIMEFRAMES}
+    intermediate = {tf: state for tf, state in states.items() if tf in INTERMEDIATE_TIMEFRAMES}
+    long_term = {tf: state for tf, state in states.items() if tf in LONG_TERM_TIMEFRAMES}
 
     try:
         # Analyze all groups
