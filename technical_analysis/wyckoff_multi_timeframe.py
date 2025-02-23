@@ -40,7 +40,7 @@ def _is_phase_confirming_momentum(analysis: TimeframeGroupAnalysis) -> bool:
     return False
 
 
-async def analyze_multi_timeframe(
+def analyze_multi_timeframe(
     states: Dict[Timeframe, WyckoffState], coin: str, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData], interactive_analysis: bool
 ) -> MultiTimeframeContext:
     """

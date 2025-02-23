@@ -716,7 +716,7 @@ def analyze_effort_result(
     timeframe: Timeframe
 ) -> EffortAnalysis:
     """
-    Enhanced effort vs result analysis considering multiple factors.
+    Enhanced effort vs result analysis with timeframe-specific optimization.
     
     Args:
         df: Price and volume data
@@ -724,46 +724,103 @@ def analyze_effort_result(
         timeframe: Current timeframe for context
     """
     try:
-        # Get recent data
-        recent_df = df.iloc[-5:]  # Look at last 5 candles
+        # Get recent data - adjust window based on timeframe group
+        lookback = {
+            Timeframe.MINUTES_15: 3,  # Scalping needs faster response
+            Timeframe.MINUTES_30: 4,  # Swing trades
+            Timeframe.HOUR_1: 5,      # Main trend
+            Timeframe.HOURS_2: 6,     # Main trend context
+            Timeframe.HOURS_4: 8,     # Market structure
+            Timeframe.HOURS_8: 10,    # Market context
+        }.get(timeframe, 5)  # Default to 5 periods
+        
+        recent_df = df.iloc[-lookback:]
         
         # Calculate normalized price movement
         price_change = abs(recent_df['c'].iloc[-1] - recent_df['o'].iloc[-1])
         price_range = recent_df['h'].iloc[-1] - recent_df['l'].iloc[-1]
         
-        # Skip tiny moves to avoid noise
-        if price_change < RESULT_MIN_MOVE:
+        # Skip tiny moves to avoid noise - adjust threshold by timeframe
+        min_move = RESULT_MIN_MOVE * {
+            Timeframe.MINUTES_15: 0.5,   # More sensitive
+            Timeframe.MINUTES_30: 0.75,  # Still sensitive
+            Timeframe.HOUR_1: 1.0,       # Base threshold
+            Timeframe.HOURS_2: 1.25,     # Less sensitive
+            Timeframe.HOURS_4: 1.5,      # Focus on larger moves
+            Timeframe.HOURS_8: 2.0,      # Only significant moves
+        }.get(timeframe, 1.0)
+        
+        if price_change < min_move:
             return EffortAnalysis(0.0, 0.0, 0.0, EffortResult.WEAK)
         
-        # Calculate volume quality
+        # Calculate volume quality with timeframe context
         volume_consistency = vol_metrics.consistency
         spread_quality = 1.0 - (abs(recent_df['c'] - recent_df['o']) / (recent_df['h'] - recent_df['l'])).mean()
-        volume_quality = (volume_consistency + spread_quality) / 2
         
-        # Calculate price impact
+        # Adjust volume quality based on timeframe expectations
+        if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]:
+            # Short timeframes need stronger volume confirmation
+            volume_quality = (volume_consistency * 0.7 + spread_quality * 0.3)
+        elif timeframe in [Timeframe.HOUR_1, Timeframe.HOURS_2]:
+            # Balanced for main trend
+            volume_quality = (volume_consistency + spread_quality) / 2
+        else:
+            # Longer timeframes focus more on spread quality
+            volume_quality = (volume_consistency * 0.3 + spread_quality * 0.7)
+        
+        # Calculate price impact with timeframe-adjusted volume ratio
         avg_price = recent_df['c'].mean()
         price_impact = price_change / (avg_price * vol_metrics.ratio)
         
-        # Calculate efficiency score
-        base_efficiency = price_change / (price_range + 1e-8)  # Avoid division by zero
-        volume_weighted_efficiency = base_efficiency * (1 + vol_metrics.strength * 0.2)
+        # Calculate efficiency score with timeframe optimization
+        base_efficiency = price_change / (price_range + 1e-8)
+        volume_weighted_efficiency = base_efficiency * (1 + vol_metrics.strength * {
+            Timeframe.MINUTES_15: 0.3,  # More reactive
+            Timeframe.MINUTES_30: 0.25,
+            Timeframe.HOUR_1: 0.2,     # Base multiplier
+            Timeframe.HOURS_2: 0.15,
+            Timeframe.HOURS_4: 0.1,    # Less reactive
+            Timeframe.HOURS_8: 0.05,   # Minimal adjustment
+        }.get(timeframe, 0.2))
         
-        # Adjust efficiency based on timeframe context
-        if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]:
-            # More forgiving for short timeframes
-            volume_weighted_efficiency *= 1.2
-        elif timeframe in [Timeframe.HOURS_4, Timeframe.HOURS_8, Timeframe.DAY_1]:
-            # Stricter for longer timeframes
-            volume_weighted_efficiency *= 0.8
+        # Adjust efficiency thresholds by timeframe
+        high_threshold = HIGH_EFFICIENCY_THRESHOLD * {
+            Timeframe.MINUTES_15: 0.8,   # Easier to achieve
+            Timeframe.MINUTES_30: 0.85,
+            Timeframe.HOUR_1: 1.0,       # Base threshold
+            Timeframe.HOURS_2: 1.1,
+            Timeframe.HOURS_4: 1.2,      # Harder to achieve
+            Timeframe.HOURS_8: 1.3,
+        }.get(timeframe, 1.0)
+        
+        low_threshold = LOW_EFFICIENCY_THRESHOLD * {
+            Timeframe.MINUTES_15: 1.2,   # Higher floor
+            Timeframe.MINUTES_30: 1.1,
+            Timeframe.HOUR_1: 1.0,       # Base threshold
+            Timeframe.HOURS_2: 0.9,
+            Timeframe.HOURS_4: 0.8,      # Lower floor
+            Timeframe.HOURS_8: 0.7,
+        }.get(timeframe, 1.0)
         
         # Final efficiency score
         efficiency = min(1.0, volume_weighted_efficiency)
         
-        # Determine effort result
+        # Determine effort result with timeframe context
         result = (
-            EffortResult.STRONG if efficiency > HIGH_EFFICIENCY_THRESHOLD and volume_quality > 0.6
-            else EffortResult.WEAK if efficiency < LOW_EFFICIENCY_THRESHOLD or volume_quality < 0.3
-            else EffortResult.STRONG if price_impact > 1.2 and vol_metrics.ratio > EFFORT_VOLUME_THRESHOLD
+            EffortResult.STRONG if (
+                efficiency > high_threshold and 
+                volume_quality > (0.5 if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30] else 0.6)
+            )
+            else EffortResult.WEAK if (
+                efficiency < low_threshold or 
+                volume_quality < (0.2 if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30] else 0.3)
+            )
+            else EffortResult.STRONG if (
+                price_impact > 1.2 and 
+                vol_metrics.ratio > EFFORT_VOLUME_THRESHOLD * (
+                    0.8 if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30] else 1.0
+                )
+            )
             else EffortResult.WEAK
         )
         

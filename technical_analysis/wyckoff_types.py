@@ -190,7 +190,6 @@ class Timeframe(Enum):
     HOURS_2 = ("2h", 120)  # New timeframe
     HOURS_4 = ("4h", 240)
     HOURS_8 = ("8h", 480)
-    DAY_1 = ("1d", 1440)
     
     def __init__(self, name: str, minutes: int):
         self._name = name
@@ -330,27 +329,7 @@ _TIMEFRAME_SETTINGS = {
         price_change_window=6,
         support_resistance_lookback=96,
         chart_image_time_delta=pd.Timedelta(days=6)
-    ),
-    
-    # Remove daily timeframe completely
-    Timeframe.DAY_1: TimeframeSettings(
-        phase_weight=0.0,           # Not needed for hourly analysis
-        ema_length=48,              # Faster
-        atr_settings=(38, 12, 44, 9, 18),
-        supertrend_multiplier=3.0,
-        base_multiplier=1.4,
-        momentum_multiplier=2.0,
-        description="Daily trend",
-        volume_ma_window=40,
-        volume_short_ma_window=5,
-        volume_long_ma_window=20,
-        spring_upthrust_window=7,
-        volume_trend_window=15,
-        price_strength_ma_window=20,
-        price_change_window=7,
-        support_resistance_lookback=120,
-        chart_image_time_delta=pd.Timedelta(days=10)
-    ),
+    )
 }
 
 class SignificantLevelsData(TypedDict):

@@ -121,8 +121,7 @@ def get_candles_for_timeframes(coin: str, now: int) -> Dict[Timeframe, List[Dict
         Timeframe.HOUR_1: 90,
         Timeframe.HOURS_2: 100,
         Timeframe.HOURS_4: 110,
-        Timeframe.HOURS_8: 150,
-        Timeframe.DAY_1: 200
+        Timeframe.HOURS_8: 150
     }
     return {
         tf: get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
