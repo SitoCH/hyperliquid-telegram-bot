@@ -301,92 +301,50 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
     if analysis.confidence_level < 0.5:
         return "<b>Analysis:</b>\nLow confidence signals across timeframes.\n<b>Recommendation:</b>\nReduce exposure and wait for clearer setups."
 
-    def get_action_plan() -> str:
-        """Get base signal and action plan based on all timeframes."""
-        if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
-            if analysis.confidence_level > 0.7:
-                return (
-                    "Longs: Prioritize entries on dips with tight stop-losses below key support levels. "
-                    "Consider adding to positions as the trend strengthens."
-                )
+    def get_main_signal() -> str:
+        """Get primary trading signal based on timeframe hierarchy."""
+        # Start with context timeframe for overall bias
+        context_bias = analysis.context.momentum_bias
+        context_phase = analysis.context.dominant_phase
+        
+        # Check main trend alignment
+        trend_aligned = (
+            analysis.long_term.momentum_bias == analysis.context.momentum_bias and
+            analysis.intermediate.momentum_bias == analysis.context.momentum_bias
+        )
+        
+        # Check for strong short-term momentum
+        strong_momentum = (
+            analysis.short_term.volume_strength > 0.7 and
+            analysis.intermediate.volume_strength > 0.6 and
+            analysis.momentum_intensity > MODERATE_MOMENTUM
+        )
 
+        # Generate main signal
+        if trend_aligned and strong_momentum:
             return (
-                "Longs: Scaled entries near support zones with careful risk management."
-                "Use smaller position sizes due to mixed signals."
+                f"Strong trend alignment across all timeframes ({context_bias.value}). "
+                f"Market structure is {context_phase.value.lower()}. "
+                "Aggressive positions can be considered with proper risk management."
             )
-
-        elif analysis.overall_direction == MultiTimeframeDirection.BEARISH:
-            if analysis.confidence_level > 0.7:
-                return (
-                    "Shorts: Focus on entries during rallies with tight stop-losses above key resistance levels."
-                    "Add to positions as the trend accelerates."
-                )
-
+        elif trend_aligned:
             return (
-                "Shorts: Scaled entries near resistance zones with strict risk control. "
-                "Confirm bearish signals with price action and volume."
+                f"Trend alignment detected ({context_bias.value}) but momentum is moderate. "
+                "Consider scaled entries with tight risk control."
             )
-
-        action_plan = (
-            "Both Directions: Trade range extremes with confirmation. "
-            "Use smaller position sizes and tighter stop-losses.\n"
-            "Avoid large positions until a clear trend emerges. "
-            "Focus on short-term trades."
-        )
-        return action_plan
-
-    action_plan = get_action_plan()
-
-    # Add timeframe-specific insights
-    timeframe_insights = []
-    if analysis.short_term.momentum_bias != analysis.long_term.momentum_bias:
-        timeframe_insights.append(
-            f"Timeframe divergence: Long-term bias is {analysis.long_term.momentum_bias.value}, while short-term bias is {analysis.short_term.momentum_bias.value}. "
-            f"Potential for trend reversal or continuation based on breakout direction. "
-            f"Watch for a break of key levels to confirm the direction."
-        )
-    if analysis.short_term.dominant_phase != analysis.intermediate.dominant_phase:
-        timeframe_insights.append(
-            f"Phase mismatch: Short-term in {analysis.short_term.dominant_phase.value}, but mid-term in {analysis.intermediate.dominant_phase.value}. "
-            f"Expect volatility as market seeks equilibrium. "
-            f"Be prepared for rapid price swings and adjust stop-losses accordingly."
-        )
-
-    # Add risk warnings
-    risk_warnings = []
-    high_liq_risks = [tf.dominant_phase.value for tf in [analysis.short_term, analysis.intermediate, analysis.long_term] if tf.liquidation_risk == LiquidationRisk.HIGH]
-    if high_liq_risks:
-        risk_warnings.append(
-            f"High liquidation risk on {', '.join(high_liq_risks)}. "
-            f"Reduce leverage significantly to avoid forced liquidations. "
-            f"Consider using isolated margin."
-        )
-
-    if analysis.short_term.volatility_state == VolatilityState.HIGH:
-        risk_warnings.append(
-            "High short-term volatility. "
-            "Use smaller position sizes and wider stop-losses to account for rapid price swings. "
-            "Avoid over-leveraging."
-        )
-
-    # Combine risk warnings if both high liquidation risk and high volatility are present
-    if high_liq_risks and analysis.short_term.volatility_state == VolatilityState.HIGH:
-        risk_warnings.append(
-            "Combined high liquidation risk and high short-term volatility. "
-            "Extreme caution is advised. Consider staying out of the market until conditions stabilize."
-        )
+        else:
+            return (
+                "Mixed signals across timeframes. "
+                "Focus on shorter timeframe opportunities with reduced position sizes."
+            )
 
     # Format the complete insight
-    insights = []
-    if timeframe_insights:
-        insights.append("<b>⚡ Timeframe Insights:</b>\n" + "\n".join(f"- {i}" for i in timeframe_insights))
-    insights.append(f"\n<b>📝 Trading Strategy:</b>\n{action_plan}")
-    if risk_warnings:
-        insights.append("\n<b>⚠️ Risk Management:</b>\n" + "\n".join(f"- {w}" for w in risk_warnings))
+    main_signal = get_main_signal()
 
-    return "\n".join(insights)
+    return (
+        f"<b>💡 Trading Insight:</b>\n{main_signal}"
+    )
 
- 
 def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
     """Generate enhanced trend description for a timeframe group."""
     volume_desc = (
