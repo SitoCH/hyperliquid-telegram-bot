@@ -4,6 +4,7 @@ import datetime
 import logging
 import time
 from typing import Any, cast, Tuple, List, Sequence
+from logging_utils import logger
 
 from telegram import (
     KeyboardButton,
@@ -149,7 +150,10 @@ class TelegramUtils:
             )
 
     async def send_message_and_exit(self, context: ContextTypes.DEFAULT_TYPE):
-        await self.send_message(context)
+        try:
+            await self.send_message(context)
+        except Exception as e:
+            logger.critical(e, exc_info=True)
         time.sleep(5)
         sys.exit()
 
