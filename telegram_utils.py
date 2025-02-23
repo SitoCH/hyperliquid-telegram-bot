@@ -149,11 +149,13 @@ class TelegramUtils:
                 parse_mode=ParseMode.HTML
             )
 
+
     async def send_message_and_exit(self, context: ContextTypes.DEFAULT_TYPE):
         try:
             await self.send_message(context)
         except Exception as e:
             logger.critical(e, exc_info=True)
+        await self.telegram_app.job_queue.stop()
         time.sleep(5)
         sys.exit()
 
