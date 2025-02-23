@@ -116,6 +116,7 @@ def analyze_multi_timeframe(
         shoud_notify = (all_analysis.confidence_level >= min_confidence and 
             momentum_intensity > MODERATE_MOMENTUM and 
             all_analysis.short_term.volatility_state != VolatilityState.HIGH and
+            all_analysis.intermediate.volatility_state != VolatilityState.HIGH and
             all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL)
 
         return MultiTimeframeContext(
