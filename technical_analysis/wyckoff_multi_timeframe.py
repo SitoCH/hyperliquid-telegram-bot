@@ -49,7 +49,7 @@ def analyze_multi_timeframe(
     if not states:
         return MultiTimeframeContext(
             description="No timeframe data available for analysis",
-            shoud_notify=False
+            should_notify=False
         )
 
     # Group timeframes into four categories
@@ -113,21 +113,21 @@ def analyze_multi_timeframe(
         description = generate_all_timeframes_description(coin, all_analysis, mid, significant_levels, interactive_analysis)
 
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
-        shoud_notify = (all_analysis.confidence_level >= min_confidence and 
+        should_notify = (all_analysis.confidence_level >= min_confidence and 
             momentum_intensity > MODERATE_MOMENTUM and 
             (all_analysis.short_term.volatility_state != VolatilityState.HIGH or all_analysis.intermediate.volatility_state != VolatilityState.HIGH) and
             all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL)
 
         return MultiTimeframeContext(
             description=description,
-            shoud_notify=shoud_notify
+            should_notify=should_notify
         )
         
     except Exception as e:
         logger.error(e, exc_info=True)
         return MultiTimeframeContext(
             description=f"Error analyzing timeframes: {str(e)}",
-            shoud_notify=False
+            should_notify=False
         )
 
 

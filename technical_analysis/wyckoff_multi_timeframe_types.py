@@ -52,7 +52,7 @@ class TimeframeGroupAnalysis:
 @dataclass
 class MultiTimeframeContext:
     description: str
-    shoud_notify: bool
+    should_notify: bool
 
 @dataclass
 class AllTimeframesAnalysis:

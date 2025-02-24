@@ -186,7 +186,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         
         mtf_context = analyze_multi_timeframe(states, coin, mid, significant_levels, interactive_analysis)
 
-        should_notify = interactive_analysis or mtf_context.shoud_notify
+        should_notify = interactive_analysis or mtf_context.should_notify
 
         if should_notify:
             await send_trend_change_message(context, mid, dataframes, states, coin, interactive_analysis, mtf_context.description)
