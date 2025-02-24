@@ -1,5 +1,4 @@
 import os
-import sys
 import datetime
 import logging
 import time
@@ -156,8 +155,8 @@ class TelegramUtils:
         except Exception as e:
             logger.critical(e, exc_info=True)
         await self.telegram_app.job_queue.stop()
-        time.sleep(5)
-        sys.exit()
+        time.sleep(2)
+        os._exit(0)
 
 
     def add_handler(self, handler: BaseHandler[Any, CCT, Any], group: int = 0) -> None:
