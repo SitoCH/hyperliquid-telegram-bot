@@ -443,7 +443,7 @@ def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> floa
 
 
 def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
-    """Calculate overall confidence with improved volume handling."""
+    """Calculate overall confidence with enhanced intraday sensitivity."""
     if not analyses:
         return 0.0
 
@@ -451,58 +451,113 @@ def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> flo
     if total_weight == 0:
         return 0.0
 
-    # Adjusted weights for better balance
-    alignment_weight = 0.30
-    volume_weight = 0.35
-    consistency_weight = 0.35
+    # Adjusted weights for intraday focus
+    alignment_weight = 0.25     # Reduced from 0.30
+    volume_weight = 0.35       # Unchanged
+    consistency_weight = 0.25  # Reduced from 0.35
+    intraday_weight = 0.15    # New component
 
-    # Enhanced volume confirmation
+    # Group analyses by timeframe
+    timeframe_groups = {
+        'short': [a for a in analyses if a.group_weight in {
+            _TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES
+        }],
+        'intermediate': [a for a in analyses if a.group_weight in {
+            _TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES
+        }],
+        'long': [a for a in analyses if a.group_weight in {
+            _TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES
+        }],
+        'context': [a for a in analyses if a.group_weight in {
+            _TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES
+        }]
+    }
+
+    # Enhanced volume confirmation with intraday focus
     volume_scores = []
     for analysis in analyses:
         # Base volume score
         base_score = analysis.volume_strength
         
-        # Boost score if volume aligns with momentum
-        if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL:
+        # Stronger boost for intraday volume confirmation
+        if analysis in timeframe_groups['short'] or analysis in timeframe_groups['intermediate']:
             if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
-                base_score *= 1.2
+                base_score *= 1.3  # Increased from 1.2
             elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
-                base_score *= 1.1
+                base_score *= 1.2  # Increased from 1.1
                 
         volume_scores.append(base_score * (analysis.group_weight / total_weight))
     
     volume_confirmation = sum(volume_scores)
 
-    # Enhanced trend consistency calculation
+    # Enhanced trend consistency with group hierarchy
     directional_scores = []
+    
+    # Process groups in order of importance for crypto intraday trading
+    group_order = ['intermediate', 'short', 'long', 'context']
     prev_bias = None
-    for analysis in sorted(analyses, key=lambda x: x.group_weight, reverse=True):
-        score = 1.0 if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL else 0.5
-        
-        # Check for bias alignment with higher timeframes
-        if prev_bias and analysis.momentum_bias == prev_bias:
-            score *= 1.2
-        
-        directional_scores.append(score * (analysis.group_weight / total_weight))
-        prev_bias = analysis.momentum_bias
+    
+    for group_name in group_order:
+        group = timeframe_groups[group_name]
+        for analysis in group:
+            # Base directional score
+            score = 1.0 if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL else 0.5
+            
+            # Alignment bonus with previous timeframe
+            if prev_bias and analysis.momentum_bias == prev_bias:
+                if group_name in ['short', 'intermediate']:
+                    score *= 1.25  # Stronger bonus for intraday alignment
+                else:
+                    score *= 1.15
+            
+            # Extra weight for strong momentum with volume
+            if analysis.volume_strength > 0.7 and analysis.internal_alignment > 0.6:
+                score *= 1.2
+            
+            directional_scores.append(score * (analysis.group_weight / total_weight))
+            prev_bias = analysis.momentum_bias
     
     directional_agreement = sum(directional_scores)
 
     # Calculate alignment score
     alignment_score = _calculate_overall_alignment(analyses)
 
+    # New: Calculate intraday confidence
+    intraday_confidence = 0.0
+    if timeframe_groups['short'] and timeframe_groups['intermediate']:
+        short_analysis = timeframe_groups['short'][0]
+        intermediate_analysis = timeframe_groups['intermediate'][0]
+        
+        # Check for strong intraday alignment
+        if short_analysis.momentum_bias == intermediate_analysis.momentum_bias:
+            intraday_score = 1.0
+            # Boost for volume confirmation
+            if short_analysis.volume_strength > 0.7 and intermediate_analysis.volume_strength > 0.7:
+                intraday_score *= 1.2
+            # Boost for phase alignment
+            if short_analysis.dominant_phase == intermediate_analysis.dominant_phase:
+                intraday_score *= 1.15
+            intraday_confidence = min(1.0, intraday_score)
+
     # Combine scores with dynamic minimum threshold
     raw_confidence = (
         volume_confirmation * volume_weight +
         directional_agreement * consistency_weight +
-        alignment_score * alignment_weight
+        alignment_score * alignment_weight +
+        intraday_confidence * intraday_weight
     )
 
     # Dynamic minimum confidence based on volume and alignment
-    min_confidence = 0.3 if all(a.volume_strength > 0.7 and a.internal_alignment > 0.6 for a in analyses) else 0.0
+    # Require stronger confirmation for intraday signals
+    min_confidence = 0.35 if all(
+        a.volume_strength > 0.7 and 
+        a.internal_alignment > 0.65 and
+        (a in timeframe_groups['short'] or a in timeframe_groups['intermediate'])
+        for a in analyses[:2]  # Check first two analyses
+    ) else 0.0
     
-    # Apply sigmoid-like scaling to emphasize strong signals
-    scaled_confidence = 1 / (1 + pow(2.0, -5 * (raw_confidence - 0.5)))
+    # Apply sigmoid-like scaling with adjusted steepness for faster response
+    scaled_confidence = 1 / (1 + pow(2.0, -6 * (raw_confidence - 0.45)))
     
     return max(min(scaled_confidence, 1.0), min_confidence)
 
