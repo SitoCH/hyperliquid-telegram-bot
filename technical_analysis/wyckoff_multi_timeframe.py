@@ -115,8 +115,7 @@ def analyze_multi_timeframe(
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
         shoud_notify = (all_analysis.confidence_level >= min_confidence and 
             momentum_intensity > MODERATE_MOMENTUM and 
-            all_analysis.short_term.volatility_state != VolatilityState.HIGH and
-            all_analysis.intermediate.volatility_state != VolatilityState.HIGH and
+            (all_analysis.short_term.volatility_state != VolatilityState.HIGH or all_analysis.intermediate.volatility_state != VolatilityState.HIGH) and
             all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL)
 
         return MultiTimeframeContext(
