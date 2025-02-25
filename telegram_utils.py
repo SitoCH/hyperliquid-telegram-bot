@@ -154,7 +154,6 @@ class TelegramUtils:
             await self.send_message(context)
         except Exception as e:
             logger.critical(e, exc_info=True)
-        await self.telegram_app.job_queue.stop()
         time.sleep(2)
         os._exit(0)
 
