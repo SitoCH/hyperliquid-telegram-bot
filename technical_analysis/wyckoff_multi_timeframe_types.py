@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
-from typing import Final, List, Dict
+from typing import Final
 
 from .wyckoff_types import (
     WyckoffPhase, CompositeAction, MarketLiquidity,
@@ -19,17 +19,17 @@ INTERMEDIATE_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERME
 LONG_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES)
 CONTEXT_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES)
 
-# Adjusted momentum thresholds for crypto's high volatility
-STRONG_MOMENTUM: Final[float] = 0.70  # Further reduced for faster signal detection
-MODERATE_MOMENTUM: Final[float] = 0.45  # More sensitive to capture developing momentum
-WEAK_MOMENTUM: Final[float] = 0.25  # Lower threshold to catch early moves
-MIXED_MOMENTUM: Final[float] = 0.12  # Slightly reduced for better noise filtering
-LOW_MOMENTUM: Final[float] = 0.05  # Unchanged - still effective for ranging detection
+# Momentum thresholds
+STRONG_MOMENTUM: Final[float] = 0.75  # Reduced from 0.8 to account for crypto volatility
+MODERATE_MOMENTUM: Final[float] = 0.5  # Reduced from 0.6 for more sensitive signals
+WEAK_MOMENTUM: Final[float] = 0.3     # Reduced from 0.4 to catch early moves
+MIXED_MOMENTUM: Final[float] = 0.15   # Reduced from 0.2 for noise filtering
+LOW_MOMENTUM: Final[float] = 0.05     # Reduced from 0.1 to better identify ranging periods
 
-# Updated analysis weight factors that increase volume importance
-DIRECTIONAL_WEIGHT: Final[float] = 0.45  # Slightly reduced in favor of volume
-VOLUME_WEIGHT: Final[float] = 0.40  # Increased from 0.35 - critical for crypto
-PHASE_WEIGHT: Final[float] = 0.15  # Maintained - still important for structure
+# Analysis weight factors
+DIRECTIONAL_WEIGHT: Final[float] = 0.50
+VOLUME_WEIGHT: Final[float] = 0.35
+PHASE_WEIGHT: Final[float] = 0.15
 
 class MultiTimeframeDirection(Enum):
     BULLISH = "bullish"
