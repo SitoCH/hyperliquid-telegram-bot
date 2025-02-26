@@ -320,49 +320,43 @@ def identify_wyckoff_phase(
             return (WyckoffPhase.MARKUP if recent_change > 0 
                    else WyckoffPhase.MARKDOWN)
 
-    # Enhanced liquidation cascade detection
+    # Enhanced liquidation cascade detection optimized for hourly analysis
     volume_impulse = curr_volume / (volume_sma + 1e-8)
     price_velocity = abs(recent_change) / (volatility.mean() + 1e-8)
+    
+    # Use dynamic thresholds based on market conditions
+    # More sensitive thresholds for shorter timeframes that update more frequently
+    vol_threshold = 2.5
+    price_threshold = 0.04  # 4% move
+    velocity_threshold = 2.0
+    effort_threshold = 0.7
+    
+    # Adjust thresholds by timeframe
+    if timeframe == Timeframe.MINUTES_15:
+        price_threshold = 0.035  # More sensitive on shorter timeframes
+        vol_threshold = 2.2
+    elif timeframe == Timeframe.HOURS_4 or timeframe == Timeframe.HOURS_8:
+        price_threshold = 0.05  # Higher threshold for longer timeframes
+        vol_threshold = 2.8
+    
     is_liquidation = (
-        abs(recent_change) > 0.05 and  # 5% move
-        volume_impulse > 2.5 and       # Sharp volume spike
-        price_velocity > 2.0 and       # Fast price movement
-        abs(effort_vs_result) > 0.7    # Strong directional move
+        abs(recent_change) > price_threshold and  
+        volume_impulse > vol_threshold and       
+        price_velocity > velocity_threshold and  
+        abs(effort_vs_result) > effort_threshold 
     )
 
+    # Enhanced cascade detection using hourly execution awareness
+    # Track if this signal is changing within a short period
+    cascade_signal_strength = (abs(recent_change) / price_threshold) * (volume_impulse / vol_threshold)
+    
     if is_liquidation:
         # Check for potential reversal after liquidation
-        if abs(recent_change) > 0.08:  # 8% move
+        if cascade_signal_strength > 1.5:  # Strong liquidation event
             return (WyckoffPhase.POSSIBLE_DISTRIBUTION if recent_change > 0
                    else WyckoffPhase.POSSIBLE_ACCUMULATION)
         return (WyckoffPhase.MARKUP if recent_change > 0
                 else WyckoffPhase.MARKDOWN)
-
-    # Mean reversion signals for ranging markets
-    price_deviation = (current_price - high_vol_price) / high_vol_price
-    is_mean_reversion = (
-        abs(price_deviation) > 0.02 and    # 2% away from VWAP
-        volume_impulse < 1.2 and           # Lower volume
-        abs(momentum_strength) < 30         # Weak momentum
-    )
-
-    if is_mean_reversion:
-        if abs(price_deviation) > 0.035:  # 3.5% deviation
-            return (WyckoffPhase.POSSIBLE_MARKDOWN if price_deviation > 0
-                   else WyckoffPhase.POSSIBLE_MARKUP)
-        return WyckoffPhase.RANGING
-
-    # Short-term support/resistance breaks
-    if is_scalp_timeframe:
-        # Detect strong breaks with volume confirmation
-        is_strong_break = (
-            abs(recent_change) > 0.02 and  # 2% move
-            volume_impulse > 1.5 and       # Above average volume
-            abs(momentum_strength) > 50     # Strong momentum
-        )
-        if is_strong_break:
-            return (WyckoffPhase.MARKUP if recent_change > 0
-                   else WyckoffPhase.MARKDOWN)
 
     # Rest of the existing phase determination logic
     return determine_phase_by_price_strength(

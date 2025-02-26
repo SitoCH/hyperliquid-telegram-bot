@@ -130,7 +130,6 @@ def analyze_multi_timeframe(
             should_notify=False
         )
 
-
 def _analyze_timeframe_group(
     group: Dict[Timeframe, WyckoffState]
 ) -> TimeframeGroupAnalysis:
@@ -155,7 +154,7 @@ def _analyze_timeframe_group(
     action_weights: Dict[CompositeAction, float] = {}
     uncertain_action_weights: Dict[CompositeAction, float] = {}  # Track uncertain actions
     total_weight = 0.0
-    
+
     # Track exhaustion signals
     upside_exhaustion = 0
     downside_exhaustion = 0
@@ -163,7 +162,7 @@ def _analyze_timeframe_group(
     # Track rapid movement signals
     rapid_bullish_moves = 0
     rapid_bearish_moves = 0
-    
+
     for tf, state in group.items():
         weight = get_phase_weight(tf)
             
@@ -171,11 +170,11 @@ def _analyze_timeframe_group(
         if (state.phase == WyckoffPhase.MARKUP and 
             state.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.CONSOLIDATING]):
             upside_exhaustion += 1
-            
+
         if (state.phase == WyckoffPhase.MARKDOWN and 
             state.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.CONSOLIDATING]):
             downside_exhaustion += 1
-            
+
         # Adjust weights based on exhaustion signals
         if state.is_upthrust:
             upside_exhaustion += 1
@@ -183,12 +182,12 @@ def _analyze_timeframe_group(
         elif state.is_spring:
             downside_exhaustion += 1
             weight *= 1.2
-            
+
         # Reduce weight if we see contrary volume signals
         if (state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN] and 
             state.volume == VolumeState.LOW):
             weight *= 0.8
-            
+
         # Factor in effort vs result analysis
         if state.effort_vs_result == EffortResult.WEAK:
             if state.phase == WyckoffPhase.MARKUP:
@@ -201,7 +200,7 @@ def _analyze_timeframe_group(
             rapid_bullish_moves += 1
         elif state.phase == WyckoffPhase.MARKDOWN and state.volume == VolumeState.HIGH:
             rapid_bearish_moves += 1
-            
+
         # Increase weight for strong directional moves
         if state.pattern == MarketPattern.TRENDING:
             if state.volume == VolumeState.HIGH:
@@ -261,7 +260,7 @@ def _analyze_timeframe_group(
     volume_factors = []
     for state in group.values():
         base_strength = 1.0 if state.volume == VolumeState.HIGH else 0.5
-        
+
         # Adjust based on effort vs result
         if state.effort_vs_result == EffortResult.STRONG:
             base_strength *= 1.2
@@ -274,9 +273,9 @@ def _analyze_timeframe_group(
                 base_strength *= 1.3
                 
         volume_factors.append(base_strength)
-    
+
     volume_strength = sum(volume_factors) / len(volume_factors)
-    
+
     # Clamp volume strength between 0 and 1
     volume_strength = max(0.0, min(1.0, volume_strength))
 
@@ -285,7 +284,7 @@ def _analyze_timeframe_group(
         volume_strength *= 0.7  # Reduce volume significance if exhaustion detected
     elif downside_exhaustion >= len(group) // 2:
         volume_strength *= 0.7
-
+    
     # Calculate funding sentiment (-1 to 1)
     funding_signals = []
     for state in group.values():
@@ -301,19 +300,19 @@ def _analyze_timeframe_group(
             funding_signals.append(-0.5)
         elif state.funding_state == FundingState.SLIGHTLY_NEGATIVE:
             funding_signals.append(-0.25)
-    
+
     funding_sentiment = sum(funding_signals) / len(funding_signals) if funding_signals else 0
 
     # Analyze market states
     liquidity_counts = {state.liquidity: 0 for state in group.values()}
     risk_counts = {state.liquidation_risk: 0 for state in group.values()}
     volatility_counts = {state.volatility: 0 for state in group.values()}
-    
+
     for state in group.values():
         liquidity_counts[state.liquidity] += 1
         risk_counts[state.liquidation_risk] += 1
         volatility_counts[state.volatility] += 1
-        
+
     liquidity_state = max(liquidity_counts.items(), key=lambda x: x[1])[0]
     liquidation_risk = max(risk_counts.items(), key=lambda x: x[1])[0]
     volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
@@ -326,7 +325,7 @@ def _analyze_timeframe_group(
         (s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH) or
         (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN)
     ))
-    
+
     bearish_signals = sum(1 for s in group.values() if (
         (s.phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] and downside_exhaustion < len(group) // 2) or 
         s.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.MARKING_DOWN] or
@@ -441,7 +440,6 @@ def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> floa
 
     return sum(alignment_scores) / comparison_count
 
-
 def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
     """Calculate overall confidence with enhanced intraday sensitivity."""
     if not analyses:
@@ -487,36 +485,36 @@ def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> flo
                 base_score *= 1.2  # Increased from 1.1
                 
         volume_scores.append(base_score * (analysis.group_weight / total_weight))
-    
+
     volume_confirmation = sum(volume_scores)
 
     # Enhanced trend consistency with group hierarchy
     directional_scores = []
-    
+
     # Process groups in order of importance for crypto intraday trading
     group_order = ['intermediate', 'short', 'long', 'context']
     prev_bias = None
-    
+
     for group_name in group_order:
         group = timeframe_groups[group_name]
         for analysis in group:
             # Base directional score
             score = 1.0 if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL else 0.5
-            
+
             # Alignment bonus with previous timeframe
             if prev_bias and analysis.momentum_bias == prev_bias:
                 if group_name in ['short', 'intermediate']:
                     score *= 1.25  # Stronger bonus for intraday alignment
                 else:
                     score *= 1.15
-            
+
             # Extra weight for strong momentum with volume
             if analysis.volume_strength > 0.7 and analysis.internal_alignment > 0.6:
                 score *= 1.2
             
             directional_scores.append(score * (analysis.group_weight / total_weight))
             prev_bias = analysis.momentum_bias
-    
+
     directional_agreement = sum(directional_scores)
 
     # Calculate alignment score
@@ -538,6 +536,20 @@ def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> flo
             if short_analysis.dominant_phase == intermediate_analysis.dominant_phase:
                 intraday_score *= 1.15
             intraday_confidence = min(1.0, intraday_score)
+        
+    # Add non-linear signal weighting for superior hourly quality
+    def nonlinear_activation(x, steepness=6.0, threshold=0.5):
+        """Apply non-linear activation to emphasize strong signals and suppress weak ones"""
+        return 1.0 / (1.0 + np.exp(-steepness * (x - threshold)))
+
+    # Apply non-linear scaling to individual components
+    volume_confirmation = nonlinear_activation(volume_confirmation, steepness=7.0, threshold=0.45)
+    directional_agreement = nonlinear_activation(directional_agreement, steepness=6.5, threshold=0.5)
+    alignment_score = nonlinear_activation(alignment_score, steepness=6.0, threshold=0.4)
+
+    # For intraday signals, use more aggressive thresholds to reduce noise
+    if intraday_confidence > 0:
+        intraday_confidence = nonlinear_activation(intraday_confidence, steepness=8.0, threshold=0.55)
 
     # Combine scores with dynamic minimum threshold
     raw_confidence = (
@@ -548,24 +560,23 @@ def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> flo
     )
 
     # Dynamic minimum confidence based on volume and alignment
-    # Require stronger confirmation for intraday signals
     min_confidence = 0.35 if all(
         a.volume_strength > 0.7 and 
-        a.internal_alignment > 0.65 and
+        a.internal_alignment > 0.65 and 
         (a in timeframe_groups['short'] or a in timeframe_groups['intermediate'])
         for a in analyses[:2]  # Check first two analyses
     ) else 0.0
     
     # Apply sigmoid-like scaling with adjusted steepness for faster response
     scaled_confidence = 1 / (1 + pow(2.0, -6 * (raw_confidence - 0.45)))
-    
+
     return max(min(scaled_confidence, 1.0), min_confidence)
 
 def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> MultiTimeframeDirection:
     """Determine overall direction considering Wyckoff phase weights for each timeframe group."""
     if not analyses:
         return MultiTimeframeDirection.NEUTRAL
-    
+
     # Group timeframes by their actual settings in _TIMEFRAME_SETTINGS
     timeframe_groups = {
         'short': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight 
@@ -579,11 +590,11 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
     def get_weighted_direction(group: List[TimeframeGroupAnalysis]) -> Tuple[MultiTimeframeDirection, float, float]:
         if not group:
             return MultiTimeframeDirection.NEUTRAL, 0.0, 0.0
-            
+
         group_total_weight = sum(a.group_weight for a in group)
         if group_total_weight == 0:
             return MultiTimeframeDirection.NEUTRAL, 0.0, 0.0
-        
+
         weighted_signals = {
             direction: sum(
                 (a.group_weight / group_total_weight) * 
@@ -597,7 +608,7 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
         
         strongest = max(weighted_signals.items(), key=lambda x: x[1])
         avg_volume = sum(a.volume_strength for a in group) / len(group)
-        
+
         return strongest[0], strongest[1], avg_volume
 
     # Get weighted directions with volume context
@@ -666,14 +677,13 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
 
         # Volume confirmation boost
         volume_boost = 1.0 + (analysis.volume_strength * 0.3)
-        
+
         # Phase confirmation bonus
         phase_aligned = False
         if overall_direction == MultiTimeframeDirection.BULLISH:
             phase_aligned = analysis.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]
         elif overall_direction == MultiTimeframeDirection.BEARISH:
             phase_aligned = analysis.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]
-        
         phase_boost = 1.2 if phase_aligned else 1.0
 
         # Funding rate impact (more weight for shorter timeframes)
@@ -693,7 +703,6 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
             if analysis.volume_strength > 0.7:
                 hourly_volume_boost = 1.2
 
-    # Calculate weighted average with hourly volume boost
     total_weight = sum(weight for _, weight in directional_scores)
     if total_weight == 0:
         return 0.0
