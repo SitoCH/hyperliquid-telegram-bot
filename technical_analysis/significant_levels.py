@@ -140,25 +140,55 @@ def find_significant_levels(
     if len(df) < timeframe.settings.support_resistance_lookback:
         return [], []
     
-    # Use BB width for dynamic volatility adjustment
+    # Use BB width for dynamic volatility adjustment with improved sensitivity
     volatility_multiplier = 1.0
     recent_bb_width = df['BB_width'].iloc[-1]
-    if recent_bb_width > df['BB_width'].mean():
-        volatility_multiplier = 1.3  # Increased from 1.2
+    bb_width_sma = df['BB_width'].rolling(window=5).mean().iloc[-1]
     
-    price_sma = df['c'].rolling(window=timeframe.settings.support_resistance_lookback).mean()
-    price_std = df['c'].rolling(window=timeframe.settings.support_resistance_lookback).std()
+    # Enhanced volatility detection with rate of change
+    bb_width_change = recent_bb_width / bb_width_sma if bb_width_sma > 0 else 1.0
+    if recent_bb_width > df['BB_width'].mean():
+        # Scale multiplier based on BB width change rate
+        volatility_multiplier = min(1.5, 1.2 + (bb_width_change - 1) * 0.3)
+    
+    # Use specific lookback for price calculations based on timeframe
+    lookback = min(timeframe.settings.support_resistance_lookback, len(df) - 1)
+    price_sma = df['c'].rolling(window=lookback).mean()
+    price_std = df['c'].rolling(window=lookback).std()
     volatility = (price_std / price_sma).iloc[-1] * volatility_multiplier
     
-    # Use full dataset instead of limited lookback
-    recent_df = df.copy()
+    # Dynamic price range based on timeframe and current volatility
+    # Shorter timeframes need narrower ranges for more precision
+    timeframe_factor = {
+        Timeframe.MINUTES_15: 0.7,
+        Timeframe.MINUTES_30: 0.8,
+        Timeframe.HOUR_1: 1.0, 
+        Timeframe.HOURS_2: 1.2,
+        Timeframe.HOURS_4: 1.5,
+        Timeframe.HOURS_8: 2.0
+    }.get(timeframe, 1.0)
     
-    max_deviation = min(STRONG_DEV_THRESHOLD * volatility, 0.25)
+    max_deviation = min(STRONG_DEV_THRESHOLD * volatility * timeframe_factor, 0.25)
     min_price = current_price * (1 - max_deviation)
     max_price = current_price * (1 + max_deviation)
     
-    # More sensitive base tolerance
-    base_tolerance = recent_df['ATR'].iloc[-1] * (0.25 + volatility * 0.25)  # Changed from 0.3 and 0.2
+    # Avoid unnecessary copy if we're not modifying the dataframe
+    recent_df = df
+    
+    # More sensitive base tolerance for crypto's volatile price action
+    # Use dynamic ATR multiplier based on timeframe
+    atr_multiplier = {
+        Timeframe.MINUTES_15: 0.2,  # Tighter for short timeframes
+        Timeframe.MINUTES_30: 0.22,
+        Timeframe.HOUR_1: 0.25,
+        Timeframe.HOURS_2: 0.27,
+        Timeframe.HOURS_4: 0.3,
+        Timeframe.HOURS_8: 0.35,  # Wider for longer timeframes
+    }.get(timeframe, 0.25)
+    
+    volatility_component = volatility * 0.2  # Reduced from 0.25 for finer control
+    base_tolerance = recent_df['ATR'].iloc[-1] * (atr_multiplier + volatility_component)
+    
     length_factor = np.log1p(len(recent_df) / timeframe.settings.support_resistance_lookback) / 2
     tolerance = base_tolerance * (1 + length_factor)
     
