@@ -215,32 +215,32 @@ class Timeframe(Enum):
 
 # Rebalanced weights for crypto focus
 _TIMEFRAME_SETTINGS = {
-    # Short-term group (40% total) - Last hour's action
+    # Short-term group (35% total) - Last hour's action
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.20,          # Increased from 0.15 for better intraday signals
-        ema_length=5,               # Decreased from 6 for faster reaction
-        atr_settings=(5, 4, 9, 3, 4),  # More responsive ATR
-        supertrend_multiplier=1.5,  # Decreased from 1.6 for higher sensitivity
-        base_multiplier=0.75,       # Decreased from 0.80 for quicker signals
-        momentum_multiplier=1.6,    # Increased from 1.5 for faster reaction
+        phase_weight=0.15,          # Quick scalping signals
+        ema_length=6,               # Faster EMA
+        atr_settings=(6, 4, 10, 3, 4),  # More responsive ATR
+        supertrend_multiplier=1.6,  # More sensitive
+        base_multiplier=0.80,       # More sensitive to moves
+        momentum_multiplier=1.5,    # More reactive
         description="15min scalping",
-        volume_ma_window=8,         # Decreased from 10 for faster response to volume changes
+        volume_ma_window=10,        # Shorter for faster signals
         volume_short_ma_window=3,
-        volume_long_ma_window=6,
-        spring_upthrust_window=3,
+        volume_long_ma_window=6,    # Shorter for faster trend detection
+        spring_upthrust_window=3,   # Quick reversal detection
         volume_trend_window=4,
-        price_strength_ma_window=4, # Decreased from 5 for quicker price strength evaluation
+        price_strength_ma_window=5,
         price_change_window=3,
-        support_resistance_lookback=20,  # Decreased from 24 for more recent level detection
-        chart_image_time_delta=pd.Timedelta(hours=12)
+        support_resistance_lookback=24,  # Less noise in shorter lookback
+        chart_image_time_delta=pd.Timedelta(hours=12)  # Shorter view for day trading
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.20,          # Unchanged
-        ema_length=8,               # Decreased from 10 for faster reaction
-        atr_settings=(7, 5, 12, 4, 5),  # Slightly reduced for responsiveness
-        supertrend_multiplier=1.7,  # Decreased from 1.8 for higher sensitivity
-        base_multiplier=0.85,       # Decreased from 0.90 for more sensitivity
-        momentum_multiplier=1.5,    # Increased from 1.4 for better momentum detection
+        phase_weight=0.20,          # Recent momentum
+        ema_length=10,              # Faster EMA
+        atr_settings=(8, 5, 14, 4, 5),
+        supertrend_multiplier=1.8,  # More sensitive
+        base_multiplier=0.90,       # More reactive
+        momentum_multiplier=1.4,    # Faster momentum detection
         description="30min swings",
         volume_ma_window=12,
         volume_short_ma_window=3,
@@ -255,10 +255,10 @@ _TIMEFRAME_SETTINGS = {
     
     # Intermediate group (30% total) - Recent trend
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.30,          # Unchanged - this remains the primary timeframe
-        ema_length=14,              # Decreased from 16 for faster adaptation
-        atr_settings=(10, 7, 16, 6, 7),  # Adjusted for more responsiveness
-        supertrend_multiplier=2.0,  # Decreased from 2.1 for higher sensitivity
+        phase_weight=0.30,          # Primary decision timeframe
+        ema_length=16,              # Faster for crypto
+        atr_settings=(12, 8, 18, 6, 7),
+        supertrend_multiplier=2.1,  # More sensitive
         base_multiplier=1.0,        # Balanced
         momentum_multiplier=1.5,    # More reactive
         description="1h trend",
