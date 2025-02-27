@@ -39,7 +39,7 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
     base_description = (
         f"{emoji} <b>Market Analysis:</b>\n"
         f"Trend: {_determine_trend_strength(analysis)} {context}\n"
-        f"Market Structure: {structure}\n"
+        f"Market structure: {structure}\n"
         f"Momentum: {momentum}\n"
         f"Sentiment: {sentiment}\n"
     )
