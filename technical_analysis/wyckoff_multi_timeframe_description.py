@@ -150,7 +150,7 @@ def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
     if not signals:
         return "Neutral market conditions"
     
-    return " • ".join(signals)
+    return ", ".join(signals)
 
 
 def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
