@@ -103,14 +103,14 @@ def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
     # Funding rate analysis
     if abs(avg_funding) > 0.7:
         if avg_funding > 0:
-            signals.append("Extremely high funding rates suggesting potential long squeeze")
+            signals.append("extremely high funding rates suggesting potential long squeeze")
         else:
-            signals.append("Very negative funding rates suggesting potential short squeeze")
+            signals.append("very negative funding rates suggesting potential short squeeze")
     elif abs(avg_funding) > 0.4:
         if avg_funding > 0:
-            signals.append("Longs paying high premiums")
+            signals.append("longs paying high premiums")
         else:
-            signals.append("Shorts paying high premiums")
+            signals.append("shorts paying high premiums")
     
     # Liquidation risk analysis
     high_risk_count = sum(
@@ -119,15 +119,15 @@ def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
     )
     
     if high_risk_count >= 2:
-        signals.append("High liquidation risk, cascading liquidations possible")
+        signals.append("high liquidation risk, cascading liquidations possible")
     
     # Volatility analysis with timeframe context
     if all(group.volatility_state == VolatilityState.HIGH 
            for group in [analysis.short_term, analysis.intermediate]):
         if analysis.long_term.volatility_state == VolatilityState.HIGH:
-            signals.append("Extreme volatility across all timeframes")
+            signals.append("extreme volatility across all timeframes")
         else:
-            signals.append("High short-term volatility, choppy conditions")
+            signals.append("high short-term volatility, choppy conditions")
     
     # Volume context
     volume_signals = []
@@ -142,13 +142,13 @@ def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
     avg_volume = sum(volume_signals) / len(volume_signals)
     if abs(avg_volume) > 0.5:
         if avg_volume > 0:
-            signals.append("Strong volume confirming moves")
+            signals.append("strong volume confirming moves")
         else:
-            signals.append("Low volume suggesting weak conviction")
+            signals.append("low volume suggesting weak conviction")
     
     # Combine all signals into a readable format
     if not signals:
-        return "Neutral market conditions"
+        return "neutral market conditions"
     
     return ", ".join(signals)
 
