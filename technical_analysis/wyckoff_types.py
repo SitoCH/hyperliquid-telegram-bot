@@ -7,19 +7,14 @@ class WyckoffPhase(Enum):
     """
     Represents the current market phase in Wyckoff analysis.
     Phases are longer-term market conditions that describe the overall structure
-    and stage of the market. A phase may last for an extended period and can
-    be uncertain (denoted by POSSIBLE_ prefix).
+    and stage of the market. A phase may last for an extended period.
+    Use with the uncertain_phase flag to indicate confidence level.
     """
-    ACCUMULATION = "acc."
-    DISTRIBUTION = "dist."
+    ACCUMULATION = "accumulation"
+    DISTRIBUTION = "distribution"
     MARKUP = "markup"
     MARKDOWN = "markdown"
-    RANGING = "rang."
-    POSSIBLE_ACCUMULATION = "~ acc."
-    POSSIBLE_DISTRIBUTION = "~ dist."
-    POSSIBLE_MARKUP = "~ markup"
-    POSSIBLE_MARKDOWN = "~ markdown"
-    POSSIBLE_RANGING = "~ rang."
+    RANGING = "ranging"
     UNKNOWN = "unknown"
 
 class VolumeState(Enum):

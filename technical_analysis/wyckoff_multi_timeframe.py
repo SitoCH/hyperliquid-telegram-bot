@@ -151,7 +151,8 @@ def _analyze_timeframe_group(
 
     # Calculate weighted votes for phases and actions
     phase_weights: Dict[WyckoffPhase, float] = {}
-    possible_phase_weights: Dict[WyckoffPhase, float] = {}  # Track possible phases separately
+    confident_phase_weights: Dict[WyckoffPhase, float] = {}  # Track confident phases separately
+    uncertain_phase_weights: Dict[WyckoffPhase, float] = {}  # Track uncertain phases separately
     action_weights: Dict[CompositeAction, float] = {}
     uncertain_action_weights: Dict[CompositeAction, float] = {}  # Track uncertain actions
     total_weight = 0.0
@@ -209,15 +210,19 @@ def _analyze_timeframe_group(
         
         total_weight += weight
 
-        # Improved phase weight handling
+        # Improved phase weight handling with certain/uncertain separation
         if state.phase != WyckoffPhase.UNKNOWN:
             if state.uncertain_phase:
-                # Store possible phases separately with reduced weight
-                base_phase = WyckoffPhase(state.phase.value.replace('~', '').strip())
-                possible_phase_weights[base_phase] = possible_phase_weights.get(base_phase, 0) + (weight * 0.7)
+                # Store uncertain phases separately with reduced weight
+                uncertain_phase_weights[state.phase] = uncertain_phase_weights.get(state.phase, 0) + (weight * 0.7)
             else:
-                # Direct phases get full weight
-                phase_weights[state.phase] = phase_weights.get(state.phase, 0) + weight
+                # Confident phases get full weight
+                confident_phase_weights[state.phase] = confident_phase_weights.get(state.phase, 0) + weight
+            
+            # Track overall phase weights for determining dominant phase
+            phase_weights[state.phase] = phase_weights.get(state.phase, 0) + (
+                weight * 0.7 if state.uncertain_phase else weight
+            )
 
         # Improved action weight handling
         if state.composite_action != CompositeAction.UNKNOWN:
@@ -226,25 +231,16 @@ def _analyze_timeframe_group(
             else:
                 action_weights[state.composite_action] = action_weights.get(state.composite_action, 0) + weight
 
-    # Merge possible phases with confirmed phases
-    for phase, weight in possible_phase_weights.items():
-        phase_weights[phase] = phase_weights.get(phase, 0) + weight
-
-    # Merge uncertain actions with confirmed actions
-    for action, weight in uncertain_action_weights.items():
-        action_weights[action] = action_weights.get(action, 0) + weight
-
-    # Determine dominant characteristics with better handling of unknowns
+    # Determine dominant phase using combined weights
     if phase_weights:
         dominant_phase = max(phase_weights.items(), key=lambda x: x[1])[0]
-        # Add uncertainty marker if mostly from possible phases
-        if (possible_phase_weights.get(dominant_phase, 0) > 
-            phase_weights[dominant_phase] * 0.7):  # 70% threshold
-            possible_name = f"~ {dominant_phase.value}"
-            dominant_phase = next(p for p in WyckoffPhase 
-                               if p.value == possible_name)
+        # Check if this phase is mostly from uncertain signals
+        uncertain_weight = uncertain_phase_weights.get(dominant_phase, 0)
+        confident_weight = confident_phase_weights.get(dominant_phase, 0)
+        dominant_phase_is_uncertain = uncertain_weight > confident_weight
     else:
         dominant_phase = WyckoffPhase.UNKNOWN
+        dominant_phase_is_uncertain = True
 
     # Determine dominant action with uncertainty handling
     if action_weights:
@@ -363,6 +359,7 @@ def _analyze_timeframe_group(
 
     return TimeframeGroupAnalysis(
         dominant_phase=dominant_phase,
+        uncertain_phase=dominant_phase_is_uncertain,
         dominant_action=dominant_action,
         internal_alignment=internal_alignment,
         volume_strength=volume_strength,

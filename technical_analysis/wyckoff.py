@@ -261,7 +261,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         funding_state = analyze_funding_rates(funding_rates or [])
 
         # Phase identification for current period
-        current_phase = identify_wyckoff_phase(
+        current_phase, uncertain_phase = identify_wyckoff_phase(
             is_spring, is_upthrust, curr_volume, vol_metrics.sma,
             effort_vs_result.iloc[-1], volume_spread.iloc[-1], volume_spread_ma.iloc[-1],
             price_strength, momentum_strength, is_high_volume, volatility,
@@ -279,7 +279,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         # Create WyckoffState instance
         wyckoff_state = WyckoffState(
             phase=current_phase,
-            uncertain_phase=current_phase.value.startswith('~'),
+            uncertain_phase=uncertain_phase,
             volume=VolumeState.HIGH if is_high_volume else VolumeState.LOW,
             pattern=MarketPattern.TRENDING if abs(momentum_strength) > momentum_threshold else MarketPattern.RANGING,
             volatility=VolatilityState.HIGH if volatility.iloc[-1] > volatility.mean() else VolatilityState.NORMAL,
@@ -291,7 +291,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
             wyckoff_sign=wyckoff_sign,
             funding_state=funding_state,
             description=generate_wyckoff_description(
-                current_phase, current_phase.value.startswith('~'), is_high_volume, momentum_strength, 
+                current_phase, uncertain_phase, is_high_volume, momentum_strength, 
                 is_spring, is_upthrust, effort_result,
                 composite_action, wyckoff_sign, funding_state
             )
@@ -308,7 +308,7 @@ def identify_wyckoff_phase(
     price_strength: float, momentum_strength: float, is_high_volume: bool,
     volatility: pd.Series, timeframe: Timeframe, recent_change: float,
     high_vol_price: float, current_price: float
-) -> WyckoffPhase:
+) -> Tuple[WyckoffPhase, bool]:
     """Enhanced Wyckoff phase identification optimized for intraday crypto trading."""
 
     # Detect scalping opportunities based on timeframe
@@ -317,8 +317,7 @@ def identify_wyckoff_phase(
         # Short-term breakout detection
         breakout_threshold = 0.015  # 1.5% move for short timeframes
         if abs(recent_change) > breakout_threshold and is_high_volume:
-            return (WyckoffPhase.MARKUP if recent_change > 0 
-                   else WyckoffPhase.MARKDOWN)
+            return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False
 
     # Enhanced liquidation cascade detection optimized for hourly analysis
     volume_impulse = curr_volume / (volume_sma + 1e-8)
@@ -353,10 +352,8 @@ def identify_wyckoff_phase(
     if is_liquidation:
         # Check for potential reversal after liquidation
         if cascade_signal_strength > 1.5:  # Strong liquidation event
-            return (WyckoffPhase.POSSIBLE_DISTRIBUTION if recent_change > 0
-                   else WyckoffPhase.POSSIBLE_ACCUMULATION)
-        return (WyckoffPhase.MARKUP if recent_change > 0
-                else WyckoffPhase.MARKDOWN)
+            return (WyckoffPhase.DISTRIBUTION if recent_change > 0 else WyckoffPhase.ACCUMULATION), True
+        return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False
 
     # Rest of the existing phase determination logic
     return determine_phase_by_price_strength(
@@ -406,7 +403,7 @@ def determine_phase_by_price_strength(
     price_strength: float, momentum_strength: float, 
     is_high_volume: bool, volatility: pd.Series,
     timeframe: Timeframe
-) -> WyckoffPhase:
+) -> Tuple[WyckoffPhase, bool]:
     """Enhanced phase determination with better trend confirmation."""
     # Get thresholds
     _, strong_dev_threshold, neutral_zone_threshold, \
@@ -426,20 +423,20 @@ def determine_phase_by_price_strength(
 
     if price_strength > strong_dev_threshold:
         if momentum_strength < -momentum_threshold and is_high_volume:
-            return WyckoffPhase.DISTRIBUTION if is_reversal_zone else WyckoffPhase.POSSIBLE_DISTRIBUTION
-        return WyckoffPhase.POSSIBLE_DISTRIBUTION
+            return WyckoffPhase.DISTRIBUTION, not is_reversal_zone
+        return WyckoffPhase.DISTRIBUTION, True
     
     if price_strength < -strong_dev_threshold:
         if momentum_strength > momentum_threshold and is_high_volume:
-            return WyckoffPhase.ACCUMULATION if is_reversal_zone else WyckoffPhase.POSSIBLE_ACCUMULATION
-        return WyckoffPhase.POSSIBLE_ACCUMULATION
+            return WyckoffPhase.ACCUMULATION, not is_reversal_zone
+        return WyckoffPhase.ACCUMULATION, True
 
     # Enhanced ranging detection
     if abs(price_strength) <= neutral_zone_threshold:
         is_low_volatility = vol_ratio < 0.8
         if abs(momentum_strength) < momentum_threshold and is_low_volatility:
-            return WyckoffPhase.RANGING
-        return WyckoffPhase.POSSIBLE_RANGING if vol_ratio < 1.2 else WyckoffPhase.POSSIBLE_MARKUP
+            return WyckoffPhase.RANGING, False
+        return WyckoffPhase.RANGING, True 
 
     # Improved trend confirmation
     trend_strength = abs(momentum_strength) / momentum_threshold
@@ -447,12 +444,12 @@ def determine_phase_by_price_strength(
 
     if price_strength > 0:
         if momentum_strength > momentum_threshold:
-            return WyckoffPhase.MARKUP if is_strong_trend else WyckoffPhase.POSSIBLE_MARKUP
-        return WyckoffPhase.POSSIBLE_MARKUP
+            return WyckoffPhase.MARKUP, not is_strong_trend
+        return WyckoffPhase.MARKUP, True
     
     if momentum_strength < -momentum_threshold:
-        return WyckoffPhase.MARKDOWN if is_strong_trend else WyckoffPhase.POSSIBLE_MARKDOWN
-    return WyckoffPhase.POSSIBLE_MARKDOWN
+        return WyckoffPhase.MARKDOWN, not is_strong_trend
+    return WyckoffPhase.MARKDOWN, True
 
 
 def detect_composite_action(

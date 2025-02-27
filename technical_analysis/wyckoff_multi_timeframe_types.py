@@ -48,6 +48,7 @@ class TimeframeGroupAnalysis:
     liquidity_state: MarketLiquidity
     liquidation_risk: LiquidationRisk
     volatility_state: VolatilityState
+    uncertain_phase: bool = True  # Add this field with default value True
 
 @dataclass
 class MultiTimeframeContext:

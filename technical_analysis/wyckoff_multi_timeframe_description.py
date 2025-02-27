@@ -347,6 +347,9 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
 
 def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
     """Generate enhanced trend description for a timeframe group."""
+    # Add uncertainty marker if needed
+    phase_desc = f"{'~' if analysis.uncertain_phase else ''} {analysis.dominant_phase.value}"
+    
     volume_desc = (
         "strong volume" if analysis.volume_strength > 0.7 else
         "moderate volume" if analysis.volume_strength > 0.4 else
@@ -366,7 +369,7 @@ def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
         funding = f" | {'Bullish' if analysis.funding_sentiment > 0 else 'Bearish'} funding"
     
     return (
-        f"• {analysis.dominant_phase.value} phase {analysis.dominant_action.value}\n"
+        f"• {phase_desc} phase {analysis.dominant_action.value}\n"
         f"  └─ {volume_desc}{volatility}{funding}{risk_warning}"
     )
 
