@@ -10,11 +10,11 @@ class WyckoffPhase(Enum):
     and stage of the market. A phase may last for an extended period.
     Use with the uncertain_phase flag to indicate confidence level.
     """
-    ACCUMULATION = "accumulation"
-    DISTRIBUTION = "distribution"
+    ACCUMULATION = "acc."
+    DISTRIBUTION = "dist."
     MARKUP = "markup"
     MARKDOWN = "markdown"
-    RANGING = "ranging"
+    RANGING = "rang."
     UNKNOWN = "unknown"
 
 class VolumeState(Enum):

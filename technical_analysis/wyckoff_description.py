@@ -21,14 +21,22 @@ def generate_wyckoff_description(
         return "Insufficient data for Wyckoff analysis"
     
     # Phase description with uncertainty marker
-    phase_desc = f"{'Possible ' if uncertain_phase else ''}{phase.value}"
+    phase_name = {
+        WyckoffPhase.ACCUMULATION: "Accumulation",
+        WyckoffPhase.DISTRIBUTION: "Distribution",
+        WyckoffPhase.MARKUP: "Markup",
+        WyckoffPhase.MARKDOWN: "Markdown",
+        WyckoffPhase.RANGING: "Ranging"
+    }.get(phase, "Unknown")
+    
+    phase_desc = f"{'Possible ' if uncertain_phase else ''}{phase_name}"
     
     # Build description components
     components = []
     
     # Add phase with volume context
     volume_desc = "high volume" if is_high_volume else "low volume"
-    components.append(f"{phase_desc.capitalize()} phase with {volume_desc}")
+    components.append(f"{phase_desc} phase with {volume_desc}")
     
     # Add spring or upthrust if present
     if is_spring:

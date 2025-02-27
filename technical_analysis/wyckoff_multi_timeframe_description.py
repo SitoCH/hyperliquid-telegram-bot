@@ -72,21 +72,21 @@ def _calculate_momentum_strength(analysis: AllTimeframesAnalysis) -> str:
     # Replace basic strength descriptions with more detailed explanations
     if analysis.momentum_intensity > STRONG_MOMENTUM:
         if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
-            return "Strong buying pressure across all timeframes"
-        return "Strong selling pressure across all timeframes"
+            return "strong buying pressure across all timeframes"
+        return "strong selling pressure across all timeframes"
     elif analysis.momentum_intensity > MODERATE_MOMENTUM:
         if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
-            return "Steady accumulation with increasing volume"
-        return "Sustained distribution with good volume"
+            return "steady accumulation with increasing volume"
+        return "sustained distribution with good volume"
     elif analysis.momentum_intensity > WEAK_MOMENTUM:
         if analysis.overall_direction == MultiTimeframeDirection.BULLISH:
-            return "Moderate upward pressure"
-        return "Moderate downward pressure"
+            return "moderate upward pressure"
+        return "moderate downward pressure"
     elif analysis.momentum_intensity > MIXED_MOMENTUM:
-        return "Mixed momentum with no clear direction"
+        return "mixed momentum with no clear direction"
     elif analysis.momentum_intensity > LOW_MOMENTUM:
-        return "Low momentum, possible consolidation phase"
-    return "Very low momentum, market likely ranging"
+        return "low momentum, possible consolidation phase"
+    return "very low momentum, market likely ranging"
 
 
 def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
@@ -348,7 +348,16 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
 def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
     """Generate enhanced trend description for a timeframe group."""
     # Add uncertainty marker if needed
-    phase_desc = f"{'~' if analysis.uncertain_phase else ''} {analysis.dominant_phase.value}"
+    phase_desc = analysis.dominant_phase.value
+    if analysis.uncertain_phase and analysis.dominant_phase != WyckoffPhase.UNKNOWN:
+        phase_desc = f"~ {phase_desc}"
+    
+    # Format action description with validation
+    action_desc = (
+        analysis.dominant_action.value 
+        if analysis.dominant_action != CompositeAction.UNKNOWN 
+        else "no clear action"
+    )
     
     volume_desc = (
         "strong volume" if analysis.volume_strength > 0.7 else
@@ -369,7 +378,7 @@ def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
         funding = f" | {'Bullish' if analysis.funding_sentiment > 0 else 'Bearish'} funding"
     
     return (
-        f"• {phase_desc} phase {analysis.dominant_action.value}\n"
+        f"• {phase_desc} phase {action_desc}\n"
         f"  └─ {volume_desc}{volatility}{funding}{risk_warning}"
     )
 

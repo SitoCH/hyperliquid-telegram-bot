@@ -243,8 +243,13 @@ def _analyze_timeframe_group(
         dominant_phase_is_uncertain = True
 
     # Determine dominant action with uncertainty handling
-    if action_weights:
-        dominant_action = max(action_weights.items(), key=lambda x: x[1])[0]
+    if action_weights or uncertain_action_weights:
+        # Combine both certain and uncertain action weights
+        combined_action_weights = action_weights.copy()
+        for action, weight in uncertain_action_weights.items():
+            combined_action_weights[action] = combined_action_weights.get(action, 0) + weight
+            
+        dominant_action = max(combined_action_weights.items(), key=lambda x: x[1])[0]
     else:
         dominant_action = CompositeAction.UNKNOWN
 
