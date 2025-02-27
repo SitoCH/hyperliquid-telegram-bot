@@ -183,19 +183,19 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
 
     if phase_alignment > 0.75 and bias_alignment > 0.75:
         # Strong alignment across all timeframes
-        return f"Strong {dominant_phase.value} structure with {dominant_bias.value} momentum"
+        return f"strong {dominant_phase.value} structure with {dominant_bias.value} momentum"
     elif short_term_conflict and trend_conflict:
         # Significant divergence across timeframes
-        return "Mixed signals across multiple timeframes - transition likely"
+        return "mixed signals across multiple timeframes - transition likely"
     elif structural_conflict:
         # Potential major trend change
-        return f"Possible trend reversal - {analysis.short_term.dominant_phase.value} forming"
+        return f"possible trend reversal - {analysis.short_term.dominant_phase.value} forming"
     elif short_term_conflict:
         # Short-term deviation
         return f"{analysis.long_term.dominant_phase.value} with short-term {analysis.short_term.momentum_bias.value} move"
     else:
         # Default case
-        return f"Developing {dominant_phase.value} structure with mixed momentum"
+        return f"developing {dominant_phase.value} structure with mixed momentum"
 
 def _determine_market_context(analysis: AllTimeframesAnalysis) -> str:
     """
