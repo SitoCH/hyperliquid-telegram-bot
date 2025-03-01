@@ -98,9 +98,7 @@ def detect_spring_upthrust(df: pd.DataFrame, idx: int, vol_metrics: VolumeMetric
         close = window['c'].iloc[-1]
         
         # Calculate volatility context
-        atr = ta.atr(df['h'], df['l'], df['c'], length=14).iloc[-1]
         price = df['c'].iloc[-1]
-        volatility_factor = atr / price  # Normalize ATR by price
         
         # Get adaptive thresholds based on market conditions
         thresholds = AdaptiveThresholdManager.get_spring_upthrust_thresholds(df, 
@@ -211,7 +209,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         
         # Get thresholds from timeframe settings
         volume_threshold, _, _, \
-        momentum_threshold, effort_threshold, volume_surge_threshold = timeframe.settings.thresholds
+        momentum_threshold, _, volume_surge_threshold = timeframe.settings.thresholds
         
         # Use thresholds directly
         is_high_volume = (
