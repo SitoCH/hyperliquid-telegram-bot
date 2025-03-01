@@ -302,40 +302,46 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         return "<b>Analysis:</b>\nLow confidence signals across timeframes.\n<b>Recommendation:</b>\nReduce exposure and wait for clearer setups."
 
     def get_main_signal() -> str:
-        """Get primary trading signal based on timeframe hierarchy."""
+        """Get primary trading signal based on timeframe hierarchy and momentum."""
         # Start with context timeframe for overall bias
         context_bias = analysis.context.momentum_bias
         context_phase = analysis.context.dominant_phase
         
-        # Check main trend alignment
+        # Determine momentum level using the same thresholds as _calculate_momentum_strength
+        momentum_desc = ""
+        if analysis.momentum_intensity > STRONG_MOMENTUM:
+            momentum_desc = "strong"
+            position_advice = "Aggressive positions can be considered with proper risk management."
+        elif analysis.momentum_intensity > MODERATE_MOMENTUM:
+            momentum_desc = "steady"
+            position_advice = "Consider directional positions with moderate risk exposure."
+        elif analysis.momentum_intensity > WEAK_MOMENTUM:
+            momentum_desc = "moderate"
+            position_advice = "Consider scaled entries with tight risk control."
+        elif analysis.momentum_intensity > MIXED_MOMENTUM:
+            momentum_desc = "mixed"
+            position_advice = "Focus on shorter timeframe opportunities with reduced position sizes."
+        else:
+            momentum_desc = "weak"
+            position_advice = "Consider ranging market strategies or stay in cash while waiting for clearer signals."
+        
+        # Check trend alignment
         trend_aligned = (
             analysis.long_term.momentum_bias == analysis.context.momentum_bias and
             analysis.intermediate.momentum_bias == analysis.context.momentum_bias
         )
         
-        # Check for strong short-term momentum
-        strong_momentum = (
-            analysis.short_term.volume_strength > 0.7 and
-            analysis.intermediate.volume_strength > 0.6 and
-            analysis.momentum_intensity > MODERATE_MOMENTUM
-        )
-
         # Generate main signal
-        if trend_aligned and strong_momentum:
+        if trend_aligned:
             return (
-                f"Strong trend alignment across all timeframes ({context_bias.value}). "
+                f"{momentum_desc.capitalize()} momentum with trend alignment across timeframes ({context_bias.value}). "
                 f"Market structure is {context_phase.value.lower()}. "
-                "Aggressive positions can be considered with proper risk management."
-            )
-        elif trend_aligned:
-            return (
-                f"Trend alignment detected ({context_bias.value}) but momentum is moderate. "
-                "Consider scaled entries with tight risk control."
+                f"{position_advice}"
             )
         else:
             return (
-                "Mixed signals across timeframes. "
-                "Focus on shorter timeframe opportunities with reduced position sizes."
+                f"{momentum_desc.capitalize()} momentum with mixed signals across timeframes. "
+                f"{position_advice}"
             )
 
     # Format the complete insight
