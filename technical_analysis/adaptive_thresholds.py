@@ -16,13 +16,9 @@ class AdaptiveThresholdManager:
         
         try:
             # Calculate volatility using ATR
-            if 'ATR' in df.columns and not pd.isna(df['ATR'].iloc[-1]):
-                atr = df['ATR'].iloc[-1]
-                price = df['c'].iloc[-1]
-                volatility = atr / price
-            else:
-                # Fallback to standard deviation if ATR isn't available
-                volatility = df['c'].pct_change().std()
+            atr = df['ATR'].iloc[-1]
+            price = df['c'].iloc[-1]
+            volatility = atr / price
                 
             # Scale threshold by timeframe and volatility
             timeframe_factor = {
@@ -51,14 +47,6 @@ class AdaptiveThresholdManager:
     @staticmethod
     def get_liquidation_thresholds(df: pd.DataFrame, timeframe: Timeframe) -> Dict[str, float]:
         """Calculate dynamic thresholds for liquidation cascade detection"""
-        if df.empty or len(df) < 10:
-            # Default fallback values
-            return {
-                "vol_threshold": 2.5, 
-                "price_threshold": 0.04,
-                "velocity_threshold": 2.0,
-                "effort_threshold": 0.7
-            }
             
         try:
             # Calculate average volatility from recent data
@@ -103,14 +91,10 @@ class AdaptiveThresholdManager:
             return 0.015  # Default fallback
         
         try:
-            # Use ATR for volatility-aware threshold
-            if 'ATR' in df.columns and not pd.isna(df['ATR'].iloc[-1]):
-                atr = df['ATR'].iloc[-1]
-                price = df['c'].iloc[-1]
-                volatility_factor = atr / price
-            else:
-                # Fallback to price standard deviation
-                volatility_factor = df['c'].pct_change().rolling(10).std().mean()
+            atr = df['ATR'].iloc[-1]
+            price = df['c'].iloc[-1]
+            volatility_factor = atr / price
+
             
             # Scale by timeframe
             timeframe_factor = {

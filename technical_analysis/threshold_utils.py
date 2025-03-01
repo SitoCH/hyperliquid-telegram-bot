@@ -75,14 +75,11 @@ def get_current_market_volatility(df: pd.DataFrame, lookback: int = 20) -> Dict[
         else:
             volume_volatility = 1.0
             
-        # ATR ratio: current vs average
-        if 'ATR' in df.columns and not df['ATR'].isna().all():
-            recent_atr = recent['ATR'].mean()
-            if len(df) > lookback * 2:
-                historical_atr = df['ATR'].mean()
-                atr_ratio = recent_atr / max(historical_atr, 0.0001)
-            else:
-                atr_ratio = 1.0
+
+        recent_atr = recent['ATR'].mean()
+        if len(df) > lookback * 2:
+            historical_atr = df['ATR'].mean()
+            atr_ratio = recent_atr / max(historical_atr, 0.0001)
         else:
             atr_ratio = 1.0
             

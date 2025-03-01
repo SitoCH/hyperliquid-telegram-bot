@@ -85,7 +85,7 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         logger.warning(f"Error calculating volume metrics: {e}")
         return VolumeMetrics(0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0)
 
-def detect_spring_upthrust(df: pd.DataFrame, idx: int, vol_metrics: VolumeMetrics) -> tuple[bool, bool]:
+def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol_metrics: VolumeMetrics) -> tuple[bool, bool]:
     """Enhanced spring/upthrust detection using normalized volume metrics."""
     if idx < 4:
         return False, False
@@ -100,8 +100,7 @@ def detect_spring_upthrust(df: pd.DataFrame, idx: int, vol_metrics: VolumeMetric
         price = df['c'].iloc[-1]
         
         # Get adaptive thresholds based on market conditions
-        thresholds = AdaptiveThresholdManager.get_spring_upthrust_thresholds(df, 
-            getattr(df, 'timeframe', Timeframe.HOUR_1))
+        thresholds = AdaptiveThresholdManager.get_spring_upthrust_thresholds(df, timeframe)
         spring_threshold = thresholds["spring"]
         upthrust_threshold = thresholds["upthrust"]
         
@@ -151,20 +150,10 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         short_term_window = min(MIN_PERIODS, len(df) - 1)
         recent_df = df.iloc[-short_term_window:]
         
-        # Get current values
-        curr_price = df['c'].iloc[-1]
-        curr_volume = df['v'].iloc[-1]
-        
-        # Use volume metrics instead of raw calculations
-        volume_trend_value = vol_metrics.trend_strength
-        relative_volume = vol_metrics.ratio
-        recent_strong_volume = vol_metrics.consistency
-        
         # Rest of function remains the same
         price_sma = df['c'].rolling(window=MIN_PERIODS).mean()
         price_std = df['c'].rolling(window=MIN_PERIODS).std()
 
-        
         # Volume analysis (VSA)
         volume_spread = recent_df['v'] * (recent_df['h'] - recent_df['l'])
         volume_spread_ma = volume_spread.rolling(window=7).mean()
@@ -201,77 +190,24 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         momentum_strength = max(min(normalized_momentum * 100, 100), -100)
 
         # Detect springs and upthrusts for the current period
-        is_spring, is_upthrust = detect_spring_upthrust(df, -1, vol_metrics)
+        is_spring, is_upthrust = detect_spring_upthrust(df, timeframe, -1, vol_metrics)
         
-        # Market condition checks
-        volume_sma_value = float(vol_metrics.sma) if not pd.isna(vol_metrics.sma) else 0.0
-        
-        # Calculate relative volume
-        relative_volume = curr_volume / volume_sma_value if volume_sma_value > 0 else 1.0
-        
-        # Calculate volume consistency
-        recent_strong_volume = vol_metrics.consistency
-        
-        # Get thresholds from timeframe settings
-        volume_threshold, _, _, \
-        momentum_threshold, _, volume_surge_threshold = timeframe.settings.thresholds
-        
-        # Use thresholds directly
-        is_high_volume = (
-            (relative_volume > volume_threshold and volume_trend_value > 0) or
-            (relative_volume > volume_surge_threshold) or
-            (recent_strong_volume > 0.6 and relative_volume > 1.2)
-        )
-
-        price_strength = (curr_price - avg_price) / (price_std_last + 1e-8)
+        # Calculate price strength
+        price_strength = (df['c'].iloc[-1] - avg_price) / (price_std_last + 1e-8)
 
         # Enhanced price strength calculation
         price_ma_short = df['c'].rolling(window=8).mean()
         price_ma_long = df['c'].rolling(window=21).mean()
         trend_strength = ((price_ma_short - price_ma_long) / price_ma_long).iloc[-1]
         price_strength = price_strength * 0.7 + trend_strength * 0.3
-
-        # Calculate recent price change before calling identify_wyckoff_phase
-        recent_change = df['c'].pct_change(3).iloc[-1]
-        
-        # Calculate time-weighted volume profile
-        def calculate_weighted_volume_profile(df: pd.DataFrame) -> float:
-            """
-            Calculate volume profile using exponentially weighted volume across all available data.
-            More recent volumes have higher weights but all data contributes to the analysis.
-            
-            Args:
-                df: DataFrame with OHLCV data
-            
-            Returns:
-                Price level with highest weighted volume
-            """
-            # Create exponential weights for all data points
-            # Using exponential decay where most recent point has weight 1.0
-            # and weight decays by half every ~100 periods
-            decay_factor = -np.log(2) / 100  # Half-life of 100 periods
-            weights = np.exp(np.linspace(decay_factor * len(df), 0, len(df)))
-            weights = weights / weights.sum()  # Normalize weights
-            
-            # Calculate volume-weighted price levels
-            weighted_volumes = df['v'] * weights
-            volume_profile = weighted_volumes.groupby(df['c'].round(2)).sum()
-            
-            # Get price level with highest weighted volume
-            return float(volume_profile.idxmax())
-
-        high_vol_price = calculate_weighted_volume_profile(df)
-
-        current_price = df['c'].iloc[-1]
         
         funding_state = analyze_funding_rates(funding_rates or [])
 
-        # Phase identification for current period
+        # Pass the entire df to identify_wyckoff_phase instead of individual parameters
         current_phase, uncertain_phase = identify_wyckoff_phase(
-            is_spring, is_upthrust, curr_volume, vol_metrics.sma,
-            effort_vs_result.iloc[-1], volume_spread.iloc[-1], volume_spread_ma.iloc[-1],
-            price_strength, momentum_strength, is_high_volume, volatility,
-            timeframe, recent_change, high_vol_price, current_price
+            df, vol_metrics, price_strength, 
+            momentum_strength, is_high_volume, volatility, timeframe, 
+            effort_vs_result
         )
         
         # Replace simple effort_result calculation with new analysis
@@ -280,14 +216,14 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         
         # Detect composite action and Wyckoff signs
         composite_action = detect_composite_action(df, price_strength, vol_metrics, effort_vs_result.iloc[-1])
-        wyckoff_sign = detect_wyckoff_signs(df, price_strength, volume_trend_value, is_spring, is_upthrust)
+        wyckoff_sign = detect_wyckoff_signs(df, price_strength, vol_metrics.trend_strength, is_spring, is_upthrust)
             
         # Create WyckoffState instance
         wyckoff_state = WyckoffState(
             phase=current_phase,
             uncertain_phase=uncertain_phase,
             volume=VolumeState.HIGH if is_high_volume else VolumeState.LOW,
-            pattern=MarketPattern.TRENDING if abs(momentum_strength) > momentum_threshold else MarketPattern.RANGING,
+            pattern=MarketPattern.TRENDING if abs(momentum_strength) > timeframe.settings.thresholds[3] else MarketPattern.RANGING,
             volatility=VolatilityState.HIGH if volatility.iloc[-1] > volatility.mean() else VolatilityState.NORMAL,
             is_spring=is_spring,
             is_upthrust=is_upthrust,
@@ -309,21 +245,25 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         return WyckoffState.unknown()
 
 def identify_wyckoff_phase(
-    is_spring: bool, is_upthrust: bool, curr_volume: float, volume_sma: float,
-    effort_vs_result: float, volume_spread: float, volume_spread_ma: float,
-    price_strength: float, momentum_strength: float, is_high_volume: bool,
-    volatility: pd.Series, timeframe: Timeframe, recent_change: float,
-    high_vol_price: float, current_price: float
+    df: pd.DataFrame,
+    vol_metrics: VolumeMetrics,
+    price_strength: float, 
+    momentum_strength: float, 
+    is_high_volume: bool,
+    volatility: pd.Series, 
+    timeframe: Timeframe,
+    effort_vs_result: pd.Series
 ) -> Tuple[WyckoffPhase, bool]:
     """Enhanced Wyckoff phase identification optimized for intraday crypto trading."""
     
-    # Attach timeframe to dataframe for reference
-    if isinstance(volatility, pd.Series) and len(volatility) > 0:
-        df = volatility.to_frame()
-        df.timeframe = timeframe
-    else:
-        df = pd.DataFrame()
-        df.timeframe = timeframe
+    # Calculate values internally that were previously passed as parameters
+    recent_change = df['c'].pct_change(3).iloc[-1]
+    curr_volume = df['v'].iloc[-1]
+
+    # Calculate high volume price level
+    decay_factor = -np.log(2) / 100
+    weights = np.exp(np.linspace(decay_factor * len(df), 0, len(df)))
+    weights = weights / weights.sum()
 
     # Detect scalping opportunities based on timeframe
     is_scalp_timeframe = timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]
@@ -334,7 +274,7 @@ def identify_wyckoff_phase(
             return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False
 
     # Enhanced liquidation cascade detection with adaptive thresholds
-    volume_impulse = curr_volume / (volume_sma + 1e-8)
+    volume_impulse = curr_volume / (vol_metrics.sma + 1e-8)
     price_velocity = abs(recent_change) / (volatility.mean() + 1e-8)
     
     # Get adaptive liquidation detection thresholds
@@ -348,7 +288,7 @@ def identify_wyckoff_phase(
         abs(recent_change) > price_threshold and  
         volume_impulse > vol_threshold and       
         price_velocity > velocity_threshold and  
-        abs(effort_vs_result) > effort_threshold 
+        abs(effort_vs_result.iloc[-1]) > effort_threshold 
     )
 
     # Enhanced cascade detection using hourly execution awareness
