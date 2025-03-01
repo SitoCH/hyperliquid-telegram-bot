@@ -12,6 +12,7 @@ from .wyckoff_description import generate_wyckoff_description
 from utils import log_execution_time
 from dataclasses import dataclass
 from logging_utils import logger
+from .adaptive_thresholds import AdaptiveThresholdManager
 
 # Constants for Wyckoff analysis
 VOLUME_THRESHOLD: Final[float] = 1.7  # Increased from 1.5 for more significance with larger dataset
@@ -101,9 +102,11 @@ def detect_spring_upthrust(df: pd.DataFrame, idx: int, vol_metrics: VolumeMetric
         price = df['c'].iloc[-1]
         volatility_factor = atr / price  # Normalize ATR by price
         
-        # Adaptive thresholds based on volatility
-        spring_threshold = 0.001 * (1 + volatility_factor * 10)
-        upthrust_threshold = 0.001 * (1 + volatility_factor * 10)
+        # Get adaptive thresholds based on market conditions
+        thresholds = AdaptiveThresholdManager.get_spring_upthrust_thresholds(df, 
+            getattr(df, 'timeframe', Timeframe.HOUR_1))
+        spring_threshold = thresholds["spring"]
+        upthrust_threshold = thresholds["upthrust"]
         
         # Check for extremely large candle wicks to avoid false signals
         if (window['h'].max() - window['l'].min()) > df['c'].iloc[-1] * 0.2:
@@ -310,33 +313,33 @@ def identify_wyckoff_phase(
     high_vol_price: float, current_price: float
 ) -> Tuple[WyckoffPhase, bool]:
     """Enhanced Wyckoff phase identification optimized for intraday crypto trading."""
+    
+    # Attach timeframe to dataframe for reference
+    if isinstance(volatility, pd.Series) and len(volatility) > 0:
+        df = volatility.to_frame()
+        df.timeframe = timeframe
+    else:
+        df = pd.DataFrame()
+        df.timeframe = timeframe
 
     # Detect scalping opportunities based on timeframe
     is_scalp_timeframe = timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]
     if is_scalp_timeframe:
-        # Short-term breakout detection
-        breakout_threshold = 0.015  # 1.5% move for short timeframes
+        # Use dynamic breakout threshold based on market conditions
+        breakout_threshold = AdaptiveThresholdManager.get_breakout_threshold(df, timeframe)
         if abs(recent_change) > breakout_threshold and is_high_volume:
             return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False
 
-    # Enhanced liquidation cascade detection optimized for hourly analysis
+    # Enhanced liquidation cascade detection with adaptive thresholds
     volume_impulse = curr_volume / (volume_sma + 1e-8)
     price_velocity = abs(recent_change) / (volatility.mean() + 1e-8)
     
-    # Use dynamic thresholds based on market conditions
-    # More sensitive thresholds for shorter timeframes that update more frequently
-    vol_threshold = 2.5
-    price_threshold = 0.04  # 4% move
-    velocity_threshold = 2.0
-    effort_threshold = 0.7
-    
-    # Adjust thresholds by timeframe
-    if timeframe == Timeframe.MINUTES_15:
-        price_threshold = 0.035  # More sensitive on shorter timeframes
-        vol_threshold = 2.2
-    elif timeframe == Timeframe.HOURS_4 or timeframe == Timeframe.HOURS_8:
-        price_threshold = 0.05  # Higher threshold for longer timeframes
-        vol_threshold = 2.8
+    # Get adaptive liquidation detection thresholds
+    liquidation_thresholds = AdaptiveThresholdManager.get_liquidation_thresholds(df, timeframe)
+    vol_threshold = liquidation_thresholds["vol_threshold"]
+    price_threshold = liquidation_thresholds["price_threshold"]
+    velocity_threshold = liquidation_thresholds["velocity_threshold"]
+    effort_threshold = liquidation_thresholds["effort_threshold"]
     
     is_liquidation = (
         abs(recent_change) > price_threshold and  
