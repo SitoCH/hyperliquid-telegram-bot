@@ -392,13 +392,19 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
     """Generate trade suggestion with stop loss and take profit based on nearby levels."""
     def get_valid_levels(timeframe: Timeframe, min_dist: float, max_dist: float) -> tuple[List[float], List[float]]:
         """Get valid support and resistance levels for a specific timeframe."""
+        if timeframe not in significant_levels:
+            return ([], [])
         return (
             [r for r in significant_levels[timeframe]['resistance'] if min_dist < abs(r - mid) < max_dist],
             [s for s in significant_levels[timeframe]['support'] if min_dist < abs(s - mid) < max_dist]
         )
 
-    def get_trade_levels(direction: MultiTimeframeDirection, resistances: List[float], supports: List[float]) -> tuple[str, float, float]:
+    def get_trade_levels(direction: MultiTimeframeDirection, resistances: List[float], supports: List[float]) -> tuple[Optional[str], Optional[float], Optional[float]]:
         """Get trade type, take profit and stop loss levels based on direction."""
+        # Safety check for empty lists
+        if not resistances or not supports:
+            return None, None, None
+            
         buffer_pct = 0.001  # 0.1% buffer for trigger levels
         
         if direction == MultiTimeframeDirection.BULLISH:
@@ -422,6 +428,10 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
            (side == "Short" and (tp >= entry or sl <= entry)):
             return None
             
+        # Add safety checks to prevent division by zero
+        if entry == 0:
+            return None
+            
         tp_pct = abs((tp - entry) / entry) * 100
         sl_pct = abs((sl - entry) / entry) * 100
         
@@ -438,6 +448,10 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
     if direction == MultiTimeframeDirection.NEUTRAL:
         return None
 
+    # Prevent negative or zero values in calculations
+    if mid <= 0:
+        return None
+
     min_distance = mid * 0.015
     max_distance = mid * 0.05
 
@@ -446,6 +460,9 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         resistances, supports = get_valid_levels(timeframe, min_distance, max_distance)
         if resistances and supports:
             side, tp, sl = get_trade_levels(direction, resistances, supports)
-            return format_trade(coin, side, mid, tp, sl)
+            if side and tp and sl:  # Add safety check for None values
+                formatted_trade = format_trade(coin, side, mid, tp, sl)
+                if formatted_trade:
+                    return formatted_trade
 
     return None
