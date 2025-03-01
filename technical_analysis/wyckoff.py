@@ -7,12 +7,11 @@ from .wyckoff_types import (
     CompositeAction, WyckoffSign, FundingState, VolumeState, Timeframe
 )
 from .funding_rates_cache import FundingRateEntry
-from statistics import mean
 from .wyckoff_description import generate_wyckoff_description
-from utils import log_execution_time
 from dataclasses import dataclass
 from logging_utils import logger
 from .adaptive_thresholds import AdaptiveThresholdManager
+
 
 # Constants for Wyckoff analysis
 VOLUME_THRESHOLD: Final[float] = 1.7  # Increased from 1.5 for more significance with larger dataset
@@ -169,7 +168,13 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         # Volume analysis (VSA)
         volume_spread = recent_df['v'] * (recent_df['h'] - recent_df['l'])
         volume_spread_ma = volume_spread.rolling(window=7).mean()
-        effort_vs_result = (recent_df['c'] - recent_df['o']) / (recent_df['h'] - recent_df['l'])
+        effort_vs_result = pd.Series([0.0] * len(recent_df), index=recent_df.index)
+        price_range_mask = (recent_df['h'] - recent_df['l']) > 0
+        if price_range_mask.any():
+            effort_vs_result[price_range_mask] = (
+                (recent_df['c'] - recent_df['o']) / 
+                (recent_df['h'] - recent_df['l'])
+            )[price_range_mask]
         
         # Get current values
         avg_price = price_sma.iloc[-1]
@@ -361,44 +366,6 @@ def identify_wyckoff_phase(
         price_strength, momentum_strength, is_high_volume, volatility, timeframe
     )
 
-def _adjust_thresholds(
-    is_very_strong_move: bool, is_strong_move: bool,
-    volatility: pd.Series, avg_volatility: float,
-    momentum_threshold: float, effort_threshold: float, volume_threshold: float
-) -> Tuple[float, float, float]:
-    """Adjust thresholds with enhanced intraday sensitivity."""
-    
-    # Calculate intraday volatility ratio
-    recent_volatility = volatility.iloc[-12:].std()  # Last 12 periods
-    volatility_ratio = recent_volatility / volatility.std()
-    
-    # Dynamic adjustments based on intraday volatility
-    if volatility_ratio > 1.5:  # High intraday volatility
-        momentum_threshold *= 0.7  # More sensitive
-        effort_threshold *= 0.8
-        volume_threshold *= 1.2  # Require more volume confirmation
-    elif volatility_ratio < 0.7:  # Low intraday volatility
-        momentum_threshold *= 1.2  # Less sensitive
-        effort_threshold *= 1.1
-        volume_threshold *= 0.9  # Accept lower volume
-
-    # Existing price movement adjustments
-    if is_very_strong_move:
-        momentum_threshold *= 0.6
-        effort_threshold *= 0.7
-    elif is_strong_move:
-        momentum_threshold *= 0.8
-        effort_threshold *= 0.85
-
-    # Enhanced volatility factor calculation
-    volatility_factor = min(2.0, (1.0 + volatility.iloc[-1] / avg_volatility) * volatility_ratio)
-    
-    # Final adjustments with volatility factor
-    return (
-        momentum_threshold * (1.0 + volatility_factor * 0.2),
-        effort_threshold * (1.0 / volatility_factor),
-        volume_threshold * volatility_factor
-    )
 
 def determine_phase_by_price_strength(
     price_strength: float, momentum_strength: float, 
@@ -664,40 +631,41 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
     
     # Convert to numpy array with error handling
     rates = np.array([
-        (1 + max(min(rate.funding_rate, 100), -100)) ** 8760 - 1  # Limit extreme values
+        (1 + np.clip(rate.funding_rate, -0.5, 0.5)) ** 8760 - 1  # More reasonable clipping for extreme values
         for rate in funding_rates
     ])
     times = np.array([rate.time for rate in funding_rates])
     
-    # Remove outliers using IQR method
+    # Improve outlier detection for crypto's volatile funding rates
+    # Use a wider IQR multiplier (2.0 instead of 1.5) to accommodate crypto's naturally higher volatility
     q1, q3 = np.percentile(rates, [25, 75])
     iqr = q3 - q1
-    mask = (rates >= q1 - 1.5 * iqr) & (rates <= q3 + 1.5 * iqr)
+    mask = (rates >= q1 - 2.0 * iqr) & (rates <= q3 + 2.0 * iqr)
     rates = rates[mask]
     times = times[mask]
     
     if len(rates) < 3:  # Check if we still have enough data after outlier removal
         return FundingState.UNKNOWN
     
-    # Non-linear time weighting (emphasizes recent values more)
+    # Decay factor adjusted for crypto's faster-changing funding environment
     time_diff_hours = (now - times) / (1000 * 3600)
-    weights = 1 / (1 + np.exp(0.5 * time_diff_hours - 2))  # Steeper sigmoid curve
+    weights = 1 / (1 + np.exp(0.75 * time_diff_hours - 2))  # Steeper curve (0.75 instead of 0.5)
     
     # Calculate weighted average with normalization
     avg_funding = np.sum(rates * weights) / np.sum(weights)
 
-    # Determine state with granular thresholds
+    # Use crypto-specific thresholds (more granularity in the slightly positive/negative range)
     if avg_funding > 0.25:
         return FundingState.HIGHLY_POSITIVE
     elif avg_funding > 0.1:
         return FundingState.POSITIVE
-    elif avg_funding > 0.02:
+    elif avg_funding > 0.015:  # Reduced from 0.02 - more sensitive for crypto
         return FundingState.SLIGHTLY_POSITIVE
     elif avg_funding < -0.25:
         return FundingState.HIGHLY_NEGATIVE
     elif avg_funding < -0.1:
         return FundingState.NEGATIVE
-    elif avg_funding < -0.02:
+    elif avg_funding < -0.015:  # Reduced from 0.02
         return FundingState.SLIGHTLY_NEGATIVE
     else:
         return FundingState.NEUTRAL
