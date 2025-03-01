@@ -88,7 +88,7 @@ class AdaptiveThresholdManager:
                 "effort_threshold": effort_threshold
             }
         except Exception as e:
-            logger.warning(f"Error calculating liquidation thresholds: {e}")
+            logger.warning(f"Error calculating liquidation thresholds: {e}", exc_info=True)
             return {
                 "vol_threshold": 2.5, 
                 "price_threshold": 0.04,
@@ -126,5 +126,5 @@ class AdaptiveThresholdManager:
             base_threshold = 0.015
             return max(0.01, base_threshold * (1 + volatility_factor * 5) * timeframe_factor)
         except Exception as e:
-            logger.warning(f"Error calculating breakout threshold: {e}")
+            logger.warning(f"Error calculating breakout threshold: {e}", exc_info=True)
             return 0.015
