@@ -2,7 +2,7 @@ import pandas as pd  # type: ignore[import]
 import numpy as np
 import os
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Any, Final, Set
+from typing import Dict, List, Optional, Tuple, Any, Final
 from dataclasses import dataclass
 from .wyckoff_multi_timeframe_description import generate_all_timeframes_description
 from .wyckoff_types import SignificantLevelsData
@@ -13,6 +13,7 @@ from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframe
 
 from .wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, _TIMEFRAME_SETTINGS,
+    is_bearish_action, is_bullish_action, is_bearish_phase, is_bullish_phase,
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
 )
 
@@ -23,36 +24,6 @@ from .wyckoff_multi_timeframe_types import (
     SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT,
     DIRECTIONAL_WEIGHT, VOLUME_WEIGHT, PHASE_WEIGHT
 )
-
-# Constant phase categorizations to avoid duplication and ensure consistency
-BULLISH_PHASES: Set[WyckoffPhase] = {WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION}
-BEARISH_PHASES: Set[WyckoffPhase] = {WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION}
-BULLISH_ACTIONS: Set[CompositeAction] = {CompositeAction.MARKING_UP, CompositeAction.ACCUMULATING}
-BEARISH_ACTIONS: Set[CompositeAction] = {CompositeAction.MARKING_DOWN, CompositeAction.DISTRIBUTING}
-
-def get_phase_weight(timeframe: Timeframe) -> float:
-    """Get the weight for each timeframe's contribution to analysis."""
-    return timeframe.settings.phase_weight
-
-
-def is_bullish_phase(phase: WyckoffPhase) -> bool:
-    """Check if the given phase is bullish."""
-    return phase in BULLISH_PHASES
-
-
-def is_bearish_phase(phase: WyckoffPhase) -> bool:
-    """Check if the given phase is bearish."""
-    return phase in BEARISH_PHASES
-
-
-def is_bullish_action(action: CompositeAction) -> bool:
-    """Check if the given action is bullish."""
-    return action in BULLISH_ACTIONS
-
-
-def is_bearish_action(action: CompositeAction) -> bool:
-    """Check if the given action is bearish."""
-    return action in BEARISH_ACTIONS
 
 
 def _is_phase_confirming_momentum(analysis: TimeframeGroupAnalysis) -> bool:
@@ -202,7 +173,7 @@ def _analyze_timeframe_group(
     rapid_bearish_moves = 0
 
     for tf, state in group.items():
-        weight = get_phase_weight(tf)
+        weight = tf.settings.phase_weight
             
         # Detect potential exhaustion based on phase combinations
         if (state.phase == WyckoffPhase.MARKUP and 
@@ -432,7 +403,7 @@ def _analyze_timeframe_group(
 
 def _calculate_group_weight(timeframes: Dict[Timeframe, WyckoffState]) -> float:
     """Calculate total weight for a timeframe group based on phase weights."""
-    return sum(get_phase_weight(tf) for tf in timeframes.keys())
+    return sum(tf.settings.phase_weight for tf in timeframes.keys())
 
 def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> float:
     """Calculate alignment across all timeframe groups with improved weighting."""

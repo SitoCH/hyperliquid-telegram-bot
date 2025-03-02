@@ -1,6 +1,6 @@
 from enum import Enum, auto
 from dataclasses import dataclass
-from typing import Optional, Dict, TypedDict, List
+from typing import Optional, Dict, TypedDict, List, Set
 import pandas as pd  # type: ignore[import]
 
 class WyckoffPhase(Enum):
@@ -65,6 +65,32 @@ class CompositeAction(Enum):
     REVERSING = "showing reversal signals"    # New
     NEUTRAL = "showing no clear directional activity"
     UNKNOWN = "unknown"
+
+# Constant phase categorizations to avoid duplication and ensure consistency
+BULLISH_PHASES: Set[WyckoffPhase] = {WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION}
+BEARISH_PHASES: Set[WyckoffPhase] = {WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION}
+BULLISH_ACTIONS: Set[CompositeAction] = {CompositeAction.MARKING_UP, CompositeAction.ACCUMULATING}
+BEARISH_ACTIONS: Set[CompositeAction] = {CompositeAction.MARKING_DOWN, CompositeAction.DISTRIBUTING}
+
+
+def is_bullish_phase(phase: WyckoffPhase) -> bool:
+    """Check if the given phase is bullish."""
+    return phase in BULLISH_PHASES
+
+
+def is_bearish_phase(phase: WyckoffPhase) -> bool:
+    """Check if the given phase is bearish."""
+    return phase in BEARISH_PHASES
+
+
+def is_bullish_action(action: CompositeAction) -> bool:
+    """Check if the given action is bullish."""
+    return action in BULLISH_ACTIONS
+
+
+def is_bearish_action(action: CompositeAction) -> bool:
+    """Check if the given action is bearish."""
+    return action in BEARISH_ACTIONS
 
 class FundingState(Enum):
     HIGHLY_POSITIVE = "highly positive"
