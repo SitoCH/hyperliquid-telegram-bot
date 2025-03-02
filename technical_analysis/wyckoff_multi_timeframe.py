@@ -333,25 +333,38 @@ def _analyze_timeframe_group(
     volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
 
     # Enhanced momentum bias calculation with exhaustion consideration
-    bullish_signals = sum(1 for s in group.values() if (
+    bullish_signals = float(sum(1 for s in group.values() if (
         (s.phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP] and upside_exhaustion < len(group) // 2) or 
         s.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.MARKING_UP] or
         (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKDOWN) or
         (s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH) or
         (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN)
-    ))
+    )))
 
-    bearish_signals = sum(1 for s in group.values() if (
+    bearish_signals = float(sum(1 for s in group.values() if (
         (s.phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] and downside_exhaustion < len(group) // 2) or 
         s.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.MARKING_DOWN] or
         (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKUP) or
         (s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH) or
         (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP)
-    ))
+    )))
 
     # Adjust momentum bias based on exhaustion signals
     consolidation_count = sum(1 for s in group.values() if s.composite_action == CompositeAction.CONSOLIDATING)
     total_signals = len(group)
+
+    # Phase dominance check - ensure momentum bias respects dominant phase
+    phase_momentum_override = None
+    if dominant_phase == WyckoffPhase.MARKDOWN or dominant_phase == WyckoffPhase.DISTRIBUTION:
+        # Strong bearish phase should limit bullish bias
+        if bullish_signals > bearish_signals and not dominant_phase_is_uncertain:
+            bearish_signals = max(bearish_signals, bullish_signals * 0.8)  # Adjust bullish signals down
+            phase_momentum_override = MultiTimeframeDirection.BEARISH
+    elif dominant_phase == WyckoffPhase.MARKUP or dominant_phase == WyckoffPhase.ACCUMULATION:
+        # Strong bullish phase should limit bearish bias  
+        if bearish_signals > bullish_signals and not dominant_phase_is_uncertain:
+            bullish_signals = max(bullish_signals, bearish_signals * 0.8)  # Adjust bearish signals down  
+            phase_momentum_override = MultiTimeframeDirection.BULLISH
 
     # Modified momentum bias calculation
     if consolidation_count / total_signals > 0.5:
@@ -369,11 +382,15 @@ def _analyze_timeframe_group(
                 MultiTimeframeDirection.NEUTRAL
             )
 
-    # Modify momentum bias calculation
+    # Modify momentum bias calculation for rapid moves
     if rapid_bullish_moves >= len(group) // 2:
         momentum_bias = MultiTimeframeDirection.BULLISH
     elif rapid_bearish_moves >= len(group) // 2:
         momentum_bias = MultiTimeframeDirection.BEARISH
+        
+    # Apply phase override after all other checks
+    if phase_momentum_override is not None:
+        momentum_bias = phase_momentum_override
 
     return TimeframeGroupAnalysis(
         dominant_phase=dominant_phase,
@@ -603,6 +620,17 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
                                                           for tf in LONG_TERM_TIMEFRAMES}]
     }
 
+    # Count dominant phases and ensure overall direction respects market structure
+    bullish_phases = sum(1 for a in analyses if a.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION])
+    bearish_phases = sum(1 for a in analyses if a.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION])
+    
+    # Market structure consistency check
+    market_structure_bias = None
+    if bearish_phases > bullish_phases and bearish_phases >= len(analyses) / 3:  # Make threshold more lenient
+        market_structure_bias = MultiTimeframeDirection.BEARISH
+    elif bullish_phases > bearish_phases and bullish_phases >= len(analyses) / 3:
+        market_structure_bias = MultiTimeframeDirection.BULLISH
+
     def get_weighted_direction(group: List[TimeframeGroupAnalysis]) -> Tuple[MultiTimeframeDirection, float, float]:
         if not group:
             return MultiTimeframeDirection.NEUTRAL, 0.0, 0.0
@@ -615,7 +643,12 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
             direction: sum(
                 (a.group_weight / group_total_weight) * 
                 (1 + a.volume_strength * 0.3) *  # Volume boost
-                (1.2 if a.volatility_state == VolatilityState.HIGH else 1.0)  # Volatility adjustment
+                (1.2 if a.volatility_state == VolatilityState.HIGH else 1.0) *  # Volatility adjustment
+                # Phase consistency factor
+                (0.7 if direction == MultiTimeframeDirection.BULLISH and 
+                      a.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION] else
+                 0.7 if direction == MultiTimeframeDirection.BEARISH and
+                      a.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION] else 1.0)
                 for a in group
                 if a.momentum_bias == direction
             )
@@ -637,6 +670,9 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
         if st_weight > 0.8 and st_vol > 0.7:  # Strong short-term move with volume
             if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_dir != st_dir:
                 return MultiTimeframeDirection.NEUTRAL  # Conflict with intermediate trend
+            # Market structure consistency check
+            if market_structure_bias and market_structure_bias != st_dir:
+                return MultiTimeframeDirection.NEUTRAL  # Conflict with market structure
             return st_dir
 
     # Check for strong intermediate trend
@@ -644,23 +680,42 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
         # Allow counter-trend short-term moves if volume is low
         if st_dir != MultiTimeframeDirection.NEUTRAL and st_dir != mid_dir:
             if st_vol < 0.5:  # Low volume counter-trend move
+                # Market structure consistency check
+                if market_structure_bias and market_structure_bias != mid_dir:
+                    return MultiTimeframeDirection.NEUTRAL
                 return mid_dir
             return MultiTimeframeDirection.NEUTRAL  # High volume conflict
+        # Market structure consistency check
+        if market_structure_bias and market_structure_bias != mid_dir:
+            return MultiTimeframeDirection.NEUTRAL
         return mid_dir
 
     # Consider longer-term trend with confirmation
     if lt_dir != MultiTimeframeDirection.NEUTRAL and lt_weight > 0.6:
         # Need confirmation from either shorter timeframe
         if mid_dir == lt_dir or st_dir == lt_dir:
+            # Market structure consistency check
+            if market_structure_bias and market_structure_bias != lt_dir:
+                return MultiTimeframeDirection.NEUTRAL
             return lt_dir
         # Check if counter-trend moves are weak
         if mid_vol < 0.5 and st_vol < 0.5:
+            # Market structure consistency check
+            if market_structure_bias and market_structure_bias != lt_dir:
+                return MultiTimeframeDirection.NEUTRAL
             return lt_dir
 
     # Check for aligned moves even with lower weights
     if st_dir == mid_dir and mid_dir == lt_dir and st_dir != MultiTimeframeDirection.NEUTRAL:
         if (st_weight + mid_weight + lt_weight) / 3 > 0.5:  # Average weight threshold
+            # Market structure consistency check
+            if market_structure_bias and market_structure_bias != st_dir:
+                return MultiTimeframeDirection.NEUTRAL
             return st_dir
+
+    # When in doubt, respect market structure
+    if market_structure_bias:
+        return market_structure_bias
 
     return MultiTimeframeDirection.NEUTRAL
 
@@ -678,6 +733,21 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     if not analyses:
         return 0.0
 
+    # Check for phase inconsistency with direction
+    phase_direction_conflict = False
+    for analysis in analyses:
+        if (overall_direction == MultiTimeframeDirection.BULLISH and
+            analysis.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]):
+            phase_direction_conflict = True
+            break
+        elif (overall_direction == MultiTimeframeDirection.BEARISH and
+              analysis.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]):
+            phase_direction_conflict = True
+            break
+    
+    # If there's a conflict, reduce overall momentum intensity
+    conflict_penalty = 0.6 if phase_direction_conflict else 1.0
+
     # Get directional scores for each timeframe group
     directional_scores = []
     hourly_volume_boost = 1.0  # Will be adjusted based on short-term volume
@@ -690,6 +760,14 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
             base_score = 0.5
         else:
             base_score = 0.0
+
+        # Phase consistency penalty
+        if (overall_direction == MultiTimeframeDirection.BULLISH and
+            analysis.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]):
+            base_score *= 0.7  # Penalize bullish direction in bearish phase
+        elif (overall_direction == MultiTimeframeDirection.BEARISH and
+              analysis.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]):
+            base_score *= 0.7  # Penalize bearish direction in bullish phase
 
         # Volume confirmation boost
         volume_boost = 1.0 + (analysis.volume_strength * 0.3)
@@ -725,6 +803,6 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
 
     weighted_momentum = sum(score * weight for score, weight in directional_scores) / total_weight
     
-    # Apply hourly volume boost and clamp final value
-    final_momentum = min(1.0, weighted_momentum * hourly_volume_boost)
+    # Apply hourly volume boost, conflict penalty and clamp final value
+    final_momentum = min(1.0, weighted_momentum * hourly_volume_boost * conflict_penalty)
     return max(0.0, final_momentum)
