@@ -118,14 +118,14 @@ def analyze_multi_timeframe(
             (all_analysis.short_term.volatility_state != VolatilityState.HIGH or all_analysis.intermediate.volatility_state != VolatilityState.HIGH) and
             all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL and
             # Additional volume criteria
-            all_analysis.short_term.volume_strength >= 0.6 and
-            all_analysis.intermediate.volume_strength >= 0.5 and
+            all_analysis.short_term.volume_strength >= 0.55 and
+            all_analysis.intermediate.volume_strength >= 0.50 and
             # Avoid uncertain phases in key timeframes
             not all_analysis.short_term.uncertain_phase and
             not all_analysis.intermediate.uncertain_phase and
             # Ensure internal alignment is strong enough
-            all_analysis.short_term.internal_alignment >= 0.6 and
-            all_analysis.intermediate.internal_alignment >= 0.55
+            all_analysis.short_term.internal_alignment >= 0.55 and
+            all_analysis.intermediate.internal_alignment >= 0.50
         )
 
         return MultiTimeframeContext(
