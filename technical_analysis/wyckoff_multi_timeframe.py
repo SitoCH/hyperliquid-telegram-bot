@@ -2,7 +2,7 @@ import pandas as pd  # type: ignore[import]
 import numpy as np
 import os
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Any, Final
+from typing import Dict, List, Optional, Tuple, Any, Final, Set
 from dataclasses import dataclass
 from .wyckoff_multi_timeframe_description import generate_all_timeframes_description
 from .wyckoff_types import SignificantLevelsData
@@ -24,20 +24,43 @@ from .wyckoff_multi_timeframe_types import (
     DIRECTIONAL_WEIGHT, VOLUME_WEIGHT, PHASE_WEIGHT
 )
 
+# Constant phase categorizations to avoid duplication and ensure consistency
+BULLISH_PHASES: Set[WyckoffPhase] = {WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION}
+BEARISH_PHASES: Set[WyckoffPhase] = {WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION}
+BULLISH_ACTIONS: Set[CompositeAction] = {CompositeAction.MARKING_UP, CompositeAction.ACCUMULATING}
+BEARISH_ACTIONS: Set[CompositeAction] = {CompositeAction.MARKING_DOWN, CompositeAction.DISTRIBUTING}
+
 def get_phase_weight(timeframe: Timeframe) -> float:
     """Get the weight for each timeframe's contribution to analysis."""
     return timeframe.settings.phase_weight
 
 
+def is_bullish_phase(phase: WyckoffPhase) -> bool:
+    """Check if the given phase is bullish."""
+    return phase in BULLISH_PHASES
+
+
+def is_bearish_phase(phase: WyckoffPhase) -> bool:
+    """Check if the given phase is bearish."""
+    return phase in BEARISH_PHASES
+
+
+def is_bullish_action(action: CompositeAction) -> bool:
+    """Check if the given action is bullish."""
+    return action in BULLISH_ACTIONS
+
+
+def is_bearish_action(action: CompositeAction) -> bool:
+    """Check if the given action is bearish."""
+    return action in BEARISH_ACTIONS
+
+
 def _is_phase_confirming_momentum(analysis: TimeframeGroupAnalysis) -> bool:
     """Check if the Wyckoff phase confirms the momentum bias."""
-    bullish_phases = {WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION}
-    bearish_phases = {WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION}
-    
     if analysis.momentum_bias == MultiTimeframeDirection.BULLISH:
-        return analysis.dominant_phase in bullish_phases
+        return is_bullish_phase(analysis.dominant_phase)
     elif analysis.momentum_bias == MultiTimeframeDirection.BEARISH:
-        return analysis.dominant_phase in bearish_phases
+        return is_bearish_phase(analysis.dominant_phase)
     return False
 
 
@@ -333,17 +356,18 @@ def _analyze_timeframe_group(
     volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
 
     # Enhanced momentum bias calculation with exhaustion consideration
+    # Using helper functions to avoid redundant phase checking
     bullish_signals = float(sum(1 for s in group.values() if (
-        (s.phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP] and upside_exhaustion < len(group) // 2) or 
-        s.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.MARKING_UP] or
+        (is_bullish_phase(s.phase) and upside_exhaustion < len(group) // 2) or 
+        is_bullish_action(s.composite_action) or
         (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKDOWN) or
         (s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH) or
         (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN)
     )))
 
     bearish_signals = float(sum(1 for s in group.values() if (
-        (s.phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] and downside_exhaustion < len(group) // 2) or 
-        s.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.MARKING_DOWN] or
+        (is_bearish_phase(s.phase) and downside_exhaustion < len(group) // 2) or 
+        is_bearish_action(s.composite_action) or
         (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKUP) or
         (s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH) or
         (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP)
@@ -355,12 +379,12 @@ def _analyze_timeframe_group(
 
     # Phase dominance check - ensure momentum bias respects dominant phase
     phase_momentum_override = None
-    if dominant_phase == WyckoffPhase.MARKDOWN or dominant_phase == WyckoffPhase.DISTRIBUTION:
+    if is_bearish_phase(dominant_phase):
         # Strong bearish phase should limit bullish bias
         if bullish_signals > bearish_signals and not dominant_phase_is_uncertain:
             bearish_signals = max(bearish_signals, bullish_signals * 0.8)  # Adjust bullish signals down
             phase_momentum_override = MultiTimeframeDirection.BEARISH
-    elif dominant_phase == WyckoffPhase.MARKUP or dominant_phase == WyckoffPhase.ACCUMULATION:
+    elif is_bullish_phase(dominant_phase):
         # Strong bullish phase should limit bearish bias  
         if bearish_signals > bullish_signals and not dominant_phase_is_uncertain:
             bullish_signals = max(bullish_signals, bearish_signals * 0.8)  # Adjust bearish signals down  
@@ -434,20 +458,16 @@ def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> floa
                 phase_aligned = 1.0  # Perfect alignment
             elif analysis1.dominant_phase.value.replace('~', '') == analysis2.dominant_phase.value.replace('~', ''):
                 phase_aligned = 0.75  # Possible phase alignment
-            elif (analysis1.dominant_phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP] and
-                  analysis2.dominant_phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.MARKUP]) or \
-                 (analysis1.dominant_phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN] and
-                  analysis2.dominant_phase in [WyckoffPhase.DISTRIBUTION, WyckoffPhase.MARKDOWN]):
+            elif (is_bullish_phase(analysis1.dominant_phase) and is_bullish_phase(analysis2.dominant_phase)) or \
+                 (is_bearish_phase(analysis1.dominant_phase) and is_bearish_phase(analysis2.dominant_phase)):
                 phase_aligned = 0.5  # General agreement on bullish/bearish phase
 
             # Action Alignment Scoring: Refined logic
             action_aligned = 0.0
             if analysis1.dominant_action == analysis2.dominant_action:
                 action_aligned = 1.0
-            elif (analysis1.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.ACCUMULATING] and
-                  analysis2.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.ACCUMULATING]) or \
-                 (analysis1.dominant_action in [CompositeAction.MARKING_DOWN, CompositeAction.DISTRIBUTING] and
-                  analysis2.dominant_action in [CompositeAction.MARKING_DOWN, CompositeAction.DISTRIBUTING]):
+            elif (is_bullish_action(analysis1.dominant_action) and is_bullish_action(analysis2.dominant_action)) or \
+                 (is_bearish_action(analysis1.dominant_action) and is_bearish_action(analysis2.dominant_action)):
                 action_aligned = 0.6  # Agreement on bullish/bearish action
 
             # Momentum Bias Alignment: Simplified
@@ -621,8 +641,8 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
     }
 
     # Count dominant phases and ensure overall direction respects market structure
-    bullish_phases = sum(1 for a in analyses if a.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION])
-    bearish_phases = sum(1 for a in analyses if a.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION])
+    bullish_phases = sum(1 for a in analyses if is_bullish_phase(a.dominant_phase))
+    bearish_phases = sum(1 for a in analyses if is_bearish_phase(a.dominant_phase))
     
     # Market structure consistency check
     market_structure_bias = None
@@ -646,9 +666,9 @@ def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Mult
                 (1.2 if a.volatility_state == VolatilityState.HIGH else 1.0) *  # Volatility adjustment
                 # Phase consistency factor
                 (0.7 if direction == MultiTimeframeDirection.BULLISH and 
-                      a.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION] else
+                      is_bearish_phase(a.dominant_phase) else
                  0.7 if direction == MultiTimeframeDirection.BEARISH and
-                      a.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION] else 1.0)
+                      is_bullish_phase(a.dominant_phase) else 1.0)
                 for a in group
                 if a.momentum_bias == direction
             )
@@ -737,11 +757,11 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     phase_direction_conflict = False
     for analysis in analyses:
         if (overall_direction == MultiTimeframeDirection.BULLISH and
-            analysis.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]):
+            is_bearish_phase(analysis.dominant_phase)):
             phase_direction_conflict = True
             break
         elif (overall_direction == MultiTimeframeDirection.BEARISH and
-              analysis.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]):
+              is_bullish_phase(analysis.dominant_phase)):
             phase_direction_conflict = True
             break
     
@@ -763,10 +783,10 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
 
         # Phase consistency penalty
         if (overall_direction == MultiTimeframeDirection.BULLISH and
-            analysis.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]):
+            is_bearish_phase(analysis.dominant_phase)):
             base_score *= 0.7  # Penalize bullish direction in bearish phase
         elif (overall_direction == MultiTimeframeDirection.BEARISH and
-              analysis.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]):
+              is_bullish_phase(analysis.dominant_phase)):
             base_score *= 0.7  # Penalize bearish direction in bullish phase
 
         # Volume confirmation boost
@@ -775,9 +795,9 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         # Phase confirmation bonus
         phase_aligned = False
         if overall_direction == MultiTimeframeDirection.BULLISH:
-            phase_aligned = analysis.dominant_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION]
+            phase_aligned = is_bullish_phase(analysis.dominant_phase)
         elif overall_direction == MultiTimeframeDirection.BEARISH:
-            phase_aligned = analysis.dominant_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION]
+            phase_aligned = is_bearish_phase(analysis.dominant_phase)
         phase_boost = 1.2 if phase_aligned else 1.0
 
         # Funding rate impact (more weight for shorter timeframes)
