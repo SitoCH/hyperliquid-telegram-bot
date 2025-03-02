@@ -2,7 +2,7 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Final
 
-from .wyckoff_types import (
+from technical_analysis.wyckoff_types import (
     WyckoffPhase, CompositeAction, MarketLiquidity,
     LiquidationRisk, VolatilityState, Timeframe, _TIMEFRAME_SETTINGS
 )

@@ -5,13 +5,15 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any, Final
 from dataclasses import dataclass
 from .wyckoff_multi_timeframe_description import generate_all_timeframes_description
-from .wyckoff_types import SignificantLevelsData
+from technical_analysis.wyckoff_types import SignificantLevelsData
 from logging_utils import logger
 
+from .mtf_direction import determine_overall_direction
+from .mtf_alignment import calculate_overall_alignment, calculate_overall_confidence
 
 from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext
 
-from .wyckoff_types import (
+from technical_analysis.wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, _TIMEFRAME_SETTINGS,
     is_bearish_action, is_bullish_action, is_bearish_phase, is_bullish_phase,
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
@@ -67,7 +69,7 @@ def analyze_multi_timeframe(
         context_analysis.group_weight = _calculate_group_weight(context)
 
         # Calculate overall direction with all timeframes
-        overall_direction = _determine_overall_direction([
+        overall_direction = determine_overall_direction([
             short_term_analysis, 
             intermediate_analysis, 
             long_term_analysis,
@@ -90,13 +92,13 @@ def analyze_multi_timeframe(
             context=context_analysis,
             overall_direction=overall_direction,
             momentum_intensity=momentum_intensity,
-            confidence_level=_calculate_overall_confidence([
+            confidence_level= calculate_overall_confidence([
                 short_term_analysis, 
                 intermediate_analysis, 
                 long_term_analysis,
                 context_analysis
             ]),
-            alignment_score=_calculate_overall_alignment([
+            alignment_score= calculate_overall_alignment([
                 short_term_analysis, 
                 intermediate_analysis, 
                 long_term_analysis,
@@ -401,314 +403,11 @@ def _analyze_timeframe_group(
         volatility_state=volatility_state
     )
 
+
 def _calculate_group_weight(timeframes: Dict[Timeframe, WyckoffState]) -> float:
     """Calculate total weight for a timeframe group based on phase weights."""
     return sum(tf.settings.phase_weight for tf in timeframes.keys())
 
-def _calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> float:
-    """Calculate alignment across all timeframe groups with improved weighting."""
-    valid_analyses = [a for a in analyses if a is not None]
-    if len(valid_analyses) < 2:
-        return 0.0
-
-    total_weight = sum(analysis.group_weight for analysis in valid_analyses)
-    if total_weight == 0:
-        return 0.0
-
-    alignment_scores = []
-    comparison_count = 0
-
-    for i, analysis1 in enumerate(valid_analyses):
-        for j, analysis2 in enumerate(valid_analyses[i + 1:], i + 1):
-            comparison_count += 1
-            weight = (analysis1.group_weight + analysis2.group_weight) / total_weight
-
-            # Phase Alignment Scoring: More nuanced approach
-            phase_aligned = 0.0
-            if analysis1.dominant_phase == analysis2.dominant_phase:
-                phase_aligned = 1.0  # Perfect alignment
-            elif analysis1.dominant_phase.value.replace('~', '') == analysis2.dominant_phase.value.replace('~', ''):
-                phase_aligned = 0.75  # Possible phase alignment
-            elif (is_bullish_phase(analysis1.dominant_phase) and is_bullish_phase(analysis2.dominant_phase)) or \
-                 (is_bearish_phase(analysis1.dominant_phase) and is_bearish_phase(analysis2.dominant_phase)):
-                phase_aligned = 0.5  # General agreement on bullish/bearish phase
-
-            # Action Alignment Scoring: Refined logic
-            action_aligned = 0.0
-            if analysis1.dominant_action == analysis2.dominant_action:
-                action_aligned = 1.0
-            elif (is_bullish_action(analysis1.dominant_action) and is_bullish_action(analysis2.dominant_action)) or \
-                 (is_bearish_action(analysis1.dominant_action) and is_bearish_action(analysis2.dominant_action)):
-                action_aligned = 0.6  # Agreement on bullish/bearish action
-
-            # Momentum Bias Alignment: Simplified
-            bias_aligned = 1.0 if analysis1.momentum_bias == analysis2.momentum_bias else 0.0
-            if analysis1.momentum_bias != MultiTimeframeDirection.NEUTRAL and analysis2.momentum_bias != MultiTimeframeDirection.NEUTRAL:
-                bias_aligned = 0.5 if analysis1.momentum_bias != analysis2.momentum_bias else 1.0
-
-            # Volume Agreement: More direct comparison
-            volume_agreement = 1 - abs(analysis1.volume_strength - analysis2.volume_strength)
-
-            # Composite Score: Adjusted Weights
-            alignment_score = (
-                phase_aligned * 0.40 +  # Phase alignment (40%)
-                action_aligned * 0.30 +  # Action alignment (30%)
-                bias_aligned * 0.20 +  # Bias alignment (20%)
-                volume_agreement * 0.10  # Volume agreement (10%)
-            )
-
-            alignment_scores.append(alignment_score * weight)
-
-    if not alignment_scores:
-        return 0.0
-
-    return sum(alignment_scores) / comparison_count
-
-def _calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
-    """Calculate overall confidence with enhanced intraday sensitivity."""
-    if not analyses:
-        return 0.0
-
-    total_weight = sum(analysis.group_weight for analysis in analyses)
-    if total_weight == 0:
-        return 0.0
-
-    # Adjusted weights for intraday focus
-    alignment_weight = 0.25     # Reduced from 0.30
-    volume_weight = 0.35       # Unchanged
-    consistency_weight = 0.25  # Reduced from 0.35
-    intraday_weight = 0.15    # New component
-
-    # Group analyses by timeframe
-    timeframe_groups = {
-        'short': [a for a in analyses if a.group_weight in {
-            _TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES
-        }],
-        'intermediate': [a for a in analyses if a.group_weight in {
-            _TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES
-        }],
-        'long': [a for a in analyses if a.group_weight in {
-            _TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES
-        }],
-        'context': [a for a in analyses if a.group_weight in {
-            _TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES
-        }]
-    }
-
-    # Enhanced volume confirmation with intraday focus
-    volume_scores = []
-    for analysis in analyses:
-        # Base volume score
-        base_score = analysis.volume_strength
-        
-        # Stronger boost for intraday volume confirmation
-        if analysis in timeframe_groups['short'] or analysis in timeframe_groups['intermediate']:
-            if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
-                base_score *= 1.3  # Increased from 1.2
-            elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
-                base_score *= 1.2  # Increased from 1.1
-                
-        volume_scores.append(base_score * (analysis.group_weight / total_weight))
-
-    volume_confirmation = sum(volume_scores)
-
-    # Enhanced trend consistency with group hierarchy
-    directional_scores = []
-
-    # Process groups in order of importance for crypto intraday trading
-    group_order = ['intermediate', 'short', 'long', 'context']
-    prev_bias = None
-
-    for group_name in group_order:
-        group = timeframe_groups[group_name]
-        for analysis in group:
-            # Base directional score
-            score = 1.0 if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL else 0.5
-
-            # Alignment bonus with previous timeframe
-            if prev_bias and analysis.momentum_bias == prev_bias:
-                if group_name in ['short', 'intermediate']:
-                    score *= 1.25  # Stronger bonus for intraday alignment
-                else:
-                    score *= 1.15
-
-            # Extra weight for strong momentum with volume
-            if analysis.volume_strength > 0.7 and analysis.internal_alignment > 0.6:
-                score *= 1.2
-            
-            directional_scores.append(score * (analysis.group_weight / total_weight))
-            prev_bias = analysis.momentum_bias
-
-    directional_agreement = sum(directional_scores)
-
-    # Calculate alignment score
-    alignment_score = _calculate_overall_alignment(analyses)
-
-    # New: Calculate intraday confidence
-    intraday_confidence = 0.0
-    if timeframe_groups['short'] and timeframe_groups['intermediate']:
-        short_analysis = timeframe_groups['short'][0]
-        intermediate_analysis = timeframe_groups['intermediate'][0]
-        
-        # Check for strong intraday alignment
-        if short_analysis.momentum_bias == intermediate_analysis.momentum_bias:
-            intraday_score = 1.0
-            # Boost for volume confirmation
-            if short_analysis.volume_strength > 0.7 and intermediate_analysis.volume_strength > 0.7:
-                intraday_score *= 1.2
-            # Boost for phase alignment
-            if short_analysis.dominant_phase == intermediate_analysis.dominant_phase:
-                intraday_score *= 1.15
-            intraday_confidence = min(1.0, intraday_score)
-        
-    # Add non-linear signal weighting for superior hourly quality
-    def nonlinear_activation(x, steepness=6.0, threshold=0.5):
-        """Apply non-linear activation to emphasize strong signals and suppress weak ones"""
-        return 1.0 / (1.0 + np.exp(-steepness * (x - threshold)))
-
-    # Apply non-linear scaling to individual components
-    volume_confirmation = nonlinear_activation(volume_confirmation, steepness=7.0, threshold=0.45)
-    directional_agreement = nonlinear_activation(directional_agreement, steepness=6.5, threshold=0.5)
-    alignment_score = nonlinear_activation(alignment_score, steepness=6.0, threshold=0.4)
-
-    # For intraday signals, use more aggressive thresholds to reduce noise
-    if intraday_confidence > 0:
-        intraday_confidence = nonlinear_activation(intraday_confidence, steepness=8.0, threshold=0.55)
-
-    # Combine scores with dynamic minimum threshold
-    raw_confidence = (
-        volume_confirmation * volume_weight +
-        directional_agreement * consistency_weight +
-        alignment_score * alignment_weight +
-        intraday_confidence * intraday_weight
-    )
-
-    # Dynamic minimum confidence based on volume and alignment
-    min_confidence = 0.35 if all(
-        a.volume_strength > 0.7 and 
-        a.internal_alignment > 0.65 and 
-        (a in timeframe_groups['short'] or a in timeframe_groups['intermediate'])
-        for a in analyses[:2]  # Check first two analyses
-    ) else 0.0
-    
-    # Apply sigmoid-like scaling with adjusted steepness for faster response
-    scaled_confidence = 1 / (1 + pow(2.0, -6 * (raw_confidence - 0.45)))
-
-    return max(min(scaled_confidence, 1.0), min_confidence)
-
-def _determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> MultiTimeframeDirection:
-    """Determine overall direction considering Wyckoff phase weights for each timeframe group."""
-    if not analyses:
-        return MultiTimeframeDirection.NEUTRAL
-
-    # Group timeframes by their actual settings in _TIMEFRAME_SETTINGS
-    timeframe_groups = {
-        'short': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight 
-                                                           for tf in SHORT_TERM_TIMEFRAMES}],
-        'mid': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight 
-                                                         for tf in INTERMEDIATE_TIMEFRAMES}],
-        'long': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight 
-                                                          for tf in LONG_TERM_TIMEFRAMES}]
-    }
-
-    # Count dominant phases and ensure overall direction respects market structure
-    bullish_phases = sum(1 for a in analyses if is_bullish_phase(a.dominant_phase))
-    bearish_phases = sum(1 for a in analyses if is_bearish_phase(a.dominant_phase))
-    
-    # Market structure consistency check
-    market_structure_bias = None
-    if bearish_phases > bullish_phases and bearish_phases >= len(analyses) / 3:  # Make threshold more lenient
-        market_structure_bias = MultiTimeframeDirection.BEARISH
-    elif bullish_phases > bearish_phases and bullish_phases >= len(analyses) / 3:
-        market_structure_bias = MultiTimeframeDirection.BULLISH
-
-    def get_weighted_direction(group: List[TimeframeGroupAnalysis]) -> Tuple[MultiTimeframeDirection, float, float]:
-        if not group:
-            return MultiTimeframeDirection.NEUTRAL, 0.0, 0.0
-
-        group_total_weight = sum(a.group_weight for a in group)
-        if group_total_weight == 0:
-            return MultiTimeframeDirection.NEUTRAL, 0.0, 0.0
-
-        weighted_signals = {
-            direction: sum(
-                (a.group_weight / group_total_weight) * 
-                (1 + a.volume_strength * 0.3) *  # Volume boost
-                (1.2 if a.volatility_state == VolatilityState.HIGH else 1.0) *  # Volatility adjustment
-                # Phase consistency factor
-                (0.7 if direction == MultiTimeframeDirection.BULLISH and 
-                      is_bearish_phase(a.dominant_phase) else
-                 0.7 if direction == MultiTimeframeDirection.BEARISH and
-                      is_bullish_phase(a.dominant_phase) else 1.0)
-                for a in group
-                if a.momentum_bias == direction
-            )
-            for direction in MultiTimeframeDirection
-        }
-        
-        strongest = max(weighted_signals.items(), key=lambda x: x[1])
-        avg_volume = sum(a.volume_strength for a in group) / len(group)
-
-        return strongest[0], strongest[1], avg_volume
-
-    # Get weighted directions with volume context
-    st_dir, st_weight, st_vol = get_weighted_direction(timeframe_groups['short'])
-    mid_dir, mid_weight, mid_vol = get_weighted_direction(timeframe_groups['mid'])
-    lt_dir, lt_weight, _ = get_weighted_direction(timeframe_groups['long'])
-
-    # Check for high-conviction intraday moves first
-    if st_dir != MultiTimeframeDirection.NEUTRAL:
-        if st_weight > 0.8 and st_vol > 0.7:  # Strong short-term move with volume
-            if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_dir != st_dir:
-                return MultiTimeframeDirection.NEUTRAL  # Conflict with intermediate trend
-            # Market structure consistency check
-            if market_structure_bias and market_structure_bias != st_dir:
-                return MultiTimeframeDirection.NEUTRAL  # Conflict with market structure
-            return st_dir
-
-    # Check for strong intermediate trend
-    if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_weight > 0.7:
-        # Allow counter-trend short-term moves if volume is low
-        if st_dir != MultiTimeframeDirection.NEUTRAL and st_dir != mid_dir:
-            if st_vol < 0.5:  # Low volume counter-trend move
-                # Market structure consistency check
-                if market_structure_bias and market_structure_bias != mid_dir:
-                    return MultiTimeframeDirection.NEUTRAL
-                return mid_dir
-            return MultiTimeframeDirection.NEUTRAL  # High volume conflict
-        # Market structure consistency check
-        if market_structure_bias and market_structure_bias != mid_dir:
-            return MultiTimeframeDirection.NEUTRAL
-        return mid_dir
-
-    # Consider longer-term trend with confirmation
-    if lt_dir != MultiTimeframeDirection.NEUTRAL and lt_weight > 0.6:
-        # Need confirmation from either shorter timeframe
-        if mid_dir == lt_dir or st_dir == lt_dir:
-            # Market structure consistency check
-            if market_structure_bias and market_structure_bias != lt_dir:
-                return MultiTimeframeDirection.NEUTRAL
-            return lt_dir
-        # Check if counter-trend moves are weak
-        if mid_vol < 0.5 and st_vol < 0.5:
-            # Market structure consistency check
-            if market_structure_bias and market_structure_bias != lt_dir:
-                return MultiTimeframeDirection.NEUTRAL
-            return lt_dir
-
-    # Check for aligned moves even with lower weights
-    if st_dir == mid_dir and mid_dir == lt_dir and st_dir != MultiTimeframeDirection.NEUTRAL:
-        if (st_weight + mid_weight + lt_weight) / 3 > 0.5:  # Average weight threshold
-            # Market structure consistency check
-            if market_structure_bias and market_structure_bias != st_dir:
-                return MultiTimeframeDirection.NEUTRAL
-            return st_dir
-
-    # When in doubt, respect market structure
-    if market_structure_bias:
-        return market_structure_bias
-
-    return MultiTimeframeDirection.NEUTRAL
 
 def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overall_direction: MultiTimeframeDirection) -> float:
     """

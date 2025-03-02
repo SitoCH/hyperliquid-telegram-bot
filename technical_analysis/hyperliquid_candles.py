@@ -21,9 +21,9 @@ from technical_analysis.candles_cache import get_candles_with_cache
 from technical_analysis.wyckoff_types import Timeframe, WyckoffState, SignificantLevelsData
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from technical_analysis.wykcoff_chart import generate_chart
-from technical_analysis.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe, MultiTimeframeDirection
+from technical_analysis.mtf.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe, MultiTimeframeDirection
 from hyperliquid_utils.hyperliquid_ratelimiter import hyperliquid_rate_limiter
-from .wyckoff_multi_timeframe_types import MODERATE_MOMENTUM
+from technical_analysis.mtf.wyckoff_multi_timeframe_types import MODERATE_MOMENTUM
 
 
 SELECTING_COIN_FOR_TA = range(1)
