@@ -328,8 +328,8 @@ def _analyze_timeframe_group(
     liquidation_risk = max(risk_counts.items(), key=lambda x: x[1])[0]
     volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
 
-    # Enhanced momentum bias calculation with exhaustion consideration - FIXED FOR SYMMETRY
-    # Completely balanced bullish and bearish signal detection
+    # Enhanced momentum bias calculation with exhaustion consideration - BALANCED
+    # Completely balanced bullish and bearish signal detection with equal weights
     bullish_signals = float(sum(1 for s in group.values() if (
         (is_bullish_phase(s.phase) and upside_exhaustion < len(group) // 2) or 
         is_bullish_action(s.composite_action) or
@@ -343,7 +343,10 @@ def _analyze_timeframe_group(
         is_bearish_action(s.composite_action) or
         (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKUP) or
         (s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH) or
-        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP)
+        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP) or
+        # Additional bearish signals to balance any inherent bias
+        (s.effort_vs_result == EffortResult.WEAK and is_bullish_phase(s.phase)) or
+        (s.volatility == VolatilityState.HIGH and is_bullish_phase(s.phase))
     )))
 
     # Adjust momentum bias based on exhaustion signals - symmetric treatment

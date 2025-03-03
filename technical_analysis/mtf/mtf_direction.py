@@ -38,7 +38,9 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
         'mid': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight 
                                                          for tf in INTERMEDIATE_TIMEFRAMES}],
         'long': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight 
-                                                          for tf in LONG_TERM_TIMEFRAMES}]
+                                                          for tf in LONG_TERM_TIMEFRAMES}],
+        'context': [a for a in analyses if a.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight
+                                                            for tf in CONTEXT_TIMEFRAMES}]
     }
 
     # Count dominant phases with equal treatment for bullish/bearish
