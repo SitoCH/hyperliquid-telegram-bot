@@ -48,9 +48,23 @@ def generate_wyckoff_description(
     if composite_action != CompositeAction.UNKNOWN and composite_action != CompositeAction.NEUTRAL:
         components.append(f"Composite operators {composite_action.value}")
     
-    # Add Wyckoff sign if present
+    # Add Wyckoff sign with expanded description
     if wyckoff_sign != WyckoffSign.NONE:
-        components.append(f"Wyckoff sign: {wyckoff_sign.value}")
+        sign_explanations = {
+            WyckoffSign.SELLING_CLIMAX: "Selling Climax (SC) - excessive selling near a potential bottom",
+            WyckoffSign.AUTOMATIC_RALLY: "Automatic Rally (AR) - technical bounce after a selling climax",
+            WyckoffSign.SECONDARY_TEST: "Secondary Test (ST) - retesting previous low with lower volume",
+            WyckoffSign.LAST_POINT_OF_SUPPORT: "Last Point of Support (LPS) - final test of support before markup",
+            WyckoffSign.SIGN_OF_STRENGTH: "Sign of Strength (SOS) - significant buying pressure after accumulation",
+            WyckoffSign.BUYING_CLIMAX: "Buying Climax (BC) - excessive buying near a potential top",
+            WyckoffSign.UPTHRUST: "Upthrust (UT) - failed move above resistance with rejection",
+            WyckoffSign.SECONDARY_TEST_RESISTANCE: "Secondary Test Resistance (STR) - test of previous high with lower volume",
+            WyckoffSign.LAST_POINT_OF_RESISTANCE: "Last Point of Supply (LPSY) - final supply test before markdown",
+            WyckoffSign.SIGN_OF_WEAKNESS: "Sign of Weakness (SOW) - significant selling pressure after distribution"
+        }
+        
+        explanation = sign_explanations.get(wyckoff_sign, wyckoff_sign.value)
+        components.append(explanation)
     
     # Add effort vs result analysis
     if effort_result == EffortResult.STRONG:
@@ -63,4 +77,4 @@ def generate_wyckoff_description(
         components.append(f"Funding rates are {funding_state.value}")
     
     # Combine all components
-    return " • ".join(components)
+    return "\n".join(components)
