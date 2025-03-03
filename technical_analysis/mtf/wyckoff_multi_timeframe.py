@@ -291,9 +291,10 @@ def _analyze_timeframe_group(
     volume_strength = max(0.0, min(1.0, volume_strength))
 
     # Adjust volume strength based on exhaustion signals - symmetric treatment
-    if upside_exhaustion >= len(group) // 2:
+    exhaustion_threshold = int(len(group) * 0.6)  # Increased from len(group) // 2 to be more conservative
+    if upside_exhaustion >= exhaustion_threshold:
         volume_strength *= 0.7
-    elif downside_exhaustion >= len(group) // 2:
+    elif downside_exhaustion >= exhaustion_threshold:
         volume_strength *= 0.7
     
     # Calculate funding sentiment (-1 to 1)
@@ -484,7 +485,7 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         # Track hourly volume for potential boost - identical for bullish/bearish
         if analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
             if analysis.volume_strength > 0.7:
-                hourly_volume_boost = 1.2
+                hourly_volume_boost = 1.15
 
     total_weight = sum(weight for _, weight in directional_scores)
     if total_weight == 0:

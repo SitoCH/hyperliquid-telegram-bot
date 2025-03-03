@@ -105,8 +105,8 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
     if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_weight > 0.7:
         # Allow counter-trend short-term moves if volume is low
         if st_dir != MultiTimeframeDirection.NEUTRAL and st_dir != mid_dir:
-            # Lower volume threshold to spot early reversals
-            if st_vol < 0.65:  # Raised from 0.5 to avoid missing early trend changes
+            # Lower volume threshold to spot early reversals while avoiding noise
+            if st_vol < 0.6:  # Adjusted from 0.65 to balance sensitivity vs. false signals
                 if market_structure_bias and market_structure_bias != mid_dir:
                     return MultiTimeframeDirection.NEUTRAL
                 return mid_dir
@@ -126,7 +126,7 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
             return lt_dir
             
         # More sensitive to counter-trend signals in crypto
-        if mid_vol < 0.65 and st_vol < 0.65:  # Raised from 0.5
+        if mid_vol < 0.6 and st_vol < 0.6:  # Adjusted from 0.65 for consistency
             if market_structure_bias and market_structure_bias != lt_dir:
                 return MultiTimeframeDirection.NEUTRAL
             return lt_dir
