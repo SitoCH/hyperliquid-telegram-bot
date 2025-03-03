@@ -166,18 +166,18 @@ def _analyze_timeframe_group(
     uncertain_action_weights: Dict[CompositeAction, float] = {}  # Track uncertain actions
     total_weight = 0.0
 
-    # Track exhaustion signals
+    # Track exhaustion signals - symmetric treatment
     upside_exhaustion = 0
     downside_exhaustion = 0
 
-    # Track rapid movement signals
+    # Track rapid movement signals - symmetric treatment
     rapid_bullish_moves = 0
     rapid_bearish_moves = 0
 
     for tf, state in group.items():
         weight = tf.settings.phase_weight
             
-        # Detect potential exhaustion based on phase combinations
+        # Detect potential exhaustion based on phase combinations - symmetric detection
         if (state.phase == WyckoffPhase.MARKUP and 
             state.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.CONSOLIDATING]):
             upside_exhaustion += 1
@@ -186,33 +186,33 @@ def _analyze_timeframe_group(
             state.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.CONSOLIDATING]):
             downside_exhaustion += 1
 
-        # Adjust weights based on exhaustion signals
+        # Adjust weights based on exhaustion signals - symmetric treatment
         if state.is_upthrust:
             upside_exhaustion += 1
-            weight *= 1.2  # Increase weight for potential reversal signals
+            weight *= 1.2
         elif state.is_spring:
             downside_exhaustion += 1
             weight *= 1.2
 
-        # Reduce weight if we see contrary volume signals
+        # Reduce weight if we see contrary volume signals - symmetric treatment
         if (state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN] and 
             state.volume == VolumeState.LOW):
             weight *= 0.8
 
-        # Factor in effort vs result analysis
+        # Factor in effort vs result analysis - symmetric treatment
         if state.effort_vs_result == EffortResult.WEAK:
             if state.phase == WyckoffPhase.MARKUP:
                 upside_exhaustion += 1
             elif state.phase == WyckoffPhase.MARKDOWN:
                 downside_exhaustion += 1
 
-        # Detect rapid price movements
+        # Detect rapid price movements - symmetric treatment 
         if state.phase == WyckoffPhase.MARKUP and state.volume == VolumeState.HIGH:
             rapid_bullish_moves += 1
         elif state.phase == WyckoffPhase.MARKDOWN and state.volume == VolumeState.HIGH:
             rapid_bearish_moves += 1
 
-        # Increase weight for strong directional moves
+        # Increase weight for strong directional moves - symmetric treatment
         if state.pattern == MarketPattern.TRENDING:
             if state.volume == VolumeState.HIGH:
                 weight *= 1.3  # 30% boost for high volume trends
@@ -267,18 +267,18 @@ def _analyze_timeframe_group(
     action_alignment = max(action_weights.values()) / total_weight if action_weights else 0
     internal_alignment = (phase_alignment + action_alignment) / 2
 
-    # Enhanced volume strength calculation
+    # Enhanced volume strength calculation - symmetric treatment
     volume_factors = []
     for state in group.values():
         base_strength = 1.0 if state.volume == VolumeState.HIGH else 0.5
 
-        # Adjust based on effort vs result
+        # Adjust based on effort vs result - symmetric treatment
         if state.effort_vs_result == EffortResult.STRONG:
             base_strength *= 1.2
         elif state.effort_vs_result == EffortResult.WEAK:
             base_strength *= 0.8
             
-        # Adjust for phase confirmation
+        # Adjust for phase confirmation - symmetric treatment for markup/markdown
         if state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN]:
             if state.composite_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
                 base_strength *= 1.3
@@ -290,9 +290,9 @@ def _analyze_timeframe_group(
     # Clamp volume strength between 0 and 1
     volume_strength = max(0.0, min(1.0, volume_strength))
 
-    # Adjust volume strength based on exhaustion signals
+    # Adjust volume strength based on exhaustion signals - symmetric treatment
     if upside_exhaustion >= len(group) // 2:
-        volume_strength *= 0.7  # Reduce volume significance if exhaustion detected
+        volume_strength *= 0.7
     elif downside_exhaustion >= len(group) // 2:
         volume_strength *= 0.7
     
@@ -328,8 +328,8 @@ def _analyze_timeframe_group(
     liquidation_risk = max(risk_counts.items(), key=lambda x: x[1])[0]
     volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
 
-    # Enhanced momentum bias calculation with exhaustion consideration
-    # Using helper functions to avoid redundant phase checking
+    # Enhanced momentum bias calculation with exhaustion consideration - FIXED FOR SYMMETRY
+    # Completely balanced bullish and bearish signal detection
     bullish_signals = float(sum(1 for s in group.values() if (
         (is_bullish_phase(s.phase) and upside_exhaustion < len(group) // 2) or 
         is_bullish_action(s.composite_action) or
@@ -346,40 +346,43 @@ def _analyze_timeframe_group(
         (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP)
     )))
 
-    # Adjust momentum bias based on exhaustion signals
+    # Adjust momentum bias based on exhaustion signals - symmetric treatment
     consolidation_count = sum(1 for s in group.values() if s.composite_action == CompositeAction.CONSOLIDATING)
     total_signals = len(group)
 
     # Phase dominance check - ensure momentum bias respects dominant phase
+    # Balanced treatment for bullish and bearish phases
     phase_momentum_override = None
     if is_bearish_phase(dominant_phase):
         # Strong bearish phase should limit bullish bias
         if bullish_signals > bearish_signals and not dominant_phase_is_uncertain:
-            bearish_signals = max(bearish_signals, bullish_signals * 0.8)  # Adjust bullish signals down
+            bearish_signals = max(bearish_signals, bullish_signals * 0.8)
             phase_momentum_override = MultiTimeframeDirection.BEARISH
     elif is_bullish_phase(dominant_phase):
         # Strong bullish phase should limit bearish bias  
         if bearish_signals > bullish_signals and not dominant_phase_is_uncertain:
-            bullish_signals = max(bullish_signals, bearish_signals * 0.8)  # Adjust bearish signals down  
+            bullish_signals = max(bullish_signals, bearish_signals * 0.8)
             phase_momentum_override = MultiTimeframeDirection.BULLISH
 
-    # Modified momentum bias calculation
+    # Modified momentum bias calculation - ensure bearish gets equal treatment
     if consolidation_count / total_signals > 0.5:
         momentum_bias = MultiTimeframeDirection.NEUTRAL
     else:
-        # Factor in exhaustion signals
+        # Factor in exhaustion signals - symmetric treatment
         if upside_exhaustion >= len(group) // 2:
-            momentum_bias = MultiTimeframeDirection.NEUTRAL if bullish_signals > bearish_signals else MultiTimeframeDirection.BEARISH
+            momentum_bias = MultiTimeframeDirection.NEUTRAL if bullish_signals > bearish_signals + 0.1 else MultiTimeframeDirection.BEARISH
         elif downside_exhaustion >= len(group) // 2:
-            momentum_bias = MultiTimeframeDirection.NEUTRAL if bearish_signals > bullish_signals else MultiTimeframeDirection.BULLISH
+            momentum_bias = MultiTimeframeDirection.NEUTRAL if bearish_signals > bullish_signals + 0.1 else MultiTimeframeDirection.BULLISH
         else:
+            # Equal threshold for both directions
+            threshold_diff = 0.1
             momentum_bias = (
-                MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals else
-                MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals else
+                MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals + threshold_diff else
+                MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals + threshold_diff else
                 MultiTimeframeDirection.NEUTRAL
             )
 
-    # Modify momentum bias calculation for rapid moves
+    # Modify momentum bias calculation for rapid moves - symmetric treatment
     if rapid_bullish_moves >= len(group) // 2:
         momentum_bias = MultiTimeframeDirection.BULLISH
     elif rapid_bearish_moves >= len(group) // 2:
@@ -420,25 +423,21 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     Returns:
         float: Momentum intensity score (0.0 to 1.0)
     """
-    if not analyses:
+    if not analyses or overall_direction == MultiTimeframeDirection.NEUTRAL:
         return 0.0
 
-    # Check for phase inconsistency with direction
+    # Check for phase inconsistency with direction - symmetric treatment
     phase_direction_conflict = False
     for analysis in analyses:
-        if (overall_direction == MultiTimeframeDirection.BULLISH and
-            is_bearish_phase(analysis.dominant_phase)):
-            phase_direction_conflict = True
-            break
-        elif (overall_direction == MultiTimeframeDirection.BEARISH and
-              is_bullish_phase(analysis.dominant_phase)):
+        if ((overall_direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(analysis.dominant_phase)) or
+            (overall_direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase))):
             phase_direction_conflict = True
             break
     
-    # If there's a conflict, reduce overall momentum intensity
+    # If there's a conflict, reduce overall momentum intensity  
     conflict_penalty = 0.6 if phase_direction_conflict else 1.0
 
-    # Get directional scores for each timeframe group
+    # Get directional scores for each timeframe group - ensure bearish momentum is treated equally
     directional_scores = []
     hourly_volume_boost = 1.0  # Will be adjusted based on short-term volume
 
@@ -451,18 +450,15 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         else:
             base_score = 0.0
 
-        # Phase consistency penalty
-        if (overall_direction == MultiTimeframeDirection.BULLISH and
-            is_bearish_phase(analysis.dominant_phase)):
-            base_score *= 0.7  # Penalize bullish direction in bearish phase
-        elif (overall_direction == MultiTimeframeDirection.BEARISH and
-              is_bullish_phase(analysis.dominant_phase)):
-            base_score *= 0.7  # Penalize bearish direction in bullish phase
+        # Phase consistency penalty - identical for bullish/bearish
+        if ((overall_direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(analysis.dominant_phase)) or
+            (overall_direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase))):
+            base_score *= 0.7  # Same penalty for both directions
 
-        # Volume confirmation boost
+        # Volume confirmation boost - identical for bullish/bearish
         volume_boost = 1.0 + (analysis.volume_strength * 0.3)
 
-        # Phase confirmation bonus
+        # Phase confirmation bonus - identical for bullish/bearish
         phase_aligned = False
         if overall_direction == MultiTimeframeDirection.BULLISH:
             phase_aligned = is_bullish_phase(analysis.dominant_phase)
@@ -470,10 +466,10 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
             phase_aligned = is_bearish_phase(analysis.dominant_phase)
         phase_boost = 1.2 if phase_aligned else 1.0
 
-        # Funding rate impact (more weight for shorter timeframes)
+        # Funding rate impact - identical for bullish/bearish
         funding_impact = abs(analysis.funding_sentiment) * 0.2
-        if (analysis.funding_sentiment > 0 and overall_direction == MultiTimeframeDirection.BULLISH) or \
-           (analysis.funding_sentiment < 0 and overall_direction == MultiTimeframeDirection.BEARISH):
+        if ((analysis.funding_sentiment > 0 and overall_direction == MultiTimeframeDirection.BULLISH) or
+            (analysis.funding_sentiment < 0 and overall_direction == MultiTimeframeDirection.BEARISH)):
             funding_boost = 1.0 + funding_impact
         else:
             funding_boost = 1.0 - funding_impact
@@ -482,7 +478,7 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         score = base_score * volume_boost * phase_boost * funding_boost
         directional_scores.append((score, analysis.group_weight))
 
-        # Track hourly volume for potential boost
+        # Track hourly volume for potential boost - identical for bullish/bearish
         if analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
             if analysis.volume_strength > 0.7:
                 hourly_volume_boost = 1.2
@@ -493,6 +489,6 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
 
     weighted_momentum = sum(score * weight for score, weight in directional_scores) / total_weight
     
-    # Apply hourly volume boost, conflict penalty and clamp final value
+    # Apply hourly volume boost, conflict penalty and clamp final value  
     final_momentum = min(1.0, weighted_momentum * hourly_volume_boost * conflict_penalty)
     return max(0.0, final_momentum)
