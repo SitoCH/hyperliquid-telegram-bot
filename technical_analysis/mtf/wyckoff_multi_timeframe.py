@@ -496,20 +496,3 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     # Apply hourly volume boost, conflict penalty and clamp final value  
     final_momentum = min(1.0, weighted_momentum * hourly_volume_boost * conflict_penalty)
     return max(0.0, final_momentum)
-
-class MultiTimeframeContext:
-    # ...existing code...
-    
-    @property
-    def recommended_next_analysis(self) -> int:
-        """Returns recommended minutes until next analysis based on market conditions"""
-        if self.current_direction == MultiTimeframeDirection.STRONG_BULLISH or \
-           self.current_direction == MultiTimeframeDirection.STRONG_BEARISH:
-            # More frequent during strong trends
-            return 30
-        elif self.current_direction == MultiTimeframeDirection.RANGING:
-            # Less frequent during consolidation
-            return 120
-        else:
-            # Default hourly
-            return 60
