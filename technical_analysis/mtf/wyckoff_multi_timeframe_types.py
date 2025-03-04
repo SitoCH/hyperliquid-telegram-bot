@@ -7,11 +7,11 @@ from technical_analysis.wyckoff_types import (
     LiquidationRisk, VolatilityState, Timeframe, _TIMEFRAME_SETTINGS
 )
 
-# Update timeframe groups for hourly analysis
-SHORT_TERM_TIMEFRAMES = {Timeframe.MINUTES_15}  # Scalping (last hour)
-INTERMEDIATE_TIMEFRAMES = {Timeframe.MINUTES_30}  # Swing trades (1-2 hours)
-LONG_TERM_TIMEFRAMES = {Timeframe.HOUR_1, Timeframe.HOURS_2}  # Trend (2-4 hours)
-CONTEXT_TIMEFRAMES = {Timeframe.HOURS_4, Timeframe.HOURS_8}  # Market structure (>4 hours)
+# Updated timeframe groups optimized for intraday crypto trading
+SHORT_TERM_TIMEFRAMES = {Timeframe.MINUTES_15}  # Immediate signals and entries/exits
+INTERMEDIATE_TIMEFRAMES = {Timeframe.MINUTES_30, Timeframe.HOUR_1}  # Intraday trend
+LONG_TERM_TIMEFRAMES = {Timeframe.HOURS_2}  # Daily bias
+CONTEXT_TIMEFRAMES = {Timeframe.HOURS_4, Timeframe.HOURS_8}  # Multi-day context
 
 # Recalculate group weights
 SHORT_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES)
