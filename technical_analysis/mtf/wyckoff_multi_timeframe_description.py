@@ -305,7 +305,9 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         """Get primary trading signal based on timeframe hierarchy and momentum."""
         # Start with context timeframe for overall bias
         context_bias = analysis.context.momentum_bias
-        context_phase = analysis.context.dominant_phase
+        
+        # Use the same market structure determination as the top analysis
+        market_structure = _get_full_market_structure(analysis)
         
         # Determine momentum level using the same thresholds as _calculate_momentum_strength
         momentum_desc = ""
@@ -335,12 +337,13 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         if trend_aligned:
             return (
                 f"{momentum_desc.capitalize()} momentum with trend alignment across timeframes ({context_bias.value}). "
-                f"Market structure is {context_phase.value.lower()}. "
+                f"Market structure is {market_structure}. "
                 f"{position_advice}"
             )
         else:
             return (
                 f"{momentum_desc.capitalize()} momentum with mixed signals across timeframes. "
+                f"Market structure is {market_structure}. "
                 f"{position_advice}"
             )
 
