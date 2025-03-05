@@ -306,7 +306,6 @@ def identify_wyckoff_phase(
         price_strength, momentum_strength, is_high_volume, volatility, timeframe
     )
 
-
 def determine_phase_by_price_strength(
     price_strength: float, momentum_strength: float, 
     is_high_volume: bool, volatility: pd.Series,
@@ -346,7 +345,7 @@ def determine_phase_by_price_strength(
             return WyckoffPhase.RANGING, False
         return WyckoffPhase.RANGING, True 
 
-    # Improved trend confirmation
+    # Improved trend confirmation with symmetric handling for bull/bear
     trend_strength = abs(momentum_strength) / momentum_threshold
     is_strong_trend = trend_strength > 1.5 and is_high_volume
 
@@ -354,11 +353,13 @@ def determine_phase_by_price_strength(
         if momentum_strength > momentum_threshold:
             return WyckoffPhase.MARKUP, not is_strong_trend
         return WyckoffPhase.MARKUP, True
+    elif price_strength < 0:  # Make explicit for symmetry
+        if momentum_strength < -momentum_threshold:
+            return WyckoffPhase.MARKDOWN, not is_strong_trend
+        return WyckoffPhase.MARKDOWN, True
     
-    if momentum_strength < -momentum_threshold:
-        return WyckoffPhase.MARKDOWN, not is_strong_trend
-    return WyckoffPhase.MARKDOWN, True
-
+    # Add fallback for exactly zero price_strength
+    return WyckoffPhase.RANGING, True
 
 def detect_composite_action(
     df: pd.DataFrame,
@@ -552,7 +553,6 @@ def detect_wyckoff_signs(
         
     return WyckoffSign.NONE
 
-
 def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState:
     """
     Analyze funding rates with enhanced crypto-specific features:
@@ -586,14 +586,14 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
     
     if len(rates) < 3:  # Check if we still have enough data after outlier removal
         return FundingState.UNKNOWN
-    
+
     # Decay factor adjusted for crypto's faster-changing funding environment
     time_diff_hours = (now - times) / (1000 * 3600)
     weights = 1 / (1 + np.exp(0.75 * time_diff_hours - 2))  # Steeper curve (0.75 instead of 0.5)
     
     # Calculate weighted average with normalization
     avg_funding = np.sum(rates * weights) / np.sum(weights)
-
+    
     # Use crypto-specific thresholds (more granularity in the slightly positive/negative range)
     if avg_funding > 0.25:
         return FundingState.HIGHLY_POSITIVE
@@ -624,7 +624,7 @@ def analyze_effort_result(
         timeframe: Current timeframe for context
     """
     try:
-        # Get recent data - adjust window based on timeframe group
+        # Get recent data - adjust window based on timeframe
         lookback = {
             Timeframe.MINUTES_15: 3,  # Scalping needs faster response
             Timeframe.MINUTES_30: 4,  # Swing trades
