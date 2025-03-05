@@ -408,20 +408,20 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         if not resistances or not supports:
             return None, None, None
             
-        buffer_pct = 0.001  # 0.1% buffer for trigger levels
+        buffer_pct = 0.0015
         
         if direction == MultiTimeframeDirection.BULLISH:
             # For longs: TP slightly above resistance, SL slightly below support
             closest_resistance = min(resistances, key=lambda x: abs(x - mid))
             closest_support = max(supports, key=lambda x: abs(x - mid))
-            tp = closest_resistance * (1 + buffer_pct)  # TP slightly above resistance
+            tp = closest_resistance
             sl = closest_support * (1 - buffer_pct)     # SL slightly below support
             return "Long", tp, sl
         
         # For shorts: TP slightly below support, SL slightly above resistance
         closest_support = max(supports, key=lambda x: abs(x - mid))
         closest_resistance = min(resistances, key=lambda x: abs(x - mid))
-        tp = closest_support * (1 - buffer_pct)     # TP slightly below support
+        tp = closest_support
         sl = closest_resistance * (1 + buffer_pct)  # SL slightly above resistance
         return "Short", tp, sl
 
