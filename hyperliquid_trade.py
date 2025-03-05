@@ -336,8 +336,6 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE])
             logger.info(open_result)
 
             await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
-
-            await telegram_utils.send(f"Opened {context.user_data['enter_mode']} for {sz} units on {selected_coin} ({leverage}x)")
         else:
             await telegram_utils.send("Exchange is not enabled")
     except Exception as e:
