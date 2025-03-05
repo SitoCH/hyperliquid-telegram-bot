@@ -105,8 +105,8 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
     if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_weight > 0.7:
         # Allow counter-trend short-term moves if volume is low
         if st_dir != MultiTimeframeDirection.NEUTRAL and st_dir != mid_dir:
-            # Lower volume threshold to spot early reversals while avoiding noise
-            if st_vol < 0.6:  # Adjusted from 0.65 to balance sensitivity vs. false signals
+            # Equal threshold for both bullish and bearish signals
+            if st_vol < 0.6:  # Now identical for both directions
                 if market_structure_bias and market_structure_bias != mid_dir:
                     return MultiTimeframeDirection.NEUTRAL
                 return mid_dir
@@ -125,16 +125,16 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
                 return MultiTimeframeDirection.NEUTRAL
             return lt_dir
             
-        # More sensitive to counter-trend signals in crypto
-        if mid_vol < 0.6 and st_vol < 0.6:  # Adjusted from 0.65 for consistency
+        # Equal sensitivity for bearish and bullish signals
+        if mid_vol < 0.6 and st_vol < 0.6:
             if market_structure_bias and market_structure_bias != lt_dir:
                 return MultiTimeframeDirection.NEUTRAL
             return lt_dir
 
-    # Check for aligned moves even with lower weights
+    # Check for aligned moves even with lower weights - equal threshold
     if st_dir == mid_dir and st_dir != MultiTimeframeDirection.NEUTRAL:
-        # Reduced alignment threshold for early direction detection
-        if (st_weight + mid_weight) / 2 > 0.45:  # Reduced from 0.5
+        # Same threshold for both bullish and bearish signals
+        if (st_weight + mid_weight) / 2 > 0.45:
             if market_structure_bias and market_structure_bias != st_dir:
                 return MultiTimeframeDirection.NEUTRAL
             return st_dir

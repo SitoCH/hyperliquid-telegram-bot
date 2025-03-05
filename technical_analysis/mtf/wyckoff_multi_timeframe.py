@@ -336,7 +336,9 @@ def _analyze_timeframe_group(
         is_bullish_action(s.composite_action) or
         (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKDOWN) or
         (s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH) or
-        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN)
+        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN) or
+        (s.effort_vs_result == EffortResult.WEAK and is_bearish_phase(s.phase)) or
+        (s.volatility == VolatilityState.HIGH and is_bearish_phase(s.phase))
     )))
 
     bearish_signals = float(sum(1 for s in group.values() if (
@@ -345,7 +347,6 @@ def _analyze_timeframe_group(
         (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKUP) or
         (s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH) or
         (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP) or
-        # Additional bearish signals to balance any inherent bias
         (s.effort_vs_result == EffortResult.WEAK and is_bullish_phase(s.phase)) or
         (s.volatility == VolatilityState.HIGH and is_bullish_phase(s.phase))
     )))
