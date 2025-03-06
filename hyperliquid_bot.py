@@ -4,6 +4,7 @@ import importlib
 import os
 import random
 import base64
+import numpy as np
 from tzlocal import get_localzone
 
 from logging_utils import logger
@@ -140,4 +141,5 @@ async def shutdown(application):
     os._exit(0)
 
 if __name__ == "__main__":
+    np.seterr(all='raise')
     main()
