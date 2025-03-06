@@ -49,9 +49,19 @@ class AdaptiveThresholdManager:
         """Calculate dynamic thresholds for liquidation cascade detection"""
             
         try:
-            # Calculate average volatility from recent data
-            vol_std = df['v'].pct_change().std()
-            price_std = df['c'].pct_change().std()
+            # Check if dataframe has enough valid data
+            if df.empty or len(df) < 5:
+                return {
+                    "vol_threshold": 2.5, 
+                    "price_threshold": 0.04,
+                    "velocity_threshold": 2.0,
+                    "effort_threshold": 0.7
+                }
+            
+            # Replace zeros with NaN for pct_change calculation
+            vol_series = df['v'].replace(0, np.nan)
+            vol_std = vol_series.pct_change().dropna().std()
+            price_std = df['c'].pct_change().dropna().std()
             
             # Scale thresholds by timeframe
             timeframe_factor = {
