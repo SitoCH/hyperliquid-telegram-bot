@@ -249,20 +249,20 @@ def _determine_trend_strength(analysis: AllTimeframesAnalysis) -> str:
     
     total_weight = sum(weights)
     if total_weight == 0:
-        return "Undefined"
+        return "undefined"
         
     weighted_alignment = sum(a * w for a, w in zip(alignments, weights)) / total_weight
     
     if weighted_alignment > 0.85:
-        return "Extremely strong"
+        return "extremely strong"
     elif weighted_alignment > 0.7:
-        return "Very strong"
+        return "very strong"
     elif weighted_alignment > 0.5:
-        return "Strong"
+        return "strong"
     elif weighted_alignment > 0.3:
-        return "Moderate"
+        return "moderate"
     
-    return "Weak"
+    return "weak"
 
 def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     """
