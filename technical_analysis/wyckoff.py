@@ -325,40 +325,61 @@ def determine_phase_by_price_strength(
         neutral_zone_threshold *= 1.2  # Wider neutral zone for noise
         momentum_threshold *= 0.9  # More sensitive momentum
 
-    # Detect potential reversal zones
-    is_reversal_zone = abs(price_strength) > strong_dev_threshold * 1.5
+    # Modified reversal zone detection (less strict, more phases become certain)
+    is_reversal_zone = abs(price_strength) > strong_dev_threshold * 1.3  # Reduced from 1.5
+    
+    # Calculate additional confirmation metrics
+    price_trend_consistency = abs(price_strength) > strong_dev_threshold * 0.7  # New price consistency check
+    momentum_consistency = abs(momentum_strength) > momentum_threshold * 0.8  # New momentum consistency
 
     if price_strength > strong_dev_threshold:
         if momentum_strength < -momentum_threshold and is_high_volume:
             return WyckoffPhase.DISTRIBUTION, not is_reversal_zone
-        return WyckoffPhase.DISTRIBUTION, True
+        # Less uncertain if we have consistent price trend or decent momentum
+        return WyckoffPhase.DISTRIBUTION, not (price_trend_consistency and (is_high_volume or momentum_consistency))
     
     if price_strength < -strong_dev_threshold:
         if momentum_strength > momentum_threshold and is_high_volume:
             return WyckoffPhase.ACCUMULATION, not is_reversal_zone
-        return WyckoffPhase.ACCUMULATION, True
+        # Less uncertain if we have consistent price trend or decent momentum
+        return WyckoffPhase.ACCUMULATION, not (price_trend_consistency and (is_high_volume or momentum_consistency))
 
-    # Enhanced ranging detection
+    # Enhanced ranging detection with multi-factor certainty
     if abs(price_strength) <= neutral_zone_threshold:
-        is_low_volatility = vol_ratio < 0.8
-        if abs(momentum_strength) < momentum_threshold and is_low_volatility:
-            return WyckoffPhase.RANGING, False
-        return WyckoffPhase.RANGING, True 
+        # Evaluate ranging certainty based on multiple factors
+        is_low_volatility = vol_ratio < 0.85
+        is_momentum_neutral = abs(momentum_strength) < momentum_threshold * 0.7
+        conflicting_signals = abs(momentum_strength) > momentum_threshold * 0.5
+        
+        # Calculate overall ranging certainty score (0-3 scale)
+        certainty_factors = 0
+        if is_low_volatility:
+            certainty_factors += 1
+        if is_momentum_neutral:
+            certainty_factors += 1
+        if abs(price_strength) < neutral_zone_threshold * 0.6:  # Very tight range
+            certainty_factors += 1
+            
+        # More certain when multiple factors align, regardless of timeframe
+        return WyckoffPhase.RANGING, certainty_factors < 2 or conflicting_signals
 
-    # Improved trend confirmation with symmetric handling for bull/bear
+    # Improved trend confirmation with more phases considered certain
     trend_strength = abs(momentum_strength) / momentum_threshold
-    is_strong_trend = trend_strength > 1.5 and is_high_volume
+    # Lower threshold for strong trend - more trends become "strong"
+    is_strong_trend = trend_strength > 1.3 and (is_high_volume or price_trend_consistency)
 
     if price_strength > 0:
-        if momentum_strength > momentum_threshold:
+        if momentum_strength > momentum_threshold * 0.8:  # Relaxed threshold
             return WyckoffPhase.MARKUP, not is_strong_trend
-        return WyckoffPhase.MARKUP, True
-    elif price_strength < 0:  # Make explicit for symmetry
-        if momentum_strength < -momentum_threshold:
+        # Less uncertain based on momentum alignment and strength
+        return WyckoffPhase.MARKUP, not (price_trend_consistency or (abs(momentum_strength) > momentum_threshold * 0.6))
+    elif price_strength < 0:
+        if momentum_strength < -momentum_threshold * 0.8:  # Relaxed threshold
             return WyckoffPhase.MARKDOWN, not is_strong_trend
-        return WyckoffPhase.MARKDOWN, True
+        # Less uncertain based on momentum alignment and strength
+        return WyckoffPhase.MARKDOWN, not (price_trend_consistency or (abs(momentum_strength) > momentum_threshold * 0.6))
     
-    # Add fallback for exactly zero price_strength
+    # Fallback case is uncertain by default (this should rarely happen)
     return WyckoffPhase.RANGING, True
 
 def detect_composite_action(
