@@ -114,8 +114,8 @@ def analyze_multi_timeframe(
         # Enhanced notification criteria
         should_notify = (
             all_analysis.confidence_level >= min_confidence and 
-            momentum_intensity > MODERATE_MOMENTUM and 
-            (all_analysis.short_term.volatility_state != VolatilityState.HIGH or all_analysis.intermediate.volatility_state != VolatilityState.HIGH) and
+            momentum_intensity >= MODERATE_MOMENTUM and 
+            # (all_analysis.short_term.volatility_state != VolatilityState.HIGH or all_analysis.intermediate.volatility_state != VolatilityState.HIGH) and
             all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL and
             # Additional volume criteria
             all_analysis.short_term.volume_strength >= 0.55 and
@@ -123,6 +123,8 @@ def analyze_multi_timeframe(
             # Avoid uncertain phases in key timeframes
             not all_analysis.short_term.uncertain_phase and
             not all_analysis.intermediate.uncertain_phase and
+            all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING and
+            all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING and
             # Ensure internal alignment is strong enough
             all_analysis.short_term.internal_alignment >= 0.55 and
             all_analysis.intermediate.internal_alignment >= 0.50

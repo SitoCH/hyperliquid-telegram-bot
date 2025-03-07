@@ -57,10 +57,10 @@ class MultiTimeframeContext:
 
 @dataclass
 class AllTimeframesAnalysis:
-    short_term: TimeframeGroupAnalysis    # 15m - Quick signals
-    intermediate: TimeframeGroupAnalysis  # 30m - Swing trades
-    long_term: TimeframeGroupAnalysis    # 1h/2h - Main trend
-    context: TimeframeGroupAnalysis      # 4h/8h - Market structure
+    short_term: TimeframeGroupAnalysis
+    intermediate: TimeframeGroupAnalysis
+    long_term: TimeframeGroupAnalysis
+    context: TimeframeGroupAnalysis
     overall_direction: MultiTimeframeDirection
     confidence_level: float
     alignment_score: float
