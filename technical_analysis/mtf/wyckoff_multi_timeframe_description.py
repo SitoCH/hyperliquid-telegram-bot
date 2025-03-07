@@ -267,29 +267,41 @@ def _determine_trend_strength(analysis: AllTimeframesAnalysis) -> str:
 def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     """
     Get appropriate trend emoji based on overall analysis state.
+    Aligned with other analysis functions using momentum intensity and volume data.
     """
     # First check if we have enough confidence
     if analysis.confidence_level < 0.4:
         return "📊"  # Low confidence
         
-    # Get the overall trend strength
-    trend_strength = analysis.alignment_score > 0.6 and analysis.confidence_level > 0.6
+    # Get the overall trend strength using both alignment and momentum
+    trend_strength = (
+        analysis.alignment_score > 0.6 and 
+        analysis.confidence_level > 0.6 and 
+        analysis.momentum_intensity > MODERATE_MOMENTUM
+    )
     
     match analysis.overall_direction:
         case MultiTimeframeDirection.BULLISH:
             if trend_strength:
                 return "📈"  # Strong bullish
-            return "↗️"  # Weak bullish
+            elif analysis.momentum_intensity > WEAK_MOMENTUM:
+                return "↗️"  # Weak bullish
+            return "➡️⬆️"  # Potential bullish
             
         case MultiTimeframeDirection.BEARISH:
             if trend_strength:
                 return "📉"  # Strong bearish
-            return "↘️"  # Weak bearish
+            elif analysis.momentum_intensity > WEAK_MOMENTUM:
+                return "↘️"  # Weak bearish
+            return "➡️⬇️"  # Potential bearish
             
         case MultiTimeframeDirection.NEUTRAL:
             # Check if we're in consolidation or in conflict
             if analysis.alignment_score > 0.6:
+                # High alignment in neutral means consolidation
                 return "↔️"  # Clear consolidation
+            elif analysis.momentum_intensity < LOW_MOMENTUM:
+                return "🔀"  # Very low momentum, ranging market
             return "🔄"  # Mixed signals
             
     return "📊"  # Fallback for unknown states
