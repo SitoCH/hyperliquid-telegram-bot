@@ -58,8 +58,16 @@ class AdaptiveThresholdManager:
                     "effort_threshold": 0.7
                 }
             
-            vol_std = df['v'].pct_change().std()
-            price_std = df['c'].pct_change().std()
+            try:
+                vol_pct = df['v'].pct_change().replace([np.inf, -np.inf], np.nan).dropna()
+                vol_std = vol_pct.std() if len(vol_pct) > 1 else 0.1
+                
+                price_pct = df['c'].pct_change().replace([np.inf, -np.inf], np.nan).dropna()
+                price_std = price_pct.std() if len(price_pct) > 1 else 0.01
+            except Exception as calc_error:
+                logger.warning(f"Error in liquidation thresholds std deviation calculations: {calc_error}")
+                vol_std = 0.1
+                price_std = 0.01
             
             # Scale thresholds by timeframe
             timeframe_factor = {
@@ -71,7 +79,6 @@ class AdaptiveThresholdManager:
                 Timeframe.HOURS_8: 1.2
             }.get(timeframe, 1.0)
             
-            # Calculate adaptive liquidation thresholds
             vol_threshold = 2.5 * np.clip(1.0 / (vol_std * 10 + 0.5), 0.8, 1.4)
             price_threshold = max(0.02, min(0.06, price_std * 3.0)) * timeframe_factor
             velocity_threshold = 2.0 * timeframe_factor
