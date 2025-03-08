@@ -30,7 +30,7 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
     context_desc = _get_timeframe_trend_description(analysis.context)
 
     structure = _get_full_market_structure(analysis)
-    context = _determine_market_context(analysis)
+    trend = _generate_trend_description(analysis)
     sentiment = _analyze_market_sentiment(analysis)
     
     emoji = _get_trend_emoji_all_timeframes(analysis)
@@ -38,7 +38,7 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
 
     base_description = (
         f"{emoji} <b>Market Analysis:</b>\n"
-        f"Trend: {_determine_trend_strength(analysis)} {context}\n"
+        f"Trend: {trend}\n"
         f"Market structure: {structure}\n"
         f"Momentum: {momentum}\n"
         f"Sentiment: {sentiment}\n"
@@ -196,6 +196,58 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
     else:
         # Default case
         return f"developing {dominant_phase.value} structure with mixed momentum"
+
+def _generate_trend_description(analysis: AllTimeframesAnalysis) -> str:
+    """
+    Generate a coherent trend description combining strength and context.
+    """
+    # Get the trend strength
+    strength = _determine_trend_strength(analysis)
+    
+    # Get the direction from the overall direction
+    direction = ""
+    if analysis.overall_direction != MultiTimeframeDirection.NEUTRAL:
+        direction = analysis.overall_direction.value + " "
+    
+    # Get additional context about the nature of the market
+    if analysis.overall_direction == MultiTimeframeDirection.NEUTRAL:
+        if analysis.momentum_intensity < LOW_MOMENTUM:
+            return f"{strength} ranging market with minimal directional movement"
+        else:
+            return f"{strength} consolidation phase"
+    
+    # Calculate weighted volume strength
+    weights = [
+        analysis.short_term.group_weight,
+        analysis.intermediate.group_weight,
+        analysis.long_term.group_weight
+    ]
+    total_weight = sum(weights)
+    
+    volume_strength = 0.0
+    if total_weight > 0:
+        volume_strength = (
+            analysis.short_term.volume_strength * weights[0] +
+            analysis.intermediate.volume_strength * weights[1] +
+            analysis.long_term.volume_strength * weights[2]
+        ) / total_weight
+    
+    # Combine everything into a coherent description
+    volume_desc = ""
+    if volume_strength > 0.7:
+        volume_desc = "with high volume"
+    elif volume_strength < 0.4:
+        volume_desc = "with low volume"
+    
+    conviction = ""
+    if analysis.confidence_level > 0.7:
+        conviction = "high-conviction "
+    elif analysis.confidence_level > 0.5:
+        conviction = "established "
+    else:
+        conviction = "developing "
+    
+    return f"{strength} {conviction}{direction}trend {volume_desc}".strip()
 
 def _determine_market_context(analysis: AllTimeframesAnalysis) -> str:
     """
