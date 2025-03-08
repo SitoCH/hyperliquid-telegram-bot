@@ -58,10 +58,8 @@ class AdaptiveThresholdManager:
                     "effort_threshold": 0.7
                 }
             
-            # Replace zeros with NaN for pct_change calculation
-            vol_series = df['v'].replace(0, np.nan)
-            vol_std = vol_series.pct_change().dropna().std()
-            price_std = df['c'].pct_change().dropna().std()
+            vol_std = df['v'].pct_change().std()
+            price_std = df['c'].pct_change().std()
             
             # Scale thresholds by timeframe
             timeframe_factor = {
