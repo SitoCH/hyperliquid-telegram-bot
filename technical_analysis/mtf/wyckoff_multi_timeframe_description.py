@@ -347,14 +347,19 @@ def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     return emoji_map.get((direction, trend_strength), "📊")
 
 def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
-    """Generate comprehensive actionable insights considering all timeframes."""
+    """
+    Generate intraday-focused actionable insights focused on crypto trading timeframes.
+    """
     if analysis.confidence_level < 0.5:
         return "<b>Analysis:</b>\nLow confidence signals across timeframes.\n<b>Recommendation:</b>\nReduce exposure and wait for clearer setups."
 
-    def get_main_signal() -> str:
-        """Get primary trading signal based on timeframe hierarchy and momentum."""
-        # Start with context timeframe for overall bias
-        context_bias = analysis.context.momentum_bias
+    def get_intraday_signal() -> str:
+        """Get primary trading signal focused on intraday timeframes."""
+        # Focus on intermediate timeframe for intraday trading bias (30m-1h)
+        intraday_bias = analysis.intermediate.momentum_bias
+        
+        # Use short term for immediate direction (15m)
+        immediate_bias = analysis.short_term.momentum_bias
         
         # Use the same market structure determination as the top analysis
         market_structure = _get_full_market_structure(analysis)
@@ -363,45 +368,56 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         momentum_desc = ""
         if analysis.momentum_intensity > STRONG_MOMENTUM:
             momentum_desc = "strong"
-            position_advice = "Aggressive positions can be considered with proper risk management."
+            position_advice = "Consider aggressive intraday positions with proper risk management."
         elif analysis.momentum_intensity > MODERATE_MOMENTUM:
             momentum_desc = "steady"
-            position_advice = "Consider directional positions with moderate risk exposure."
+            position_advice = "Favorable environment for swing positions with moderate risk exposure."
         elif analysis.momentum_intensity > WEAK_MOMENTUM:
             momentum_desc = "moderate"
-            position_advice = "Consider scaled entries with tight risk control."
+            position_advice = "Use scaled entries and definitive technical triggers for entries."
         elif analysis.momentum_intensity > MIXED_MOMENTUM:
             momentum_desc = "mixed"
-            position_advice = "Focus on shorter timeframe opportunities with reduced position sizes."
+            position_advice = "Focus on shorter timeframe setups and reduced position sizes."
         else:
             momentum_desc = "weak"
-            position_advice = "Consider ranging market strategies or stay in cash while waiting for clearer signals."
+            position_advice = "Consider range trading strategies or reduce exposure until clearer signals emerge."
         
-        # Check trend alignment
-        trend_aligned = (
-            analysis.long_term.momentum_bias == analysis.context.momentum_bias and
-            analysis.intermediate.momentum_bias == analysis.context.momentum_bias
-        )
+        # Check intraday alignment - focus on short and intermediate timeframes
+        intraday_aligned = immediate_bias == intraday_bias
         
-        # Generate main signal
-        if trend_aligned:
-            return (
-                f"{momentum_desc.capitalize()} momentum with trend alignment across timeframes ({context_bias.value}). "
-                f"Market structure is {market_structure}. "
-                f"{position_advice}"
-            )
+        # Generate specific intraday trading signal
+        signal_prefix = f"{momentum_desc.capitalize()} momentum "
+        
+        if intraday_aligned:
+            if intraday_bias == MultiTimeframeDirection.BULLISH:
+                signal_direction = "bullish intraday alignment offering favorable long opportunities. "
+            elif intraday_bias == MultiTimeframeDirection.BEARISH:
+                signal_direction = "bearish intraday alignment favoring short positions. "
+            else:
+                signal_direction = "neutral price action across trading timeframes. "
         else:
-            return (
-                f"{momentum_desc.capitalize()} momentum with mixed signals across timeframes. "
-                f"Market structure is {market_structure}. "
-                f"{position_advice}"
-            )
+            if immediate_bias == MultiTimeframeDirection.BULLISH:
+                signal_direction = "bullish short-term momentum against " + \
+                                 f"{'bullish' if analysis.long_term.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} " + \
+                                 "larger trend. "
+            elif immediate_bias == MultiTimeframeDirection.BEARISH:
+                signal_direction = "bearish short-term momentum against " + \
+                                 f"{'bullish' if analysis.long_term.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} " + \
+                                 "larger trend. "
+            else:
+                signal_direction = "consolidating short-term action within the broader trend. "
+        
+        return (
+            f"{signal_prefix}with {signal_direction}"
+            f"Market structure is {market_structure}. "
+            f"{position_advice}"
+        )
 
     # Format the complete insight
-    main_signal = get_main_signal()
+    intraday_signal = get_intraday_signal()
 
     return (
-        f"<b>💡 Trading Insight:</b>\n{main_signal}"
+        f"<b>💡 Trading Insight:</b>\n{intraday_signal}"
     )
 
 def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
