@@ -352,27 +352,71 @@ def _analyze_timeframe_group(
     liquidation_risk = max(risk_counts.items(), key=lambda x: x[1])[0]
     volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
 
-    # Enhanced momentum bias calculation with exhaustion consideration - BALANCED
-    # Completely balanced bullish and bearish signal detection with equal weights
-    bullish_signals = float(sum(1 for s in group.values() if (
-        (is_bullish_phase(s.phase) and upside_exhaustion < len(group) // 2) or 
-        is_bullish_action(s.composite_action) or
-        (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKDOWN) or
-        (s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH) or
-        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKDOWN) or
-        (s.effort_vs_result == EffortResult.WEAK and is_bearish_phase(s.phase)) or
-        (s.volatility == VolatilityState.HIGH and is_bearish_phase(s.phase))
-    )))
+    # Enhanced momentum bias calculation with clear signal weighting and transition handling
+    bullish_signals = 0.0
+    bearish_signals = 0.0
+        
+    for s in group.values():
+        # Primary phase signals - core market structure signals
+        if is_bullish_phase(s.phase) and upside_exhaustion < len(group) // 2:
+            # Non-exhausted bullish phase
+            bullish_signals += 1.0
+        elif is_bearish_phase(s.phase) and downside_exhaustion < len(group) // 2:
+            # Non-exhausted bearish phase
+            bearish_signals += 1.0
+        
+        # Action signals - immediate behavior signals
+        if is_bullish_action(s.composite_action):
+            bullish_signals += 0.8  # Slightly less weight than phase
+        elif is_bearish_action(s.composite_action):
+            bearish_signals += 0.8
+        
+        # Transition signals - early reversal indicators
+        if s.composite_action == CompositeAction.REVERSING:
+            if s.phase == WyckoffPhase.MARKDOWN:
+                bullish_signals += 0.7  # Reversal in downtrend - bullish
+            elif s.phase == WyckoffPhase.MARKUP:
+                bearish_signals += 0.7  # Reversal in uptrend - bearish
+        
+        # Sentiment signals - contra-indicators often suggest reversals
+        if s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH:
+            # Strong negative funding with high volume often signals potential reversal
+            bullish_signals += 0.6
+        elif s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH:
+            # Strong positive funding with high volume can signal overly bullish sentiment
+            bearish_signals += 0.6
+        
+        # Risk signals - market structure stress indicators
+        if s.liquidation_risk == LiquidationRisk.HIGH:
+            if s.phase == WyckoffPhase.MARKDOWN:
+                bullish_signals += 0.5  # High liquidations in downtrend can signal climax
+            elif s.phase == WyckoffPhase.MARKUP:
+                bearish_signals += 0.5  # High liquidations in uptrend can signal exhaustion
+        
+        # Effort-result signals - efficiency and exhaustion indicators
+        if s.effort_vs_result == EffortResult.WEAK:
+            if is_bearish_phase(s.phase):
+                bullish_signals += 0.4  # Weak selling effort can signal bullish potential
+            elif is_bullish_phase(s.phase):
+                bearish_signals += 0.4  # Weak buying effort can signal bearish potential
+        
+        # Volatility signals - often indicate potential change of character
+        if s.volatility == VolatilityState.HIGH:
+            if is_bearish_phase(s.phase):
+                bullish_signals += 0.3  # High volatility in bearish phase can signal capitulation
+            elif is_bullish_phase(s.phase):
+                bearish_signals += 0.3  # High volatility in bullish phase can signal blow-off top
+                
+        # Ranging phases get partial credit to both sides - acknowledging uncertainty
+        if s.phase == WyckoffPhase.RANGING:
+            # Split signal between both directions but with lower weight
+            bullish_signals += 0.2
+            bearish_signals += 0.2
 
-    bearish_signals = float(sum(1 for s in group.values() if (
-        (is_bearish_phase(s.phase) and downside_exhaustion < len(group) // 2) or 
-        is_bearish_action(s.composite_action) or
-        (s.composite_action == CompositeAction.REVERSING and s.phase == WyckoffPhase.MARKUP) or
-        (s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH) or
-        (s.liquidation_risk == LiquidationRisk.HIGH and s.phase == WyckoffPhase.MARKUP) or
-        (s.effort_vs_result == EffortResult.WEAK and is_bullish_phase(s.phase)) or
-        (s.volatility == VolatilityState.HIGH and is_bullish_phase(s.phase))
-    )))
+    # Normalize signals by count of timeframes for consistency
+    if len(group) > 0:
+        bullish_signals /= len(group)
+        bearish_signals /= len(group)
 
     # Adjust momentum bias based on exhaustion signals - symmetric treatment
     consolidation_count = sum(1 for s in group.values() if s.composite_action == CompositeAction.CONSOLIDATING)
