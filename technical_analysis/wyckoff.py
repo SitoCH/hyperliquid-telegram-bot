@@ -298,7 +298,9 @@ def identify_wyckoff_phase(
     if is_liquidation:
         # Check for potential reversal after liquidation
         if cascade_signal_strength > 1.5:  # Strong liquidation event
-            return (WyckoffPhase.DISTRIBUTION if recent_change > 0 else WyckoffPhase.ACCUMULATION), True
+            # Fix the reversed logic - a strong positive move after liquidation is typically accumulation,
+            # while a strong negative move is typically distribution
+            return (WyckoffPhase.ACCUMULATION if recent_change > 0 else WyckoffPhase.DISTRIBUTION), True
         return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False
 
     # Rest of the existing phase determination logic
@@ -467,10 +469,8 @@ def detect_composite_action(
         if effort_vs_result < -EFFORT_THRESHOLD and vol_metrics.trend > 0:
             return CompositeAction.MARKING_DOWN
             
-        # Add divergence analysis
         price_highs = df['h'].rolling(5).max()
         price_lows = df['l'].rolling(5).min()
-        
         bullish_divergence = (
             price_lows.iloc[-1] < price_lows.iloc[-5] and
             df['v'].iloc[-1] > df['v'].iloc[-5] * 1.5 and
@@ -487,7 +487,7 @@ def detect_composite_action(
             return CompositeAction.ACCUMULATING
         if bearish_divergence:
             return CompositeAction.DISTRIBUTING
-            
+        
         return CompositeAction.NEUTRAL
     except Exception as e:
         logger.error(f"Error in composite action detection: {e}")
@@ -498,7 +498,7 @@ def detect_wyckoff_signs(
     price_strength: float,
     volume_trend: float,
     is_spring: bool,
-    is_upthrust: bool
+    is_upthrust: bool,
 ) -> WyckoffSign:
     """
     Detect specific Wyckoff signs in market action with stricter confirmation requirements
@@ -524,13 +524,13 @@ def detect_wyckoff_signs(
     def confirm_trend(window: int, threshold: float) -> bool:
         recent_changes = price_change.iloc[-window:]
         return (recent_changes > threshold).sum() >= window // 2
-
+        
     def confirm_volume(window: int, threshold: float) -> bool:
         recent_volume = volume_change.iloc[-window:]
         return (recent_volume > threshold).sum() >= window // 2
         
     # Selling Climax (SC) - Requires panic selling with climactic volume
-    if (price_change.iloc[-1] < -min_price_move and 
+    if (price_change.iloc[-1] < -min_price_move and
         volume_change.iloc[-1] > min_volume_surge and 
         price_strength < -STRONG_DEV_THRESHOLD and
         df['c'].iloc[-1] < price_ma.iloc[-1] * 0.95):  # Price well below MA
@@ -565,7 +565,7 @@ def detect_wyckoff_signs(
         return WyckoffSign.SIGN_OF_STRENGTH
         
     # Buying Climax (BC) - Extreme buying with high volume
-    if (price_change.iloc[-1] > min_price_move * 2 and 
+    if (price_change.iloc[-1] > min_price_move * 2 and
         volume_change.iloc[-1] > min_volume_surge and 
         price_strength > STRONG_DEV_THRESHOLD and
         df['c'].iloc[-1] > price_ma.iloc[-1] * 1.05):  # Price well above MA
@@ -599,7 +599,7 @@ def detect_wyckoff_signs(
         price_strength < -0.5):
         return WyckoffSign.SIGN_OF_WEAKNESS
         
-    return WyckoffSign.NONE
+    return WyckoffSign.NONE        
 
 def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState:
     """
@@ -616,7 +616,7 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
         return FundingState.UNKNOWN
 
     now = max(rate.time for rate in funding_rates)
-    
+
     # Convert to numpy array with error handling
     rates = np.array([
         (1 + np.clip(rate.funding_rate, -0.5, 0.5)) ** 8760 - 1  # More reasonable clipping for extreme values
@@ -638,7 +638,7 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
     # Decay factor adjusted for crypto's faster-changing funding environment
     time_diff_hours = (now - times) / (1000 * 3600)
     weights = 1 / (1 + np.exp(0.75 * time_diff_hours - 2))  # Steeper curve (0.75 instead of 0.5)
-    
+
     # Calculate weighted average with normalization
     avg_funding = np.sum(rates * weights) / np.sum(weights)
     
@@ -665,7 +665,6 @@ def analyze_effort_result(
 ) -> EffortAnalysis:
     """
     Enhanced effort vs result analysis with timeframe-specific optimization.
-    
     Args:
         df: Price and volume data
         vol_metrics: Volume metrics from calculate_volume_metrics
@@ -675,13 +674,13 @@ def analyze_effort_result(
         # Get recent data - adjust window based on timeframe
         lookback = {
             Timeframe.MINUTES_15: 3,  # Scalping needs faster response
-            Timeframe.MINUTES_30: 4,  # Swing trades
+            Timeframe.MINUTES_30: 4,  # Swing trade
             Timeframe.HOUR_1: 5,      # Main trend
             Timeframe.HOURS_2: 6,     # Main trend context
             Timeframe.HOURS_4: 8,     # Market structure
             Timeframe.HOURS_8: 10,    # Market context
         }.get(timeframe, 5)  # Default to 5 periods
-        
+
         recent_df = df.iloc[-lookback:]
         
         # Calculate normalized price movement
@@ -700,11 +699,11 @@ def analyze_effort_result(
         
         if price_change < min_move:
             return EffortAnalysis(0.0, 0.0, 0.0, EffortResult.WEAK)
-        
+
         # Calculate volume quality with timeframe context
         volume_consistency = vol_metrics.consistency
         spread_quality = 1.0 - (abs(recent_df['c'] - recent_df['o']) / (recent_df['h'] - recent_df['l'])).mean()
-        
+
         # Adjust volume quality based on timeframe expectations
         if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]:
             # Short timeframes need stronger volume confirmation
@@ -719,7 +718,7 @@ def analyze_effort_result(
         # Calculate price impact with timeframe-adjusted volume ratio
         avg_price = recent_df['c'].mean()
         price_impact = price_change / (avg_price * vol_metrics.ratio)
-        
+
         # Calculate efficiency score with timeframe optimization
         base_efficiency = price_change / (price_range + 1e-8)
         volume_weighted_efficiency = base_efficiency * (1 + vol_metrics.strength * {
@@ -752,7 +751,7 @@ def analyze_effort_result(
         
         # Final efficiency score
         efficiency = min(1.0, volume_weighted_efficiency)
-        
+
         # Determine effort result with timeframe context
         result = (
             EffortResult.STRONG if (
