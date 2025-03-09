@@ -73,7 +73,7 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         return VolumeMetrics(
             strength=(df['v'].iloc[-1] - volume_sma.iloc[-1]) / last_std,
             ratio=df['v'].iloc[-1] / last_sma,
-            trend=df['v'].rolling(window=5).mean().iloc[-1] / last_sma,
+            trend=df['v'].rolling(window=timeframe.settings.volume_trend_window).mean().iloc[-1] / last_sma,
             impulse=df['v'].pct_change().iloc[-1],
             sma=last_sma,
             consistency=recent_strong_volume,
