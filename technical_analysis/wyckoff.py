@@ -332,15 +332,25 @@ def determine_phase_by_price_strength(
     price_trend_consistency = abs(price_strength) > strong_dev_threshold * 0.7  # Price consistency check
     momentum_consistency = abs(momentum_strength) > momentum_threshold * 0.8  # Momentum consistency
     
-    # Check for extreme negative momentum (price collapse)
+    # Check for extreme momentum (price surge or collapse)
     is_price_collapsing = momentum_strength < -momentum_threshold * 1.5 and price_strength < -strong_dev_threshold
+    is_price_surging = momentum_strength > momentum_threshold * 1.5 and price_strength > strong_dev_threshold
     
     # Price above threshold - potential Distribution or Markup
     if price_strength > strong_dev_threshold:
-        if momentum_strength < -momentum_threshold and is_high_volume:
-            return WyckoffPhase.DISTRIBUTION, not is_reversal_zone
-        # Less uncertain if we have consistent price trend or decent momentum
-        return WyckoffPhase.DISTRIBUTION, not (price_trend_consistency and (is_high_volume or momentum_consistency))
+        # Check for a price surge (strong positive momentum)
+        if is_price_surging:
+            # If price is surging rapidly, this is markup, not distribution
+            return WyckoffPhase.MARKUP, False
+            
+        # Distribution requires momentum to be stabilizing or turning down
+        if momentum_strength < momentum_threshold * 0.3:  # Neutral or negative momentum
+            if is_high_volume:  # Distribution with supporting volume
+                return WyckoffPhase.DISTRIBUTION, not is_reversal_zone
+            return WyckoffPhase.DISTRIBUTION, not (price_trend_consistency and momentum_consistency)
+        else:
+            # Strong positive momentum with positive price - still in Markup
+            return WyckoffPhase.MARKUP, not (price_trend_consistency and (is_high_volume or momentum_consistency))
     
     # Price below threshold - potential Accumulation or Markdown
     if price_strength < -strong_dev_threshold:
