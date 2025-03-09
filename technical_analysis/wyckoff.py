@@ -329,20 +329,34 @@ def determine_phase_by_price_strength(
     is_reversal_zone = abs(price_strength) > strong_dev_threshold * 1.3  # Reduced from 1.5
     
     # Calculate additional confirmation metrics
-    price_trend_consistency = abs(price_strength) > strong_dev_threshold * 0.7  # New price consistency check
-    momentum_consistency = abs(momentum_strength) > momentum_threshold * 0.8  # New momentum consistency
-
+    price_trend_consistency = abs(price_strength) > strong_dev_threshold * 0.7  # Price consistency check
+    momentum_consistency = abs(momentum_strength) > momentum_threshold * 0.8  # Momentum consistency
+    
+    # Check for extreme negative momentum (price collapse)
+    is_price_collapsing = momentum_strength < -momentum_threshold * 1.5 and price_strength < -strong_dev_threshold
+    
+    # Price above threshold - potential Distribution or Markup
     if price_strength > strong_dev_threshold:
         if momentum_strength < -momentum_threshold and is_high_volume:
             return WyckoffPhase.DISTRIBUTION, not is_reversal_zone
         # Less uncertain if we have consistent price trend or decent momentum
         return WyckoffPhase.DISTRIBUTION, not (price_trend_consistency and (is_high_volume or momentum_consistency))
     
+    # Price below threshold - potential Accumulation or Markdown
     if price_strength < -strong_dev_threshold:
-        if momentum_strength > momentum_threshold and is_high_volume:
-            return WyckoffPhase.ACCUMULATION, not is_reversal_zone
-        # Less uncertain if we have consistent price trend or decent momentum
-        return WyckoffPhase.ACCUMULATION, not (price_trend_consistency and (is_high_volume or momentum_consistency))
+        # Fix for the issue: Check if we have a price collapse (strong negative momentum)
+        if is_price_collapsing:
+            # If price is collapsing, this is markdown, not accumulation
+            return WyckoffPhase.MARKDOWN, False
+            
+        # Accumulation requires momentum to be stabilizing or turning up
+        if momentum_strength > -momentum_threshold * 0.3:  # Neutral or positive momentum
+            if is_high_volume:  # Accumulation with supporting volume
+                return WyckoffPhase.ACCUMULATION, not is_reversal_zone
+            return WyckoffPhase.ACCUMULATION, not (price_trend_consistency and momentum_consistency)
+        else:
+            # Strong negative momentum with negative price - still in Markdown
+            return WyckoffPhase.MARKDOWN, not (price_trend_consistency and (is_high_volume or momentum_consistency))
 
     # Enhanced ranging detection with multi-factor certainty
     if abs(price_strength) <= neutral_zone_threshold:
@@ -368,12 +382,15 @@ def determine_phase_by_price_strength(
     # Lower threshold for strong trend - more trends become "strong"
     is_strong_trend = trend_strength > 1.3 and (is_high_volume or price_trend_consistency)
 
+    # Check for trend phases (Markup/Markdown)
     if price_strength > 0:
+        # Better distinguish markup from end of accumulation
         if momentum_strength > momentum_threshold * 0.8:  # Relaxed threshold
             return WyckoffPhase.MARKUP, not is_strong_trend
         # Less uncertain based on momentum alignment and strength
         return WyckoffPhase.MARKUP, not (price_trend_consistency or (abs(momentum_strength) > momentum_threshold * 0.6))
     elif price_strength < 0:
+        # Better distinguish markdown from start of accumulation based on momentum
         if momentum_strength < -momentum_threshold * 0.8:  # Relaxed threshold
             return WyckoffPhase.MARKDOWN, not is_strong_trend
         # Less uncertain based on momentum alignment and strength
