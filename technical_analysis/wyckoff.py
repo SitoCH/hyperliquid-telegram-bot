@@ -104,8 +104,8 @@ def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol
         spring_threshold = thresholds["spring"]
         upthrust_threshold = thresholds["upthrust"]
         
-        # Check for extremely large candle wicks to avoid false signals
-        if (window['h'].max() - window['l'].min()) > df['c'].iloc[-1] * 0.2:
+        # Check for extremely large candle wicks to avoid false signals - use adaptive threshold
+        if (window['h'].max() - window['l'].min()) > df['c'].iloc[-1] * thresholds.get("max_wick", 0.2):
             return False, False
         
         # Enhanced spring detection

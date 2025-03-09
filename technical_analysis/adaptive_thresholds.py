@@ -36,9 +36,14 @@ class AdaptiveThresholdManager:
             spring_threshold = base_threshold * (1 + volatility_multiplier) * timeframe_factor
             upthrust_threshold = spring_threshold * 1.05  # Slightly higher for upthrush
             
+            # Calculate max wick threshold - higher for volatile markets
+            max_wick_base = 0.2  # Base threshold for max wick size
+            max_wick_threshold = max_wick_base * timeframe_factor * (1 + volatility * 10)
+            
             return {
                 "spring": spring_threshold,
-                "upthrust": upthrust_threshold
+                "upthrust": upthrust_threshold,
+                "max_wick": max_wick_threshold
             }
         except Exception as e:
             logger.warning(f"Error calculating spring/upthrust thresholds: {e}")
