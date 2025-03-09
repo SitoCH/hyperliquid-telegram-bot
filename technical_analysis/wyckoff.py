@@ -298,8 +298,6 @@ def identify_wyckoff_phase(
     if is_liquidation:
         # Check for potential reversal after liquidation
         if cascade_signal_strength > 1.5:  # Strong liquidation event
-            # Fix the reversed logic - a strong positive move after liquidation is typically accumulation,
-            # while a strong negative move is typically distribution
             return (WyckoffPhase.ACCUMULATION if recent_change > 0 else WyckoffPhase.DISTRIBUTION), True
         return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False
 
@@ -466,7 +464,8 @@ def detect_composite_action(
             
         if effort_vs_result > EFFORT_THRESHOLD and vol_metrics.trend > 0:
             return CompositeAction.MARKING_UP
-        if effort_vs_result < -EFFORT_THRESHOLD and vol_metrics.trend > 0:
+
+        if effort_vs_result < -EFFORT_THRESHOLD:
             return CompositeAction.MARKING_DOWN
             
         price_highs = df['h'].rolling(5).max()
