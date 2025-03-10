@@ -122,5 +122,5 @@ class EtfStrategy(BaseStrategy):
 
         telegram_utils.run_repeating(
             self.check_position_allocation_drifts,
-            interval=datetime.timedelta(minutes=random.randint(6 * 60 - 10, 6 * 60 + 10))
+            interval=datetime.timedelta(minutes=random.randint(12 * 60 - 10, 12 * 60 + 10))
         )
