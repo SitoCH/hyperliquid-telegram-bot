@@ -181,14 +181,18 @@ class TimeframeSettings:
     base_multiplier: float          # Used in thresholds property
     momentum_multiplier: float      # Used in thresholds property
     description: str                # Used for logging/display purposes
-    # Simplified volume settings
-    volume_ma_window: int           # General volume moving average window (combined)
-    volume_long_ma_window: int      # For longer-term volume trend analysis
+    # Simplified volume settings - further reduced
+    volume_ma_window: int           # Primary volume moving average window
     spring_upthrust_window: int     # For reversal pattern detection
     support_resistance_lookback: int # For S/R level identification
     chart_image_time_delta: pd.Timedelta  # For chart rendering
 
-    # Properties to provide backward compatibility for code that might use the removed parameters
+    # Properties to provide derived values and backward compatibility
+    @property
+    def volume_long_ma_window(self) -> int:
+        """Long-term volume MA is double the main window"""
+        return self.volume_ma_window * 2
+        
     @property
     def volume_short_ma_window(self) -> int:
         """Derive short MA from main window size for backward compatibility"""
@@ -252,9 +256,8 @@ _TIMEFRAME_SETTINGS = {
         base_multiplier=0.80,
         momentum_multiplier=1.5,
         description="15min scalping",
-        volume_ma_window=14,       # Retained this as primary volume metric
-        volume_long_ma_window=28,  # Double the main window for trend analysis
-        spring_upthrust_window=4,  # Kept the same
+        volume_ma_window=14,       # Main volume metric (long window derived as 28)
+        spring_upthrust_window=4,
         support_resistance_lookback=30,
         chart_image_time_delta=pd.Timedelta(hours=12)
     ),
@@ -266,8 +269,7 @@ _TIMEFRAME_SETTINGS = {
         base_multiplier=0.90,
         momentum_multiplier=1.4,
         description="30min swings",
-        volume_ma_window=16,
-        volume_long_ma_window=32,  # Double the main window
+        volume_ma_window=16,       # Long window derived as 32
         spring_upthrust_window=5,
         support_resistance_lookback=42,
         chart_image_time_delta=pd.Timedelta(hours=24)
@@ -282,8 +284,7 @@ _TIMEFRAME_SETTINGS = {
         base_multiplier=1.0,
         momentum_multiplier=1.5,
         description="1h trend",
-        volume_ma_window=20,
-        volume_long_ma_window=40,  # Double the main window
+        volume_ma_window=20,       # Long window derived as 40
         spring_upthrust_window=5,
         support_resistance_lookback=52,
         chart_image_time_delta=pd.Timedelta(hours=48)
@@ -298,8 +299,7 @@ _TIMEFRAME_SETTINGS = {
         base_multiplier=1.1,
         momentum_multiplier=1.6,
         description="2h trend",
-        volume_ma_window=24,
-        volume_long_ma_window=48,  # Double the main window
+        volume_ma_window=24,       # Long window derived as 48
         spring_upthrust_window=6,
         support_resistance_lookback=60,
         chart_image_time_delta=pd.Timedelta(hours=72)
@@ -312,8 +312,7 @@ _TIMEFRAME_SETTINGS = {
         base_multiplier=1.2,
         momentum_multiplier=1.8,
         description="4h trend",
-        volume_ma_window=28,
-        volume_long_ma_window=56,  # Double the main window
+        volume_ma_window=28,       # Long window derived as 56
         spring_upthrust_window=7,
         support_resistance_lookback=78,
         chart_image_time_delta=pd.Timedelta(days=4)
@@ -328,8 +327,7 @@ _TIMEFRAME_SETTINGS = {
         base_multiplier=1.3,
         momentum_multiplier=1.9,
         description="8h trend",
-        volume_ma_window=36,
-        volume_long_ma_window=72,  # Double the main window
+        volume_ma_window=36,       # Long window derived as 72
         spring_upthrust_window=8,
         support_resistance_lookback=104,
         chart_image_time_delta=pd.Timedelta(days=6)
