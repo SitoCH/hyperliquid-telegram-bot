@@ -187,8 +187,6 @@ class TimeframeSettings:
     volume_long_ma_window: int            # From wyckoff.py calculate_volume_metrics()
     spring_upthrust_window: int           # From wyckoff.py detect_spring_upthrust()
     volume_trend_window: int              # From wyckoff.py calculate_volume_metrics()
-    price_strength_ma_window: int         # From wyckoff.py determine_phase_by_price_strength()
-    price_change_window: int              # From wyckoff.py determine_phase_by_price_strength()
     support_resistance_lookback: int      # From significant_levels.py find_significant_levels()
     chart_image_time_delta: pd.Timedelta  # From wyckoff_chart.py save_to_buffer()
 
@@ -250,8 +248,6 @@ _TIMEFRAME_SETTINGS = {
         volume_long_ma_window=10,   # Increased from 6 for better trend detection
         spring_upthrust_window=4,   # Increased from 3 for confirmation
         volume_trend_window=6,      # Increased from 4
-        price_strength_ma_window=7, # Increased from 5
-        price_change_window=4,      # Increased from 3
         support_resistance_lookback=30,  # Increased from 24
         chart_image_time_delta=pd.Timedelta(hours=12)  # Same
     ),
@@ -268,8 +264,6 @@ _TIMEFRAME_SETTINGS = {
         volume_long_ma_window=12,   # Increased from 8
         spring_upthrust_window=5,   # Increased from 4
         volume_trend_window=7,      # Increased from 5
-        price_strength_ma_window=9, # Increased from 7
-        price_change_window=4,      # Increased from 3
         support_resistance_lookback=42,  # Increased from 36
         chart_image_time_delta=pd.Timedelta(hours=24)  # Same
     ),
@@ -288,8 +282,6 @@ _TIMEFRAME_SETTINGS = {
         volume_long_ma_window=14,   # Increased from 10
         spring_upthrust_window=5,   # Increased from 4
         volume_trend_window=8,      # Increased from 6
-        price_strength_ma_window=10,# Increased from 8
-        price_change_window=5,      # Increased from 4
         support_resistance_lookback=52,  # Increased from 48
         chart_image_time_delta=pd.Timedelta(hours=48)  # Same
     ),
@@ -308,8 +300,6 @@ _TIMEFRAME_SETTINGS = {
         volume_long_ma_window=16,   # Increased from 12 (now larger than 1h's 14)
         spring_upthrust_window=6,   # Increased from 5
         volume_trend_window=10,     # Increased from 8 (now larger than 1h's 8)
-        price_strength_ma_window=12,# Increased from 10
-        price_change_window=5,      # Increased from 4
         support_resistance_lookback=60,  # Slightly increased
         chart_image_time_delta=pd.Timedelta(hours=72)  # Same
     ),
@@ -326,8 +316,6 @@ _TIMEFRAME_SETTINGS = {
         volume_long_ma_window=18,   # Increased from 14
         spring_upthrust_window=7,   # Increased from 5
         volume_trend_window=12,     # Increased from 10
-        price_strength_ma_window=14,# Increased from 12
-        price_change_window=6,      # Increased from 5
         support_resistance_lookback=78,  # Slightly increased
         chart_image_time_delta=pd.Timedelta(days=4)  # Same
     ),
@@ -346,8 +334,6 @@ _TIMEFRAME_SETTINGS = {
         volume_long_ma_window=22,   # Increased from 18
         spring_upthrust_window=8,   # Increased from 6
         volume_trend_window=14,     # Increased from 12
-        price_strength_ma_window=18,# Increased from 16
-        price_change_window=7,      # Increased from 6
         support_resistance_lookback=104,  # Slightly increased
         chart_image_time_delta=pd.Timedelta(days=6)  # Same
     )
