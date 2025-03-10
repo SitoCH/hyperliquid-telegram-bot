@@ -181,14 +181,23 @@ class TimeframeSettings:
     base_multiplier: float          # Used in thresholds property
     momentum_multiplier: float      # Used in thresholds property
     description: str                # Used for logging/display purposes
-    # Add new settings
-    volume_ma_window: int                 # From wyckoff.py calculate_volume_metrics()
-    volume_short_ma_window: int           # From wyckoff.py calculate_volume_metrics()
-    volume_long_ma_window: int            # From wyckoff.py calculate_volume_metrics()
-    spring_upthrust_window: int           # From wyckoff.py detect_spring_upthrust()
-    volume_trend_window: int              # From wyckoff.py calculate_volume_metrics()
-    support_resistance_lookback: int      # From significant_levels.py find_significant_levels()
-    chart_image_time_delta: pd.Timedelta  # From wyckoff_chart.py save_to_buffer()
+    # Simplified volume settings
+    volume_ma_window: int           # General volume moving average window (combined)
+    volume_long_ma_window: int      # For longer-term volume trend analysis
+    spring_upthrust_window: int     # For reversal pattern detection
+    support_resistance_lookback: int # For S/R level identification
+    chart_image_time_delta: pd.Timedelta  # For chart rendering
+
+    # Properties to provide backward compatibility for code that might use the removed parameters
+    @property
+    def volume_short_ma_window(self) -> int:
+        """Derive short MA from main window size for backward compatibility"""
+        return max(3, self.volume_ma_window // 4)
+        
+    @property
+    def volume_trend_window(self) -> int:
+        """Derive trend window from long window for backward compatibility"""
+        return max(4, self.volume_long_ma_window // 2)
 
     @property
     def thresholds(self) -> tuple[float, float, float, float, float, float]:
@@ -236,106 +245,94 @@ class Timeframe(Enum):
 _TIMEFRAME_SETTINGS = {
     # Short-term group (35% total) - Last hour's action
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.15,          # Quick scalping signals
-        ema_length=8,               # Increased from 6 for less noise
-        atr_settings=(12, 7, 16, 5, 7),  # Increased from (8, 5, 12, 4, 5)
-        supertrend_multiplier=1.7,  # Slightly increased to reduce false signals
-        base_multiplier=0.80,       # Same sensitivity to moves
-        momentum_multiplier=1.5,    # Same
+        phase_weight=0.15,
+        ema_length=8,
+        atr_settings=(12, 7, 16, 5, 7),
+        supertrend_multiplier=1.7,
+        base_multiplier=0.80,
+        momentum_multiplier=1.5,
         description="15min scalping",
-        volume_ma_window=14,        # Increased from 10 for better smoothing
-        volume_short_ma_window=4,   # Increased from 3
-        volume_long_ma_window=10,   # Increased from 6 for better trend detection
-        spring_upthrust_window=4,   # Increased from 3 for confirmation
-        volume_trend_window=6,      # Increased from 4
-        support_resistance_lookback=30,  # Increased from 24
-        chart_image_time_delta=pd.Timedelta(hours=12)  # Same
+        volume_ma_window=14,       # Retained this as primary volume metric
+        volume_long_ma_window=28,  # Double the main window for trend analysis
+        spring_upthrust_window=4,  # Kept the same
+        support_resistance_lookback=30,
+        chart_image_time_delta=pd.Timedelta(hours=12)
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.20,          # Same weight
-        ema_length=12,              # Increased from 10
-        atr_settings=(16, 9, 20, 6, 8),  # Increased from (10, 6, 16, 5, 6)
-        supertrend_multiplier=1.9,  # Slightly increased
-        base_multiplier=0.90,       # Same
-        momentum_multiplier=1.4,    # Same
+        phase_weight=0.20,
+        ema_length=12,
+        atr_settings=(16, 9, 20, 6, 8),
+        supertrend_multiplier=1.9,
+        base_multiplier=0.90,
+        momentum_multiplier=1.4,
         description="30min swings",
-        volume_ma_window=16,        # Increased from 12
-        volume_short_ma_window=4,   # Increased from 3
-        volume_long_ma_window=12,   # Increased from 8
-        spring_upthrust_window=5,   # Increased from 4
-        volume_trend_window=7,      # Increased from 5
-        support_resistance_lookback=42,  # Increased from 36
-        chart_image_time_delta=pd.Timedelta(hours=24)  # Same
+        volume_ma_window=16,
+        volume_long_ma_window=32,  # Double the main window
+        spring_upthrust_window=5,
+        support_resistance_lookback=42,
+        chart_image_time_delta=pd.Timedelta(hours=24)
     ),
     
     # Intermediate group (30% total) - Recent trend
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.30,          # Same weight - primary decision timeframe
-        ema_length=18,              # Increased from 16
-        atr_settings=(20, 12, 26, 8, 10),  # Increased from (14, 9, 20, 6, 8)
-        supertrend_multiplier=2.1,  # Same
-        base_multiplier=1.0,        # Same
-        momentum_multiplier=1.5,    # Same
+        phase_weight=0.30,
+        ema_length=18,
+        atr_settings=(20, 12, 26, 8, 10),
+        supertrend_multiplier=2.1,
+        base_multiplier=1.0,
+        momentum_multiplier=1.5,
         description="1h trend",
-        volume_ma_window=20,        # Increased from 16
-        volume_short_ma_window=4,   # Increased from 3
-        volume_long_ma_window=14,   # Increased from 10
-        spring_upthrust_window=5,   # Increased from 4
-        volume_trend_window=8,      # Increased from 6
-        support_resistance_lookback=52,  # Increased from 48
-        chart_image_time_delta=pd.Timedelta(hours=48)  # Same
+        volume_ma_window=20,
+        volume_long_ma_window=40,  # Double the main window
+        spring_upthrust_window=5,
+        support_resistance_lookback=52,
+        chart_image_time_delta=pd.Timedelta(hours=48)
     ),
     
     # Long-term group (25% total) - Established trend
     Timeframe.HOURS_2: TimeframeSettings(
-        phase_weight=0.15,          # Trend confirmation
-        ema_length=26,              # Increased from 24 to maintain progression
-        atr_settings=(24, 14, 30, 9, 12),  # Increased from (18, 9, 22, 7, 9)
-        supertrend_multiplier=2.3,  # Same
-        base_multiplier=1.1,        # Same
-        momentum_multiplier=1.6,    # Same
+        phase_weight=0.15,
+        ema_length=26,
+        atr_settings=(24, 14, 30, 9, 12),
+        supertrend_multiplier=2.3,
+        base_multiplier=1.1,
+        momentum_multiplier=1.6,
         description="2h trend",
-        volume_ma_window=24,        # Increased from 20 (now larger than 1h's 20)
-        volume_short_ma_window=5,   # Increased from 4
-        volume_long_ma_window=16,   # Increased from 12 (now larger than 1h's 14)
-        spring_upthrust_window=6,   # Increased from 5
-        volume_trend_window=10,     # Increased from 8 (now larger than 1h's 8)
-        support_resistance_lookback=60,  # Slightly increased
-        chart_image_time_delta=pd.Timedelta(hours=72)  # Same
+        volume_ma_window=24,
+        volume_long_ma_window=48,  # Double the main window
+        spring_upthrust_window=6,
+        support_resistance_lookback=60,
+        chart_image_time_delta=pd.Timedelta(hours=72)
     ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.10,          # Same
-        ema_length=32,              # Increased from 30
-        atr_settings=(32, 16, 38, 12, 16),  # Increased from (26, 12, 30, 9, 13)
-        supertrend_multiplier=2.6,  # Same
-        base_multiplier=1.2,        # Same
-        momentum_multiplier=1.8,    # Same
+        phase_weight=0.10,
+        ema_length=32,
+        atr_settings=(32, 16, 38, 12, 16),
+        supertrend_multiplier=2.6,
+        base_multiplier=1.2,
+        momentum_multiplier=1.8,
         description="4h trend",
-        volume_ma_window=28,        # Increased from 24
-        volume_short_ma_window=6,   # Increased from 4
-        volume_long_ma_window=18,   # Increased from 14
-        spring_upthrust_window=7,   # Increased from 5
-        volume_trend_window=12,     # Increased from 10
-        support_resistance_lookback=78,  # Slightly increased
-        chart_image_time_delta=pd.Timedelta(days=4)  # Same
+        volume_ma_window=28,
+        volume_long_ma_window=56,  # Double the main window
+        spring_upthrust_window=7,
+        support_resistance_lookback=78,
+        chart_image_time_delta=pd.Timedelta(days=4)
     ),
     
     # Context group (10% total) - Market structure
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.10,          # Same
-        ema_length=40,              # Increased from 38
-        atr_settings=(42, 20, 48, 14, 20),  # Increased from (34, 14, 38, 10, 15)
-        supertrend_multiplier=2.8,  # Same
-        base_multiplier=1.3,        # Same
-        momentum_multiplier=1.9,    # Same
+        phase_weight=0.10,
+        ema_length=40,
+        atr_settings=(42, 20, 48, 14, 20),
+        supertrend_multiplier=2.8,
+        base_multiplier=1.3,
+        momentum_multiplier=1.9,
         description="8h trend",
-        volume_ma_window=36,        # Increased from 32
-        volume_short_ma_window=7,   # Increased from 5
-        volume_long_ma_window=22,   # Increased from 18
-        spring_upthrust_window=8,   # Increased from 6
-        volume_trend_window=14,     # Increased from 12
-        support_resistance_lookback=104,  # Slightly increased
-        chart_image_time_delta=pd.Timedelta(days=6)  # Same
+        volume_ma_window=36,
+        volume_long_ma_window=72,  # Double the main window
+        spring_upthrust_window=8,
+        support_resistance_lookback=104,
+        chart_image_time_delta=pd.Timedelta(days=6)
     )
 }
 
