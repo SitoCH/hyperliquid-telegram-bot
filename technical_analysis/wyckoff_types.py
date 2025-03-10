@@ -240,7 +240,7 @@ _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
         phase_weight=0.15,          # Quick scalping signals
         ema_length=8,               # Increased from 6 for less noise
-        atr_settings=(8, 5, 12, 4, 5),  # Slightly increased for stability
+        atr_settings=(12, 7, 16, 5, 7),  # Increased from (8, 5, 12, 4, 5)
         supertrend_multiplier=1.7,  # Slightly increased to reduce false signals
         base_multiplier=0.80,       # Same sensitivity to moves
         momentum_multiplier=1.5,    # Same
@@ -258,7 +258,7 @@ _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_30: TimeframeSettings(
         phase_weight=0.20,          # Same weight
         ema_length=12,              # Increased from 10
-        atr_settings=(10, 6, 16, 5, 6),  # Increased for stability
+        atr_settings=(16, 9, 20, 6, 8),  # Increased from (10, 6, 16, 5, 6)
         supertrend_multiplier=1.9,  # Slightly increased
         base_multiplier=0.90,       # Same
         momentum_multiplier=1.4,    # Same
@@ -278,7 +278,7 @@ _TIMEFRAME_SETTINGS = {
     Timeframe.HOUR_1: TimeframeSettings(
         phase_weight=0.30,          # Same weight - primary decision timeframe
         ema_length=18,              # Increased from 16
-        atr_settings=(14, 9, 20, 6, 8),  # Slightly adjusted
+        atr_settings=(20, 12, 26, 8, 10),  # Increased from (14, 9, 20, 6, 8)
         supertrend_multiplier=2.1,  # Same
         base_multiplier=1.0,        # Same
         momentum_multiplier=1.5,    # Same
@@ -298,7 +298,7 @@ _TIMEFRAME_SETTINGS = {
     Timeframe.HOURS_2: TimeframeSettings(
         phase_weight=0.15,          # Trend confirmation
         ema_length=26,              # Increased from 24 to maintain progression
-        atr_settings=(18, 9, 22, 7, 9),  # Adjusted to better align with 1h
+        atr_settings=(24, 14, 30, 9, 12),  # Increased from (18, 9, 22, 7, 9)
         supertrend_multiplier=2.3,  # Same
         base_multiplier=1.1,        # Same
         momentum_multiplier=1.6,    # Same
@@ -316,7 +316,7 @@ _TIMEFRAME_SETTINGS = {
     Timeframe.HOURS_4: TimeframeSettings(
         phase_weight=0.10,          # Same
         ema_length=32,              # Increased from 30
-        atr_settings=(26, 12, 30, 9, 13),  # Adjusted up 
+        atr_settings=(32, 16, 38, 12, 16),  # Increased from (26, 12, 30, 9, 13)
         supertrend_multiplier=2.6,  # Same
         base_multiplier=1.2,        # Same
         momentum_multiplier=1.8,    # Same
@@ -336,7 +336,7 @@ _TIMEFRAME_SETTINGS = {
     Timeframe.HOURS_8: TimeframeSettings(
         phase_weight=0.10,          # Same
         ema_length=40,              # Increased from 38
-        atr_settings=(34, 14, 38, 10, 15),  # Adjusted up
+        atr_settings=(42, 20, 48, 14, 20),  # Increased from (34, 14, 38, 10, 15)
         supertrend_multiplier=2.8,  # Same
         base_multiplier=1.3,        # Same
         momentum_multiplier=1.9,    # Same
