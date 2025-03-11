@@ -20,11 +20,11 @@ LONG_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_
 CONTEXT_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES)
 
 # Momentum thresholds
-STRONG_MOMENTUM: Final[float] = 0.75  # Reduced from 0.8 to account for crypto volatility
-MODERATE_MOMENTUM: Final[float] = 0.5  # Reduced from 0.6 for more sensitive signals
-WEAK_MOMENTUM: Final[float] = 0.3     # Reduced from 0.4 to catch early moves
-MIXED_MOMENTUM: Final[float] = 0.15   # Reduced from 0.2 for noise filtering
-LOW_MOMENTUM: Final[float] = 0.05     # Reduced from 0.1 to better identify ranging periods
+STRONG_MOMENTUM: Final[float] = 0.75
+MODERATE_MOMENTUM: Final[float] = 0.5
+WEAK_MOMENTUM: Final[float] = 0.3
+MIXED_MOMENTUM: Final[float] = 0.15
+LOW_MOMENTUM: Final[float] = 0.05
 
 # Analysis weight factors
 DIRECTIONAL_WEIGHT: Final[float] = 0.50

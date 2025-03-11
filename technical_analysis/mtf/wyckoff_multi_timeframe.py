@@ -114,7 +114,7 @@ def analyze_multi_timeframe(
         # Enhanced notification criteria
         should_notify = (
             all_analysis.confidence_level >= min_confidence and 
-            momentum_intensity >= MODERATE_MOMENTUM and 
+            momentum_intensity >= WEAK_MOMENTUM and 
             # (all_analysis.short_term.volatility_state != VolatilityState.HIGH or all_analysis.intermediate.volatility_state != VolatilityState.HIGH) and
             all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL and
             # Avoid uncertain phases in key timeframes
