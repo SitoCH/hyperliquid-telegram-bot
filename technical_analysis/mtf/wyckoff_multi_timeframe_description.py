@@ -154,15 +154,6 @@ def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
         else:
             signals.append("shorts paying high premiums")
     
-    # Liquidation risk analysis
-    high_risk_count = sum(
-        1 for group in [analysis.short_term, analysis.intermediate, analysis.long_term]
-        if group.liquidation_risk == LiquidationRisk.HIGH
-    )
-    
-    if high_risk_count >= 2:
-        signals.append("high liquidation risk, cascading liquidations possible")
-    
     # Volatility analysis with timeframe context
     if all(group.volatility_state == VolatilityState.HIGH 
            for group in [analysis.short_term, analysis.intermediate]):
@@ -435,18 +426,14 @@ def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
     )
     
     volume_desc = _get_volume_description(analysis.volume_strength)
-    
-    risk_warning = ""
-    if analysis.liquidation_risk == LiquidationRisk.HIGH:
-        risk_warning = " ⚠️ high liquidation risk"
-    
+        
     volatility = ""
     if analysis.volatility_state == VolatilityState.HIGH:
         volatility = " | high volatility"
         
     return (
         f"• {phase_desc} phase {action_desc}\n"
-        f"  └─ {volume_desc}{volatility}{risk_warning}"
+        f"  └─ {volume_desc}{volatility}"
     )
 
 def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData]) -> Optional[str]:

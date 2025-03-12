@@ -181,7 +181,6 @@ def _analyze_timeframe_group(
             group_weight=0.0,
             funding_sentiment=0.0,
             liquidity_state=MarketLiquidity.UNKNOWN,
-            liquidation_risk=LiquidationRisk.UNKNOWN,
             volatility_state=VolatilityState.UNKNOWN
         )
 
@@ -344,16 +343,13 @@ def _analyze_timeframe_group(
 
     # Analyze market states
     liquidity_counts = {state.liquidity: 0 for state in group.values()}
-    risk_counts = {state.liquidation_risk: 0 for state in group.values()}
     volatility_counts = {state.volatility: 0 for state in group.values()}
 
     for state in group.values():
         liquidity_counts[state.liquidity] += 1
-        risk_counts[state.liquidation_risk] += 1
         volatility_counts[state.volatility] += 1
 
     liquidity_state = max(liquidity_counts.items(), key=lambda x: x[1])[0]
-    liquidation_risk = max(risk_counts.items(), key=lambda x: x[1])[0]
     volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
 
     # Enhanced momentum bias calculation with clear signal weighting and transition handling
@@ -389,13 +385,6 @@ def _analyze_timeframe_group(
         elif s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH:
             # Strong positive funding with high volume can signal overly bullish sentiment
             bearish_signals += 0.6
-        
-        # Risk signals - market structure stress indicators
-        if s.liquidation_risk == LiquidationRisk.HIGH:
-            if s.phase == WyckoffPhase.MARKDOWN:
-                bullish_signals += 0.5  # High liquidations in downtrend can signal climax
-            elif s.phase == WyckoffPhase.MARKUP:
-                bearish_signals += 0.5  # High liquidations in uptrend can signal exhaustion
         
         # Effort-result signals - efficiency and exhaustion indicators
         if s.effort_vs_result == EffortResult.WEAK:
@@ -478,7 +467,6 @@ def _analyze_timeframe_group(
         group_weight=total_weight,
         funding_sentiment=funding_sentiment,
         liquidity_state=liquidity_state,
-        liquidation_risk=liquidation_risk,
         volatility_state=volatility_state
     )
 

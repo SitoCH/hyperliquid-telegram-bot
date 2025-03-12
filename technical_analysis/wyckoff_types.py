@@ -108,12 +108,6 @@ class MarketLiquidity(Enum):
     LOW = "low liquidity"
     UNKNOWN = "unknown liquidity"
 
-class LiquidationRisk(Enum):
-    HIGH = "high liquidation risk"
-    MODERATE = "moderate liquidation risk"
-    LOW = "low liquidation risk"
-    UNKNOWN = "unknown risk"
-
 @dataclass
 class WyckoffState:
     phase: WyckoffPhase
@@ -130,7 +124,6 @@ class WyckoffState:
     funding_state: FundingState
     description: str
     liquidity: MarketLiquidity = MarketLiquidity.UNKNOWN
-    liquidation_risk: LiquidationRisk = LiquidationRisk.UNKNOWN
 
     def to_dict(self):
         return {
@@ -147,8 +140,7 @@ class WyckoffState:
             'wyckoff_sign': self.wyckoff_sign.value,
             'funding_state': self.funding_state.value,
             'description': self.description,
-            'liquidity': self.liquidity.value,
-            'liquidation_risk': self.liquidation_risk.value,
+            'liquidity': self.liquidity.value
         }
 
     @staticmethod
@@ -167,8 +159,7 @@ class WyckoffState:
             wyckoff_sign=WyckoffSign.NONE,
             funding_state=FundingState.UNKNOWN,
             description="Unknown market state",
-            liquidity=MarketLiquidity.UNKNOWN,
-            liquidation_risk=LiquidationRisk.UNKNOWN,
+            liquidity=MarketLiquidity.UNKNOWN
         )
 
 @dataclass

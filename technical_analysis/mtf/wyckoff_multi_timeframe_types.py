@@ -50,7 +50,6 @@ class TimeframeGroupAnalysis:
     group_weight: float
     funding_sentiment: float  # -1 to 1, negative means bearish funding
     liquidity_state: MarketLiquidity
-    liquidation_risk: LiquidationRisk
     volatility_state: VolatilityState
     uncertain_phase: bool = True  # Add this field with default value True
 
