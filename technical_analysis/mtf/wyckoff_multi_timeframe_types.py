@@ -19,6 +19,10 @@ INTERMEDIATE_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERME
 LONG_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES)
 CONTEXT_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES)
 
+# Volume thresholds
+STRONG_VOLUME_THRESHOLD = 0.7
+MODERATE_VOLUME_THRESHOLD = 0.4
+
 # Momentum thresholds
 STRONG_MOMENTUM: Final[float] = 0.75
 MODERATE_MOMENTUM: Final[float] = 0.5

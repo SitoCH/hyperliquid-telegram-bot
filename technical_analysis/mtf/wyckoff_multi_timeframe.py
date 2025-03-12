@@ -21,7 +21,7 @@ from technical_analysis.wyckoff_types import (
 
 from .wyckoff_multi_timeframe_types import (
     SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
-    STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
+    STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM, MODERATE_VOLUME_THRESHOLD,
     MIXED_MOMENTUM, LOW_MOMENTUM,
     SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT,
     DIRECTIONAL_WEIGHT, VOLUME_WEIGHT, PHASE_WEIGHT
@@ -120,6 +120,8 @@ def analyze_multi_timeframe(
             # Avoid uncertain phases in key timeframes
             not all_analysis.short_term.uncertain_phase and
             not all_analysis.intermediate.uncertain_phase and
+            all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD and
+            all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD and
             all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING and
             all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING
         )
@@ -128,19 +130,18 @@ def analyze_multi_timeframe(
         if all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:
             # Bullish criteria - require stronger signals
             should_notify = should_notify and (
-                # Additional volume criteria for bullish moves
-                all_analysis.short_term.volume_strength >= 0.55 and
-                all_analysis.intermediate.volume_strength >= 0.50 and
                 # Ensure internal alignment is strong enough
                 all_analysis.short_term.internal_alignment >= 0.55 and
-                all_analysis.intermediate.internal_alignment >= 0.50
+                all_analysis.intermediate.internal_alignment >= 0.50 and
+                # At least one of these bullish confirmation signals
+                (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKUP or 
+                 all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKUP or
+                 all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BULLISH or
+                 all_analysis.intermediate.funding_sentiment > 0.1)
             )
         else:  # BEARISH
             # Bearish criteria - adjusted thresholds for typical bearish behavior
             should_notify = should_notify and (
-                # Lower volume requirements for bearish moves
-                all_analysis.short_term.volume_strength >= 0.45 and
-                all_analysis.intermediate.volume_strength >= 0.40 and
                 # Still require reasonable alignment but less strict
                 all_analysis.short_term.internal_alignment >= 0.50 and
                 all_analysis.intermediate.internal_alignment >= 0.45 and
