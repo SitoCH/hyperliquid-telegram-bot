@@ -23,8 +23,8 @@ def _load_from_disk(coin: str, timeframe: Timeframe) -> Optional[Tuple[int, List
         try:
             with open(cache_file, 'r') as f:
                 return tuple(json.load(f))
-        except (ValueError):
-            # Handle corrupted cache files
+        except ValueError as e:
+            logger.error(f"Failed to load cache for {coin} {timeframe.name}: {e}")
             cache_file.unlink()
     return None
 
