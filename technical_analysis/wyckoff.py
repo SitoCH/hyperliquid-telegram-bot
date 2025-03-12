@@ -17,18 +17,18 @@ from .adaptive_thresholds import AdaptiveThresholdManager
 VOLUME_THRESHOLD: Final[float] = 1.7  # Increased from 1.5 for more significance with larger dataset
 STRONG_DEV_THRESHOLD: Final[float] = 1.9  # Increased from 1.8 for wider historical context
 NEUTRAL_ZONE_THRESHOLD: Final[float] = 1.0  # Increased from 0.8 for more stable neutral zone detection
-EFFORT_THRESHOLD: Final[float] = 0.7  # Increased from 0.65 for clearer effort vs result signals
+EFFORT_THRESHOLD: Final[float] = 0.75  # Increased from 0.7 for cleaner effort signals
 MIN_PERIODS: Final[int] = 40  # Increased from 30 to use more historical data
 VOLUME_MA_THRESHOLD: Final[float] = 1.5  # Increased from 1.3 for stronger volume signals
-VOLUME_SURGE_THRESHOLD: Final[float] = 2.2  # Increased from 2.0 for more significant volume events
-VOLUME_TREND_SHORT: Final[int] = 7  # Increased from 5 for smoother short-term trends
-VOLUME_TREND_LONG: Final[int] = 14  # Increased from 10 for longer-term trend context
+VOLUME_SURGE_THRESHOLD: Final[float] = 2.4  # Increased from 2.2 for stronger volume event signals
+VOLUME_TREND_SHORT: Final[int] = 8  # Increased from 7 for smoother short-term trends
+VOLUME_TREND_LONG: Final[int] = 16  # Increased from 14 for longer-term trend context
 
 # Add new constants after existing ones
-EFFORT_VOLUME_THRESHOLD: Final[float] = 1.5  # Volume threshold for effort analysis
+EFFORT_VOLUME_THRESHOLD: Final[float] = 1.6  # Increased from 1.5 for higher quality volume signals
 RESULT_MIN_MOVE: Final[float] = 0.001  # Minimum price move to consider (0.1%)
-HIGH_EFFICIENCY_THRESHOLD: Final[float] = 0.8  # High efficiency threshold
-LOW_EFFICIENCY_THRESHOLD: Final[float] = 0.4  # Low efficiency threshold
+HIGH_EFFICIENCY_THRESHOLD: Final[float] = 0.75  # Reduced from 0.8 for more achievable threshold
+LOW_EFFICIENCY_THRESHOLD: Final[float] = 0.35  # Reduced from 0.4 for stricter weak signal filtering
 
 @dataclass
 class VolumeMetrics:
