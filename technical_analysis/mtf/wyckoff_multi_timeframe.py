@@ -16,7 +16,7 @@ from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframe
 from technical_analysis.wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, _TIMEFRAME_SETTINGS,
     is_bearish_action, is_bullish_action, is_bearish_phase, is_bullish_phase,
-    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
+    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity
 )
 
 from .wyckoff_multi_timeframe_types import (

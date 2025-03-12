@@ -9,7 +9,7 @@ from utils import exchange_enabled
 
 from technical_analysis.wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, SignificantLevelsData,
-    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, LiquidationRisk
+    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity
 )
 
 from .wyckoff_multi_timeframe_types import (

@@ -4,7 +4,7 @@ from typing import Final
 
 from technical_analysis.wyckoff_types import (
     WyckoffPhase, CompositeAction, MarketLiquidity,
-    LiquidationRisk, VolatilityState, Timeframe, _TIMEFRAME_SETTINGS
+    VolatilityState, Timeframe, _TIMEFRAME_SETTINGS
 )
 
 # Updated timeframe groups optimized for intraday crypto trading
