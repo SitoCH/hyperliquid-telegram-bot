@@ -312,18 +312,12 @@ def determine_phase_by_price_strength(
     timeframe: Timeframe
 ) -> Tuple[WyckoffPhase, bool]:
     """Enhanced phase determination with better trend confirmation."""
-    # Get thresholds
+
     _, strong_dev_threshold, neutral_zone_threshold, \
     momentum_threshold, _, _ = timeframe.settings.thresholds
 
     # Calculate trend consistency
     vol_ratio = volatility.iloc[-1] / volatility.mean()
-    
-    # Adjust thresholds for intraday volatility
-    if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]:
-        strong_dev_threshold *= 0.85  # More sensitive for short timeframes
-        neutral_zone_threshold *= 1.2  # Wider neutral zone for noise
-        momentum_threshold *= 0.9  # More sensitive momentum
 
     # Modified reversal zone detection (less strict, more phases become certain)
     is_reversal_zone = abs(price_strength) > strong_dev_threshold * 1.3  # Reduced from 1.5
