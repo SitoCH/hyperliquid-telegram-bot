@@ -438,19 +438,15 @@ def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
     
     risk_warning = ""
     if analysis.liquidation_risk == LiquidationRisk.HIGH:
-        risk_warning = " ⚠️ High liquidation risk"
+        risk_warning = " ⚠️ high liquidation risk"
     
     volatility = ""
     if analysis.volatility_state == VolatilityState.HIGH:
-        volatility = " | High volatility"
-    
-    funding = ""
-    if abs(analysis.funding_sentiment) > HIGH_FUNDING_THRESHOLD:
-        funding = f" | {'Bullish' if analysis.funding_sentiment > 0 else 'Bearish'} funding"
-    
+        volatility = " | high volatility"
+        
     return (
         f"• {phase_desc} phase {action_desc}\n"
-        f"  └─ {volume_desc}{volatility}{funding}{risk_warning}"
+        f"  └─ {volume_desc}{volatility}{risk_warning}"
     )
 
 def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData]) -> Optional[str]:
