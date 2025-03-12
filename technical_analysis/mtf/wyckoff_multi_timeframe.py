@@ -115,7 +115,6 @@ def analyze_multi_timeframe(
         should_notify = (
             all_analysis.confidence_level >= min_confidence and 
             momentum_intensity >= WEAK_MOMENTUM and 
-            # (all_analysis.short_term.volatility_state != VolatilityState.HIGH or all_analysis.intermediate.volatility_state != VolatilityState.HIGH) and
             all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL and
             # Avoid uncertain phases in key timeframes
             not all_analysis.short_term.uncertain_phase and
@@ -135,7 +134,9 @@ def analyze_multi_timeframe(
                 all_analysis.intermediate.internal_alignment >= 0.50 and
                 # At least one of these bullish confirmation signals
                 (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKUP or 
+                 all_analysis.short_term.dominant_phase == WyckoffPhase.ACCUMULATION or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKUP or
+                 all_analysis.intermediate.dominant_phase == WyckoffPhase.ACCUMULATION or
                  all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BULLISH or
                  all_analysis.intermediate.funding_sentiment > 0.1)
             )
@@ -147,7 +148,9 @@ def analyze_multi_timeframe(
                 all_analysis.intermediate.internal_alignment >= 0.45 and
                 # At least one of these bearish confirmation signals
                 (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKDOWN or 
+                 all_analysis.short_term.dominant_phase == WyckoffPhase.DISTRIBUTION or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKDOWN or
+                 all_analysis.intermediate.dominant_phase == WyckoffPhase.DISTRIBUTION or
                  all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BEARISH or
                  all_analysis.intermediate.funding_sentiment < -0.1)
             )
