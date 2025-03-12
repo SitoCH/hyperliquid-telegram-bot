@@ -290,9 +290,12 @@ async def spot_positions_messages(tablefmt, spot_user_state):
                 'pnl': pnl,
                 'pnl_percentage': pnl_percentage
             })
-    
+
+    if len(positions) == 0:
+        return []
+
     positions.sort(key=lambda x: x['usd_value'], reverse=True)
-    
+
     table = tabulate(
         [
             [
