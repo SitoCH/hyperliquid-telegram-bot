@@ -6,8 +6,7 @@ from .wyckoff_types import (
 def generate_wyckoff_description(
     phase: WyckoffPhase, 
     uncertain_phase: bool, 
-    is_high_volume: bool, 
-    momentum_strength: float,
+    volume_state: VolumeState,
     is_spring: bool, 
     is_upthrust: bool, 
     effort_result: EffortResult,
@@ -34,9 +33,9 @@ def generate_wyckoff_description(
     # Build description components
     components = []
     
-    # Add phase with volume context
-    volume_desc = "high volume" if is_high_volume else "low volume"
-    components.append(f"{phase_desc} phase with {volume_desc}")
+    # Add phase with volume context - enhanced with more granular volume states
+    volume_desc = volume_state.value
+    components.append(f"{phase_desc} phase with {volume_desc} volume")
     
     # Add spring or upthrust if present
     if is_spring:

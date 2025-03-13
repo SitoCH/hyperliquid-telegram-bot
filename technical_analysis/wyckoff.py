@@ -42,6 +42,7 @@ class VolumeMetrics:
     short_ma: float    # Short-term moving average
     long_ma: float     # Long-term moving average
     trend_strength: float  # Trend strength indicator
+    state: VolumeState  # Categorized volume state (VERY_HIGH, HIGH, NEUTRAL, LOW, VERY_LOW)
 
 @dataclass
 class EffortAnalysis:
@@ -52,7 +53,7 @@ class EffortAnalysis:
     result: EffortResult     # Final effort classification
 
 def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMetrics:
-    """Calculate normalized volume metrics."""
+    """Calculate normalized volume metrics and determine volume state."""
     try:
         # Use timeframe settings instead of hardcoded values
         volume_sma = df['v'].rolling(window=timeframe.settings.volume_ma_window).mean()
@@ -70,20 +71,44 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         # Calculate volume consistency
         recent_strong_volume = (df['v'].iloc[-3:] > volume_sma.iloc[-3:]).mean()
         
+        # Calculate strength and ratio metrics
+        strength = (df['v'].iloc[-1] - volume_sma.iloc[-1]) / last_std
+        ratio = df['v'].iloc[-1] / last_sma
+        
+        # Determine volume state based on metrics
+        volume_threshold = timeframe.settings.thresholds[0]
+        
+        # Set volume state based on ratio and strength with more gradations
+        if ratio > volume_threshold * 1.5 or strength > 2.5:
+            state = VolumeState.VERY_HIGH
+        elif ratio > volume_threshold * 1.1 or strength > 1.5:
+            state = VolumeState.HIGH
+        elif ratio < 0.5 or strength < -1.5:
+            state = VolumeState.VERY_LOW
+        elif ratio < 0.75 or strength < -0.8:
+            state = VolumeState.LOW
+        else:
+            state = VolumeState.NEUTRAL
+        
         return VolumeMetrics(
-            strength=(df['v'].iloc[-1] - volume_sma.iloc[-1]) / last_std,
-            ratio=df['v'].iloc[-1] / last_sma,
+            strength=strength,
+            ratio=ratio,
             trend=df['v'].rolling(window=timeframe.settings.volume_trend_window).mean().iloc[-1] / last_sma,
             impulse=df['v'].pct_change().iloc[-1],
             sma=last_sma,
             consistency=recent_strong_volume,
             short_ma=volume_short_ma.iloc[-1],
             long_ma=volume_long_ma.iloc[-1],
-            trend_strength=volume_trend.iloc[-1]
+            trend_strength=volume_trend.iloc[-1],
+            state=state
         )
     except Exception as e:
         logger.warning(f"Error calculating volume metrics: {e}")
-        return VolumeMetrics(0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0)
+        return VolumeMetrics(
+            strength=0.0, ratio=1.0, trend=1.0, impulse=0.0, 
+            sma=1.0, consistency=0.0, short_ma=1.0, long_ma=1.0, 
+            trend_strength=0.0, state=VolumeState.UNKNOWN
+        )
 
 def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol_metrics: VolumeMetrics) -> tuple[bool, bool]:
     """Enhanced spring/upthrust detection using normalized volume metrics."""
@@ -136,15 +161,8 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         return WyckoffState.unknown()
 
     try:
-        # Calculate volume metrics first
+        # Calculate volume metrics first - now includes volume_state
         vol_metrics = calculate_volume_metrics(df, timeframe)
-        
-        # Define is_high_volume using normalized metrics
-        is_high_volume = (
-            (vol_metrics.ratio > timeframe.settings.thresholds[0] and vol_metrics.trend > 1.0) or
-            (abs(vol_metrics.strength) > 2.0) or
-            (vol_metrics.ratio > 1.2 and vol_metrics.trend > 1.2)
-        )
 
         # Process last period
         short_term_window = min(MIN_PERIODS, len(df) - 1)
@@ -204,7 +222,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         # Pass the entire df to identify_wyckoff_phase instead of individual parameters
         current_phase, uncertain_phase = identify_wyckoff_phase(
             df, vol_metrics, price_strength, 
-            momentum_strength, is_high_volume, volatility, timeframe, 
+            momentum_strength, vol_metrics.state, volatility, timeframe, 
             effort_vs_result
         )
         
@@ -220,7 +238,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         wyckoff_state = WyckoffState(
             phase=current_phase,
             uncertain_phase=uncertain_phase,
-            volume=VolumeState.HIGH if is_high_volume else VolumeState.LOW,
+            volume=vol_metrics.state,
             pattern=MarketPattern.TRENDING if abs(momentum_strength) > timeframe.settings.thresholds[3] else MarketPattern.RANGING,
             volatility=VolatilityState.HIGH if volatility.iloc[-1] > volatility.mean() else VolatilityState.NORMAL,
             is_spring=is_spring,
@@ -230,7 +248,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
             wyckoff_sign=wyckoff_sign,
             funding_state=funding_state,
             description=generate_wyckoff_description(
-                current_phase, uncertain_phase, is_high_volume, momentum_strength, 
+                current_phase, uncertain_phase, vol_metrics.state, 
                 is_spring, is_upthrust, effort_result,
                 composite_action, wyckoff_sign, funding_state
             )
@@ -246,7 +264,7 @@ def identify_wyckoff_phase(
     vol_metrics: VolumeMetrics,
     price_strength: float, 
     momentum_strength: float, 
-    is_high_volume: bool,
+    volume_state: VolumeState,
     volatility: pd.Series, 
     timeframe: Timeframe,
     effort_vs_result: pd.Series
@@ -267,7 +285,9 @@ def identify_wyckoff_phase(
     if is_scalp_timeframe:
         # Use dynamic breakout threshold based on market conditions
         breakout_threshold = AdaptiveThresholdManager.get_breakout_threshold(df, timeframe)
-        if abs(recent_change) > breakout_threshold and is_high_volume:
+        # Use higher volume states for more reliable breakout signals
+        has_significant_volume = volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH)
+        if abs(recent_change) > breakout_threshold and has_significant_volume:
             return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False
 
     # Enhanced liquidation cascade detection with adaptive thresholds
@@ -300,12 +320,12 @@ def identify_wyckoff_phase(
 
     # Rest of the existing phase determination logic
     return determine_phase_by_price_strength(
-        price_strength, momentum_strength, is_high_volume, volatility, timeframe
+        price_strength, momentum_strength, volume_state, volatility, timeframe
     )
 
 def determine_phase_by_price_strength(
     price_strength: float, momentum_strength: float, 
-    is_high_volume: bool, volatility: pd.Series,
+    volume_state: VolumeState, volatility: pd.Series,
     timeframe: Timeframe
 ) -> Tuple[WyckoffPhase, bool]:
     """Enhanced phase determination with better trend confirmation."""
@@ -327,6 +347,9 @@ def determine_phase_by_price_strength(
     is_price_collapsing = momentum_strength < -momentum_threshold * 1.5 and price_strength < -strong_dev_threshold
     is_price_surging = momentum_strength > momentum_threshold * 1.5 and price_strength > strong_dev_threshold
     
+    # Use volume state for more nuanced analysis
+    has_high_volume = volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH)
+
     # Price above threshold - potential Distribution or Markup
     if price_strength > strong_dev_threshold:
         # Check for a price surge (strong positive momentum)
@@ -336,12 +359,23 @@ def determine_phase_by_price_strength(
             
         # Distribution requires momentum to be stabilizing or turning down
         if momentum_strength < momentum_threshold * 0.3:  # Neutral or negative momentum
-            if is_high_volume:  # Distribution with supporting volume
-                return WyckoffPhase.DISTRIBUTION, not is_reversal_zone
-            return WyckoffPhase.DISTRIBUTION, not (price_trend_consistency and momentum_consistency)
+            # Volume state influences certainty - VERY_HIGH volume gives strongest signal
+            if volume_state == VolumeState.VERY_HIGH:
+                return WyckoffPhase.DISTRIBUTION, False  # Very certain with extreme volume
+            elif volume_state == VolumeState.HIGH:
+                return WyckoffPhase.DISTRIBUTION, not is_reversal_zone  # Still quite certain
+            else:
+                # Less certain with lower volume
+                return WyckoffPhase.DISTRIBUTION, not (price_trend_consistency and momentum_consistency)
         else:
             # Strong positive momentum with positive price - still in Markup
-            return WyckoffPhase.MARKUP, not (price_trend_consistency and (is_high_volume or momentum_consistency))
+            # Volume helps confirm markup - higher certainty with higher volume
+            markup_certainty = price_trend_consistency and (
+                volume_state == VolumeState.VERY_HIGH or 
+                (volume_state == VolumeState.HIGH and momentum_consistency) or
+                momentum_consistency > 0.9  # Very strong momentum can override volume
+            )
+            return WyckoffPhase.MARKUP, not markup_certainty
     
     # Price below threshold - potential Accumulation or Markdown
     if price_strength < -strong_dev_threshold:
@@ -352,12 +386,23 @@ def determine_phase_by_price_strength(
             
         # Accumulation requires momentum to be stabilizing or turning up
         if momentum_strength > -momentum_threshold * 0.3:  # Neutral or positive momentum
-            if is_high_volume:  # Accumulation with supporting volume
-                return WyckoffPhase.ACCUMULATION, not is_reversal_zone
-            return WyckoffPhase.ACCUMULATION, not (price_trend_consistency and momentum_consistency)
+            # Volume state influences certainty - VERY_HIGH volume gives strongest signal
+            if volume_state == VolumeState.VERY_HIGH:
+                return WyckoffPhase.ACCUMULATION, False  # Very certain with extreme volume
+            elif volume_state == VolumeState.HIGH:
+                return WyckoffPhase.ACCUMULATION, not is_reversal_zone  # Still quite certain
+            else:
+                # Less certain with lower volume
+                return WyckoffPhase.ACCUMULATION, not (price_trend_consistency and momentum_consistency)
         else:
             # Strong negative momentum with negative price - still in Markdown
-            return WyckoffPhase.MARKDOWN, not (price_trend_consistency and (is_high_volume or momentum_consistency))
+            # Volume helps confirm markdown - higher certainty with higher volume
+            markdown_certainty = price_trend_consistency and (
+                volume_state == VolumeState.VERY_HIGH or 
+                (volume_state == VolumeState.HIGH and momentum_consistency) or
+                momentum_consistency > 0.9  # Very strong momentum can override volume
+            )
+            return WyckoffPhase.MARKDOWN, not markdown_certainty
 
     # Enhanced ranging detection with multi-factor certainty
     if abs(price_strength) <= neutral_zone_threshold:
@@ -381,7 +426,7 @@ def determine_phase_by_price_strength(
     # Improved trend confirmation with more phases considered certain
     trend_strength = abs(momentum_strength) / momentum_threshold
     # Lower threshold for strong trend - more trends become "strong"
-    is_strong_trend = trend_strength > 1.3 and (is_high_volume or price_trend_consistency)
+    is_strong_trend = trend_strength > 1.3 and (has_high_volume or price_trend_consistency)
 
     # Check for trend phases (Markup/Markdown)
     if price_strength > 0:

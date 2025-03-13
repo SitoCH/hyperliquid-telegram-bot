@@ -18,8 +18,11 @@ class WyckoffPhase(Enum):
     UNKNOWN = "unknown"
 
 class VolumeState(Enum):
+    VERY_HIGH = "very high"
     HIGH = "high"
+    NEUTRAL = "neutral"
     LOW = "low"
+    VERY_LOW = "very low"
     UNKNOWN = "unknown"
 
 class MarketPattern(Enum):
