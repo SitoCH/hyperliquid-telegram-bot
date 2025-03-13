@@ -295,7 +295,14 @@ def _analyze_timeframe_group(
 
     # Enhanced volume strength calculation - symmetric treatment
     volume_factors = []
-    for state in group.values():
+    total_volume_weight = 0.0
+    
+    for tf, state in group.items():
+        # Use timeframe-specific settings for weighting
+        tf_weight = tf.settings.phase_weight
+        total_volume_weight += tf_weight
+        
+        # Base strength determined by volume state
         base_strength = 1.0 if state.volume == VolumeState.HIGH else 0.5
 
         # Adjust based on effort vs result - symmetric treatment
@@ -308,11 +315,20 @@ def _analyze_timeframe_group(
         if state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN]:
             if state.composite_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
                 base_strength *= 1.3
-                
-        volume_factors.append(base_strength)
-
-    volume_strength = sum(volume_factors) / len(volume_factors)
-
+        
+        # Consider timeframe-specific volume characteristics
+        # Higher importance for longer timeframes and more extreme settings
+        volume_importance = tf.settings.volume_ma_window / 20.0  # Normalize based on typical window size
+        
+        # Add the weighted volume factor to our list
+        volume_factors.append((base_strength * volume_importance, tf_weight))
+    
+    # Calculate weighted average of volume factors
+    volume_strength = (
+        sum(factor * weight for factor, weight in volume_factors) / total_volume_weight 
+        if total_volume_weight > 0 else 0.0
+    )
+    
     # Clamp volume strength between 0 and 1
     volume_strength = max(0.0, min(1.0, volume_strength))
 
