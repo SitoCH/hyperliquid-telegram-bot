@@ -197,8 +197,8 @@ def _analyze_timeframe_group(
     downside_exhaustion = 0
 
     # Track rapid movement signals - symmetric treatment
-    rapid_bullish_moves = 0
-    rapid_bearish_moves = 0
+    rapid_bullish_moves = 0.0
+    rapid_bearish_moves = 0.0
 
     for tf, state in group.items():
         weight = tf.settings.phase_weight
@@ -220,10 +220,18 @@ def _analyze_timeframe_group(
             downside_exhaustion += 1
             weight *= 1.2
 
+        # Enhance volume signal handling with the new enum values
         # Reduce weight if we see contrary volume signals - symmetric treatment
-        if (state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN] and 
-            state.volume == VolumeState.LOW):
-            weight *= 0.8
+        if (state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN]):
+            # Use the expanded volume states - LOW and VERY_LOW both indicate weak volume
+            if state.volume in [VolumeState.LOW, VolumeState.VERY_LOW]:
+                weight *= 0.8
+            # VERY_HIGH volume should get a stronger boost
+            elif state.volume == VolumeState.VERY_HIGH:
+                weight *= 1.3
+            # HIGH volume gets a regular boost
+            elif state.volume == VolumeState.HIGH:
+                weight *= 1.1
 
         # Factor in effort vs result analysis - symmetric treatment
         if state.effort_vs_result == EffortResult.WEAK:
@@ -232,16 +240,23 @@ def _analyze_timeframe_group(
             elif state.phase == WyckoffPhase.MARKDOWN:
                 downside_exhaustion += 1
 
-        # Detect rapid price movements - symmetric treatment 
-        if state.phase == WyckoffPhase.MARKUP and state.volume == VolumeState.HIGH:
-            rapid_bullish_moves += 1
-        elif state.phase == WyckoffPhase.MARKDOWN and state.volume == VolumeState.HIGH:
-            rapid_bearish_moves += 1
-
+        # Detect rapid price movements - optimized for new volume states
+        # Use VERY_HIGH and HIGH volume states for detecting rapid moves
+        if state.phase == WyckoffPhase.MARKUP and state.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
+            # Give stronger weight to VERY_HIGH volume
+            rapid_bullish_moves += 1.5 if state.volume == VolumeState.VERY_HIGH else 1.0
+        elif state.phase == WyckoffPhase.MARKDOWN and state.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
+            # Give stronger weight to VERY_HIGH volume
+            rapid_bearish_moves += 1.5 if state.volume == VolumeState.VERY_HIGH else 1.0
+        
         # Increase weight for strong directional moves - symmetric treatment
         if state.pattern == MarketPattern.TRENDING:
-            if state.volume == VolumeState.HIGH:
-                weight *= 1.3  # 30% boost for high volume trends
+            # Scale weight boost based on volume state granularity
+            if state.volume == VolumeState.VERY_HIGH:
+                weight *= 1.4     # 40% boost for very high volume trends
+            elif state.volume == VolumeState.HIGH:
+                weight *= 1.2     # 20% boost for high volume trends
+            # Normal or low volume doesn't get a boost
         
         total_weight += weight
 
@@ -293,7 +308,7 @@ def _analyze_timeframe_group(
     action_alignment = max(action_weights.values()) / total_weight if action_weights else 0
     internal_alignment = (phase_alignment + action_alignment) / 2
 
-    # Enhanced volume strength calculation - symmetric treatment
+    # Enhanced volume strength calculation with improved volume state handling
     volume_factors = []
     total_volume_weight = 0.0
     
@@ -302,8 +317,19 @@ def _analyze_timeframe_group(
         tf_weight = tf.settings.phase_weight
         total_volume_weight += tf_weight
         
-        # Base strength determined by volume state
-        base_strength = 1.0 if state.volume == VolumeState.HIGH else 0.5
+        # Base strength determined by more granular volume state
+        if state.volume == VolumeState.VERY_HIGH:
+            base_strength = 1.5    # Increased from 1.0 for very high volume
+        elif state.volume == VolumeState.HIGH:
+            base_strength = 1.0    # Standard for high volume
+        elif state.volume == VolumeState.NEUTRAL:
+            base_strength = 0.7    # Medium for neutral volume
+        elif state.volume == VolumeState.LOW:
+            base_strength = 0.4    # Lower for low volume
+        elif state.volume == VolumeState.VERY_LOW:
+            base_strength = 0.25   # Very low for very low volume
+        else:
+            base_strength = 0.5    # Default/unknown case
 
         # Adjust based on effort vs result - symmetric treatment
         if state.effort_vs_result == EffortResult.STRONG:
@@ -395,12 +421,22 @@ def _analyze_timeframe_group(
                 bearish_signals += 0.7  # Reversal in uptrend - bearish
         
         # Sentiment signals - contra-indicators often suggest reversals
-        if s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE] and s.volume == VolumeState.HIGH:
-            # Strong negative funding with high volume often signals potential reversal
-            bullish_signals += 0.6
-        elif s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE] and s.volume == VolumeState.HIGH:
-            # Strong positive funding with high volume can signal overly bullish sentiment
-            bearish_signals += 0.6
+        if s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE]:
+            # Amplify signal based on volume state
+            if s.volume == VolumeState.VERY_HIGH:
+                bullish_signals += 0.8    # Stronger signal with very high volume
+            elif s.volume == VolumeState.HIGH:
+                bullish_signals += 0.6    # Regular signal with high volume
+            elif s.volume != VolumeState.VERY_LOW:  # Skip very low volume
+                bullish_signals += 0.4    # Weaker signal with normal/low volume
+        elif s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE]:
+            # Amplify signal based on volume state
+            if s.volume == VolumeState.VERY_HIGH:
+                bearish_signals += 0.8    # Stronger signal with very high volume
+            elif s.volume == VolumeState.HIGH:
+                bearish_signals += 0.6    # Regular signal with high volume
+            elif s.volume != VolumeState.VERY_LOW:  # Skip very low volume
+                bearish_signals += 0.4    # Weaker signal with normal/low volume
         
         # Effort-result signals - efficiency and exhaustion indicators
         if s.effort_vs_result == EffortResult.WEAK:
