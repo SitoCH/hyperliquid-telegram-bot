@@ -117,7 +117,6 @@ class WyckoffState:
     volatility: VolatilityState
     is_spring: bool
     is_upthrust: bool
-    volume_spread: VolumeState
     effort_vs_result: EffortResult
     composite_action: CompositeAction
     wyckoff_sign: WyckoffSign
@@ -134,7 +133,6 @@ class WyckoffState:
             'volatility': self.volatility.value,
             'is_spring': self.is_spring,
             'is_upthrust': self.is_upthrust,
-            'volume_spread': self.volume_spread.value,
             'effort_vs_result': self.effort_vs_result.value,
             'composite_action': self.composite_action.value,
             'wyckoff_sign': self.wyckoff_sign.value,
@@ -153,7 +151,6 @@ class WyckoffState:
             volatility=VolatilityState.UNKNOWN,
             is_spring=False,
             is_upthrust=False,
-            volume_spread=VolumeState.UNKNOWN,
             effort_vs_result=EffortResult.UNKNOWN,
             composite_action=CompositeAction.UNKNOWN,
             wyckoff_sign=WyckoffSign.NONE,

@@ -155,8 +155,6 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         price_std = df['c'].rolling(window=MIN_PERIODS).std()
 
         # Volume analysis (VSA)
-        volume_spread = recent_df['v'] * (recent_df['h'] - recent_df['l'])
-        volume_spread_ma = volume_spread.rolling(window=7).mean()
         effort_vs_result = pd.Series([0.0] * len(recent_df), index=recent_df.index)
         price_range_mask = (recent_df['h'] - recent_df['l']) > 0
         if price_range_mask.any():
@@ -213,11 +211,11 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         # Replace simple effort_result calculation with new analysis
         effort_analysis = analyze_effort_result(df, vol_metrics, timeframe)
         effort_result = effort_analysis.result
-        
+
         # Detect composite action and Wyckoff signs
         composite_action = detect_composite_action(df, price_strength, vol_metrics, effort_vs_result.iloc[-1])
         wyckoff_sign = detect_wyckoff_signs(df, price_strength, vol_metrics.trend_strength, is_spring, is_upthrust)
-            
+
         # Create WyckoffState instance
         wyckoff_state = WyckoffState(
             phase=current_phase,
@@ -227,7 +225,6 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
             volatility=VolatilityState.HIGH if volatility.iloc[-1] > volatility.mean() else VolatilityState.NORMAL,
             is_spring=is_spring,
             is_upthrust=is_upthrust,
-            volume_spread=VolumeState.HIGH if volume_spread.iloc[-1] > volume_spread_ma.iloc[-1] else VolumeState.LOW,
             effort_vs_result=effort_result,
             composite_action=composite_action,
             wyckoff_sign=wyckoff_sign,
