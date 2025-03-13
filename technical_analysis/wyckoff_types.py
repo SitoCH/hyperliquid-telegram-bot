@@ -187,12 +187,12 @@ class TimeframeSettings:
     @property
     def volume_short_ma_window(self) -> int:
         """Derive short MA from main window size for backward compatibility"""
-        return max(3, self.volume_ma_window // 4)
+        return max(5, self.volume_ma_window // 3)
         
     @property
     def volume_trend_window(self) -> int:
         """Derive trend window from long window for backward compatibility"""
-        return max(4, self.volume_long_ma_window // 2)
+        return max(7, self.volume_long_ma_window // 3)
 
     @property
     def thresholds(self) -> tuple[float, float, float, float, float, float]:
