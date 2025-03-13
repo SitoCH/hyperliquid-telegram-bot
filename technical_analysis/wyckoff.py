@@ -44,14 +44,6 @@ class VolumeMetrics:
     trend_strength: float  # Trend strength indicator
     state: VolumeState  # Categorized volume state (VERY_HIGH, HIGH, NEUTRAL, LOW, VERY_LOW)
 
-@dataclass
-class EffortAnalysis:
-    """Container for effort vs result analysis"""
-    efficiency: float          # How efficiently volume translates to price movement
-    volume_quality: float     # Quality of the volume (considering spread and consistency)
-    price_impact: float      # Actual price impact relative to volume
-    result: EffortResult     # Final effort classification
-
 def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMetrics:
     """Calculate normalized volume metrics and determine volume state."""
     try:
@@ -75,17 +67,29 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         strength = (df['v'].iloc[-1] - volume_sma.iloc[-1]) / last_std
         ratio = df['v'].iloc[-1] / last_sma
         
-        # Determine volume state based on metrics
+        # Optimized volume state determination with cleaner threshold logic
         volume_threshold = timeframe.settings.thresholds[0]
         
-        # Set volume state based on ratio and strength with more gradations
-        if ratio > volume_threshold * 1.5 or strength > 2.5:
+        # Define threshold boundaries once - more maintainable
+        thresholds = {
+            'very_high_ratio': volume_threshold * 1.5,
+            'high_ratio': volume_threshold * 1.1,
+            'low_ratio': 0.75,
+            'very_low_ratio': 0.5,
+            'very_high_strength': 2.5,
+            'high_strength': 1.5,
+            'low_strength': -0.8,
+            'very_low_strength': -1.5
+        }
+        
+        # Clean determination of volume state
+        if ratio > thresholds['very_high_ratio'] or strength > thresholds['very_high_strength']:
             state = VolumeState.VERY_HIGH
-        elif ratio > volume_threshold * 1.1 or strength > 1.5:
+        elif ratio > thresholds['high_ratio'] or strength > thresholds['high_strength']:
             state = VolumeState.HIGH
-        elif ratio < 0.5 or strength < -1.5:
+        elif ratio < thresholds['very_low_ratio'] or strength < thresholds['very_low_strength']:
             state = VolumeState.VERY_LOW
-        elif ratio < 0.75 or strength < -0.8:
+        elif ratio < thresholds['low_ratio'] or strength < thresholds['low_strength']:
             state = VolumeState.LOW
         else:
             state = VolumeState.NEUTRAL
@@ -111,7 +115,7 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         )
 
 def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol_metrics: VolumeMetrics) -> tuple[bool, bool]:
-    """Enhanced spring/upthrust detection using normalized volume metrics."""
+    """Enhanced spring/upthrust detection with optimized signal logic."""
     if idx < 4:
         return False, False
     
@@ -120,6 +124,8 @@ def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol
         low_point = window['l'].min()
         high_point = window['h'].max()
         close = window['c'].iloc[-1]
+        current_low = window['l'].iloc[-1]
+        current_high = window['h'].iloc[-1]
         
         # Calculate volatility context
         price = df['c'].iloc[-1]
@@ -129,24 +135,27 @@ def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol
         spring_threshold = thresholds["spring"]
         upthrust_threshold = thresholds["upthrust"]
         
-        # Check for extremely large candle wicks to avoid false signals - use adaptive threshold
-        if (window['h'].max() - window['l'].min()) > df['c'].iloc[-1] * thresholds.get("max_wick", 0.2):
+        # Check for extremely large candle wicks to avoid false signals
+        max_wick = thresholds.get("max_wick", 0.2)
+        if (window['h'].max() - window['l'].min()) > price * max_wick:
+            return False, False
+            
+        # Volume must be significant for both patterns
+        if vol_metrics.strength <= 1.0:
             return False, False
         
-        # Enhanced spring detection
+        # Spring detection - optimized to separate conditions for clarity
         is_spring = (
-            window['l'].iloc[-1] < low_point and  # Makes new low
-            close > low_point and  # Closes above the low
-            vol_metrics.strength > 1.0 and  # Using normalized volume
-            abs(close - window['l'].iloc[-1]) > price * spring_threshold  # Significant bounce
+            current_low < low_point and         # Makes new low
+            close > low_point and               # Closes above the low
+            abs(close - current_low) > price * spring_threshold  # Significant bounce
         )
         
-        # Enhanced upthrust detection
+        # Upthrust detection - optimized to separate conditions for clarity
         is_upthrust = (
-            window['h'].iloc[-1] > high_point and  # Makes new high
-            close < high_point and  # Closes below the high
-            vol_metrics.strength > 1.0 and  # Using normalized volume
-            abs(window['h'].iloc[-1] - close) > price * upthrust_threshold  # Significant rejection
+            current_high > high_point and       # Makes new high
+            close < high_point and              # Closes below the high
+            abs(current_high - close) > price * upthrust_threshold  # Significant rejection
         )
         
         return is_spring, is_upthrust
@@ -163,7 +172,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
     try:
         # Calculate volume metrics first - now includes volume_state
         vol_metrics = calculate_volume_metrics(df, timeframe)
-
+        
         # Process last period
         short_term_window = min(MIN_PERIODS, len(df) - 1)
         recent_df = df.iloc[-short_term_window:]
@@ -171,7 +180,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         # Rest of function remains the same
         price_sma = df['c'].rolling(window=MIN_PERIODS).mean()
         price_std = df['c'].rolling(window=MIN_PERIODS).std()
-
+        
         # Volume analysis (VSA)
         effort_vs_result = pd.Series([0.0] * len(recent_df), index=recent_df.index)
         price_range_mask = (recent_df['h'] - recent_df['l']) > 0
@@ -189,7 +198,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         # Enhanced momentum with Exponential ROC
         def exp_roc(series: pd.Series, periods: int) -> pd.Series:
             return (series / series.shift(periods)).pow(1/periods) - 1
-            
+        
         # Calculate momentum components
         fast_momentum = exp_roc(df['c'], 7).iloc[-1]
         medium_momentum = exp_roc(df['c'], 14).iloc[-1]
@@ -200,7 +209,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
 
         # Calculate momentum standard deviation for scaling
         momentum_std = float(np.std([fast_momentum, medium_momentum, slow_momentum]))
-
+        
         # Scale momentum
         normalized_momentum = momentum_value / (momentum_std * 2) if momentum_std != 0 else 0
         momentum_strength = max(min(normalized_momentum * 100, 100), -100)
@@ -216,7 +225,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         price_ma_long = df['c'].rolling(window=21).mean()
         trend_strength = ((price_ma_short - price_ma_long) / price_ma_long).iloc[-1]
         price_strength = price_strength * 0.7 + trend_strength * 0.3
-        
+
         funding_state = analyze_funding_rates(funding_rates or [])
 
         # Pass the entire df to identify_wyckoff_phase instead of individual parameters
@@ -226,9 +235,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
             effort_vs_result
         )
         
-        # Replace simple effort_result calculation with new analysis
-        effort_analysis = analyze_effort_result(df, vol_metrics, timeframe)
-        effort_result = effort_analysis.result
+        effort_result = analyze_effort_result(df, vol_metrics, timeframe)
 
         # Detect composite action and Wyckoff signs
         composite_action = detect_composite_action(df, price_strength, vol_metrics, effort_vs_result.iloc[-1])
@@ -270,7 +277,7 @@ def identify_wyckoff_phase(
     effort_vs_result: pd.Series
 ) -> Tuple[WyckoffPhase, bool]:
     """Enhanced Wyckoff phase identification optimized for intraday crypto trading."""
-    
+
     # Calculate values internally that were previously passed as parameters
     recent_change = df['c'].pct_change(3).iloc[-1]
     curr_volume = df['v'].iloc[-1]
@@ -300,18 +307,18 @@ def identify_wyckoff_phase(
     price_threshold = liquidation_thresholds["price_threshold"]
     velocity_threshold = liquidation_thresholds["velocity_threshold"]
     effort_threshold = liquidation_thresholds["effort_threshold"]
-    
+
     is_liquidation = (
         abs(recent_change) > price_threshold and  
         volume_impulse > vol_threshold and       
-        price_velocity > velocity_threshold and  
+        price_velocity > velocity_threshold and   
         abs(effort_vs_result.iloc[-1]) > effort_threshold 
     )
 
     # Enhanced cascade detection using hourly execution awareness
     # Track if this signal is changing within a short period
     cascade_signal_strength = (abs(recent_change) / price_threshold) * (volume_impulse / vol_threshold)
-    
+
     if is_liquidation:
         # Check for potential reversal after liquidation
         if cascade_signal_strength > 1.5:  # Strong liquidation event
@@ -342,11 +349,11 @@ def determine_phase_by_price_strength(
     # Calculate additional confirmation metrics
     price_trend_consistency = abs(price_strength) > strong_dev_threshold * 0.7  # Price consistency check
     momentum_consistency = abs(momentum_strength) > momentum_threshold * 0.8  # Momentum consistency
-    
+
     # Check for extreme momentum (price surge or collapse)
     is_price_collapsing = momentum_strength < -momentum_threshold * 1.5 and price_strength < -strong_dev_threshold
     is_price_surging = momentum_strength > momentum_threshold * 1.5 and price_strength > strong_dev_threshold
-    
+
     # Use volume state for more nuanced analysis
     has_high_volume = volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH)
 
@@ -356,7 +363,7 @@ def determine_phase_by_price_strength(
         if is_price_surging:
             # If price is surging rapidly, this is markup, not distribution
             return WyckoffPhase.MARKUP, False
-            
+
         # Distribution requires momentum to be stabilizing or turning down
         if momentum_strength < momentum_threshold * 0.3:  # Neutral or negative momentum
             # Volume state influences certainty - VERY_HIGH volume gives strongest signal
@@ -376,14 +383,14 @@ def determine_phase_by_price_strength(
                 momentum_consistency > 0.9  # Very strong momentum can override volume
             )
             return WyckoffPhase.MARKUP, not markup_certainty
-    
+
     # Price below threshold - potential Accumulation or Markdown
     if price_strength < -strong_dev_threshold:
         # Fix for the issue: Check if we have a price collapse (strong negative momentum)
         if is_price_collapsing:
             # If price is collapsing, this is markdown, not accumulation
             return WyckoffPhase.MARKDOWN, False
-            
+
         # Accumulation requires momentum to be stabilizing or turning up
         if momentum_strength > -momentum_threshold * 0.3:  # Neutral or positive momentum
             # Volume state influences certainty - VERY_HIGH volume gives strongest signal
@@ -403,7 +410,7 @@ def determine_phase_by_price_strength(
                 momentum_consistency > 0.9  # Very strong momentum can override volume
             )
             return WyckoffPhase.MARKDOWN, not markdown_certainty
-
+    
     # Enhanced ranging detection with multi-factor certainty
     if abs(price_strength) <= neutral_zone_threshold:
         # Evaluate ranging certainty based on multiple factors
@@ -419,7 +426,7 @@ def determine_phase_by_price_strength(
             certainty_factors += 1
         if abs(price_strength) < neutral_zone_threshold * 0.6:  # Very tight range
             certainty_factors += 1
-            
+
         # More certain when multiple factors align, regardless of timeframe
         return WyckoffPhase.RANGING, certainty_factors < 2 or conflicting_signals
 
@@ -465,7 +472,7 @@ def detect_composite_action(
         if liquidation_cascade:
             return (CompositeAction.MARKING_UP if df['c'].pct_change().iloc[-1] > 0 
                     else CompositeAction.MARKING_DOWN)
-        
+
         # Add whale wallet analysis patterns
         absorption_volume = (
             vol_metrics.ratio > 2.0 and                          # Double normal volume
@@ -487,7 +494,7 @@ def detect_composite_action(
             if df['c'].iloc[-1] > df['o'].iloc[-1]:
                 return CompositeAction.DISTRIBUTING
             return CompositeAction.ACCUMULATING
-        
+
         # Check for absorption of supply/demand
         price_range = df['h'] - df['l']
         price_close = df['c'] - df['o']
@@ -497,13 +504,13 @@ def detect_composite_action(
             if price_strength < 0:
                 return CompositeAction.ACCUMULATING
             return CompositeAction.DISTRIBUTING
-            
+
         if effort_vs_result > EFFORT_THRESHOLD and vol_metrics.trend > 0:
             return CompositeAction.MARKING_UP
 
         if effort_vs_result < -EFFORT_THRESHOLD:
             return CompositeAction.MARKING_DOWN
-            
+
         price_highs = df['h'].rolling(5).max()
         price_lows = df['l'].rolling(5).min()
         bullish_divergence = (
@@ -511,7 +518,6 @@ def detect_composite_action(
             df['v'].iloc[-1] > df['v'].iloc[-5] * 1.5 and
             effort_vs_result > 0
         )
-        
         bearish_divergence = (
             price_highs.iloc[-1] > price_highs.iloc[-5] and
             df['v'].iloc[-1] > df['v'].iloc[-5] * 1.5 and
@@ -520,6 +526,7 @@ def detect_composite_action(
         
         if bullish_divergence:
             return CompositeAction.ACCUMULATING
+
         if bearish_divergence:
             return CompositeAction.DISTRIBUTING
         
@@ -535,13 +542,10 @@ def detect_wyckoff_signs(
     is_spring: bool,
     is_upthrust: bool,
 ) -> WyckoffSign:
-    """
-    Detect specific Wyckoff signs in market action with stricter confirmation requirements
-    to reduce noise and false signals.
-    """
+    """Detect specific Wyckoff signs in market action with stricter confirmation requirements."""
     if len(df) < 5:
         return WyckoffSign.NONE
-        
+
     # Calculate key metrics with noise reduction
     price_change = df['c'].pct_change()
     volume_change = df['v'].pct_change()
@@ -554,7 +558,7 @@ def detect_wyckoff_signs(
     # Minimum thresholds scaled by volatility
     min_price_move = max(0.02, price_volatility * 1.5)
     min_volume_surge = max(2.0, volume_change.rolling(5).std().iloc[-1] * 2)
-    
+
     # Check for strong confirmation across multiple candles
     def confirm_trend(window: int, threshold: float) -> bool:
         recent_changes = price_change.iloc[-window:]
@@ -563,7 +567,7 @@ def detect_wyckoff_signs(
     def confirm_volume(window: int, threshold: float) -> bool:
         recent_volume = volume_change.iloc[-window:]
         return (recent_volume > threshold).sum() >= window // 2
-        
+
     # Selling Climax (SC) - Requires panic selling with climactic volume
     if (price_change.iloc[-1] < -min_price_move and
         volume_change.iloc[-1] > min_volume_surge and 
@@ -584,7 +588,7 @@ def detect_wyckoff_signs(
         df['v'].iloc[-1] < volume_ma.iloc[-1] * 0.8 and  # Lower volume
         price_strength < 0):
         return WyckoffSign.SECONDARY_TEST
-        
+
     # Last Point of Support (LPS) - Spring with volume confirmation
     if (is_spring and
         volume_trend > 0.5 and  # Strong volume
@@ -612,37 +616,35 @@ def detect_wyckoff_signs(
         price_change.iloc[-1] < -min_price_move * 0.5 and
         df['c'].iloc[-1] < df['h'].iloc[-1] * 0.985):  # Strong rejection
         return WyckoffSign.UPTHRUST
-        
+
     # Secondary Test Resistance (STR) - Higher test with lower volume
     if (abs(price_change.iloc[-1]) < price_volatility and
         df['h'].iloc[-1] <= df['h'].iloc[-5:].max() * 1.01 and
         df['v'].iloc[-1] < volume_ma.iloc[-1] * 0.8 and
         price_strength > 0):
         return WyckoffSign.SECONDARY_TEST_RESISTANCE
-        
+
     # Last Point of Supply (LPSY) - Failed upthrust with volume
     if (is_upthrust and
         volume_trend > 0.5 and
         price_change.iloc[-1] < -min_price_move and
         confirm_volume(3, 1.2)):
         return WyckoffSign.LAST_POINT_OF_RESISTANCE
-        
+
     # Sign of Weakness (SOW) - Strong down move with volume
     if (price_change.iloc[-1] < -min_price_move * 1.5 and
         confirm_trend(3, -min_price_move) and
         confirm_volume(3, 1.5) and
         price_strength < -0.5):
         return WyckoffSign.SIGN_OF_WEAKNESS
-        
-    return WyckoffSign.NONE        
+
+    return WyckoffSign.NONE
 
 def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState:
-    """
-    Analyze funding rates with enhanced crypto-specific features:
+    """Analyze funding rates with enhanced crypto-specific features:
     - Non-linear time weighting for faster response to changes
     - Outlier detection to ignore manipulation spikes
     - Dynamic thresholds based on volatility
-    
     Note: Funding rates are converted to EAR (Effective Annual Rate) using the formula:
     EAR = (1 + hourly_rate)^8760 - 1
     This gives the true annualized return accounting for compounding.
@@ -658,7 +660,7 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
         for rate in funding_rates
     ])
     times = np.array([rate.time for rate in funding_rates])
-    
+
     # Improve outlier detection for crypto's volatile funding rates
     # Use a wider IQR multiplier (2.0 instead of 1.5) to accommodate crypto's naturally higher volatility
     q1, q3 = np.percentile(rates, [25, 75])
@@ -676,7 +678,7 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
 
     # Calculate weighted average with normalization
     avg_funding = np.sum(rates * weights) / np.sum(weights)
-    
+
     # Use crypto-specific thresholds (more granularity in the slightly positive/negative range)
     if avg_funding > 0.25:
         return FundingState.HIGHLY_POSITIVE
@@ -697,7 +699,7 @@ def analyze_effort_result(
     df: pd.DataFrame,
     vol_metrics: VolumeMetrics,
     timeframe: Timeframe
-) -> EffortAnalysis:
+) -> EffortResult:
     """
     Enhanced effort vs result analysis with timeframe-specific optimization.
     Args:
@@ -731,13 +733,14 @@ def analyze_effort_result(
             Timeframe.HOURS_4: 1.5,      # Focus on larger moves
             Timeframe.HOURS_8: 2.0,      # Only significant moves
         }.get(timeframe, 1.0)
-        
+
         if price_change < min_move:
-            return EffortAnalysis(0.0, 0.0, 0.0, EffortResult.WEAK)
+            return EffortResult.WEAK
 
         # Calculate volume quality with timeframe context
         volume_consistency = vol_metrics.consistency
         spread_quality = 1.0 - (abs(recent_df['c'] - recent_df['o']) / (recent_df['h'] - recent_df['l'])).mean()
+        volume_quality = (volume_consistency + spread_quality) / 2
 
         # Adjust volume quality based on timeframe expectations
         if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30]:
@@ -764,7 +767,7 @@ def analyze_effort_result(
             Timeframe.HOURS_4: 0.1,    # Less reactive
             Timeframe.HOURS_8: 0.05,   # Minimal adjustment
         }.get(timeframe, 0.2))
-        
+
         # Adjust efficiency thresholds by timeframe
         high_threshold = HIGH_EFFICIENCY_THRESHOLD * {
             Timeframe.MINUTES_15: 0.8,   # Easier to achieve
@@ -774,7 +777,7 @@ def analyze_effort_result(
             Timeframe.HOURS_4: 1.2,      # Harder to achieve
             Timeframe.HOURS_8: 1.3,
         }.get(timeframe, 1.0)
-        
+
         low_threshold = LOW_EFFICIENCY_THRESHOLD * {
             Timeframe.MINUTES_15: 1.2,   # Higher floor
             Timeframe.MINUTES_30: 1.1,
@@ -783,12 +786,12 @@ def analyze_effort_result(
             Timeframe.HOURS_4: 0.8,      # Lower floor
             Timeframe.HOURS_8: 0.7,
         }.get(timeframe, 1.0)
-        
+
         # Final efficiency score
         efficiency = min(1.0, volume_weighted_efficiency)
 
         # Determine effort result with timeframe context
-        result = (
+        return (
             EffortResult.STRONG if (
                 efficiency > high_threshold and 
                 volume_quality > (0.5 if timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30] else 0.6)
@@ -806,13 +809,6 @@ def analyze_effort_result(
             else EffortResult.WEAK
         )
         
-        return EffortAnalysis(
-            efficiency=efficiency,
-            volume_quality=volume_quality,
-            price_impact=price_impact,
-            result=result
-        )
-        
     except Exception as e:
         logger.error(f"Error in effort vs result analysis: {e}")
-        return EffortAnalysis(0.0, 0.0, 0.0, EffortResult.WEAK)
+        return EffortResult.WEAK

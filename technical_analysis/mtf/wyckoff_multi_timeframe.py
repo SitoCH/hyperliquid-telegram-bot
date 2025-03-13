@@ -167,6 +167,36 @@ def analyze_multi_timeframe(
             should_notify=False
         )
 
+# Create a helper function to calculate volume-based weight adjustment
+def get_volume_weight_adjustment(volume_state: VolumeState) -> float:
+    """Return weight adjustment multiplier based on volume state"""
+    if volume_state == VolumeState.VERY_HIGH:
+        return 1.3
+    elif volume_state == VolumeState.HIGH:
+        return 1.1
+    elif volume_state == VolumeState.LOW:
+        return 0.9
+    elif volume_state == VolumeState.VERY_LOW:
+        return 0.8
+    else:  # NEUTRAL or UNKNOWN
+        return 1.0
+    
+# Create another helper for volume strength mapping
+def get_base_volume_strength(volume_state: VolumeState) -> float:
+    """Return base volume strength value based on volume state"""
+    if volume_state == VolumeState.VERY_HIGH:
+        return 1.5
+    elif volume_state == VolumeState.HIGH:
+        return 1.0
+    elif volume_state == VolumeState.NEUTRAL:
+        return 0.7
+    elif volume_state == VolumeState.LOW:
+        return 0.4
+    elif volume_state == VolumeState.VERY_LOW:
+        return 0.25
+    else:  # UNKNOWN
+        return 0.5
+
 def _analyze_timeframe_group(
     group: Dict[Timeframe, WyckoffState]
 ) -> TimeframeGroupAnalysis:
@@ -220,18 +250,9 @@ def _analyze_timeframe_group(
             downside_exhaustion += 1
             weight *= 1.2
 
-        # Enhance volume signal handling with the new enum values
-        # Reduce weight if we see contrary volume signals - symmetric treatment
-        if (state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN]):
-            # Use the expanded volume states - LOW and VERY_LOW both indicate weak volume
-            if state.volume in [VolumeState.LOW, VolumeState.VERY_LOW]:
-                weight *= 0.8
-            # VERY_HIGH volume should get a stronger boost
-            elif state.volume == VolumeState.VERY_HIGH:
-                weight *= 1.3
-            # HIGH volume gets a regular boost
-            elif state.volume == VolumeState.HIGH:
-                weight *= 1.1
+        # Optimize volume-based weight adjustment
+        if state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN]:
+            weight *= get_volume_weight_adjustment(state.volume)
 
         # Factor in effort vs result analysis - symmetric treatment
         if state.effort_vs_result == EffortResult.WEAK:
@@ -249,14 +270,9 @@ def _analyze_timeframe_group(
             # Give stronger weight to VERY_HIGH volume
             rapid_bearish_moves += 1.5 if state.volume == VolumeState.VERY_HIGH else 1.0
         
-        # Increase weight for strong directional moves - symmetric treatment
-        if state.pattern == MarketPattern.TRENDING:
-            # Scale weight boost based on volume state granularity
-            if state.volume == VolumeState.VERY_HIGH:
-                weight *= 1.4     # 40% boost for very high volume trends
-            elif state.volume == VolumeState.HIGH:
-                weight *= 1.2     # 20% boost for high volume trends
-            # Normal or low volume doesn't get a boost
+        # Optimize trending weight boost with the same helper
+        if state.pattern == MarketPattern.TRENDING and state.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
+            weight *= get_volume_weight_adjustment(state.volume)
         
         total_weight += weight
 
@@ -317,19 +333,8 @@ def _analyze_timeframe_group(
         tf_weight = tf.settings.phase_weight
         total_volume_weight += tf_weight
         
-        # Base strength determined by more granular volume state
-        if state.volume == VolumeState.VERY_HIGH:
-            base_strength = 1.5    # Increased from 1.0 for very high volume
-        elif state.volume == VolumeState.HIGH:
-            base_strength = 1.0    # Standard for high volume
-        elif state.volume == VolumeState.NEUTRAL:
-            base_strength = 0.7    # Medium for neutral volume
-        elif state.volume == VolumeState.LOW:
-            base_strength = 0.4    # Lower for low volume
-        elif state.volume == VolumeState.VERY_LOW:
-            base_strength = 0.25   # Very low for very low volume
-        else:
-            base_strength = 0.5    # Default/unknown case
+        # Use the helper for base strength determination
+        base_strength = get_base_volume_strength(state.volume)
 
         # Adjust based on effort vs result - symmetric treatment
         if state.effort_vs_result == EffortResult.STRONG:
@@ -527,84 +532,83 @@ def _calculate_group_weight(timeframes: Dict[Timeframe, WyckoffState]) -> float:
     """Calculate total weight for a timeframe group based on phase weights."""
     return sum(tf.settings.phase_weight for tf in timeframes.keys())
 
-
 def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overall_direction: MultiTimeframeDirection) -> float:
-    """
-    Calculate momentum intensity across all timeframe groups with hourly optimization.
-    
-    Args:
-        analyses: List of timeframe group analyses
-        overall_direction: Previously determined overall market direction
-    
-    Returns:
-        float: Momentum intensity score (0.0 to 1.0)
-    """
+    """Calculate momentum intensity with optimized scoring."""
     if not analyses or overall_direction == MultiTimeframeDirection.NEUTRAL:
         return 0.0
 
-    # Check for phase inconsistency with direction - symmetric treatment
-    phase_direction_conflict = False
-    for analysis in analyses:
+    # Check for phase inconsistency with improved efficiency
+    phase_direction_conflicts = sum(
+        1 for analysis in analyses 
         if ((overall_direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(analysis.dominant_phase)) or
-            (overall_direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase))):
-            phase_direction_conflict = True
-            break
+            (overall_direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase)))
+    )
     
-    # If there's a conflict, reduce overall momentum intensity  
-    conflict_penalty = 0.6 if phase_direction_conflict else 1.0
+    # Graduated penalty based on conflict ratio rather than binary
+    conflict_ratio = phase_direction_conflicts / len(analyses) if analyses else 0
+    conflict_penalty = max(0.5, 1.0 - conflict_ratio * 0.5)  # Min 0.5, linear decrease
 
-    # Get directional scores for each timeframe group - ensure bearish momentum is treated equally
+    # Optimize directional score calculation
     directional_scores = []
-    hourly_volume_boost = 1.0  # Will be adjusted based on short-term volume
-
+    short_term_volume = 0.0
+    short_term_count = 0
+    
+    # Score calculation with simplified logic - map calculation to a function
     for analysis in analyses:
-        # Base directional alignment with overall trend
+        # Base score
         if analysis.momentum_bias == overall_direction:
             base_score = 1.0
         elif analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL:
             base_score = 0.5
         else:
             base_score = 0.0
-
-        # Phase consistency penalty - identical for bullish/bearish
-        if ((overall_direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(analysis.dominant_phase)) or
-            (overall_direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase))):
-            base_score *= 0.7  # Same penalty for both directions
-
-        # Volume confirmation boost - identical for bullish/bearish
+        
+        # Phase alignment
+        phase_aligned = (
+            (overall_direction == MultiTimeframeDirection.BULLISH and is_bullish_phase(analysis.dominant_phase)) or
+            (overall_direction == MultiTimeframeDirection.BEARISH and is_bearish_phase(analysis.dominant_phase))
+        )
+        
+        # Calculate all boosts at once
+        phase_consistency = 0.7 if not phase_aligned else 1.0
         volume_boost = 1.0 + (analysis.volume_strength * 0.3)
-
-        # Phase confirmation bonus - identical for bullish/bearish
-        phase_aligned = False
-        if overall_direction == MultiTimeframeDirection.BULLISH:
-            phase_aligned = is_bullish_phase(analysis.dominant_phase)
-        elif overall_direction == MultiTimeframeDirection.BEARISH:
-            phase_aligned = is_bearish_phase(analysis.dominant_phase)
         phase_boost = 1.2 if phase_aligned else 1.0
-
-        # Funding rate impact - identical for bullish/bearish
+        
+        # Funding impact
+        funding_aligned = (
+            (analysis.funding_sentiment > 0 and overall_direction == MultiTimeframeDirection.BULLISH) or
+            (analysis.funding_sentiment < 0 and overall_direction == MultiTimeframeDirection.BEARISH)
+        )
         funding_impact = abs(analysis.funding_sentiment) * 0.2
-        if ((analysis.funding_sentiment > 0 and overall_direction == MultiTimeframeDirection.BULLISH) or
-            (analysis.funding_sentiment < 0 and overall_direction == MultiTimeframeDirection.BEARISH)):
-            funding_boost = 1.0 + funding_impact
-        else:
-            funding_boost = 1.0 - funding_impact
-
-        # Calculate final score with all factors
-        score = base_score * volume_boost * phase_boost * funding_boost
+        funding_boost = (1.0 + funding_impact) if funding_aligned else (1.0 - funding_impact)
+        
+        # Combined score calculation
+        score = base_score * phase_consistency * volume_boost * phase_boost * funding_boost
         directional_scores.append((score, analysis.group_weight))
-
-        # Track hourly volume for potential boost - identical for bullish/bearish
-        if analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
-            if analysis.volume_strength > 0.7:
-                hourly_volume_boost = 1.15
-
+        
+        # Track short timeframe volume for boost
+        if analysis.group_weight in {tf.settings.phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
+            short_term_volume += analysis.volume_strength
+            short_term_count += 1
+    
+    # More accurate volume boost calculation
+    hourly_volume_boost = 1.0
+    if short_term_count > 0:
+        avg_short_term_volume = short_term_volume / short_term_count
+        hourly_volume_boost = 1.0 + max(0, min(0.15, avg_short_term_volume - 0.5))
+    
+    # Final calculation with error handling
     total_weight = sum(weight for _, weight in directional_scores)
     if total_weight == 0:
         return 0.0
-
+        
     weighted_momentum = sum(score * weight for score, weight in directional_scores) / total_weight
     
-    # Apply hourly volume boost, conflict penalty and clamp final value  
-    final_momentum = min(1.0, weighted_momentum * hourly_volume_boost * conflict_penalty)
-    return max(0.0, final_momentum)
+    # Improved final value calculation with smoother scaling
+    final_momentum = weighted_momentum * hourly_volume_boost * conflict_penalty
+    
+    # Apply smoothing curve to make the output more balanced across the 0-1 range
+    # This improves the distribution of results instead of clustering at extremes
+    final_momentum = 1.0 / (1.0 + np.exp(-5 * (final_momentum - 0.5))) if final_momentum > 0 else 0.0
+    
+    return min(1.0, final_momentum)
