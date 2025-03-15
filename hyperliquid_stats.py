@@ -2,9 +2,11 @@ import time
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
+from tabulate import simple_separated_format, tabulate
 
 from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
+from utils import fmt
 
 def calculate_trading_stats(user_fills, cutoff_timestamp):
     """
@@ -47,10 +49,32 @@ def calculate_trading_stats(user_fills, cutoff_timestamp):
         'total_fees': total_fees
     }
 
+def format_stats_table(stats):
+    """
+    Format trading statistics as a tabulated table.
+    
+    Args:
+        stats: Dictionary containing trading statistics
+        title: Title for the table (e.g., "Last 7 days")
+        
+    Returns:
+        Formatted table as a string
+    """
+    tablefmt = simple_separated_format('  ')
+    
+    table = tabulate([
+        ["Win rate", f"{stats['winning_trades']} / {stats['total_trades']} ({fmt(stats['win_rate'])}%)"],
+        ["PnL", f"{fmt(stats['pnl'])} USDC"],
+        ["Total fees", f"{fmt(stats['total_fees'])} USDC"],
+        ["Net PnL (after fees)", f"{fmt(stats['adjusted_pnl'])} USDC"]
+    ], headers=["", ""], tablefmt=tablefmt, colalign=("left", "right"))
+    
+    return f"<pre>{table}</pre>"
+
 async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         message_lines = [
-            "<b>Statistics:</b>"
+            "<b>Trading Statistics:</b>"
         ]
 
         current_time = int(time.time() * 1000)
@@ -58,20 +82,19 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         user_fills = hyperliquid_utils.info.user_fills_by_time(hyperliquid_utils.address, one_month_ago)
         
+        # Calculate stats for both time periods
+        stats_1d = calculate_trading_stats(user_fills, current_time - (24 * 60 * 60 * 1000))
         stats_7d = calculate_trading_stats(user_fills, current_time - (7 * 24 * 60 * 60 * 1000))
         stats_30d = calculate_trading_stats(user_fills, one_month_ago)
         
-        message_lines.append("Last 7 days:")
-        message_lines.append(f"Win rate: {stats_7d['winning_trades']} / {stats_7d['total_trades']} ({stats_7d['win_rate']:.2f}%)")
-        message_lines.append(f"PnL: {stats_7d['pnl']:.2f} USDC")
-        message_lines.append(f"Total fees: {stats_7d['total_fees']:.2f} USDC")
-        message_lines.append(f"Net PnL (after fees): {stats_7d['adjusted_pnl']:.2f} USDC")
+        # Format tables using the helper function
+        message_lines.append("Last day")
+        message_lines.append(format_stats_table(stats_1d))
+        message_lines.append("Last 7 days")
+        message_lines.append(format_stats_table(stats_7d))
         message_lines.append("")
-        message_lines.append("Last 30 days:")
-        message_lines.append(f"Win rate: {stats_30d['winning_trades']} / {stats_30d['total_trades']} ({stats_30d['win_rate']:.2f}%)")
-        message_lines.append(f"PnL: {stats_30d['pnl']:.2f} USDC")
-        message_lines.append(f"Total fees: {stats_30d['total_fees']:.2f} USDC") 
-        message_lines.append(f"Net PnL (after fees): {stats_30d['adjusted_pnl']:.2f} USDC")
+        message_lines.append("Last 30 days")
+        message_lines.append(format_stats_table(stats_30d))
         
         # Send the response
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
