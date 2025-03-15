@@ -33,8 +33,22 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, timefram
     """Use timeframe settings for chart window."""
     # Calculate thresholds from full dataset
     df['MACD_Hist'] = df['MACD_Hist'].fillna(0)
-    strong_positive_threshold = max(df['MACD_Hist'].max() * 0.4, 0.000001)
-    strong_negative_threshold = min(df['MACD_Hist'].min() * 0.4, -0.000001)
+    
+    # Using percentiles instead of fixed percentage of max/min
+    # This makes the thresholds more robust against outliers
+    positive_values = df['MACD_Hist'][df['MACD_Hist'] > 0]
+    negative_values = df['MACD_Hist'][df['MACD_Hist'] < 0]
+    
+    # If we have enough data points, use percentiles
+    if len(positive_values) > 10:
+        strong_positive_threshold = max(positive_values.quantile(0.75), 0.000001)
+    else:
+        strong_positive_threshold = max(df['MACD_Hist'].max() * 0.4, 0.000001)
+        
+    if len(negative_values) > 10:
+        strong_negative_threshold = min(negative_values.quantile(0.25), -0.000001)
+    else:
+        strong_negative_threshold = min(df['MACD_Hist'].min() * 0.4, -0.000001)
     
     # Calculate significant levels using full dataset
     resistance_levels, support_levels = find_significant_levels(df, wyckoff, mid, timeframe)
@@ -60,14 +74,26 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, timefram
     ha_df = heikin_ashi(df_plot)
 
     def determine_color(value: float) -> str:
-        if value >= strong_positive_threshold:
-            return 'green'
-        elif 0 < value < strong_positive_threshold:
-            return 'lightgreen'
-        elif strong_negative_threshold < value <= 0:
-            return 'lightcoral'
+        if value > 0:
+            if value >= strong_positive_threshold * 1.5:
+                return '#006400'  # dark green
+            elif value >= strong_positive_threshold:
+                return '#008000'  # green
+            elif value >= strong_positive_threshold * 0.5:
+                return '#2E8B57'  # sea green
+            else:
+                return '#90EE90'  # light green
+        elif value < 0:
+            if value <= strong_negative_threshold * 1.5:
+                return '#8B0000'  # dark red
+            elif value <= strong_negative_threshold:
+                return '#FF0000'  # red
+            elif value <= strong_negative_threshold * 0.5:
+                return '#CD5C5C'  # indian red
+            else:
+                return '#FFA07A'  # light salmon
         else:
-            return 'red'
+            return '#D3D3D3'  # light gray for zero values
 
     # Apply colors based on full dataset thresholds but only to plotting window data
     macd_hist_colors = df_plot['MACD_Hist'].apply(determine_color).values
@@ -107,7 +133,7 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, timefram
                 mpf.make_addplot(df_plot['EMA'], ax=ax[0], color='orange', width=0.5),
                 *level_lines,
                 mpf.make_addplot(df_plot['MACD_Hist'], type='bar', panel=1, ax=ax[1], 
-                                color=macd_hist_colors, width=0.7, alpha=0.4)
+                                color=macd_hist_colors, width=0.7)
             ])
 
     x_min, x_max = ax[1].get_xlim()
