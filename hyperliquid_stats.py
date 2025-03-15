@@ -104,6 +104,7 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Format tables using the helper function
         message_lines.append("Last day:")
         message_lines.append(format_stats_table(stats_1d))
+        message_lines.append("")
         message_lines.append("Last 7 days:")
         message_lines.append(format_stats_table(stats_7d))
         message_lines.append("")
