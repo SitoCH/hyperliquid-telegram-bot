@@ -17,9 +17,11 @@ def calculate_trading_stats(user_fills, cutoff_timestamp):
     Returns:
         Dictionary containing total_trades, win_rate, and pnl
     """
+    # Filter all trades after cutoff timestamp
+    all_trades = [trade for trade in user_fills if trade['time'] >= cutoff_timestamp]
+    
     # Filter closed positions after cutoff timestamp
-    closed_positions = [trade for trade in user_fills if 
-                       trade['time'] >= cutoff_timestamp and 
+    closed_positions = [trade for trade in all_trades if 
                        'dir' in trade and 
                        trade['dir'].startswith('Close')]
     
@@ -27,13 +29,22 @@ def calculate_trading_stats(user_fills, cutoff_timestamp):
     winning_trades = [trade for trade in closed_positions if float(trade['closedPnl']) > 0]
     win_rate = (len(winning_trades) / len(closed_positions)) * 100 if closed_positions else 0
     
-    # Calculate total PnL
-    pnl = sum(float(trade['closedPnl']) for trade in closed_positions)
+    # Calculate total PnL from closed positions
+    closed_pnl = sum(float(trade['closedPnl']) for trade in closed_positions)
+    
+    # Add fees from all trades to get complete PnL picture
+    total_fees = sum(float(trade.get('fee', 0)) for trade in all_trades)
+    
+    # Calculate adjusted PnL (closed PnL minus all fees)
+    adjusted_pnl = closed_pnl - total_fees
     
     return {
+        'winning_trades': len(winning_trades),
         'total_trades': len(closed_positions),
         'win_rate': win_rate,
-        'pnl': pnl
+        'pnl': closed_pnl,
+        'adjusted_pnl': adjusted_pnl,
+        'total_fees': total_fees
     }
 
 async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -47,19 +58,20 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         user_fills = hyperliquid_utils.info.user_fills_by_time(hyperliquid_utils.address, one_month_ago)
         
-
         stats_7d = calculate_trading_stats(user_fills, current_time - (7 * 24 * 60 * 60 * 1000))
-        stats_30d = calculate_trading_stats(user_fills, current_time - one_month_ago)
+        stats_30d = calculate_trading_stats(user_fills, one_month_ago)
         
-        message_lines.append("Last 7 Days:")
-        message_lines.append(f"Total Closed Positions: {stats_7d['total_trades']}")
-        message_lines.append(f"Win Rate: {stats_7d['win_rate']:.2f}%")
+        message_lines.append("Last 7 days:")
+        message_lines.append(f"Win rate: {stats_7d['winning_trades']} / {stats_7d['total_trades']} ({stats_7d['win_rate']:.2f}%)")
         message_lines.append(f"PnL: {stats_7d['pnl']:.2f} USDC")
+        message_lines.append(f"Total fees: {stats_7d['total_fees']:.2f} USDC")
+        message_lines.append(f"Net PnL (after fees): {stats_7d['adjusted_pnl']:.2f} USDC")
         message_lines.append("")
-        message_lines.append("Last 30 Days:")
-        message_lines.append( f"Total Closed Positions: {stats_30d['total_trades']}")
-        message_lines.append(f"Win Rate: {stats_30d['win_rate']:.2f}%")
+        message_lines.append("Last 30 days:")
+        message_lines.append(f"Win rate: {stats_30d['winning_trades']} / {stats_30d['total_trades']} ({stats_30d['win_rate']:.2f}%)")
         message_lines.append(f"PnL: {stats_30d['pnl']:.2f} USDC")
+        message_lines.append(f"Total fees: {stats_30d['total_fees']:.2f} USDC") 
+        message_lines.append(f"Net PnL (after fees): {stats_30d['adjusted_pnl']:.2f} USDC")
         
         # Send the response
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
