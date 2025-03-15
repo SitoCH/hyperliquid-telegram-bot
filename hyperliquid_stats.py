@@ -19,25 +19,39 @@ def calculate_trading_stats(user_fills, cutoff_timestamp):
     Returns:
         Dictionary containing total_trades, win_rate, and pnl
     """
-    # Filter all trades after cutoff timestamp
     all_trades = [trade for trade in user_fills if trade['time'] >= cutoff_timestamp]
     
-    # Filter closed positions after cutoff timestamp
-    closed_positions = [trade for trade in all_trades if 
-                       'dir' in trade and 
-                       trade['dir'].startswith('Close')]
-    
-    # Calculate win rate
-    winning_trades = [trade for trade in closed_positions if float(trade['closedPnl']) > 0]
-    win_rate = (len(winning_trades) / len(closed_positions)) * 100 if closed_positions else 0
-    
-    # Calculate total PnL from closed positions
-    closed_pnl = sum(float(trade['closedPnl']) for trade in closed_positions)
-    
-    # Add fees from all trades to get complete PnL picture
     total_fees = sum(float(trade.get('fee', 0)) for trade in all_trades)
     
-    # Calculate adjusted PnL (closed PnL minus all fees)
+    aggregated_trades = {}
+    for trade in all_trades:
+        trade_hash = trade.get('hash', 'unknown')
+        if trade_hash not in aggregated_trades:
+            aggregated_trades[trade_hash] = {
+                'is_close': False,
+                'closed_pnl': 0.0,
+            }
+        
+        if 'dir' in trade and trade['dir'].startswith('Close'):
+            aggregated_trades[trade_hash]['is_close'] = True
+        
+        if 'closedPnl' in trade:
+            aggregated_trades[trade_hash]['closed_pnl'] += float(trade['closedPnl'])
+    
+    closed_positions = {
+        hash_id: data for hash_id, data in aggregated_trades.items() 
+        if data['is_close']
+    }
+    
+    winning_trades = {
+        hash_id: data for hash_id, data in closed_positions.items() 
+        if data['closed_pnl'] > 0
+    }
+    
+    win_rate = (len(winning_trades) / len(closed_positions)) * 100 if closed_positions else 0
+    
+    closed_pnl = sum(data['closed_pnl'] for data in closed_positions.values())
+    
     adjusted_pnl = closed_pnl - total_fees
     
     return {
@@ -88,12 +102,12 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         stats_30d = calculate_trading_stats(user_fills, one_month_ago)
         
         # Format tables using the helper function
-        message_lines.append("Last day")
+        message_lines.append("Last day:")
         message_lines.append(format_stats_table(stats_1d))
-        message_lines.append("Last 7 days")
+        message_lines.append("Last 7 days:")
         message_lines.append(format_stats_table(stats_7d))
         message_lines.append("")
-        message_lines.append("Last 30 days")
+        message_lines.append("Last 30 days:")
         message_lines.append(format_stats_table(stats_30d))
         
         # Send the response
