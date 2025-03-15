@@ -44,7 +44,7 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, timefram
     df_plot = df.loc[df['t'] >= from_time].copy()
 
     buf = io.BytesIO()
-    fig, ax = plt.subplots(2, 1, figsize=(10, 6), gridspec_kw={'height_ratios': [3, 1]})
+    fig, ax = plt.subplots(3, 1, figsize=(10, 6), gridspec_kw={'height_ratios': [7, 1, 1]})
 
     df_plot['SuperTrend_Green'] = np.where(
         df_plot['c'] > df_plot['SuperTrend'],
@@ -94,22 +94,59 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, timefram
             type='candle',
             columns=['o', 'h', 'l', 'c', 'v'],
             ax=ax[0],
-            volume=False,
+            volume=ax[2],
+            volume_panel=2,
+            scale_width_adjustment={'volume': 0.7},
             axtitle=title,
             style='charles',
+            ylabel='', 
+            ylabel_lower='',
             addplot=[
                 mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', width=0.5),
                 mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='blue', width=0.5),
                 mpf.make_addplot(df_plot['EMA'], ax=ax[0], color='orange', width=0.5),
                 *level_lines,
-                mpf.make_addplot(df_plot['MACD_Hist'], type='bar', width=0.7, 
-                                color=macd_hist_colors, ax=ax[1], alpha=0.4)
+                mpf.make_addplot(df_plot['MACD_Hist'], type='bar', panel=1, ax=ax[1], 
+                                color=macd_hist_colors, width=0.7, alpha=0.4)
             ])
 
+    x_min, x_max = ax[1].get_xlim()
+    ax[0].set_xlim(x_min, x_max)
+    ax[2].set_xlim(x_min, x_max)
+
+    ax[0].set_ylabel('Price')
+    
+    ax[1].set_ylabel('MACD')
+    ax[2].set_ylabel('Vol.')
+    
+    ax[1].yaxis.set_label_position('right')
+    ax[1].tick_params(axis='y', length=0, labelright=False, labelleft=False) 
+    
+    ax[2].yaxis.set_label_position('right')
+    ax[2].tick_params(axis='y', length=0, labelright=False, labelleft=False) 
+    
+    ax[0].set_xticklabels([])
+    ax[0].set_xlabel('')
+    ax[0].tick_params(axis='x', length=0)
+    
+    ax[1].set_xticklabels([])
+    ax[1].set_xlabel('')
+    ax[1].tick_params(axis='x', length=0) 
+    
+    plt.subplots_adjust(hspace=-0.05)
+    
+    ax[0].spines['bottom'].set_visible(False)
+    ax[1].spines['top'].set_visible(True)
+    ax[1].spines['bottom'].set_visible(False)
+    ax[2].spines['top'].set_visible(True)
+
+    # Add legend to candle panel
     ax[0].legend(loc='upper left', fontsize='small')
 
     plt.tight_layout()
-    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', 
+    plt.subplots_adjust(hspace=-0.01) 
+    
+    plt.savefig(buf, format='png', dpi=200, bbox_inches='tight', 
                 facecolor='white', edgecolor='none')
     buf.seek(0)
     plt.close(fig)
