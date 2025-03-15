@@ -41,11 +41,15 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         message_lines = [
             "<b>Statistics:</b>"
         ]
-        user_fills = hyperliquid_utils.info.user_fills(hyperliquid_utils.address)
-        
+
         current_time = int(time.time() * 1000)
+        one_month_ago = current_time - (30 * 24 * 60 * 60 * 1000)
+
+        user_fills = hyperliquid_utils.info.user_fills_by_time(hyperliquid_utils.address, one_month_ago)
+        
+
         stats_7d = calculate_trading_stats(user_fills, current_time - (7 * 24 * 60 * 60 * 1000))
-        stats_30d = calculate_trading_stats(user_fills, current_time - (30 * 24 * 60 * 60 * 1000))
+        stats_30d = calculate_trading_stats(user_fills, current_time - one_month_ago)
         
         message_lines.append("Last 7 Days:")
         message_lines.append(f"Total Closed Positions: {stats_7d['total_trades']}")
