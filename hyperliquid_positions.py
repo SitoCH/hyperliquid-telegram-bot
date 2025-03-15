@@ -4,7 +4,6 @@ from tabulate import simple_separated_format, tabulate
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-import requests
 
 from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils

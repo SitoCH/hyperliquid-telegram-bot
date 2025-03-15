@@ -15,6 +15,7 @@ from hyperliquid_orders import get_open_orders
 from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_LEVERAGE, enter_long, enter_short, exit_all_positions, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit, selected_leverage
 from hyperliquid_utils.utils import hyperliquid_utils
 from hyperliquid_positions import get_positions, get_overview
+from hyperliquid_stats import get_stats
 from hyperliquid_alerts import check_profit_percentage
 from hyperliquid_events import on_user_events
 from telegram_utils import conversation_cancel, telegram_utils
@@ -44,6 +45,7 @@ def main() -> None:
     telegram_utils.add_handler(start_conv_handler)
 
     telegram_utils.add_handler(CommandHandler(telegram_utils.overview_command, get_overview))
+    telegram_utils.add_handler(CommandHandler(telegram_utils.stats_command, get_stats))
     telegram_utils.add_handler(CommandHandler("positions", get_positions))
     telegram_utils.add_handler(CommandHandler("orders", get_open_orders))
     telegram_utils.add_handler(CommandHandler(telegram_utils.exit_all_command, exit_all_positions))
