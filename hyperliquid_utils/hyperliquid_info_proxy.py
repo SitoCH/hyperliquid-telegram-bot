@@ -13,6 +13,7 @@ class InfoProxy:
         'spot_meta_and_asset_ctxs': 20,
         'meta_and_asset_ctxs': 20,
         'user_staking_summary': 20,
+        'user_fills': 20,
         'frontend_open_orders': 20,
         'meta': 20,
         'subscribe': 0,
