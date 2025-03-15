@@ -163,6 +163,20 @@ class WyckoffState:
         )
 
 @dataclass
+class VolumeMetrics:
+    """Container for volume-related metrics"""
+    strength: float      # Normalized volume (z-score)
+    ratio: float        # Current volume / SMA ratio
+    trend: float        # Short-term trend direction
+    impulse: float      # Rate of change
+    sma: float         # Simple moving average
+    consistency: float  # Recent volume consistency
+    short_ma: float    # Short-term moving average
+    long_ma: float     # Long-term moving average
+    trend_strength: float  # Trend strength indicator
+    state: VolumeState  # Categorized volume state (VERY_HIGH, HIGH, NEUTRAL, LOW, VERY_LOW)
+
+@dataclass
 class TimeframeSettings:
     """Settings for technical analysis parameters per timeframe"""
     phase_weight: float              # Used in get_phase_weight()

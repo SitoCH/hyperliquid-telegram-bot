@@ -4,20 +4,20 @@ import numpy as np  # type: ignore[import]
 from typing import Final, Dict, List, Optional, Any, Tuple
 from .wyckoff_types import (
     MarketPattern, VolatilityState, WyckoffState, WyckoffPhase, EffortResult, 
-    CompositeAction, WyckoffSign, FundingState, VolumeState, Timeframe
+    CompositeAction, WyckoffSign, FundingState, VolumeState, Timeframe, VolumeMetrics
 )
 from .funding_rates_cache import FundingRateEntry
 from .wyckoff_description import generate_wyckoff_description
 from dataclasses import dataclass
 from logging_utils import logger
 from .adaptive_thresholds import AdaptiveThresholdManager
+from .wyckoff_composite_action import detect_composite_action
 
 
 # Constants for Wyckoff analysis
 VOLUME_THRESHOLD: Final[float] = 1.7  # Increased from 1.5 for more significance with larger dataset
 STRONG_DEV_THRESHOLD: Final[float] = 1.9  # Increased from 1.8 for wider historical context
 NEUTRAL_ZONE_THRESHOLD: Final[float] = 1.0  # Increased from 0.8 for more stable neutral zone detection
-EFFORT_THRESHOLD: Final[float] = 0.75  # Increased from 0.7 for cleaner effort signals
 MIN_PERIODS: Final[int] = 40  # Increased from 30 to use more historical data
 VOLUME_MA_THRESHOLD: Final[float] = 1.5  # Increased from 1.3 for stronger volume signals
 VOLUME_SURGE_THRESHOLD: Final[float] = 2.4  # Increased from 2.2 for stronger volume event signals
@@ -30,19 +30,6 @@ RESULT_MIN_MOVE: Final[float] = 0.001  # Minimum price move to consider (0.1%)
 HIGH_EFFICIENCY_THRESHOLD: Final[float] = 0.75  # Reduced from 0.8 for more achievable threshold
 LOW_EFFICIENCY_THRESHOLD: Final[float] = 0.35  # Reduced from 0.4 for stricter weak signal filtering
 
-@dataclass
-class VolumeMetrics:
-    """Container for volume-related metrics"""
-    strength: float      # Normalized volume (z-score)
-    ratio: float        # Current volume / SMA ratio
-    trend: float        # Short-term trend direction
-    impulse: float      # Rate of change
-    sma: float         # Simple moving average
-    consistency: float  # Recent volume consistency
-    short_ma: float    # Short-term moving average
-    long_ma: float     # Long-term moving average
-    trend_strength: float  # Trend strength indicator
-    state: VolumeState  # Categorized volume state (VERY_HIGH, HIGH, NEUTRAL, LOW, VERY_LOW)
 
 def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMetrics:
     """Calculate normalized volume metrics and determine volume state."""
@@ -451,89 +438,6 @@ def determine_phase_by_price_strength(
     
     # Fallback case is uncertain by default (this should rarely happen)
     return WyckoffPhase.RANGING, True
-
-def detect_composite_action(
-    df: pd.DataFrame,
-    price_strength: float,
-    vol_metrics: VolumeMetrics,
-    effort_vs_result: float
-) -> CompositeAction:
-    """Enhanced composite action detection for crypto markets."""
-    try:
-        # Simplified liquidation cascade detection
-        liquidation_cascade = (
-            abs(df['c'].pct_change().iloc[-1]) > 0.05 and
-            abs(vol_metrics.strength) > 2.5 and
-            vol_metrics.ratio > 3.0 and
-            abs(df['c'].iloc[-1] - df['o'].iloc[-1]) / 
-            (df['h'].iloc[-1] - df['l'].iloc[-1]) > 0.8
-        )
-        
-        if liquidation_cascade:
-            return (CompositeAction.MARKING_UP if df['c'].pct_change().iloc[-1] > 0 
-                    else CompositeAction.MARKING_DOWN)
-
-        # Add whale wallet analysis patterns
-        absorption_volume = (
-            vol_metrics.ratio > 2.0 and                          # Double normal volume
-            abs(vol_metrics.strength) > 1.5 and                  # Significant volume deviation
-            abs(df['c'].iloc[-1] - df['o'].iloc[-1]) < 
-            (df['h'].iloc[-1] - df['l'].iloc[-1]) * 0.3    # Small body
-        )
-        
-        if absorption_volume:
-            return (CompositeAction.ACCUMULATING if price_strength < 0 
-                    else CompositeAction.DISTRIBUTING)
-        
-        # Check for whale manipulation patterns
-        sudden_volume_spike = df['v'].iloc[-1] > df['v'].iloc[-5:].mean() * 3
-        price_rejection = (abs(df['h'].iloc[-1] - df['c'].iloc[-1]) > 
-                          abs(df['c'].iloc[-1] - df['o'].iloc[-1]) * 2)
-        
-        if sudden_volume_spike and price_rejection:
-            if df['c'].iloc[-1] > df['o'].iloc[-1]:
-                return CompositeAction.DISTRIBUTING
-            return CompositeAction.ACCUMULATING
-
-        # Check for absorption of supply/demand
-        price_range = df['h'] - df['l']
-        price_close = df['c'] - df['o']
-        absorption = (price_range.iloc[-1] > price_range.mean()) and (abs(price_close.iloc[-1]) < price_close.std())
-        
-        if absorption and vol_metrics.trend > VOLUME_THRESHOLD:
-            if price_strength < 0:
-                return CompositeAction.ACCUMULATING
-            return CompositeAction.DISTRIBUTING
-
-        if effort_vs_result > EFFORT_THRESHOLD and vol_metrics.trend > 0:
-            return CompositeAction.MARKING_UP
-
-        if effort_vs_result < -EFFORT_THRESHOLD:
-            return CompositeAction.MARKING_DOWN
-
-        price_highs = df['h'].rolling(5).max()
-        price_lows = df['l'].rolling(5).min()
-        bullish_divergence = (
-            price_lows.iloc[-1] < price_lows.iloc[-5] and
-            df['v'].iloc[-1] > df['v'].iloc[-5] * 1.5 and
-            effort_vs_result > 0
-        )
-        bearish_divergence = (
-            price_highs.iloc[-1] > price_highs.iloc[-5] and
-            df['v'].iloc[-1] > df['v'].iloc[-5] * 1.5 and
-            effort_vs_result < 0
-        )
-        
-        if bullish_divergence:
-            return CompositeAction.ACCUMULATING
-
-        if bearish_divergence:
-            return CompositeAction.DISTRIBUTING
-        
-        return CompositeAction.NEUTRAL
-    except Exception as e:
-        logger.error(f"Error in composite action detection: {e}")
-        return CompositeAction.UNKNOWN
 
 def detect_wyckoff_signs(
     df: pd.DataFrame,
