@@ -225,7 +225,7 @@ def format_stats_table(stats, btc_hold):
         ["Win rate", f"{stats['winning_trades']} / {stats['total_trades']} ({fmt(stats['win_rate'])}%)"],
         ["PnL", f"{fmt(stats['pnl'])} USDC"],
         ["Total fees", f"{fmt(stats['total_fees'])} USDC"],
-        ["Net PnL (after fees)", f"{fmt(stats['adjusted_pnl'])} USDC"]
+        ["Net PnL (ex fees)", f"{fmt(stats['adjusted_pnl'])} USDC"]
     ]
     
     if 'total_trades' in stats and stats['total_trades'] > 0:
