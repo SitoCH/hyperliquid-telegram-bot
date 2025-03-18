@@ -22,12 +22,12 @@ from .wyckoff_multi_timeframe_types import (
     STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
     MIXED_MOMENTUM, LOW_MOMENTUM,
     SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT,
-    DIRECTIONAL_WEIGHT, VOLUME_WEIGHT, PHASE_WEIGHT
+    DIRECTIONAL_WEIGHT, VOLUME_WEIGHT, PHASE_WEIGHT, MODERATE_VOLUME_THRESHOLD
 )
 
 
 def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> MultiTimeframeDirection:
-    """Determine overall direction considering Wyckoff phase weights for each timeframe group."""
+    """Determine overall direction considering Wyckoff phase weights and uncertainty for each timeframe group."""
     if not analyses:
         return MultiTimeframeDirection.NEUTRAL
 
@@ -44,8 +44,9 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
     }
 
     # Count dominant phases with equal treatment for bullish/bearish
-    bullish_phases = sum(1 for a in analyses if is_bullish_phase(a.dominant_phase))
-    bearish_phases = sum(1 for a in analyses if is_bearish_phase(a.dominant_phase))
+    # Only count confident phases (not uncertain)
+    bullish_phases = sum(1 for a in analyses if is_bullish_phase(a.dominant_phase) and not a.uncertain_phase)
+    bearish_phases = sum(1 for a in analyses if is_bearish_phase(a.dominant_phase) and not a.uncertain_phase)
     
     # Market structure consistency check - create bias only when clearly dominant
     market_structure_bias = None
@@ -68,17 +69,22 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
                 (a.group_weight / group_total_weight) * 
                 (1 + a.volume_strength * 0.3) *  # Volume boost
                 (1.2 if a.volatility_state == VolatilityState.HIGH else 1.0) *  # Volatility adjustment
+                # Uncertainty penalty - reduce weight if uncertain
+                (0.6 if a.uncertain_phase else 1.0) *
                 # Phase consistency factor - identical treatment for bullish/bearish
                 (0.7 if (direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(a.dominant_phase)) or
                       (direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(a.dominant_phase)) else 1.0)
                 for a in group
                 if a.momentum_bias == direction
             )
-            for direction in MultiTimeframeDirection
+            for direction in [MultiTimeframeDirection.BULLISH, MultiTimeframeDirection.BEARISH]
         }
         
+        # Handle neutral case separately to avoid key error
+        weighted_signals[MultiTimeframeDirection.NEUTRAL] = 0
+        
         strongest = max(weighted_signals.items(), key=lambda x: x[1])
-        avg_volume = sum(a.volume_strength for a in group) / len(group)
+        avg_volume = sum(a.volume_strength for a in group) / len(group) if group else 0
 
         return strongest[0], strongest[1], avg_volume
 
@@ -91,10 +97,14 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
     
     # Check for high-conviction intraday moves first
     if st_dir != MultiTimeframeDirection.NEUTRAL:
-        if st_weight > 0.8 and st_vol > 0.7:  # Strong short-term move with volume
+        if st_weight > 0.8 and st_vol > MODERATE_VOLUME_THRESHOLD:  # Using consistent threshold
             if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_dir != st_dir:
                 return MultiTimeframeDirection.NEUTRAL  # Conflict with intermediate trend
             
+            # Skip uncertain phases
+            if any(a.uncertain_phase for a in timeframe_groups['short']):
+                return MultiTimeframeDirection.NEUTRAL
+                
             # Market structure consistency check - equal treatment for bull/bear
             if market_structure_bias and market_structure_bias != st_dir:
                 return MultiTimeframeDirection.NEUTRAL
@@ -103,10 +113,14 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
 
     # Check for strong intermediate trend - symmetric treatment
     if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_weight > 0.7:
+        # Skip uncertain phases
+        if any(a.uncertain_phase for a in timeframe_groups['mid']):
+            return MultiTimeframeDirection.NEUTRAL
+            
         # Allow counter-trend short-term moves if volume is low
         if st_dir != MultiTimeframeDirection.NEUTRAL and st_dir != mid_dir:
             # Equal threshold for both bullish and bearish signals
-            if st_vol < 0.6:  # Now identical for both directions
+            if st_vol < MODERATE_VOLUME_THRESHOLD:  # Using consistent threshold
                 if market_structure_bias and market_structure_bias != mid_dir:
                     return MultiTimeframeDirection.NEUTRAL
                 return mid_dir
@@ -120,27 +134,38 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
 
     # Consider longer-term trend with confirmation - equal treatment
     if lt_dir != MultiTimeframeDirection.NEUTRAL and lt_weight > 0.6:
+        # Skip uncertain phases
+        if any(a.uncertain_phase for a in timeframe_groups['long']):
+            return MultiTimeframeDirection.NEUTRAL
+            
         if mid_dir == lt_dir or st_dir == lt_dir:
             if market_structure_bias and market_structure_bias != lt_dir:
                 return MultiTimeframeDirection.NEUTRAL
             return lt_dir
             
         # Equal sensitivity for bearish and bullish signals
-        if mid_vol < 0.6 and st_vol < 0.6:
+        if mid_vol < MODERATE_VOLUME_THRESHOLD and st_vol < MODERATE_VOLUME_THRESHOLD:  # Using consistent threshold
             if market_structure_bias and market_structure_bias != lt_dir:
                 return MultiTimeframeDirection.NEUTRAL
             return lt_dir
 
     # Check for aligned moves even with lower weights - equal threshold
     if st_dir == mid_dir and st_dir != MultiTimeframeDirection.NEUTRAL:
+        # Skip uncertain phases in both groups
+        if any(a.uncertain_phase for a in timeframe_groups['short'] + timeframe_groups['mid']):
+            return MultiTimeframeDirection.NEUTRAL
+            
         # Same threshold for both bullish and bearish signals
         if (st_weight + mid_weight) / 2 > 0.45:
             if market_structure_bias and market_structure_bias != st_dir:
                 return MultiTimeframeDirection.NEUTRAL
             return st_dir
 
-    # When in doubt, respect market structure
+    # When in doubt, respect market structure if phases are certain
     if market_structure_bias:
-        return market_structure_bias
+        # Only trust market structure if we have enough certain phases
+        certain_phases = sum(1 for a in analyses if not a.uncertain_phase)
+        if certain_phases >= len(analyses) / 2:
+            return market_structure_bias
 
     return MultiTimeframeDirection.NEUTRAL
