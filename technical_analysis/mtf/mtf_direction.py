@@ -48,65 +48,171 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
     bullish_phases = sum(1 for a in analyses if is_bullish_phase(a.dominant_phase) and not a.uncertain_phase)
     bearish_phases = sum(1 for a in analyses if is_bearish_phase(a.dominant_phase) and not a.uncertain_phase)
     
-    # Market structure consistency check - create bias only when clearly dominant
+    # Count strong volume signals by direction
+    bullish_volume_signals = sum(1 for a in analyses if a.momentum_bias == MultiTimeframeDirection.BULLISH 
+                                and a.volume_strength > MODERATE_VOLUME_THRESHOLD)
+    bearish_volume_signals = sum(1 for a in analyses if a.momentum_bias == MultiTimeframeDirection.BEARISH 
+                                and a.volume_strength > MODERATE_VOLUME_THRESHOLD)
+    
+    # Enhanced market structure consistency check - consider both phases and volume
     market_structure_bias = None
-    if bearish_phases > bullish_phases and bearish_phases >= len(analyses) / 2.5:  # Stricter threshold
+    phase_threshold = len(analyses) / 2.5  # Stricter threshold for phases
+    
+    # Calculate overall market structure considering both phases and volume
+    if bearish_phases > bullish_phases and bearish_phases >= phase_threshold:
         market_structure_bias = MultiTimeframeDirection.BEARISH
-    elif bullish_phases > bearish_phases and bullish_phases >= len(analyses) / 2.5:
+    elif bullish_phases > bearish_phases and bullish_phases >= phase_threshold:
         market_structure_bias = MultiTimeframeDirection.BULLISH
-
+        
+    # Volume can override if extremely strong in one direction
+    if bullish_volume_signals > bearish_volume_signals * 2 and bullish_volume_signals >= len(analyses) / 2:
+        if market_structure_bias != MultiTimeframeDirection.BULLISH:
+            # Consider as potential divergence, but only if strong enough
+            market_structure_bias = MultiTimeframeDirection.BULLISH if bullish_volume_signals >= len(analyses) * 0.6 else market_structure_bias
+    elif bearish_volume_signals > bullish_volume_signals * 2 and bearish_volume_signals >= len(analyses) / 2:
+        if market_structure_bias != MultiTimeframeDirection.BEARISH:
+            # Consider as potential divergence, but only if strong enough
+            market_structure_bias = MultiTimeframeDirection.BEARISH if bearish_volume_signals >= len(analyses) * 0.6 else market_structure_bias
+    
     def get_weighted_direction(group: List[TimeframeGroupAnalysis]) -> Tuple[MultiTimeframeDirection, float, float]:
+        """
+        Calculate the weighted directional bias for a group of timeframes.
+        
+        Args:
+            group: List of timeframe group analyses
+            
+        Returns:
+            Tuple containing:
+            - The strongest directional bias (BULLISH, BEARISH, or NEUTRAL)
+            - The weight/strength of that bias (0.0-1.0)
+            - The average volume strength across all timeframes
+        """
         if not group:
             return MultiTimeframeDirection.NEUTRAL, 0.0, 0.0
 
         group_total_weight = sum(a.group_weight for a in group)
         if group_total_weight == 0:
             return MultiTimeframeDirection.NEUTRAL, 0.0, 0.0
-
-        # Apply identical multipliers for both bullish and bearish signals
-        weighted_signals = {
-            direction: sum(
-                (a.group_weight / group_total_weight) * 
-                (1 + a.volume_strength * 0.3) *  # Volume boost
-                (1.2 if a.volatility_state == VolatilityState.HIGH else 1.0) *  # Volatility adjustment
-                # Uncertainty penalty - reduce weight if uncertain
-                (0.6 if a.uncertain_phase else 1.0) *
+        
+        def calculate_signal_weight(analysis: TimeframeGroupAnalysis, direction: MultiTimeframeDirection) -> float:
+            """Calculate adjusted weight for a single timeframe analysis in the specified direction."""
+            if analysis.momentum_bias != direction:
+                return 0.0
+                
+            # Base weight normalized by total group weight
+            base_weight = analysis.group_weight / group_total_weight
+            
+            # Apply multipliers for technical factors
+            multipliers = [
+                1 + analysis.volume_strength * 0.3,                       # Volume boost
+                1.2 if analysis.volatility_state == VolatilityState.HIGH else 1.0,  # Volatility adjustment
+                0.6 if analysis.uncertain_phase else 1.0,                  # Uncertainty penalty
                 # Phase consistency factor - identical treatment for bullish/bearish
-                (0.7 if (direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(a.dominant_phase)) or
-                      (direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(a.dominant_phase)) else 1.0)
-                for a in group
-                if a.momentum_bias == direction
-            )
+                0.7 if ((direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(analysis.dominant_phase)) or
+                      (direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase))) 
+                    else 1.0
+            ]
+            
+            # Apply all multipliers to base weight
+            return base_weight * np.prod(multipliers) # type: ignore
+        
+        # Calculate weighted signals for each direction
+        weighted_signals = {
+            direction: sum(calculate_signal_weight(a, direction) for a in group)
             for direction in [MultiTimeframeDirection.BULLISH, MultiTimeframeDirection.BEARISH]
         }
         
-        # Handle neutral case separately to avoid key error
-        weighted_signals[MultiTimeframeDirection.NEUTRAL] = 0
-        
-        strongest = max(weighted_signals.items(), key=lambda x: x[1])
+        # Calculate average volume
         avg_volume = sum(a.volume_strength for a in group) / len(group) if group else 0
-
-        return strongest[0], strongest[1], avg_volume
+        
+        # Find strongest signal, defaulting to NEUTRAL if no clear direction
+        if weighted_signals[MultiTimeframeDirection.BULLISH] == 0 and weighted_signals[MultiTimeframeDirection.BEARISH] == 0:
+            return MultiTimeframeDirection.NEUTRAL, 0.0, avg_volume
+        
+        strongest_dir = max(weighted_signals.items(), key=lambda x: x[1])
+        return strongest_dir[0], strongest_dir[1], avg_volume
 
     # Get weighted directions with volume context
     st_dir, st_weight, st_vol = get_weighted_direction(timeframe_groups['short'])
     mid_dir, mid_weight, mid_vol = get_weighted_direction(timeframe_groups['mid'])
     lt_dir, lt_weight, _ = get_weighted_direction(timeframe_groups['long'])
+    ctx_dir, _, _ = get_weighted_direction(timeframe_groups['context'])
 
-    # Apply symmetric rules for both bullish and bearish signals
+    # Calculate consistency scores to measure signal reliability
+    dir_consistency = 0.0
+    all_directions = [d for d in [st_dir, mid_dir, lt_dir, ctx_dir] if d != MultiTimeframeDirection.NEUTRAL]
+    if all_directions:
+        # Count occurrences of each non-neutral direction
+        dir_counts = {} # type: Dict[MultiTimeframeDirection, int]
+        for d in all_directions:
+            dir_counts[d] = dir_counts.get(d, 0) + 1
+        
+        # Calculate direction consistency score (1.0 means all timeframes agree)
+        max_count = max(dir_counts.values()) if dir_counts else 0
+        dir_consistency = max_count / len(all_directions) if all_directions else 0.0
     
-    # Check for high-conviction intraday moves first
+    # Detect high confidence directional moves
+    high_confidence_direction = None
+    if dir_consistency >= 0.75:  # At least 75% agreement among timeframes
+        # Find the most common direction
+        all_dirs = [d for d in [st_dir, mid_dir, lt_dir, ctx_dir] if d != MultiTimeframeDirection.NEUTRAL]
+        if all_dirs:
+            dir_counts = {}
+            for d in all_dirs:
+                dir_counts[d] = dir_counts.get(d, 0) + 1
+            high_confidence_direction = max(dir_counts.items(), key=lambda x: x[1])[0]
+            
+            # Verify with volume confirmation
+            direction_vols = {
+                MultiTimeframeDirection.BULLISH: sum(v for d, _, v in [(st_dir, st_weight, st_vol), 
+                                                                    (mid_dir, mid_weight, mid_vol)] 
+                                             if d == MultiTimeframeDirection.BULLISH),
+                MultiTimeframeDirection.BEARISH: sum(v for d, _, v in [(st_dir, st_weight, st_vol), 
+                                                                     (mid_dir, mid_weight, mid_vol)]
+                                              if d == MultiTimeframeDirection.BEARISH)
+            }
+            
+            # Require adequate volume in the direction
+            required_vol = MODERATE_VOLUME_THRESHOLD * 0.9  # Slightly lower threshold when we have consistency
+            if direction_vols.get(high_confidence_direction, 0) < required_vol:
+                high_confidence_direction = None  # Reset if volume doesn't confirm
+
+    # Apply our detection logic, but first check for high confidence signals
+    if high_confidence_direction:
+        # If we have a high-confidence signal based on consistency across timeframes
+        # and it doesn't contradict market structure, use it
+        if not market_structure_bias or market_structure_bias == high_confidence_direction:
+            return high_confidence_direction
+        # If it contradicts market structure, we need stronger evidence
+        elif (st_dir == high_confidence_direction and st_vol > MODERATE_VOLUME_THRESHOLD * 1.25 and
+              mid_dir == high_confidence_direction):
+            # Allow contradiction only with very strong evidence
+            return high_confidence_direction
+
+    # Check for high-conviction intraday moves first with enhanced criteria
     if st_dir != MultiTimeframeDirection.NEUTRAL:
-        if st_weight > 0.8 and st_vol > MODERATE_VOLUME_THRESHOLD:  # Using consistent threshold
-            if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_dir != st_dir:
-                return MultiTimeframeDirection.NEUTRAL  # Conflict with intermediate trend
+        # Enhanced short-term signal requirements
+        # 1. Strong weight
+        # 2. Sufficient volume
+        # 3. Agreement with at least one other timeframe OR very strong volume
+        if (st_weight > 0.8 and st_vol > MODERATE_VOLUME_THRESHOLD and
+            (mid_dir == st_dir or lt_dir == st_dir or 
+             (st_vol > MODERATE_VOLUME_THRESHOLD * 1.5 and not any(a.uncertain_phase for a in timeframe_groups['short'])))):
+            
+            # Only reject if there's a direct conflict with intermediate timeframe
+            if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_dir != st_dir and mid_vol > st_vol:
+                return MultiTimeframeDirection.NEUTRAL  # Conflict with stronger intermediate trend
             
             # Skip uncertain phases
             if any(a.uncertain_phase for a in timeframe_groups['short']):
                 return MultiTimeframeDirection.NEUTRAL
                 
-            # Market structure consistency check - equal treatment for bull/bear
+            # Market structure consistency check with flexibility for strong signals
             if market_structure_bias and market_structure_bias != st_dir:
+                # Allow contradiction only with very strong short-term signals
+                if st_vol > MODERATE_VOLUME_THRESHOLD * 1.5 and st_weight > 0.9:
+                    # This might be a reversal against the larger structure
+                    return st_dir
                 return MultiTimeframeDirection.NEUTRAL
                 
             return st_dir
