@@ -490,19 +490,13 @@ def _analyze_timeframe_group(
     if consolidation_count / total_signals > 0.5:
         momentum_bias = MultiTimeframeDirection.NEUTRAL
     else:
-        # Factor in exhaustion signals - symmetric treatment
-        if upside_exhaustion >= len(group) // 2:
-            momentum_bias = MultiTimeframeDirection.NEUTRAL if bullish_signals > bearish_signals + 0.1 else MultiTimeframeDirection.BEARISH
-        elif downside_exhaustion >= len(group) // 2:
-            momentum_bias = MultiTimeframeDirection.NEUTRAL if bearish_signals > bullish_signals + 0.1 else MultiTimeframeDirection.BULLISH
-        else:
-            # Equal threshold for both directions
-            threshold_diff = 0.1
-            momentum_bias = (
-                MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals + threshold_diff else
-                MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals + threshold_diff else
-                MultiTimeframeDirection.NEUTRAL
-            )
+        # Equal threshold for both directions
+        threshold_diff = 0.1
+        momentum_bias = (
+            MultiTimeframeDirection.BULLISH if bullish_signals > bearish_signals + threshold_diff else
+            MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals + threshold_diff else
+            MultiTimeframeDirection.NEUTRAL
+        )
 
     # Modify momentum bias calculation for rapid moves - symmetric treatment
     if rapid_bullish_moves >= len(group) // 2:
@@ -533,7 +527,7 @@ def _calculate_group_weight(timeframes: Dict[Timeframe, WyckoffState]) -> float:
     return sum(tf.settings.phase_weight for tf in timeframes.keys())
 
 def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overall_direction: MultiTimeframeDirection) -> float:
-    """Calculate momentum intensity with optimized scoring."""
+    """Calculate momentum intensity with optimized scoring for faster intraday response."""
     if not analyses or overall_direction == MultiTimeframeDirection.NEUTRAL:
         return 0.0
 
@@ -544,9 +538,9 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
             (overall_direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase)))
     )
     
-    # Graduated penalty based on conflict ratio rather than binary
+    # Reduced penalty for conflicts to allow faster direction changes
     conflict_ratio = phase_direction_conflicts / len(analyses) if analyses else 0
-    conflict_penalty = max(0.5, 1.0 - conflict_ratio * 0.5)  # Min 0.5, linear decrease
+    conflict_penalty = max(0.6, 1.0 - conflict_ratio * 0.4)  # Minimum 0.6 (up from 0.5)
 
     # Optimize directional score calculation
     directional_scores = []
@@ -571,7 +565,7 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         
         # Calculate all boosts at once
         phase_consistency = 0.7 if not phase_aligned else 1.0
-        volume_boost = 1.0 + (analysis.volume_strength * 0.3)
+        volume_boost = 1.0 + (analysis.volume_strength * 0.35)
         phase_boost = 1.2 if phase_aligned else 1.0
         
         # Funding impact
@@ -591,11 +585,11 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
             short_term_volume += analysis.volume_strength
             short_term_count += 1
     
-    # More accurate volume boost calculation
+    # More aggressive volume boost calculation
     hourly_volume_boost = 1.0
     if short_term_count > 0:
         avg_short_term_volume = short_term_volume / short_term_count
-        hourly_volume_boost = 1.0 + max(0, min(0.15, avg_short_term_volume - 0.5))
+        hourly_volume_boost = 1.0 + max(0, min(0.25, avg_short_term_volume - 0.4))  # Increased from 0.15 and lowered threshold
     
     # Final calculation with error handling
     total_weight = sum(weight for _, weight in directional_scores)
@@ -607,8 +601,7 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     # Improved final value calculation with smoother scaling
     final_momentum = weighted_momentum * hourly_volume_boost * conflict_penalty
     
-    # Apply smoothing curve to make the output more balanced across the 0-1 range
-    # This improves the distribution of results instead of clustering at extremes
-    final_momentum = 1.0 / (1.0 + np.exp(-5 * (final_momentum - 0.5))) if final_momentum > 0 else 0.0
+    # Apply less steep curve for more responsive results
+    final_momentum = 1.0 / (1.0 + np.exp(-4 * (final_momentum - 0.45))) if final_momentum > 0 else 0.0
     
     return min(1.0, final_momentum)

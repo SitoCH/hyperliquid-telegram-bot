@@ -47,7 +47,7 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         # Use timeframe settings for trend window
         volume_trend = ((volume_short_ma - volume_long_ma) / volume_long_ma).fillna(0)
         
-        # Calculate volume consistency
+        # Calculate volume consistency - more balanced approach
         recent_strong_volume = (df['v'].iloc[-3:] > volume_sma.iloc[-3:]).mean()
         
         # Calculate strength and ratio metrics
@@ -57,16 +57,16 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         # Optimized volume state determination with cleaner threshold logic
         volume_threshold = timeframe.settings.thresholds[0]
         
-        # Define threshold boundaries once - more maintainable
+        # Define threshold boundaries - more balanced
         thresholds = {
-            'very_high_ratio': volume_threshold * 1.5,
-            'high_ratio': volume_threshold * 1.1,
-            'low_ratio': 0.75,
-            'very_low_ratio': 0.5,
-            'very_high_strength': 2.5,
-            'high_strength': 1.5,
-            'low_strength': -0.8,
-            'very_low_strength': -1.5
+            'very_high_ratio': volume_threshold * 1.45,  # More conservative reduction
+            'high_ratio': volume_threshold * 1.05,       # More conservative
+            'low_ratio': 0.78,                          # More conservative
+            'very_low_ratio': 0.55,                     # More conservative
+            'very_high_strength': 2.3,                  # More conservative
+            'high_strength': 1.4,                       # More conservative
+            'low_strength': -0.75,                      # More conservative
+            'very_low_strength': -1.3                   # More conservative
         }
         
         # Clean determination of volume state
@@ -102,11 +102,12 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         )
 
 def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol_metrics: VolumeMetrics) -> tuple[bool, bool]:
-    """Enhanced spring/upthrust detection with optimized signal logic."""
-    if idx < 4:
+    """Enhanced spring/upthrust detection with more balanced signal generation."""
+    if idx < 4:  # Maintain original lookback for better reliability
         return False, False
     
     try:
+        # Use standard window for better reliability
         window = df.iloc[idx-4:idx+1]
         low_point = window['l'].min()
         high_point = window['h'].max()
