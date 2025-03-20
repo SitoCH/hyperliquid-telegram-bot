@@ -613,31 +613,17 @@ def analyze_effort_result(
         timeframe: Current timeframe for context
     """
     try:
-        # Get recent data - adjust window based on timeframe
-        lookback = {
-            Timeframe.MINUTES_15: 3,  # Scalping needs faster response
-            Timeframe.MINUTES_30: 4,  # Swing trade
-            Timeframe.HOUR_1: 5,      # Main trend
-            Timeframe.HOURS_2: 6,     # Main trend context
-            Timeframe.HOURS_4: 8,     # Market structure
-            Timeframe.HOURS_8: 10,    # Market context
-        }.get(timeframe, 5)  # Default to 5 periods
-
+        # Get recent data - use timeframe settings instead of hardcoded dictionary
+        lookback = timeframe.settings.effort_lookback
+        
         recent_df = df.iloc[-lookback:]
         
         # Calculate normalized price movement
         price_change = abs(recent_df['c'].iloc[-1] - recent_df['o'].iloc[-1])
         price_range = recent_df['h'].iloc[-1] - recent_df['l'].iloc[-1]
         
-        # Skip tiny moves to avoid noise - adjust threshold by timeframe
-        min_move = RESULT_MIN_MOVE * {
-            Timeframe.MINUTES_15: 0.5,   # More sensitive
-            Timeframe.MINUTES_30: 0.75,  # Still sensitive
-            Timeframe.HOUR_1: 1.0,       # Base threshold
-            Timeframe.HOURS_2: 1.25,     # Less sensitive
-            Timeframe.HOURS_4: 1.5,      # Focus on larger moves
-            Timeframe.HOURS_8: 2.0,      # Only significant moves
-        }.get(timeframe, 1.0)
+        # Skip tiny moves to avoid noise - use settings instead of hardcoded dictionary
+        min_move = RESULT_MIN_MOVE * timeframe.settings.min_move_multiplier
 
         if price_change < min_move:
             return EffortResult.WEAK

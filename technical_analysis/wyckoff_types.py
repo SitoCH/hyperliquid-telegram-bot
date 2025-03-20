@@ -191,6 +191,8 @@ class TimeframeSettings:
     spring_upthrust_window: int     # For reversal pattern detection
     support_resistance_lookback: int # For S/R level identification
     chart_image_time_delta: pd.Timedelta  # For chart rendering
+    effort_lookback: int = 5        # Periods to look back for effort-result analysis
+    min_move_multiplier: float = 1.0  # Minimum price move multiplier for effort-result analysis
 
     # Properties to provide derived values and backward compatibility
     @property
@@ -264,7 +266,9 @@ _TIMEFRAME_SETTINGS = {
         volume_ma_window=13,
         spring_upthrust_window=4,
         support_resistance_lookback=30,
-        chart_image_time_delta=pd.Timedelta(hours=12)
+        chart_image_time_delta=pd.Timedelta(hours=12),
+        effort_lookback=3,            # Faster response for scalping
+        min_move_multiplier=0.5       # More sensitive to smaller moves
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
         phase_weight=0.20,  # Increased for tactical intraday decisions
@@ -277,7 +281,9 @@ _TIMEFRAME_SETTINGS = {
         volume_ma_window=14,
         spring_upthrust_window=5,
         support_resistance_lookback=42,
-        chart_image_time_delta=pd.Timedelta(hours=24)
+        chart_image_time_delta=pd.Timedelta(hours=24),
+        effort_lookback=4,            # Quick response for swing trades
+        min_move_multiplier=0.75      # Still sensitive to smaller moves
     ),
     
     # Intermediate group (35% total) - Critical for intraday context
@@ -292,7 +298,9 @@ _TIMEFRAME_SETTINGS = {
         volume_ma_window=19,
         spring_upthrust_window=5,
         support_resistance_lookback=52,
-        chart_image_time_delta=pd.Timedelta(hours=48)
+        chart_image_time_delta=pd.Timedelta(hours=48),
+        effort_lookback=5,            # Standard lookback for main trend
+        min_move_multiplier=1.0       # Base threshold for moves
     ),
     Timeframe.HOURS_2: TimeframeSettings(
         phase_weight=0.13,  # Still important for intraday structure
@@ -305,7 +313,9 @@ _TIMEFRAME_SETTINGS = {
         volume_ma_window=22,
         spring_upthrust_window=6,
         support_resistance_lookback=60,
-        chart_image_time_delta=pd.Timedelta(hours=72)
+        chart_image_time_delta=pd.Timedelta(hours=72),
+        effort_lookback=6,            # Longer lookback for trend structure
+        min_move_multiplier=1.25      # Less sensitive to small moves
     ),
     
     # Long-term group (25% total) - Reduced but still vital for context
@@ -320,7 +330,9 @@ _TIMEFRAME_SETTINGS = {
         volume_ma_window=26,
         spring_upthrust_window=7,
         support_resistance_lookback=78,
-        chart_image_time_delta=pd.Timedelta(days=4)
+        chart_image_time_delta=pd.Timedelta(days=4),
+        effort_lookback=8,            # Significant lookback for larger trends
+        min_move_multiplier=1.5       # Only considering meaningful moves
     ),
     Timeframe.HOURS_8: TimeframeSettings(
         phase_weight=0.10,  # Reduced but maintained for campaign insight
@@ -333,7 +345,9 @@ _TIMEFRAME_SETTINGS = {
         volume_ma_window=32,
         spring_upthrust_window=8,
         support_resistance_lookback=104,
-        chart_image_time_delta=pd.Timedelta(days=6)
+        chart_image_time_delta=pd.Timedelta(days=6),
+        effort_lookback=10,           # Maximum lookback for market context
+        min_move_multiplier=2.0       # Only considering significant moves
     )
 }
 
