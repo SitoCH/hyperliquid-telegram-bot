@@ -59,14 +59,14 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         
         # Define threshold boundaries - more balanced
         thresholds = {
-            'very_high_ratio': volume_threshold * 1.45,  # More conservative reduction
-            'high_ratio': volume_threshold * 1.05,       # More conservative
-            'low_ratio': 0.78,                          # More conservative
-            'very_low_ratio': 0.55,                     # More conservative
-            'very_high_strength': 2.3,                  # More conservative
-            'high_strength': 1.4,                       # More conservative
-            'low_strength': -0.75,                      # More conservative
-            'very_low_strength': -1.3                   # More conservative
+            'very_high_ratio': volume_threshold * 1.5,
+            'high_ratio': volume_threshold * 1.1,
+            'low_ratio': 0.75,
+            'very_low_ratio': 0.5,
+            'very_high_strength': 2.5,
+            'high_strength': 1.5,
+            'low_strength': -0.8,
+            'very_low_strength': -1.5
         }
         
         # Clean determination of volume state

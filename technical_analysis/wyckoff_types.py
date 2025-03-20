@@ -252,87 +252,85 @@ class Timeframe(Enum):
 
 # Rebalanced weights for crypto focus
 _TIMEFRAME_SETTINGS = {
-    # Short-term group (34% total) - Slightly reduced to allow for minimum weights
+    # Short-term group (40% total) - Increased for intraday crypto responsiveness
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.16,  # Reduced from 0.20 to balance minimum weights
+        phase_weight=0.20,  # Increased for faster intraday signals
         ema_length=8,
         atr_settings=(12, 7, 16, 5, 7),
         supertrend_multiplier=1.7,
-        base_multiplier=0.65,        # Slightly more conservative
-        momentum_multiplier=1.5,     # Increased for stronger signals
+        base_multiplier=0.65,
+        momentum_multiplier=1.5,
         description="15min scalping",
-        volume_ma_window=13,         # Less extreme reduction
+        volume_ma_window=13,
         spring_upthrust_window=4,
         support_resistance_lookback=30,
         chart_image_time_delta=pd.Timedelta(hours=12)
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.18,  # Reduced from 0.20 to balance minimum weights
+        phase_weight=0.20,  # Increased for tactical intraday decisions
         ema_length=12,
         atr_settings=(16, 9, 20, 6, 8),
         supertrend_multiplier=1.9,
-        base_multiplier=0.74,        # More conservative reduction
-        momentum_multiplier=1.3,     # Slightly increased
+        base_multiplier=0.74,
+        momentum_multiplier=1.3,
         description="30min swings",
-        volume_ma_window=14,         # Reduced from 16 for faster response
+        volume_ma_window=14,
         spring_upthrust_window=5,
         support_resistance_lookback=42,
         chart_image_time_delta=pd.Timedelta(hours=24)
     ),
     
-    # Intermediate group (32% total) - Slightly reduced
+    # Intermediate group (35% total) - Critical for intraday context
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.32,  # Reduced from 0.35 to balance minimum weights
+        phase_weight=0.22,  # Maintained high weight for primary intraday trend
         ema_length=18,
         atr_settings=(20, 12, 26, 8, 10),
         supertrend_multiplier=2.1,
-        base_multiplier=0.98,        # More conservative reduction
-        momentum_multiplier=1.6,     # Increased from 1.5 for clearer signals
+        base_multiplier=0.98,
+        momentum_multiplier=1.6,
         description="1h trend",
-        volume_ma_window=19,         # More conservative reduction
+        volume_ma_window=19,
         spring_upthrust_window=5,
         support_resistance_lookback=52,
         chart_image_time_delta=pd.Timedelta(hours=48)
     ),
-    
-    # Long-term group (24% total) - Increased to ensure minimum weights
     Timeframe.HOURS_2: TimeframeSettings(
-        phase_weight=0.10,  # Reduced from 0.12 to balance minimum weights
+        phase_weight=0.13,  # Still important for intraday structure
         ema_length=26,
         atr_settings=(24, 14, 30, 9, 12),
         supertrend_multiplier=2.3,
-        base_multiplier=1.05,        # Reduced from 1.1 for faster signals
+        base_multiplier=1.05,
         momentum_multiplier=1.6,
         description="2h trend",
-        volume_ma_window=22,         # Reduced from 24 for faster response
+        volume_ma_window=22,
         spring_upthrust_window=6,
         support_resistance_lookback=60,
         chart_image_time_delta=pd.Timedelta(hours=72)
     ),
+    
+    # Long-term group (25% total) - Reduced but still vital for context
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.14,  # Increased from 0.08 to meet minimum threshold
+        phase_weight=0.15,  # Reduced but still important for larger context
         ema_length=32,
         atr_settings=(32, 16, 38, 12, 16),
         supertrend_multiplier=2.6,
         base_multiplier=1.2,
         momentum_multiplier=1.8,
         description="4h trend",
-        volume_ma_window=26,         # Reduced from 28 for faster response
+        volume_ma_window=26,
         spring_upthrust_window=7,
         support_resistance_lookback=78,
         chart_image_time_delta=pd.Timedelta(days=4)
     ),
-    
-    # Context group (10% total) - Doubled to meet minimum threshold 
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.10,  # Increased from 0.05 to meet minimum threshold
+        phase_weight=0.10,  # Reduced but maintained for campaign insight
         ema_length=40,
         atr_settings=(42, 20, 48, 14, 20),
         supertrend_multiplier=2.8,
         base_multiplier=1.3,
         momentum_multiplier=1.9,
         description="8h trend",
-        volume_ma_window=32,         # Reduced from 36 for faster response
+        volume_ma_window=32,
         spring_upthrust_window=8,
         support_resistance_lookback=104,
         chart_image_time_delta=pd.Timedelta(days=6)

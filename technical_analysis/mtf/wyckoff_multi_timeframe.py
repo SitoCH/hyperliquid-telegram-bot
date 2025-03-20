@@ -540,7 +540,7 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     
     # Reduced penalty for conflicts to allow faster direction changes
     conflict_ratio = phase_direction_conflicts / len(analyses) if analyses else 0
-    conflict_penalty = max(0.6, 1.0 - conflict_ratio * 0.4)  # Minimum 0.6 (up from 0.5)
+    conflict_penalty = max(0.5, 1.0 - conflict_ratio * 0.5)
 
     # Optimize directional score calculation
     directional_scores = []
@@ -589,7 +589,7 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     hourly_volume_boost = 1.0
     if short_term_count > 0:
         avg_short_term_volume = short_term_volume / short_term_count
-        hourly_volume_boost = 1.0 + max(0, min(0.25, avg_short_term_volume - 0.4))  # Increased from 0.15 and lowered threshold
+        hourly_volume_boost = 1.0 + max(0, min(0.2, avg_short_term_volume - 0.4))  # Increased from 0.15 and lowered threshold
     
     # Final calculation with error handling
     total_weight = sum(weight for _, weight in directional_scores)
