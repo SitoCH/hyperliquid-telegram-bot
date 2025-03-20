@@ -16,7 +16,7 @@ from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, S
 from hyperliquid_utils.utils import hyperliquid_utils
 from hyperliquid_positions import get_positions, get_overview
 from hyperliquid_stats import get_stats
-from hyperliquid_alerts import check_profit_percentage
+from hyperliquid_alerts import check_profit_percentage, check_positions_to_close
 from hyperliquid_events import on_user_events
 from telegram_utils import conversation_cancel, telegram_utils
 from utils import exchange_enabled
@@ -60,8 +60,14 @@ def main() -> None:
 
     telegram_utils.run_repeating(
         check_profit_percentage,
-        interval=datetime.timedelta(minutes=random.randint(6 * 60 - 10, 6 * 60 + 10))
+        interval=datetime.timedelta(minutes=random.randint(6 * 60 - 20, 6 * 60 + 20))
     )
+
+    if os.getenv("HTB_MONITOR_STALE_POSITIONS", "False") == "True":
+        telegram_utils.run_repeating(
+            check_positions_to_close,
+            interval=datetime.timedelta(minutes=random.randint(2 * 60 - 20, 6 * 60 + 20))
+        )
 
     if exchange_enabled:
         strategy_name = os.environ.get("HTB_STRATEGY")
