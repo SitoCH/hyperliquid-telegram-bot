@@ -44,8 +44,9 @@ async def execute_ta(update: Update, context: CallbackContext) -> int:
 
     if context.args and len(context.args) > 0:
         coin = context.args[0]
-        await update.message.reply_text(text=f"Analyzing {coin}...")
+        message = await update.message.reply_text(text=f"Analyzing {coin}...")
         await analyze_candles_for_coin(context, coin, True)
+        await message.delete()
         return ConversationHandler.END
     
     await update.message.reply_text("Choose a coin to analyze:", reply_markup=hyperliquid_utils.get_coins_reply_markup())
