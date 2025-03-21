@@ -315,7 +315,7 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE])
         await telegram_utils.send("Error: No coin selected. Please restart the process.")
         return ConversationHandler.END
 
-    await telegram_utils.send(f"Opening {context.user_data['enter_mode']} for {selected_coin}...")
+    message = await telegram_utils.send(f"Opening {context.user_data['enter_mode']} for {selected_coin}...")
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
@@ -336,6 +336,7 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE])
             logger.info(open_result)
 
             await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
+            await message.delete()
         else:
             await telegram_utils.send("Exchange is not enabled")
     except Exception as e:

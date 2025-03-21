@@ -111,11 +111,11 @@ class TelegramUtils:
             )
 
 
-    async def send(self, message: str, parse_mode: ODVInput[str] = None):
+    async def send(self, message: str, parse_mode: ODVInput[str] = None) -> Optional[Message]:
         if not self.telegram_app:
             logging.error(self.MISSING_ENV_VARS_ERROR)
-            return
-        await self.telegram_app.bot.send_message(text=message, parse_mode=parse_mode, chat_id=self.telegram_chat_id)
+            return None
+        return await self.telegram_app.bot.send_message(text=message, parse_mode=parse_mode, chat_id=self.telegram_chat_id)
 
 
     def send_and_exit(self, message: str):
