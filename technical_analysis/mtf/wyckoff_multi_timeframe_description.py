@@ -87,6 +87,7 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
         f"Market structure: {structure}\n"
         f"Momentum: {momentum}\n"
         f"Sentiment: {sentiment}\n"
+        f"Confidence: {confidence_pct}\n"
     )
 
     if not interactive_analysis:
@@ -95,13 +96,11 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
     full_description = (
         f"{base_description}\n"
         f"<b>🔍 Timeframes:</b>\n"
+        f"Timeframe alignment: {alignment_pct}\n"
         f"Market Context (4h-8h):\n{context_desc}\n"
         f"Daily Bias (2h):\n{long_term_desc}\n"
         f"Intraday Trend (30m-1h):\n{intermediate_desc}\n"
         f"Immediate Signals (15m):\n{short_term_desc}\n\n"
-        f"<b>🎯 Signal Quality:</b>\n"
-        f"• Timeframe Alignment: {alignment_pct}\n"
-        f"• Confidence Level: {confidence_pct}\n\n"
         f"{insight}"
     )
 
@@ -517,6 +516,7 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
 
         return (
             f"<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>\n"
+            f"Market price: {fmt_price(mid)} USDC\n"
             f"Stop Loss: {fmt_price(sl)} USDC (-{sl_pct:.1f}%)\n"
             f"Take Profit: {fmt_price(tp)} USDC (+{tp_pct:.1f}%)"
         )

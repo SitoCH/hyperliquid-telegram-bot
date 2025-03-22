@@ -4,7 +4,6 @@ import os
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any, Final
 from dataclasses import dataclass
-from .wyckoff_multi_timeframe_description import generate_all_timeframes_description
 from technical_analysis.wyckoff_types import SignificantLevelsData
 from logging_utils import logger
 
