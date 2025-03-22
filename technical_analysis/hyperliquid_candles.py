@@ -359,9 +359,9 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
 
             # Send all charts in sequence, using copies of the buffers
             for idx, (chart, period, results) in enumerate([
-                (charts[0], "15m", results_15m),
+                (charts[2], "4h", results_4h),
                 (charts[1], "1h", results_1h),
-                (charts[2], "4h", results_4h)
+                (charts[0], "15m", results_15m)
             ]):
                 wyckoff_description = results['wyckoff'].description if results.get('wyckoff') else no_wyckoff_data_available
                 caption = f"<b>{period} indicators:</b>\n{wyckoff_description}"
