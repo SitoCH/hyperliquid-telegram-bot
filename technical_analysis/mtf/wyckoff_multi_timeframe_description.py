@@ -193,17 +193,45 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
         analysis.intermediate.dominant_phase, # Intraday swings
         analysis.short_term.dominant_phase    # Quick signals
     ]
-    dominant_phase = max(set(phases), key=phases.count)
-    phase_alignment = phases.count(dominant_phase) / len(phases)
-
+    
+    # Calculate dominant phase using weights instead of simple counting
+    weights = [
+        analysis.context.group_weight,
+        analysis.long_term.group_weight,
+        analysis.intermediate.group_weight,
+        analysis.short_term.group_weight
+    ]
+    
+    # Create a weighted count of each phase
+    phase_weights = {}
+    for phase, weight in zip(phases, weights):
+        if phase not in phase_weights:
+            phase_weights[phase] = 0.0
+        phase_weights[phase] += weight
+    
+    # Find the phase with the highest weighted score
+    dominant_phase = max(phase_weights.keys(), key=lambda p: phase_weights[p])
+    
+    # Calculate weighted alignment score
+    total_weight = sum(weights)
+    phase_alignment = phase_weights[dominant_phase] / total_weight if total_weight > 0 else 0
+    
     biases = [
         analysis.context.momentum_bias,      # Structural bias
         analysis.long_term.momentum_bias,    # Main trend bias
         analysis.intermediate.momentum_bias, # Intraday bias
         analysis.short_term.momentum_bias    # Quick signals bias
     ]
-    dominant_bias = max(set(biases), key=biases.count)
-    bias_alignment = biases.count(dominant_bias) / len(biases)
+    
+    # Similarly calculate weighted bias
+    bias_weights = {}
+    for bias, weight in zip(biases, weights):
+        if bias not in bias_weights:
+            bias_weights[bias] = 0.0
+        bias_weights[bias] += weight
+    
+    dominant_bias = max(bias_weights.keys(), key=lambda p: bias_weights[p])
+    bias_alignment = bias_weights[dominant_bias] / total_weight if total_weight > 0 else 0
 
     # Check for time-horizon conflicts
     short_term_conflict = (analysis.short_term.momentum_bias != 
