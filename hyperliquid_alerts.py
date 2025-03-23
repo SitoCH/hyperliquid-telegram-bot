@@ -75,7 +75,7 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
                 oldest_trade = position_trades[0]
                 trade_time = int(oldest_trade["timestamp"])
                 
-                if trade_time < one_day_ago and pnl > 0.10:
+                if trade_time < one_day_ago and pnl > 0.25:
                     positions_to_close.append({
                         "coin": coin,
                         "size": position["szi"],
