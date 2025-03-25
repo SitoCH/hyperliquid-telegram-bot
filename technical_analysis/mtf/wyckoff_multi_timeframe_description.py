@@ -186,15 +186,14 @@ def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
 
 def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
     """Get comprehensive market structure description across four timeframes."""
-
+    # Extract timeframes and weights
     phases = [
-        analysis.context.dominant_phase,      # Structural context
-        analysis.long_term.dominant_phase,    # Main trend
-        analysis.intermediate.dominant_phase, # Intraday swings
-        analysis.short_term.dominant_phase    # Quick signals
+        analysis.context.dominant_phase,      
+        analysis.long_term.dominant_phase,    
+        analysis.intermediate.dominant_phase, 
+        analysis.short_term.dominant_phase    
     ]
     
-    # Calculate dominant phase using weights with intraday boost
     weights = [
         analysis.context.group_weight,
         analysis.long_term.group_weight,
@@ -202,7 +201,6 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
         analysis.short_term.group_weight
     ]
     
-    # Track confidence levels for each phase
     confidences = [
         not analysis.context.uncertain_phase,
         not analysis.long_term.uncertain_phase,
@@ -210,46 +208,44 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
         not analysis.short_term.uncertain_phase
     ]
     
-    # Create a weighted count of each phase, accounting for uncertainty
-    phase_weights = {}
-    for phase, weight, is_confident in zip(phases, weights, confidences):
-        confidence_factor = 1.0 if is_confident else 0.6  # Reduce weight of uncertain phases
-        if phase not in phase_weights:
-            phase_weights[phase] = 0.0
-        phase_weights[phase] += weight * confidence_factor
+    # Helper function to calculate weighted phase/bias contributions
+    def calculate_weighted_contributions(items, confidence_factor=0.6):
+        results = {}
+        for item, weight, is_confident in zip(items, weights, confidences):
+            factor = 1.0 if is_confident else confidence_factor
+            if item not in results:
+                results[item] = 0.0
+            results[item] += weight * factor
+        return results
     
-    # Find the phase with the highest weighted score
-    dominant_phase = max(phase_weights.keys(), key=lambda p: phase_weights[p]) if phase_weights else WyckoffPhase.UNKNOWN
-    
-    # Calculate weighted alignment score
-    total_weight = sum(weights)
-    phase_alignment = phase_weights.get(dominant_phase, 0) / total_weight if total_weight > 0 else 0
+    # Calculate phase and bias weights with the helper function
+    phase_weights = calculate_weighted_contributions(phases)
     
     biases = [
-        analysis.context.momentum_bias,      # Structural bias
-        analysis.long_term.momentum_bias,    # Main trend bias
-        analysis.intermediate.momentum_bias, # Intraday bias
-        analysis.short_term.momentum_bias    # Quick signals bias
+        analysis.context.momentum_bias,      
+        analysis.long_term.momentum_bias,    
+        analysis.intermediate.momentum_bias, 
+        analysis.short_term.momentum_bias    
     ]
     
-    # Similarly calculate weighted bias with intraday focus
-    bias_weights = {}
-    for bias, weight, is_confident in zip(biases, weights, confidences):
-        confidence_factor = 1.0 if is_confident else 0.7  # Reduce weight but less severely
-        if bias not in bias_weights:
-            bias_weights[bias] = 0.0
-        bias_weights[bias] += weight * confidence_factor
+    # Use slightly higher confidence factor for biases
+    bias_weights = calculate_weighted_contributions(biases, 0.7)
     
+    # Find dominant values
+    total_weight = sum(weights)
+    dominant_phase = max(phase_weights.keys(), key=lambda p: phase_weights[p]) if phase_weights else WyckoffPhase.UNKNOWN
     dominant_bias = max(bias_weights.keys(), key=lambda p: bias_weights[p]) if bias_weights else MultiTimeframeDirection.NEUTRAL
-    bias_alignment = bias_weights.get(dominant_bias, 0) / total_weight if total_weight > 0 else 0
-
-    # Improved conflict detection for crypto markets
-    # Focus more on immediate conflicts that matter for intraday trading
-    short_term_conflict = (analysis.short_term.momentum_bias != analysis.intermediate.momentum_bias)
-    trend_conflict = (analysis.long_term.momentum_bias != analysis.intermediate.momentum_bias)
-    structural_conflict = (analysis.context.momentum_bias != analysis.long_term.momentum_bias)
     
-    # Calculate volume context - critical for crypto
+    # Calculate alignments
+    phase_alignment = phase_weights.get(dominant_phase, 0) / total_weight if total_weight > 0 else 0
+    bias_alignment = bias_weights.get(dominant_bias, 0) / total_weight if total_weight > 0 else 0
+    
+    # Calculate timeframe conflicts - streamline to focus only on what's needed
+    short_term_conflict = analysis.short_term.momentum_bias != analysis.intermediate.momentum_bias
+    trend_conflict = analysis.long_term.momentum_bias != analysis.intermediate.momentum_bias
+    structural_conflict = analysis.context.momentum_bias != analysis.long_term.momentum_bias
+    
+    # Calculate volume context - use weighted approach focused on shorter timeframes
     avg_volume_strength = (
         analysis.short_term.volume_strength * 0.5 +
         analysis.intermediate.volume_strength * 0.3 +
@@ -263,47 +259,53 @@ def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
         volume_context = " on thin volume"
     
     # Dynamically adjust alignment threshold based on volatility
-    # In volatile crypto markets, we accept lower alignment values
     volatility_adjustment = 0.1 if analysis.short_term.volatility_state == VolatilityState.HIGH else 0
     alignment_threshold = 0.7 - volatility_adjustment
     
-    # Special case for high-volatility intraday conditions
-    if analysis.short_term.volatility_state == VolatilityState.HIGH and analysis.intermediate.volatility_state == VolatilityState.HIGH:
-        if analysis.short_term.volume_strength > STRONG_VOLUME_THRESHOLD:
-            return f"volatile {analysis.short_term.dominant_phase.value} structure with {analysis.short_term.momentum_bias.value} momentum{volume_context}"
+    # Check conditions in order of priority for crypto trading
     
-    # Check short-term breakout situations - common in crypto
+    # 1. High volatility conditions - most important for intraday
+    if (analysis.short_term.volatility_state == VolatilityState.HIGH and 
+        analysis.intermediate.volatility_state == VolatilityState.HIGH and
+        analysis.short_term.volume_strength > STRONG_VOLUME_THRESHOLD):
+        return f"volatile {analysis.short_term.dominant_phase.value} structure with {analysis.short_term.momentum_bias.value} momentum{volume_context}"
+    
+    # 2. Potential breakout - critical for trading opportunities
     short_term_breakout = (
         analysis.short_term.momentum_bias != MultiTimeframeDirection.NEUTRAL and
         analysis.short_term.volume_strength > STRONG_VOLUME_THRESHOLD and
         not analysis.short_term.uncertain_phase
     )
     
-    # More detailed crypto-specific structure description
+    if short_term_breakout and short_term_conflict:
+        return f"{analysis.intermediate.dominant_phase.value} structure with potential {analysis.short_term.momentum_bias.value} breakout{volume_context}"
+    
+    # 3. Strong alignment - clear market structure
     if phase_alignment > alignment_threshold and bias_alignment > alignment_threshold:
         confidence = "strong" if phase_alignment > 0.8 else "clear"
         return f"{confidence} {dominant_phase.value} structure with {dominant_bias.value} momentum{volume_context}"
-    elif short_term_breakout and short_term_conflict:
-        # Emphasize breakout against trend - important for intraday crypto trading
-        return f"{analysis.intermediate.dominant_phase.value} structure with potential {analysis.short_term.momentum_bias.value} breakout{volume_context}"
-    elif short_term_conflict and trend_conflict:
+    
+    # 4. Multiple timeframe conflicts - transition phase
+    if short_term_conflict and trend_conflict:
         if analysis.short_term.volatility_state == VolatilityState.HIGH:
             return f"choppy market with mixed signals across timeframes{volume_context}"
         return f"mixed signals across timeframes - transition phase{volume_context}"
-    elif structural_conflict:
-        # Potential major trend change - important in crypto
+    
+    # 5. Major structural conflict - potential reversal 
+    if structural_conflict:
         confidence = "" if analysis.short_term.uncertain_phase else "confirmed "
         return f"possible trend reversal - {confidence}{analysis.short_term.dominant_phase.value} forming{volume_context}"
-    elif short_term_conflict:
-        # Critical for intraday - short term deviation from larger trend
+    
+    # 6. Short term deviation - important for intraday 
+    if short_term_conflict:
         st_bias = analysis.short_term.momentum_bias.value
         lt_phase = analysis.long_term.dominant_phase.value
         return f"{lt_phase} structure with {st_bias} short-term move{volume_context}"
-    else:
-        # Enhanced default case
-        conf_level = "developing" if phase_alignment < 0.6 else "established"
-        momentum_desc = dominant_bias.value if bias_alignment > 0.6 else "mixed"
-        return f"{conf_level} {dominant_phase.value} structure with {momentum_desc} momentum{volume_context}"
+    
+    # 7. Default case - balanced description
+    conf_level = "developing" if phase_alignment < 0.6 else "established"
+    momentum_desc = dominant_bias.value if bias_alignment > 0.6 else "mixed"
+    return f"{conf_level} {dominant_phase.value} structure with {momentum_desc} momentum{volume_context}"
 
 def _generate_trend_description(analysis: AllTimeframesAnalysis) -> str:
     """Generate a coherent trend description combining strength and context."""
@@ -428,11 +430,13 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         # Use short term for immediate direction (15m)
         immediate_bias = analysis.short_term.momentum_bias
         
-        # Use the same market structure determination as the top analysis
-        market_structure = _get_full_market_structure(analysis)
+        # Calculate volume context for signal strength
+        avg_volume = (
+            analysis.short_term.volume_strength * 0.6 +  # Higher weight for short timeframe volume
+            analysis.intermediate.volume_strength * 0.4  # Lower weight for intermediate timeframe
+        )
         
         # Determine momentum level using the same thresholds as _calculate_momentum_strength
-        momentum_desc = ""
         if analysis.momentum_intensity > STRONG_MOMENTUM:
             momentum_desc = "strong"
             position_advice = "Consider aggressive intraday positions with proper risk management."
@@ -449,34 +453,82 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
             momentum_desc = "weak"
             position_advice = "Consider range trading strategies or reduce exposure until clearer signals emerge."
         
+        # Volume qualifier for more precise signal description
+        volume_qualifier = ""
+        if avg_volume > STRONG_VOLUME_THRESHOLD:
+            volume_qualifier = "high-volume "
+        elif avg_volume < MODERATE_VOLUME_THRESHOLD:
+            volume_qualifier = "thin-volume "
+        
         # Check intraday alignment - focus on short and intermediate timeframes
         intraday_aligned = immediate_bias == intraday_bias
         
-        # Generate specific intraday trading signal
-        signal_prefix = f"{momentum_desc.capitalize()} momentum "
+        # Generate improved timeframe-specific momentum prefix
+        signal_prefix = f"{momentum_desc.capitalize()} {volume_qualifier}momentum "
         
+        # Improved signal direction with more specific crypto trading language
         if intraday_aligned:
             if intraday_bias == MultiTimeframeDirection.BULLISH:
-                signal_direction = "bullish intraday alignment offering favorable long opportunities. "
+                signal_direction = (
+                    f"bullish alignment across 15m-1h timeframes suggesting continuation. "
+                    f"Price action shows {momentum_desc} buying interest"
+                )
+                if avg_volume > STRONG_VOLUME_THRESHOLD:
+                    signal_direction += " with above-average volume support"
+                signal_direction += ". "
+                
             elif intraday_bias == MultiTimeframeDirection.BEARISH:
-                signal_direction = "bearish intraday alignment favoring short positions. "
+                signal_direction = (
+                    f"bearish alignment across 15m-1h timeframes indicating continued selling pressure. "
+                    f"Price structure shows {momentum_desc} selling"
+                )
+                if avg_volume > STRONG_VOLUME_THRESHOLD:
+                    signal_direction += " with significant volume"
+                signal_direction += ". "
+                
             else:
-                signal_direction = "neutral price action across trading timeframes. "
-        else:
-            if immediate_bias == MultiTimeframeDirection.BULLISH:
-                signal_direction = "bullish short-term momentum against " + \
-                                 f"{'bullish' if analysis.long_term.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} " + \
-                                 "larger trend. "
-            elif immediate_bias == MultiTimeframeDirection.BEARISH:
-                signal_direction = "bearish short-term momentum against " + \
-                                 f"{'bullish' if analysis.long_term.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} " + \
-                                 "larger trend. "
+                signal_direction = (
+                    f"neutral price action across key timeframes suggesting range-bound conditions. "
+                    f"Watch for breakout triggers with increasing volume. "
+                )
+                
+        else:  # Timeframes not aligned
+            # Check for potential reversal setups - common in crypto
+            potential_reversal = (
+                immediate_bias != MultiTimeframeDirection.NEUTRAL and
+                intraday_bias != immediate_bias and 
+                analysis.short_term.volume_strength > MODERATE_VOLUME_THRESHOLD
+            )
+            
+            if potential_reversal:
+                if immediate_bias == MultiTimeframeDirection.BULLISH:
+                    signal_direction = (
+                        f"potential bullish reversal forming on 15m against "
+                        f"{'bullish' if analysis.long_term.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} "
+                        f"larger trend. Look for confirmation on the 30m-1h timeframes before adding size. "
+                    )
+                else:  # BEARISH
+                    signal_direction = (
+                        f"potential bearish reversal forming on 15m against "
+                        f"{'bullish' if analysis.long_term.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} "
+                        f"larger trend. Wait for confirmation on the 30m-1h timeframes before committing. "
+                    )
             else:
-                signal_direction = "consolidating short-term action within the broader trend. "
-        
+                if immediate_bias == MultiTimeframeDirection.NEUTRAL:
+                    # Short-term consolidation
+                    signal_direction = (
+                        f"15m consolidation within the {intraday_bias.value} intermediate trend. "
+                        f"Watch for breakout direction with increasing volume. "
+                    )
+                else:
+                    # General timeframe conflict
+                    signal_direction = (
+                        f"{immediate_bias.value} short-term momentum not yet confirmed on higher timeframes. "
+                        f"{'Consider quick scalps only until alignment improves.' if avg_volume > MODERATE_VOLUME_THRESHOLD else 'Avoid chasing moves until alignment improves.'} "
+                    )
+
         return (
             f"{signal_prefix}with {signal_direction}"
-            f"Market structure is {market_structure}. "
             f"{position_advice}"
         )
 
