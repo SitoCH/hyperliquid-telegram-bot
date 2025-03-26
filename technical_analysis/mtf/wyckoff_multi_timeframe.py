@@ -110,11 +110,14 @@ def analyze_multi_timeframe(
         description = generate_all_timeframes_description(coin, all_analysis, mid, significant_levels, interactive_analysis)
 
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
+
+        choppy_conditions = all(group.volatility_state == VolatilityState.HIGH for group in [all_analysis.short_term, all_analysis.intermediate])
         
         # Enhanced notification criteria
         should_notify = (
             all_analysis.confidence_level >= min_confidence and 
             momentum_intensity >= WEAK_MOMENTUM and 
+            not choppy_conditions and
             all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL and
             # Avoid uncertain phases in key timeframes
             not all_analysis.short_term.uncertain_phase and
