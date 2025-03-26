@@ -21,9 +21,8 @@ from .wyckoff_multi_timeframe_types import (
     STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
     MIXED_MOMENTUM, LOW_MOMENTUM,
     SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT,
-    DIRECTIONAL_WEIGHT, VOLUME_WEIGHT, PHASE_WEIGHT, MODERATE_VOLUME_THRESHOLD
+    DIRECTIONAL_WEIGHT, VOLUME_WEIGHT, PHASE_WEIGHT, MODERATE_VOLUME_THRESHOLD, LOW_VOLUME_THRESHOLD
 )
-
 
 def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> MultiTimeframeDirection:
     """Determine overall direction considering Wyckoff phase weights and uncertainty for each timeframe group."""
@@ -42,27 +41,53 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
                                                             for tf in CONTEXT_TIMEFRAMES}]
     }
 
-    # Count dominant phases with equal treatment for bullish/bearish
-    # Only count confident phases (not uncertain)
+    # Count dominant phases including uncertain ones that could be transitions
     bullish_phases = sum(1 for a in analyses if is_bullish_phase(a.dominant_phase) and not a.uncertain_phase)
     bearish_phases = sum(1 for a in analyses if is_bearish_phase(a.dominant_phase) and not a.uncertain_phase)
     
-    # Count strong volume signals by direction
+    # Also count phases that are uncertain but have clear bias
+    uncertain_bullish = sum(1 for a in analyses if is_bullish_phase(a.dominant_phase) and a.uncertain_phase 
+                           and a.momentum_bias == MultiTimeframeDirection.BULLISH)
+    uncertain_bearish = sum(1 for a in analyses if is_bearish_phase(a.dominant_phase) and a.uncertain_phase 
+                           and a.momentum_bias == MultiTimeframeDirection.BEARISH)
+
+    # Consider transition phases when they have momentum and volume confirmation
+    transition_bullish = sum(1 for a in analyses if a.uncertain_phase and a.momentum_bias == MultiTimeframeDirection.BULLISH
+                            and a.volume_strength > MODERATE_VOLUME_THRESHOLD)
+    transition_bearish = sum(1 for a in analyses if a.uncertain_phase and a.momentum_bias == MultiTimeframeDirection.BEARISH
+                            and a.volume_strength > MODERATE_VOLUME_THRESHOLD)
+    
+    # Count volume signals by direction - with lower threshold for consistency check
     bullish_volume_signals = sum(1 for a in analyses if a.momentum_bias == MultiTimeframeDirection.BULLISH 
                                 and a.volume_strength > MODERATE_VOLUME_THRESHOLD)
     bearish_volume_signals = sum(1 for a in analyses if a.momentum_bias == MultiTimeframeDirection.BEARISH 
                                 and a.volume_strength > MODERATE_VOLUME_THRESHOLD)
     
+    # Also count light volume signals for phase consistency check
+    light_bullish_signals = sum(1 for a in analyses if a.momentum_bias == MultiTimeframeDirection.BULLISH 
+                               and a.volume_strength > LOW_VOLUME_THRESHOLD)
+    light_bearish_signals = sum(1 for a in analyses if a.momentum_bias == MultiTimeframeDirection.BEARISH 
+                               and a.volume_strength > LOW_VOLUME_THRESHOLD)
+    
     # Enhanced market structure consistency check - consider both phases and volume
     market_structure_bias = None
     phase_threshold = len(analyses) / 2.5  # Stricter threshold for phases
     
-    # Calculate overall market structure considering both phases and volume
-    if bearish_phases > bullish_phases and bearish_phases >= phase_threshold:
+    # Calculate overall market structure considering transition phases too
+    adjusted_bullish_phases = bullish_phases + (uncertain_bullish * 0.5) + (transition_bullish * 0.7)
+    adjusted_bearish_phases = bearish_phases + (uncertain_bearish * 0.5) + (transition_bearish * 0.7)
+    
+    # Check for consistent bearish phase presence across timeframes
+    consistent_bearish = bearish_phases >= len(analyses) * 0.5 and bearish_phases > bullish_phases
+    consistent_bullish = bullish_phases >= len(analyses) * 0.5 and bullish_phases > bearish_phases
+    
+    # Modified phase detection to recognize consistent bearish signals even with light volume
+    if consistent_bearish or adjusted_bearish_phases > adjusted_bullish_phases and adjusted_bearish_phases >= phase_threshold:
         market_structure_bias = MultiTimeframeDirection.BEARISH
-    elif bullish_phases > bearish_phases and bullish_phases >= phase_threshold:
+    elif consistent_bullish or adjusted_bullish_phases > adjusted_bearish_phases and adjusted_bullish_phases >= phase_threshold:
         market_structure_bias = MultiTimeframeDirection.BULLISH
-        
+
+
     # Volume can override if extremely strong in one direction
     if bullish_volume_signals > bearish_volume_signals * 2 and bullish_volume_signals >= len(analyses) / 2:
         if market_structure_bias != MultiTimeframeDirection.BULLISH:
@@ -73,6 +98,14 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
             # Consider as potential divergence, but only if strong enough
             market_structure_bias = MultiTimeframeDirection.BEARISH if bearish_volume_signals >= len(analyses) * 0.6 else market_structure_bias
     
+    # Check for consistent light volume pattern
+    if light_bearish_signals > light_bullish_signals and light_bearish_signals >= len(analyses) * 0.4:
+        if market_structure_bias is None or market_structure_bias == MultiTimeframeDirection.BEARISH:
+            market_structure_bias = MultiTimeframeDirection.BEARISH
+    elif light_bullish_signals > light_bearish_signals and light_bullish_signals >= len(analyses) * 0.4:
+        if market_structure_bias is None or market_structure_bias == MultiTimeframeDirection.BULLISH:
+            market_structure_bias = MultiTimeframeDirection.BULLISH
+
     def get_weighted_direction(group: List[TimeframeGroupAnalysis]) -> Tuple[MultiTimeframeDirection, float, float]:
         """
         Calculate the weighted directional bias for a group of timeframes.
@@ -101,11 +134,17 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
             # Base weight normalized by total group weight
             base_weight = analysis.group_weight / group_total_weight
             
-            # Apply multipliers for technical factors
+            # Apply multipliers for technical factors - with transition handling
             multipliers = [
-                1 + analysis.volume_strength * 0.3,                       # Volume boost
+                1 + analysis.volume_strength * 0.3,  # Volume boost (same for both directions)
                 1.2 if analysis.volatility_state == VolatilityState.HIGH else 1.0,  # Volatility adjustment
-                0.6 if analysis.uncertain_phase else 1.0,                  # Uncertainty penalty
+                
+                # Better handling of uncertain phases during transitions
+                0.9 if (analysis.uncertain_phase and 
+                       ((direction == MultiTimeframeDirection.BULLISH and is_bullish_phase(analysis.dominant_phase)) or
+                        (direction == MultiTimeframeDirection.BEARISH and is_bearish_phase(analysis.dominant_phase)))) 
+                    else (0.7 if analysis.uncertain_phase else 1.0),
+                
                 # Phase consistency factor - identical treatment for bullish/bearish
                 0.7 if ((direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(analysis.dominant_phase)) or
                       (direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase))) 
@@ -190,36 +229,50 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
 
     # Check for high-conviction intraday moves first with enhanced criteria
     if st_dir != MultiTimeframeDirection.NEUTRAL:
-        # Enhanced short-term signal requirements
-        # 1. Strong weight
-        # 2. Sufficient volume
-        # 3. Agreement with at least one other timeframe OR very strong volume
-        if (st_weight > 0.8 and st_vol > MODERATE_VOLUME_THRESHOLD and
+        # Enhanced short-term signal requirements - apply same threshold for both directions
+        if (st_weight > 0.75 and st_vol > MODERATE_VOLUME_THRESHOLD and
             (mid_dir == st_dir or lt_dir == st_dir or 
-             (st_vol > MODERATE_VOLUME_THRESHOLD * 1.5 and not any(a.uncertain_phase for a in timeframe_groups['short'])))):
+             (st_vol > MODERATE_VOLUME_THRESHOLD * 1.5))):
             
             # Only reject if there's a direct conflict with intermediate timeframe
-            if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_dir != st_dir and mid_vol > st_vol:
-                return MultiTimeframeDirection.NEUTRAL  # Conflict with stronger intermediate trend
+            if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_dir != st_dir:
+                # Detect potential transition phase
+                short_term_transition = any(a.uncertain_phase and a.volume_strength > MODERATE_VOLUME_THRESHOLD 
+                                         for a in timeframe_groups['short'])
+                
+                # Allow transition phase to override with enough conviction
+                if short_term_transition and st_weight > 0.85 and st_vol > mid_vol:
+                    return st_dir
+                
+                if mid_vol > st_vol:
+                    return MultiTimeframeDirection.NEUTRAL  # Conflict with stronger intermediate trend
             
-            # Skip uncertain phases
-            if any(a.uncertain_phase for a in timeframe_groups['short']):
+            # Handle uncertain phases during transitions
+            uncertain_with_direction = any(a.uncertain_phase and a.momentum_bias == st_dir 
+                                        and a.volume_strength > MODERATE_VOLUME_THRESHOLD
+                                        for a in timeframe_groups['short'])
+                                        
+            if any(a.uncertain_phase for a in timeframe_groups['short']) and not uncertain_with_direction:
                 return MultiTimeframeDirection.NEUTRAL
                 
             # Market structure consistency check with flexibility for strong signals
             if market_structure_bias and market_structure_bias != st_dir:
-                # Allow contradiction only with very strong short-term signals
-                if st_vol > MODERATE_VOLUME_THRESHOLD * 1.5 and st_weight > 0.9:
+                # Allow contradiction with strong short-term signals when phase transition is detected
+                if st_vol > MODERATE_VOLUME_THRESHOLD * 1.4 and st_weight > 0.8:
                     # This might be a reversal against the larger structure
                     return st_dir
                 return MultiTimeframeDirection.NEUTRAL
                 
             return st_dir
 
-    # Check for strong intermediate trend - symmetric treatment
-    if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_weight > 0.7:
-        # Skip uncertain phases
-        if any(a.uncertain_phase for a in timeframe_groups['mid']):
+    # Check for strong intermediate trend with transition detection
+    if mid_dir != MultiTimeframeDirection.NEUTRAL and mid_weight > 0.65:
+        # Handle uncertain phases during transitions
+        uncertain_with_direction = any(a.uncertain_phase and a.momentum_bias == mid_dir 
+                                    and a.volume_strength > MODERATE_VOLUME_THRESHOLD
+                                    for a in timeframe_groups['mid'])
+                                    
+        if any(a.uncertain_phase for a in timeframe_groups['mid']) and not uncertain_with_direction:
             return MultiTimeframeDirection.NEUTRAL
             
         # Allow counter-trend short-term moves if volume is low
@@ -254,10 +307,13 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
                 return MultiTimeframeDirection.NEUTRAL
             return lt_dir
 
-    # Check for aligned moves even with lower weights - equal threshold
+    # Check for aligned moves even with lower weights - same threshold for both directions
     if st_dir == mid_dir and st_dir != MultiTimeframeDirection.NEUTRAL:
-        # Skip uncertain phases in both groups
-        if any(a.uncertain_phase for a in timeframe_groups['short'] + timeframe_groups['mid']):
+        # Consider transitions as valid if they have consistent direction
+        uncertain_aligned = all(a.uncertain_phase and a.momentum_bias == st_dir or not a.uncertain_phase 
+                             for a in timeframe_groups['short'] + timeframe_groups['mid'])
+        
+        if any(a.uncertain_phase for a in timeframe_groups['short'] + timeframe_groups['mid']) and not uncertain_aligned:
             return MultiTimeframeDirection.NEUTRAL
             
         # Same threshold for both bullish and bearish signals
