@@ -133,15 +133,15 @@ def analyze_multi_timeframe(
             # Bullish criteria - require stronger signals
             should_notify = should_notify and (
                 # Ensure internal alignment is strong enough
-                all_analysis.short_term.internal_alignment >= 0.55 and
-                all_analysis.intermediate.internal_alignment >= 0.50 and
+                all_analysis.short_term.internal_alignment >= 0.50 and
+                all_analysis.intermediate.internal_alignment >= 0.45 and
                 # At least one of these bullish confirmation signals
                 (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKUP or 
                  all_analysis.short_term.dominant_phase == WyckoffPhase.ACCUMULATION or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKUP or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.ACCUMULATION or
                  all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BULLISH or
-                 all_analysis.intermediate.funding_sentiment > 0.1)
+                 all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BULLISH)
             )
         else:  # BEARISH
             # Bearish criteria - adjusted thresholds for typical bearish behavior
@@ -155,7 +155,7 @@ def analyze_multi_timeframe(
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKDOWN or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.DISTRIBUTION or
                  all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BEARISH or
-                 all_analysis.intermediate.funding_sentiment < -0.1)
+                 all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BEARISH)
             )
 
         return MultiTimeframeContext(
