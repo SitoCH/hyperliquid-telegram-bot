@@ -66,7 +66,7 @@ def main() -> None:
     if os.getenv("HTB_MONITOR_STALE_POSITIONS", "False") == "True":
         telegram_utils.run_repeating(
             check_positions_to_close,
-            interval=datetime.timedelta(minutes=random.randint(2 * 60 - 20, 6 * 60 + 20))
+            interval=datetime.timedelta(minutes=random.randint(2 * 60 - 30, 2 * 60 + 30))
         )
 
     if exchange_enabled:
