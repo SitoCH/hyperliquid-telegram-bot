@@ -84,7 +84,7 @@ async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
  
     # Schedule next coin if any remain
     if coins_to_analyze:
-        weight_per_analysis = 155
+        weight_per_analysis = 175
         next_available = hyperliquid_rate_limiter.get_next_available_time(weight_per_analysis)
         delay = max(4, next_available)
         context.application.job_queue.run_once( # type: ignore
@@ -116,12 +116,13 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
 def get_candles_for_timeframes(coin: str, now: int) -> Dict[Timeframe, List[Dict[str, Any]]]:
     """Get candles data for all timeframes with optimized lookback periods."""
     timeframe_lookbacks = {
+        Timeframe.MINUTES_5: 14,
         Timeframe.MINUTES_15: 40,
-        Timeframe.MINUTES_30: 70,
-        Timeframe.HOUR_1: 90,
-        Timeframe.HOURS_2: 100,
-        Timeframe.HOURS_4: 110,
-        Timeframe.HOURS_8: 150
+        Timeframe.MINUTES_30: 60,
+        Timeframe.HOUR_1: 75,
+        Timeframe.HOURS_2: 90,
+        Timeframe.HOURS_4: 100,
+        Timeframe.HOURS_8: 125
     }
     return {
         tf: get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
