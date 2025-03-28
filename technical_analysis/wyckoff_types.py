@@ -272,10 +272,10 @@ class Timeframe(Enum):
 
 # Rebalanced weights for crypto focus
 _TIMEFRAME_SETTINGS = {
-    # SHORT_TERM_TIMEFRAMES (28.9% total) - For scalping and quick tactical decisions
+    # SHORT_TERM_TIMEFRAMES (29% total) - For scalping and quick tactical decisions
     Timeframe.MINUTES_5: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.084,  # Increased from 0.08 to 0.084
+        phase_weight=0.08,  # Reduced to 0.08 (from 0.084)
         description="5min scalping",
         chart_image_time_delta=pd.Timedelta(hours=6),
         
@@ -307,7 +307,7 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.MINUTES_15: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.205,  # Increased from 0.195 to 0.205
+        phase_weight=0.21,  # Increased to 0.21 (from 0.205)
         description="15min scalping",
         chart_image_time_delta=pd.Timedelta(hours=12),
         
@@ -338,10 +338,10 @@ _TIMEFRAME_SETTINGS = {
         low_threshold=1.2
     ),
     
-    # INTERMEDIATE_TIMEFRAMES (43.6% total) - Primary trading decision timeframes
+    # INTERMEDIATE_TIMEFRAMES (44% total) - Primary trading decision timeframes
     Timeframe.MINUTES_30: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.205,  # Increased from 0.195 to 0.205
+        phase_weight=0.21,  # Increased to 0.21 (from 0.205)
         description="30min swings",
         chart_image_time_delta=pd.Timedelta(hours=24),
         
@@ -373,7 +373,7 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.HOUR_1: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.231,  # Increased from 0.22 to 0.231
+        phase_weight=0.23,  # Set to 0.23 (from 0.231)
         description="1h trend",
         chart_image_time_delta=pd.Timedelta(hours=48),
         
@@ -404,10 +404,10 @@ _TIMEFRAME_SETTINGS = {
         low_threshold=1.0
     ),
     
-    # LONG_TERM_TIMEFRAMES (12.5% total) - Daily bias and trend direction
+    # LONG_TERM_TIMEFRAMES (12% total) - Daily bias and trend direction
     Timeframe.HOURS_2: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.125,  # Increased from 0.12 to 0.125
+        phase_weight=0.12,  # Reduced to 0.12 (from 0.125)
         description="2h trend",
         chart_image_time_delta=pd.Timedelta(hours=72),
         
@@ -441,7 +441,7 @@ _TIMEFRAME_SETTINGS = {
     # CONTEXT_TIMEFRAMES (15% total) - Market structure and bigger picture (capped)
     Timeframe.HOURS_4: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.095,  # Reduced from 0.12 to 0.095
+        phase_weight=0.10,  # Adjusted to 0.10 (from 0.095)
         description="4h trend",
         chart_image_time_delta=pd.Timedelta(days=4),
         
@@ -473,7 +473,7 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.HOURS_8: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.055,  # Reduced from 0.07 to 0.055
+        phase_weight=0.05,  # Reduced to 0.05 (from 0.055)
         description="8h trend",
         chart_image_time_delta=pd.Timedelta(days=6),
         
