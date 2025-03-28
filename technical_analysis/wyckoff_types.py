@@ -179,21 +179,29 @@ class VolumeMetrics:
 @dataclass
 class TimeframeSettings:
     """Settings for technical analysis parameters per timeframe"""
+    
+    # --- Core Analysis Settings ---
     phase_weight: float              # Used in get_phase_weight()
+    description: str                # Used for logging/display purposes
+    chart_image_time_delta: pd.Timedelta  # For chart rendering
+    
+    # --- Indicator Settings ---
     ema_length: int                  # Used in apply_indicators() for EMA calculation
     atr_settings: tuple[int, int, int, int, int]  # Used in get_indicator_settings()
     supertrend_multiplier: float     # Used in apply_indicators() for Supertrend
     base_multiplier: float          # Used in thresholds property
     momentum_multiplier: float      # Used in thresholds property
-    description: str                # Used for logging/display purposes
-    # Simplified volume settings - further reduced
+    
+    # --- Volume Analysis Settings ---
     volume_ma_window: int           # Primary volume moving average window
+    
+    # --- Support/Resistance & Pattern Detection ---
     spring_upthrust_window: int     # For reversal pattern detection
     support_resistance_lookback: int # For S/R level identification
-    chart_image_time_delta: pd.Timedelta  # For chart rendering
     effort_lookback: int = 5        # Periods to look back for effort-result analysis
     min_move_multiplier: float = 1.0  # Minimum price move multiplier for effort-result analysis
-    # Adaptive threshold factors
+    
+    # --- Adaptive Threshold Factors ---
     spring_factor: float = 1.0      # Factor for spring/upthrust detection
     liquidation_factor: float = 1.0 # Factor for liquidation cascade detection
     breakout_factor: float = 1.0    # Factor for breakout detection
