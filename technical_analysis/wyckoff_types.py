@@ -199,6 +199,9 @@ class TimeframeSettings:
     breakout_factor: float = 1.0    # Factor for breakout detection
     significant_levels_factor: float = 1.0  # Factor for price level detection
     atr_multiplier: float = 0.25    # ATR multiplier for support/resistance clustering
+    volume_weighted_efficiency: float = 0.2  # Efficiency multiplier for volume impact on price movement
+    high_threshold: float = 1.0     # Upper threshold for efficiency calculation
+    low_threshold: float = 1.0      # Lower threshold for efficiency calculation
 
     # Properties to provide derived values and backward compatibility
     @property
@@ -279,7 +282,10 @@ _TIMEFRAME_SETTINGS = {
         liquidation_factor=0.9,
         breakout_factor=0.8,
         significant_levels_factor=0.7,
-        atr_multiplier=0.2  # Tighter for short timeframes
+        atr_multiplier=0.2,  # Tighter for short timeframes
+        volume_weighted_efficiency=0.3,  # More reactive
+        high_threshold=0.8,  # Easier to achieve
+        low_threshold=1.2    # Higher floor
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
         phase_weight=0.20,  # Increased for tactical intraday decisions
@@ -299,7 +305,10 @@ _TIMEFRAME_SETTINGS = {
         liquidation_factor=0.95,
         breakout_factor=0.9,
         significant_levels_factor=0.8,
-        atr_multiplier=0.22
+        atr_multiplier=0.22,
+        volume_weighted_efficiency=0.25,
+        high_threshold=0.85,
+        low_threshold=1.1
     ),
     
     # Intermediate group (35% total) - Critical for intraday context
@@ -321,7 +330,10 @@ _TIMEFRAME_SETTINGS = {
         liquidation_factor=1.0,
         breakout_factor=1.0,
         significant_levels_factor=1.0,
-        atr_multiplier=0.25
+        atr_multiplier=0.25,
+        volume_weighted_efficiency=0.2,  # Base multiplier
+        high_threshold=1.0,  # Base threshold
+        low_threshold=1.0
     ),
     Timeframe.HOURS_2: TimeframeSettings(
         phase_weight=0.13,  # Still important for intraday structure
@@ -341,7 +353,10 @@ _TIMEFRAME_SETTINGS = {
         liquidation_factor=1.05,
         breakout_factor=1.15,
         significant_levels_factor=1.2,
-        atr_multiplier=0.27
+        atr_multiplier=0.27,
+        volume_weighted_efficiency=0.15,
+        high_threshold=1.1,
+        low_threshold=0.9
     ),
     
     # Long-term group (25% total) - Reduced but still vital for context
@@ -363,7 +378,10 @@ _TIMEFRAME_SETTINGS = {
         liquidation_factor=1.1,
         breakout_factor=1.3,
         significant_levels_factor=1.5,
-        atr_multiplier=0.3
+        atr_multiplier=0.3,
+        volume_weighted_efficiency=0.1,  # Less reactive
+        high_threshold=1.2,  # Harder to achieve
+        low_threshold=0.8
     ),
     Timeframe.HOURS_8: TimeframeSettings(
         phase_weight=0.10,  # Reduced but maintained for campaign insight
@@ -383,9 +401,17 @@ _TIMEFRAME_SETTINGS = {
         liquidation_factor=1.2,
         breakout_factor=1.5,
         significant_levels_factor=2.0,
-        atr_multiplier=0.35  # Wider for longer timeframes
+        atr_multiplier=0.35,  # Wider for longer timeframes
+        volume_weighted_efficiency=0.05,  # Minimal adjustment
+        high_threshold=1.3,  # Hardest to achieve
+        low_threshold=0.7    # Lowest floor
     )
 }
+
+SHORT_TERM_TIMEFRAMES = {Timeframe.MINUTES_15}
+INTERMEDIATE_TIMEFRAMES = {Timeframe.MINUTES_30, Timeframe.HOUR_1}
+LONG_TERM_TIMEFRAMES = {Timeframe.HOURS_2}  # Daily bias
+CONTEXT_TIMEFRAMES = {Timeframe.HOURS_4, Timeframe.HOURS_8}
 
 class SignificantLevelsData(TypedDict):
     resistance: List[float]

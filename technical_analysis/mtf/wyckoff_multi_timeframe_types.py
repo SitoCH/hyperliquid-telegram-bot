@@ -4,14 +4,9 @@ from typing import Final
 
 from technical_analysis.wyckoff_types import (
     WyckoffPhase, CompositeAction, MarketLiquidity,
-    VolatilityState, Timeframe, _TIMEFRAME_SETTINGS
+    VolatilityState, Timeframe, _TIMEFRAME_SETTINGS,
+    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES
 )
-
-# Updated timeframe groups optimized for intraday crypto trading
-SHORT_TERM_TIMEFRAMES = {Timeframe.MINUTES_15}  # Immediate signals and entries/exits
-INTERMEDIATE_TIMEFRAMES = {Timeframe.MINUTES_30, Timeframe.HOUR_1}  # Intraday trend
-LONG_TERM_TIMEFRAMES = {Timeframe.HOURS_2}  # Daily bias
-CONTEXT_TIMEFRAMES = {Timeframe.HOURS_4, Timeframe.HOURS_8}  # Multi-day context
 
 # Recalculate group weights
 SHORT_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES)
