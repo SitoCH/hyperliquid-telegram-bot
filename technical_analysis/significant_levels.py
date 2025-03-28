@@ -158,15 +158,8 @@ def find_significant_levels(
     volatility = (price_std / price_sma).iloc[-1] * volatility_multiplier
     
     # Dynamic price range based on timeframe and current volatility
-    # Shorter timeframes need narrower ranges for more precision
-    timeframe_factor = {
-        Timeframe.MINUTES_15: 0.7,
-        Timeframe.MINUTES_30: 0.8,
-        Timeframe.HOUR_1: 1.0, 
-        Timeframe.HOURS_2: 1.2,
-        Timeframe.HOURS_4: 1.5,
-        Timeframe.HOURS_8: 2.0
-    }.get(timeframe, 1.0)
+    # Use the significant_levels_factor from timeframe settings
+    timeframe_factor = timeframe.settings.significant_levels_factor
     
     max_deviation = min(STRONG_DEV_THRESHOLD * volatility * timeframe_factor, 0.25)
     min_price = current_price * (1 - max_deviation)
@@ -176,15 +169,8 @@ def find_significant_levels(
     recent_df = df
     
     # More sensitive base tolerance for crypto's volatile price action
-    # Use dynamic ATR multiplier based on timeframe
-    atr_multiplier = {
-        Timeframe.MINUTES_15: 0.2,  # Tighter for short timeframes
-        Timeframe.MINUTES_30: 0.22,
-        Timeframe.HOUR_1: 0.25,
-        Timeframe.HOURS_2: 0.27,
-        Timeframe.HOURS_4: 0.3,
-        Timeframe.HOURS_8: 0.35,  # Wider for longer timeframes
-    }.get(timeframe, 0.25)
+    # Use atr_multiplier from timeframe settings
+    atr_multiplier = timeframe.settings.atr_multiplier
     
     volatility_component = volatility * 0.2  # Reduced from 0.25 for finer control
     base_tolerance = recent_df['ATR'].iloc[-1] * (atr_multiplier + volatility_component)

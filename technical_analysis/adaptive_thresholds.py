@@ -20,15 +20,8 @@ class AdaptiveThresholdManager:
             price = df['c'].iloc[-1]
             volatility = atr / price
                 
-            # Scale threshold by timeframe and volatility
-            timeframe_factor = {
-                Timeframe.MINUTES_15: 0.7,   # More sensitive on shorter timeframes
-                Timeframe.MINUTES_30: 0.85,
-                Timeframe.HOUR_1: 1.0,       # Base reference
-                Timeframe.HOURS_2: 1.1,
-                Timeframe.HOURS_4: 1.25,
-                Timeframe.HOURS_8: 1.4
-            }.get(timeframe, 1.0)
+            # Use timeframe_factor from settings
+            timeframe_factor = timeframe.settings.spring_factor
             
             # Calculate adaptive thresholds
             base_threshold = 0.001
@@ -48,7 +41,7 @@ class AdaptiveThresholdManager:
         except Exception as e:
             logger.warning(f"Error calculating spring/upthrust thresholds: {e}")
             return {"spring": 0.001, "upthrust": 0.001}
-    
+
     @staticmethod
     def get_liquidation_thresholds(df: pd.DataFrame, timeframe: Timeframe) -> Dict[str, float]:
         """Calculate dynamic thresholds for liquidation cascade detection"""
@@ -74,15 +67,8 @@ class AdaptiveThresholdManager:
                 vol_std = 0.1
                 price_std = 0.01
             
-            # Scale thresholds by timeframe
-            timeframe_factor = {
-                Timeframe.MINUTES_15: 0.9,   # More sensitive on shorter timeframes
-                Timeframe.MINUTES_30: 0.95,
-                Timeframe.HOUR_1: 1.0,       # Base reference
-                Timeframe.HOURS_2: 1.05,
-                Timeframe.HOURS_4: 1.1,
-                Timeframe.HOURS_8: 1.2
-            }.get(timeframe, 1.0)
+            # Use timeframe_factor from settings
+            timeframe_factor = timeframe.settings.liquidation_factor
             
             vol_threshold = 2.5 * np.clip(1.0 / (vol_std * 10 + 0.5), 0.8, 1.4)
             price_threshold = max(0.02, min(0.06, price_std * 3.0)) * timeframe_factor
@@ -115,16 +101,8 @@ class AdaptiveThresholdManager:
             price = df['c'].iloc[-1]
             volatility_factor = atr / price
 
-            
-            # Scale by timeframe
-            timeframe_factor = {
-                Timeframe.MINUTES_15: 0.8,
-                Timeframe.MINUTES_30: 0.9,
-                Timeframe.HOUR_1: 1.0,
-                Timeframe.HOURS_2: 1.15,
-                Timeframe.HOURS_4: 1.3,
-                Timeframe.HOURS_8: 1.5
-            }.get(timeframe, 1.0)
+            # Use timeframe_factor from settings
+            timeframe_factor = timeframe.settings.breakout_factor
             
             # Calculate adaptive breakout threshold
             base_threshold = 0.015

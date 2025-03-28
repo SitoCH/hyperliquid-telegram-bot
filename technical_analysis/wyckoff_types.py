@@ -193,6 +193,12 @@ class TimeframeSettings:
     chart_image_time_delta: pd.Timedelta  # For chart rendering
     effort_lookback: int = 5        # Periods to look back for effort-result analysis
     min_move_multiplier: float = 1.0  # Minimum price move multiplier for effort-result analysis
+    # Adaptive threshold factors
+    spring_factor: float = 1.0      # Factor for spring/upthrust detection
+    liquidation_factor: float = 1.0 # Factor for liquidation cascade detection
+    breakout_factor: float = 1.0    # Factor for breakout detection
+    significant_levels_factor: float = 1.0  # Factor for price level detection
+    atr_multiplier: float = 0.25    # ATR multiplier for support/resistance clustering
 
     # Properties to provide derived values and backward compatibility
     @property
@@ -268,7 +274,12 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=30,
         chart_image_time_delta=pd.Timedelta(hours=12),
         effort_lookback=3,            # Faster response for scalping
-        min_move_multiplier=0.5       # More sensitive to smaller moves
+        min_move_multiplier=0.5,      # More sensitive to smaller moves
+        spring_factor=0.7,           # More sensitive on shorter timeframes
+        liquidation_factor=0.9,
+        breakout_factor=0.8,
+        significant_levels_factor=0.7,
+        atr_multiplier=0.2  # Tighter for short timeframes
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
         phase_weight=0.20,  # Increased for tactical intraday decisions
@@ -283,7 +294,12 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=42,
         chart_image_time_delta=pd.Timedelta(hours=24),
         effort_lookback=4,            # Quick response for swing trades
-        min_move_multiplier=0.75      # Still sensitive to smaller moves
+        min_move_multiplier=0.75,     # Still sensitive to smaller moves
+        spring_factor=0.85,
+        liquidation_factor=0.95,
+        breakout_factor=0.9,
+        significant_levels_factor=0.8,
+        atr_multiplier=0.22
     ),
     
     # Intermediate group (35% total) - Critical for intraday context
@@ -300,7 +316,12 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=52,
         chart_image_time_delta=pd.Timedelta(hours=48),
         effort_lookback=5,            # Standard lookback for main trend
-        min_move_multiplier=1.0       # Base threshold for moves
+        min_move_multiplier=1.0,      # Base threshold for moves
+        spring_factor=1.0,           # Base reference
+        liquidation_factor=1.0,
+        breakout_factor=1.0,
+        significant_levels_factor=1.0,
+        atr_multiplier=0.25
     ),
     Timeframe.HOURS_2: TimeframeSettings(
         phase_weight=0.13,  # Still important for intraday structure
@@ -315,7 +336,12 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=60,
         chart_image_time_delta=pd.Timedelta(hours=72),
         effort_lookback=6,            # Longer lookback for trend structure
-        min_move_multiplier=1.25      # Less sensitive to small moves
+        min_move_multiplier=1.25,     # Less sensitive to small moves
+        spring_factor=1.1,
+        liquidation_factor=1.05,
+        breakout_factor=1.15,
+        significant_levels_factor=1.2,
+        atr_multiplier=0.27
     ),
     
     # Long-term group (25% total) - Reduced but still vital for context
@@ -332,7 +358,12 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=78,
         chart_image_time_delta=pd.Timedelta(days=4),
         effort_lookback=8,            # Significant lookback for larger trends
-        min_move_multiplier=1.5       # Only considering meaningful moves
+        min_move_multiplier=1.5,      # Only considering meaningful moves
+        spring_factor=1.25,
+        liquidation_factor=1.1,
+        breakout_factor=1.3,
+        significant_levels_factor=1.5,
+        atr_multiplier=0.3
     ),
     Timeframe.HOURS_8: TimeframeSettings(
         phase_weight=0.10,  # Reduced but maintained for campaign insight
@@ -347,7 +378,12 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=104,
         chart_image_time_delta=pd.Timedelta(days=6),
         effort_lookback=10,           # Maximum lookback for market context
-        min_move_multiplier=2.0       # Only considering significant moves
+        min_move_multiplier=2.0,      # Only considering significant moves
+        spring_factor=1.4,
+        liquidation_factor=1.2,
+        breakout_factor=1.5,
+        significant_levels_factor=2.0,
+        atr_multiplier=0.35  # Wider for longer timeframes
     )
 }
 
