@@ -56,7 +56,7 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
         trade_history = hyperliquid_utils.info.frontend_open_orders(hyperliquid_utils.address)
         
         current_time = time.time()
-        one_day_ago = (current_time - (24 * 60 * 60)) * 1000
+        stale_from = (current_time - (6 * 60 * 60)) * 1000
         
         positions_to_close = []
         
@@ -75,7 +75,7 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
                 oldest_trade = position_trades[0]
                 trade_time = int(oldest_trade["timestamp"])
                 
-                if trade_time < one_day_ago and pnl > 0.25:
+                if trade_time < stale_from and pnl > 0.25:
                     positions_to_close.append({
                         "coin": coin,
                         "size": position["szi"],
