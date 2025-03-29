@@ -15,21 +15,21 @@ from .adaptive_thresholds import AdaptiveThresholdManager
 from .wyckoff_composite_action import detect_composite_action
 
 
-# Constants for Wyckoff analysis
-VOLUME_THRESHOLD: Final[float] = 1.7  # Increased from 1.5 for more significance with larger dataset
-STRONG_DEV_THRESHOLD: Final[float] = 1.9  # Increased from 1.8 for wider historical context
-NEUTRAL_ZONE_THRESHOLD: Final[float] = 1.0  # Increased from 0.8 for more stable neutral zone detection
-MIN_PERIODS: Final[int] = 40  # Increased from 30 to use more historical data
-VOLUME_MA_THRESHOLD: Final[float] = 1.5  # Increased from 1.3 for stronger volume signals
-VOLUME_SURGE_THRESHOLD: Final[float] = 2.4  # Increased from 2.2 for stronger volume event signals
-VOLUME_TREND_SHORT: Final[int] = 8  # Increased from 7 for smoother short-term trends
-VOLUME_TREND_LONG: Final[int] = 16  # Increased from 14 for longer-term trend context
+# Constants for Wyckoff analysis - optimized for crypto markets
+VOLUME_THRESHOLD: Final[float] = 2.0
+STRONG_DEV_THRESHOLD: Final[float] = 2.1
+NEUTRAL_ZONE_THRESHOLD: Final[float] = 1.2
+MIN_PERIODS: Final[int] = 50
+VOLUME_MA_THRESHOLD: Final[float] = 1.8
+VOLUME_SURGE_THRESHOLD: Final[float] = 2.8
+VOLUME_TREND_SHORT: Final[int] = 10
+VOLUME_TREND_LONG: Final[int] = 20
 
-# Add new constants after existing ones
-EFFORT_VOLUME_THRESHOLD: Final[float] = 1.6  # Increased from 1.5 for higher quality volume signals
-RESULT_MIN_MOVE: Final[float] = 0.001  # Minimum price move to consider (0.1%)
-HIGH_EFFICIENCY_THRESHOLD: Final[float] = 0.75  # Reduced from 0.8 for more achievable threshold
-LOW_EFFICIENCY_THRESHOLD: Final[float] = 0.35  # Reduced from 0.4 for stricter weak signal filtering
+# Add new constants
+EFFORT_VOLUME_THRESHOLD: Final[float] = 1.8
+RESULT_MIN_MOVE: Final[float] = 0.002
+HIGH_EFFICIENCY_THRESHOLD: Final[float] = 0.65
+LOW_EFFICIENCY_THRESHOLD: Final[float] = 0.25
 
 
 def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMetrics:
@@ -324,27 +324,31 @@ def determine_phase_by_price_strength(
     volume_state: VolumeState, volatility: pd.Series,
     timeframe: Timeframe
 ) -> Tuple[WyckoffPhase, bool]:
-    """Enhanced phase determination with better trend confirmation."""
+    """Enhanced phase determination with more decisive phase identification."""
 
     _, strong_dev_threshold, neutral_zone_threshold, \
     momentum_threshold, _, _ = timeframe.settings.thresholds
 
     # Calculate trend consistency
     vol_ratio = volatility.iloc[-1] / volatility.mean()
-
-    # Modified reversal zone detection (less strict, more phases become certain)
-    is_reversal_zone = abs(price_strength) > strong_dev_threshold * 1.3  # Reduced from 1.5
     
-    # Calculate additional confirmation metrics
-    price_trend_consistency = abs(price_strength) > strong_dev_threshold * 0.7  # Price consistency check
-    momentum_consistency = abs(momentum_strength) > momentum_threshold * 0.8  # Momentum consistency
+    # Define confirmation metrics
+    price_trend_consistency = abs(price_strength) > strong_dev_threshold * 0.6
+    momentum_consistency = abs(momentum_strength) > momentum_threshold * 0.7
 
-    # Check for extreme momentum (price surge or collapse)
-    is_price_collapsing = momentum_strength < -momentum_threshold * 1.5 and price_strength < -strong_dev_threshold
-    is_price_surging = momentum_strength > momentum_threshold * 1.5 and price_strength > strong_dev_threshold
+    # Define extreme momentum conditions
+    is_price_collapsing = momentum_strength < -momentum_threshold * 1.3 and price_strength < -strong_dev_threshold * 0.9
+    is_price_surging = momentum_strength > momentum_threshold * 1.3 and price_strength > strong_dev_threshold * 0.9
 
     # Use volume state for more nuanced analysis
     has_high_volume = volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH)
+    
+    # Quickly mark phases as certain if strong indicators are present
+    if abs(price_strength) > strong_dev_threshold * 1.5 and (price_strength * momentum_strength > 0):
+        if price_strength > 0:
+            return WyckoffPhase.MARKUP if momentum_strength > 0 else WyckoffPhase.DISTRIBUTION, False
+        else:
+            return WyckoffPhase.MARKDOWN if momentum_strength < 0 else WyckoffPhase.ACCUMULATION, False
 
     # Price above threshold - potential Distribution or Markup
     if price_strength > strong_dev_threshold:
@@ -355,90 +359,63 @@ def determine_phase_by_price_strength(
 
         # Distribution requires momentum to be stabilizing or turning down
         if momentum_strength < momentum_threshold * 0.3:  # Neutral or negative momentum
-            # Volume state influences certainty - VERY_HIGH volume gives strongest signal
-            if volume_state == VolumeState.VERY_HIGH:
-                return WyckoffPhase.DISTRIBUTION, False  # Very certain with extreme volume
-            elif volume_state == VolumeState.HIGH:
-                return WyckoffPhase.DISTRIBUTION, not is_reversal_zone  # Still quite certain
+            if volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH):
+                return WyckoffPhase.DISTRIBUTION, False
             else:
-                # Less certain with lower volume
-                return WyckoffPhase.DISTRIBUTION, not (price_trend_consistency and momentum_consistency)
+                return WyckoffPhase.DISTRIBUTION, not (price_trend_consistency or momentum_consistency)
         else:
             # Strong positive momentum with positive price - still in Markup
-            # Volume helps confirm markup - higher certainty with higher volume
-            markup_certainty = price_trend_consistency and (
-                volume_state == VolumeState.VERY_HIGH or 
-                (volume_state == VolumeState.HIGH and momentum_consistency) or
-                momentum_consistency > 0.9  # Very strong momentum can override volume
+            markup_certainty = price_trend_consistency or (
+                volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH) or
+                momentum_consistency > 0.8
             )
             return WyckoffPhase.MARKUP, not markup_certainty
 
     # Price below threshold - potential Accumulation or Markdown
     if price_strength < -strong_dev_threshold:
-        # Fix for the issue: Check if we have a price collapse (strong negative momentum)
+        # Check if we have a price collapse
         if is_price_collapsing:
             # If price is collapsing, this is markdown, not accumulation
             return WyckoffPhase.MARKDOWN, False
 
         # Accumulation requires momentum to be stabilizing or turning up
         if momentum_strength > -momentum_threshold * 0.3:  # Neutral or positive momentum
-            # Volume state influences certainty - VERY_HIGH volume gives strongest signal
-            if volume_state == VolumeState.VERY_HIGH:
-                return WyckoffPhase.ACCUMULATION, False  # Very certain with extreme volume
-            elif volume_state == VolumeState.HIGH:
-                return WyckoffPhase.ACCUMULATION, not is_reversal_zone  # Still quite certain
+            if volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH):
+                return WyckoffPhase.ACCUMULATION, False
             else:
-                # Less certain with lower volume
-                return WyckoffPhase.ACCUMULATION, not (price_trend_consistency and momentum_consistency)
+                return WyckoffPhase.ACCUMULATION, not (price_trend_consistency or momentum_consistency)
         else:
             # Strong negative momentum with negative price - still in Markdown
-            # Volume helps confirm markdown - higher certainty with higher volume
-            markdown_certainty = price_trend_consistency and (
-                volume_state == VolumeState.VERY_HIGH or 
-                (volume_state == VolumeState.HIGH and momentum_consistency) or
-                momentum_consistency > 0.9  # Very strong momentum can override volume
+            markdown_certainty = price_trend_consistency or (
+                volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH) or
+                momentum_consistency > 0.8
             )
             return WyckoffPhase.MARKDOWN, not markdown_certainty
     
     # Enhanced ranging detection with multi-factor certainty
     if abs(price_strength) <= neutral_zone_threshold:
-        # Evaluate ranging certainty based on multiple factors
-        is_low_volatility = vol_ratio < 0.85
-        is_momentum_neutral = abs(momentum_strength) < momentum_threshold * 0.7
-        conflicting_signals = abs(momentum_strength) > momentum_threshold * 0.5
+        is_low_volatility = vol_ratio < 0.9
         
-        # Calculate overall ranging certainty score (0-3 scale)
-        certainty_factors = 0
-        if is_low_volatility:
-            certainty_factors += 1
-        if is_momentum_neutral:
-            certainty_factors += 1
-        if abs(price_strength) < neutral_zone_threshold * 0.6:  # Very tight range
-            certainty_factors += 1
+        # Simplify ranging certainty calculation
+        conflicting_momentum = abs(momentum_strength) > momentum_threshold * 0.6
+        
+        return WyckoffPhase.RANGING, conflicting_momentum and not is_low_volatility
 
-        # More certain when multiple factors align, regardless of timeframe
-        return WyckoffPhase.RANGING, certainty_factors < 2 or conflicting_signals
-
-    # Improved trend confirmation with more phases considered certain
+    # Improved trend confirmation
     trend_strength = abs(momentum_strength) / momentum_threshold
-    # Lower threshold for strong trend - more trends become "strong"
-    is_strong_trend = trend_strength > 1.3 and (has_high_volume or price_trend_consistency)
+    is_strong_trend = trend_strength > 1.2 or has_high_volume
 
     # Check for trend phases (Markup/Markdown)
     if price_strength > 0:
-        # Better distinguish markup from end of accumulation
-        if momentum_strength > momentum_threshold * 0.8:  # Relaxed threshold
+        if momentum_strength > momentum_threshold * 0.7:
             return WyckoffPhase.MARKUP, not is_strong_trend
-        # Less uncertain based on momentum alignment and strength
-        return WyckoffPhase.MARKUP, not (price_trend_consistency or (abs(momentum_strength) > momentum_threshold * 0.6))
+        return WyckoffPhase.MARKUP, not (price_trend_consistency or has_high_volume or momentum_strength > 0)
     elif price_strength < 0:
-        # Better distinguish markdown from start of accumulation based on momentum
-        if momentum_strength < -momentum_threshold * 0.8:  # Relaxed threshold
+        if momentum_strength < -momentum_threshold * 0.7:
             return WyckoffPhase.MARKDOWN, not is_strong_trend
-        # Less uncertain based on momentum alignment and strength
-        return WyckoffPhase.MARKDOWN, not (price_trend_consistency or (abs(momentum_strength) > momentum_threshold * 0.6))
+        return WyckoffPhase.MARKDOWN, not (price_trend_consistency or has_high_volume or momentum_strength < 0)
     
-    # Fallback case is uncertain by default (this should rarely happen)
+    # Fallback case is uncertain by default
     return WyckoffPhase.RANGING, True
 
 def detect_wyckoff_signs(
