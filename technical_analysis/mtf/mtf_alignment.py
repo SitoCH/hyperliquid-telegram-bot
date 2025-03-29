@@ -91,8 +91,8 @@ CONSISTENCY_WEIGHT = 0.25
 INTRADAY_WEIGHT = 0.15
 
 # Threshold constants
-VOLUME_THRESHOLD = 0.7
-ALIGNMENT_THRESHOLD = 0.6
+VOLUME_THRESHOLD = 0.65  # Slightly relaxed from 0.7
+ALIGNMENT_THRESHOLD = 0.55  # Slightly relaxed from 0.6
 INTERNAL_ALIGNMENT_THRESHOLD = 0.65
 MIN_CONFIDENCE_THRESHOLD = 0.35
 
@@ -112,14 +112,14 @@ VOLUME_PHASE_BOOST = 1.2
 INTRADAY_VOLUME_BOOST = 1.2
 INTRADAY_PHASE_BOOST = 1.15
 
-RECENCY_BOOST = 1.4       # Weight recent signals more heavily
+RECENCY_BOOST = 1.25  # Reduced from 1.4 to avoid overweighting volatile timeframes
 
 def nonlinear_activation(x, steepness=6.0, threshold=0.5):
     """Apply non-linear activation to emphasize strong signals and suppress weak ones"""
     return 1.0 / (1.0 + np.exp(-steepness * (x - threshold)))
 
 def calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
-    """Calculate overall confidence with enhanced intraday sensitivity."""
+    """Calculate overall confidence with enhanced robustness across all timeframes."""
     if not analyses:
         return 0.0
 
@@ -129,7 +129,10 @@ def calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> floa
 
     timeframe_groups = _group_analyses_by_timeframe(analyses)
     
-    volume_confirmation = _calculate_volume_confirmation(analyses, timeframe_groups, total_weight)
+    # Sort analyses to prioritize the most reliable signals
+    sorted_analyses = _sort_analyses_by_reliability(analyses)
+    
+    volume_confirmation = _calculate_volume_confirmation(sorted_analyses, timeframe_groups, total_weight)
     
     directional_agreement = _calculate_directional_agreement(timeframe_groups, total_weight)
     
@@ -159,13 +162,12 @@ def calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> floa
     )
 
     # Dynamic minimum confidence threshold
-    min_confidence = _calculate_minimum_confidence(analyses, timeframe_groups)
+    min_confidence = _calculate_minimum_confidence(sorted_analyses, timeframe_groups)
     
     # Apply sigmoid-like scaling for final confidence score
     scaled_confidence = 1 / (1 + pow(2.0, -FINAL_ACTIVATION[0] * (raw_confidence - FINAL_ACTIVATION[1])))
 
     return max(min(scaled_confidence, 1.0), min_confidence)
-
 
 def _detect_market_regime(analyses: List[TimeframeGroupAnalysis], 
                           timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]]) -> str:
@@ -249,46 +251,58 @@ def _group_analyses_by_timeframe(analyses: List[TimeframeGroupAnalysis]) -> Dict
         }]
     }
 
+def _sort_analyses_by_reliability(analyses: List[TimeframeGroupAnalysis]) -> List[TimeframeGroupAnalysis]:
+    """Sort analyses by their reliability (combination of internal alignment and volume strength)."""
+    return sorted(
+        analyses,
+        key=lambda a: (a.internal_alignment * a.volume_strength),
+        reverse=True
+    )
+
 def _calculate_volume_confirmation(analyses: List[TimeframeGroupAnalysis], 
                                   timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]],
                                   total_weight: float) -> float:
-    """Calculate volume confirmation score with intraday focus and recency bias."""
+    """Calculate volume confirmation score with reliability-based weighting."""
     volume_scores = []
     
-    # Sort analyses by timeframe priority (shorter timeframes first)
-    analyses_by_recency = sorted(
-        analyses, 
-        key=lambda a: 0 if a in timeframe_groups['short'] else 
-                      1 if a in timeframe_groups['intermediate'] else 
-                      2 if a in timeframe_groups['long'] else 3
-    )
-    
-    # Apply recency bias - more recent (short-term) analyses get stronger weight
-    for i, analysis in enumerate(analyses_by_recency):
+    # Each timeframe is weighted by its phase_weight from settings (already built in)
+    # and further adjusted by its reliability
+    for analysis in analyses:
+        # Base score is volume strength
         base_score = analysis.volume_strength
-        recency_factor = RECENCY_BOOST if i < len(analyses_by_recency) // 2 else 1.0
         
-        if analysis in timeframe_groups['short'] or analysis in timeframe_groups['intermediate']:
-            if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
-                base_score *= MARKUP_MARKDOWN_BOOST
-            elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
-                base_score *= ACCUMULATION_DISTRIBUTION_BOOST
-                
-        volume_scores.append(base_score * (analysis.group_weight / total_weight) * recency_factor)
+        # Weight by reliability factor - higher for more reliable signals
+        reliability_factor = (analysis.internal_alignment + 0.5) / 1.5  # Scale between 0.33 and 1.0
+        
+        # Apply action-based boost
+        if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
+            base_score *= MARKUP_MARKDOWN_BOOST
+        elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
+            base_score *= ACCUMULATION_DISTRIBUTION_BOOST
+            
+        volume_scores.append(base_score * (analysis.group_weight / total_weight) * reliability_factor)
 
     return sum(volume_scores)
 
 def _calculate_directional_agreement(timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]], 
                                     total_weight: float) -> float:
-    """Calculate directional agreement score with timeframe hierarchy."""
+    """Calculate directional agreement score prioritizing reliable signals."""
     directional_scores = []
+    # Prioritize intermediate timeframes for directional agreement
     group_order = ['intermediate', 'short', 'long', 'context']
     prev_bias = None
-
+    
     for group_name in group_order:
         group = timeframe_groups[group_name]
-        for analysis in group:
+        
+        # Sort each group by reliability
+        sorted_group = sorted(group, key=lambda a: a.internal_alignment * a.volume_strength, reverse=True)
+        
+        for analysis in sorted_group:
             score = 1.0 if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL else 0.5
+            
+            # Weight by internal alignment
+            score *= (analysis.internal_alignment + 0.5) / 1.5  # Scale between 0.33 and 1.0
 
             if prev_bias and analysis.momentum_bias == prev_bias:
                 if group_name in ['short', 'intermediate']:
@@ -310,8 +324,23 @@ def _calculate_intraday_confidence(timeframe_groups: Dict[str, List[TimeframeGro
         return 0.0
         
     try:
-        short_analysis = timeframe_groups['short'][0]
-        intermediate_analysis = timeframe_groups['intermediate'][0]
+        # Find the short-term analysis with the highest internal alignment * volume strength
+        if len(timeframe_groups['short']) > 1:
+            short_analysis = max(
+                timeframe_groups['short'],
+                key=lambda a: a.internal_alignment * a.volume_strength
+            )
+        else:
+            short_analysis = timeframe_groups['short'][0]
+            
+        # Find the most reliable intermediate timeframe analysis
+        if len(timeframe_groups['intermediate']) > 1:
+            intermediate_analysis = max(
+                timeframe_groups['intermediate'],
+                key=lambda a: a.internal_alignment * a.volume_strength
+            )
+        else:
+            intermediate_analysis = timeframe_groups['intermediate'][0]
         
         if short_analysis.momentum_bias == intermediate_analysis.momentum_bias:
             intraday_score = 1.0
@@ -331,13 +360,16 @@ def _calculate_intraday_confidence(timeframe_groups: Dict[str, List[TimeframeGro
 
 def _calculate_minimum_confidence(analyses: List[TimeframeGroupAnalysis],
                                  timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]]) -> float:
-    """Calculate dynamic minimum confidence threshold."""
+    """Calculate dynamic minimum confidence threshold using most reliable signals."""
     if len(analyses) < 2:
         return 0.0
+    
+    # Use the two most reliable analyses instead of just the first two
+    most_reliable = analyses[:2] if len(analyses) >= 2 else analyses
         
     return MIN_CONFIDENCE_THRESHOLD if all(
-        a.volume_strength > VOLUME_THRESHOLD and 
-        a.internal_alignment > INTERNAL_ALIGNMENT_THRESHOLD and 
+        a.volume_strength > VOLUME_THRESHOLD * 0.9 and  # Slightly relaxed threshold 
+        a.internal_alignment > ALIGNMENT_THRESHOLD * 0.9 and  # Slightly relaxed threshold
         (a in timeframe_groups['short'] or a in timeframe_groups['intermediate'])
-        for a in analyses[:2]
+        for a in most_reliable
     ) else 0.0
