@@ -4,7 +4,8 @@ import numpy as np  # type: ignore[import]
 from typing import Final, Dict, List, Optional, Any, Tuple
 from .wyckoff_types import (
     MarketPattern, VolatilityState, WyckoffState, WyckoffPhase, EffortResult, 
-    CompositeAction, WyckoffSign, FundingState, VolumeState, Timeframe, VolumeMetrics
+    CompositeAction, WyckoffSign, FundingState, VolumeState, Timeframe, VolumeMetrics,
+    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES
 )
 from .funding_rates_cache import FundingRateEntry
 from .wyckoff_description import generate_wyckoff_description
@@ -12,7 +13,6 @@ from dataclasses import dataclass
 from logging_utils import logger
 from .adaptive_thresholds import AdaptiveThresholdManager
 from .wyckoff_composite_action import detect_composite_action
-from .mtf.wyckoff_multi_timeframe_types import INTERMEDIATE_TIMEFRAMES, SHORT_TERM_TIMEFRAMES
 
 
 # Constants for Wyckoff analysis
