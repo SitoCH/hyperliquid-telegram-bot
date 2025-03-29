@@ -114,49 +114,64 @@ def analyze_multi_timeframe(
         choppy_conditions = all(group.volatility_state == VolatilityState.HIGH for group in [all_analysis.short_term, all_analysis.intermediate])
         
         # Enhanced notification criteria
-        should_notify = (
-            all_analysis.confidence_level >= min_confidence and 
-            momentum_intensity >= WEAK_MOMENTUM and 
-            not choppy_conditions and
-            all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL and
-            # Avoid uncertain phases in key timeframes
-            not all_analysis.short_term.uncertain_phase and
-            not all_analysis.intermediate.uncertain_phase and
-            all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD and
-            all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD and
-            all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING and
-            all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING
-        )
+        notification_checks = [
+            (all_analysis.confidence_level >= min_confidence, f"Low confidence: {all_analysis.confidence_level:.2f} < {min_confidence:.2f}"),
+            (momentum_intensity >= WEAK_MOMENTUM, f"Weak momentum: {momentum_intensity:.2f} < {WEAK_MOMENTUM:.2f}"),
+            (not choppy_conditions, "Choppy market conditions detected"),
+            (all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL, "Neutral market direction"),
+            (not all_analysis.short_term.uncertain_phase, "Uncertain short-term phase"),
+            (not all_analysis.intermediate.uncertain_phase, "Uncertain intermediate-term phase"),
+            (all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD, f"Low short-term volume strength: {all_analysis.short_term.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD:.2f}"),
+            (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD, f"Low intermediate volume strength: {all_analysis.intermediate.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD:.2f}"),
+            (all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING, "Short-term market ranging"),
+            (all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING, "Intermediate-term market ranging")
+        ]
+        
+        should_notify = all(check[0] for check in notification_checks)
+        
+        # Log reasons for not notifying
+        if not should_notify:
+            reasons = [reason for condition, reason in notification_checks if not condition]
+            logger.info(f"Notification suppressed for {coin}: {', '.join(reasons)}")
         
         # Add direction-specific criteria
-        if all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:
-            # Bullish criteria - require stronger signals
-            should_notify = should_notify and (
-                # Ensure internal alignment is strong enough
-                all_analysis.short_term.internal_alignment >= 0.50 and
-                all_analysis.intermediate.internal_alignment >= 0.45 and
-                # At least one of these bullish confirmation signals
+        if should_notify and all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:
+            bullish_checks = [
+                (all_analysis.short_term.internal_alignment >= 0.50, f"Low short-term alignment: {all_analysis.short_term.internal_alignment:.2f} < 0.50"),
+                (all_analysis.intermediate.internal_alignment >= 0.45, f"Low intermediate alignment: {all_analysis.intermediate.internal_alignment:.2f} < 0.45"),
                 (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKUP or 
                  all_analysis.short_term.dominant_phase == WyckoffPhase.ACCUMULATION or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKUP or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.ACCUMULATION or
                  all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BULLISH or
-                 all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BULLISH)
-            )
-        else:  # BEARISH
-            # Bearish criteria - adjusted thresholds for typical bearish behavior
-            should_notify = should_notify and (
-                # Still require reasonable alignment but less strict
-                all_analysis.short_term.internal_alignment >= 0.50 and
-                all_analysis.intermediate.internal_alignment >= 0.45 and
-                # At least one of these bearish confirmation signals
+                 all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BULLISH, 
+                 "Missing bullish confirmation signals")
+            ]
+            
+            should_notify = all(check[0] for check in bullish_checks)
+            
+            if not should_notify:
+                reasons = [reason for condition, reason in bullish_checks if not condition]
+                logger.info(f"Bullish notification suppressed for {coin}: {', '.join(reasons)}")
+                
+        elif should_notify:  # BEARISH
+            bearish_checks = [
+                (all_analysis.short_term.internal_alignment >= 0.50, f"Low short-term alignment: {all_analysis.short_term.internal_alignment:.2f} < 0.50"),
+                (all_analysis.intermediate.internal_alignment >= 0.45, f"Low intermediate alignment: {all_analysis.intermediate.internal_alignment:.2f} < 0.45"),
                 (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKDOWN or 
                  all_analysis.short_term.dominant_phase == WyckoffPhase.DISTRIBUTION or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKDOWN or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.DISTRIBUTION or
                  all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BEARISH or
-                 all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BEARISH)
-            )
+                 all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BEARISH,
+                 "Missing bearish confirmation signals")
+            ]
+            
+            should_notify = all(check[0] for check in bearish_checks)
+            
+            if not should_notify:
+                reasons = [reason for condition, reason in bearish_checks if not condition]
+                logger.info(f"Bearish notification suppressed for {coin}: {', '.join(reasons)}")
 
         return MultiTimeframeContext(
             description=description,
