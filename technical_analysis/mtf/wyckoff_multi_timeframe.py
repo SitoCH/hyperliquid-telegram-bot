@@ -132,7 +132,9 @@ def analyze_multi_timeframe(
         # Log reasons for not notifying
         if not should_notify:
             reasons = [reason for condition, reason in notification_checks if not condition]
-            logger.info(f"Notification suppressed for {coin}: {', '.join(reasons)}")
+            logger.info(f"Notification suppressed for {coin} due to following reasons:")
+            for reason in reasons:
+                logger.info(f"- {reason}")
         
         # Add direction-specific criteria
         if should_notify and all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:
@@ -152,7 +154,9 @@ def analyze_multi_timeframe(
             
             if not should_notify:
                 reasons = [reason for condition, reason in bullish_checks if not condition]
-                logger.info(f"Bullish notification suppressed for {coin}: {', '.join(reasons)}")
+                logger.info(f"Bullish notification suppressed for {coin} due to following reasons:")
+                for reason in reasons:
+                    logger.info(f"- {reason}")
                 
         elif should_notify:  # BEARISH
             bearish_checks = [
@@ -171,7 +175,9 @@ def analyze_multi_timeframe(
             
             if not should_notify:
                 reasons = [reason for condition, reason in bearish_checks if not condition]
-                logger.info(f"Bearish notification suppressed for {coin}: {', '.join(reasons)}")
+                logger.info(f"Bearish notification suppressed for {coin} due to following reasons:")
+                for reason in reasons:
+                    logger.info(f"- {reason}")
 
         return MultiTimeframeContext(
             description=description,
