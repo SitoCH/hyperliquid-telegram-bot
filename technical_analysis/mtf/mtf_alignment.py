@@ -4,20 +4,17 @@ import os
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any, Final
 from dataclasses import dataclass
-from technical_analysis.wyckoff_types import SignificantLevelsData
 from logging_utils import logger
 
-
-from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext
-
 from technical_analysis.wyckoff_types import (
-    WyckoffState, WyckoffPhase, MarketPattern, _TIMEFRAME_SETTINGS,
+    WyckoffState, WyckoffPhase, MarketPattern, SignificantLevelsData, _TIMEFRAME_SETTINGS,
     SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
     is_bearish_action, is_bullish_action, is_bearish_phase, is_bullish_phase,
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity
 )
 
 from .wyckoff_multi_timeframe_types import (
+     AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext,
     STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
     MIXED_MOMENTUM, LOW_MOMENTUM,
     SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT,
@@ -84,155 +81,256 @@ def calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> float
 
     return sum(alignment_scores) / comparison_count
 
-# Define constants for enhanced readability
-# Weight constants
-ALIGNMENT_WEIGHT = 0.25
-CONSISTENCY_WEIGHT = 0.25
-INTRADAY_WEIGHT = 0.15
+# Timeframe importance weights for crypto
+SHORT_TERM_IMPORTANCE = 0.35
+INTERMEDIATE_IMPORTANCE = 0.40
+LONG_TERM_IMPORTANCE = 0.15
+CONTEXT_IMPORTANCE = 0.10
 
-# Threshold constants
-VOLUME_THRESHOLD = 0.65  # Slightly relaxed from 0.7
-ALIGNMENT_THRESHOLD = 0.55  # Slightly relaxed from 0.6
-INTERNAL_ALIGNMENT_THRESHOLD = 0.65
-MIN_CONFIDENCE_THRESHOLD = 0.35
+# Thresholds for confidence calculation
+BASE_CONFIDENCE_THRESHOLD = 0.25
+STRONG_SIGNAL_MULTIPLIER = 1.5
+VOLATILITY_BOOST = 1.2
 
-# Activation function parameters
-VOLUME_ACTIVATION = (7.0, 0.45)  # (steepness, threshold)
-DIRECTIONAL_ACTIVATION = (6.5, 0.5)
-ALIGNMENT_ACTIVATION = (6.0, 0.4)
-INTRADAY_ACTIVATION = (8.0, 0.55)
-FINAL_ACTIVATION = (6.0, 0.45)  # For sigmoid scaling at the end
-
-# Boost multipliers
-MARKUP_MARKDOWN_BOOST = 1.3
-ACCUMULATION_DISTRIBUTION_BOOST = 1.2
-INTRADAY_ALIGNMENT_BOOST = 1.25
-HIGHER_TF_ALIGNMENT_BOOST = 1.15
-VOLUME_PHASE_BOOST = 1.2
-INTRADAY_VOLUME_BOOST = 1.2
-INTRADAY_PHASE_BOOST = 1.15
-
-RECENCY_BOOST = 1.25  # Reduced from 1.4 to avoid overweighting volatile timeframes
-
-def nonlinear_activation(x, steepness=6.0, threshold=0.5):
-    """Apply non-linear activation to emphasize strong signals and suppress weak ones"""
-    return 1.0 / (1.0 + np.exp(-steepness * (x - threshold)))
+# Define proportion adjustments for crypto markets
+# Rather than redefining constants, we'll adjust the proportions within the function
+CRYPTO_DIRECTIONAL_RATIO = 0.9   # Slightly lower than imported DIRECTIONAL_WEIGHT
+CRYPTO_VOLUME_RATIO = 0.85       # Slightly lower than imported VOLUME_WEIGHT
+ALIGNMENT_PROPORTION = 0.15      # New proportion for alignment
+MOMENTUM_PROPORTION = 0.10       # New proportion for momentum
 
 def calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
-    """Calculate overall confidence with enhanced robustness across all timeframes."""
-    if not analyses:
+    """
+    Calculate overall confidence using a simplified algorithm optimized for crypto.
+    
+    This new implementation focuses on:
+    1. Directional agreement between timeframes
+    2. Volume confirmation
+    3. Momentum intensity
+    4. Adaptability to crypto market volatility
+    """
+    if not analyses or len(analyses) < 2:
         return 0.0
-
-    total_weight = sum(analysis.group_weight for analysis in analyses)
-    if total_weight == 0:
-        return 0.0
-
+    
+    # Group analyses by timeframe
     timeframe_groups = _group_analyses_by_timeframe(analyses)
     
-    # Sort analyses to prioritize the most reliable signals
-    sorted_analyses = _sort_analyses_by_reliability(analyses)
+    # Calculate directional agreement score
+    directional_score = _calculate_directional_score(timeframe_groups)
     
-    volume_confirmation = _calculate_volume_confirmation(sorted_analyses, timeframe_groups, total_weight)
+    # Calculate volume confirmation score
+    volume_score = _calculate_volume_score(analyses)
     
-    directional_agreement = _calculate_directional_agreement(timeframe_groups, total_weight)
-    
+    # Calculate alignment between timeframes
     alignment_score = calculate_overall_alignment(analyses)
     
-    intraday_confidence = _calculate_intraday_confidence(timeframe_groups)
+    # Calculate momentum intensity
+    momentum_score = _calculate_momentum_score(timeframe_groups)
     
-    market_regime = _detect_market_regime(analyses, timeframe_groups)
+    # Calculate volatility adjustment based on volatility state
+    volatility_adjustment = _calculate_volatility_adjustment(analyses)
     
-    # Apply non-linear scaling to emphasize strong signals
-    volume_confirmation = nonlinear_activation(volume_confirmation, *VOLUME_ACTIVATION)
-    directional_agreement = nonlinear_activation(directional_agreement, *DIRECTIONAL_ACTIVATION)
-    alignment_score = nonlinear_activation(alignment_score, *ALIGNMENT_ACTIVATION)
+    # Calculate the total weight to ensure proportions sum to 1.0
+    total_weight = (DIRECTIONAL_WEIGHT * CRYPTO_DIRECTIONAL_RATIO) + \
+                  (VOLUME_WEIGHT * CRYPTO_VOLUME_RATIO) + \
+                  ALIGNMENT_PROPORTION + MOMENTUM_PROPORTION
     
-    if intraday_confidence > 0:
-        intraday_confidence = nonlinear_activation(intraday_confidence, *INTRADAY_ACTIVATION)
-        
-    # Adjust weights based on market regime
-    adjusted_weights = _adjust_weights_for_market_regime(market_regime)
-    
-    # Combine scores with dynamic weights
-    raw_confidence = (
-        volume_confirmation * adjusted_weights["volume"] +
-        directional_agreement * adjusted_weights["directional"] +
-        alignment_score * adjusted_weights["alignment"] +
-        intraday_confidence * adjusted_weights["intraday"]
+    # Combine scores with appropriate weights for crypto
+    base_confidence = (
+        directional_score * (DIRECTIONAL_WEIGHT * CRYPTO_DIRECTIONAL_RATIO / total_weight) +
+        volume_score * (VOLUME_WEIGHT * CRYPTO_VOLUME_RATIO / total_weight) +
+        alignment_score * (ALIGNMENT_PROPORTION / total_weight) +
+        momentum_score * (MOMENTUM_PROPORTION / total_weight)
     )
-
-    # Dynamic minimum confidence threshold
-    min_confidence = _calculate_minimum_confidence(sorted_analyses, timeframe_groups)
     
-    # Apply sigmoid-like scaling for final confidence score
-    scaled_confidence = 1 / (1 + pow(2.0, -FINAL_ACTIVATION[0] * (raw_confidence - FINAL_ACTIVATION[1])))
+    # Apply volatility adjustment - higher volatility can mean clearer signals in crypto
+    adjusted_confidence = base_confidence * volatility_adjustment
+    
+    # Apply a more aggressive scaling function for crypto
+    # This allows strong signals to reach higher confidence values
+    final_confidence = _crypto_confidence_scaling(adjusted_confidence)
+    
+    # Ensure the confidence is within bounds
+    return max(min(final_confidence, 1.0), BASE_CONFIDENCE_THRESHOLD)
 
-    return max(min(scaled_confidence, 1.0), min_confidence)
-
-def _detect_market_regime(analyses: List[TimeframeGroupAnalysis], 
-                          timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]]) -> str:
+def _crypto_confidence_scaling(x: float) -> float:
     """
-    Detect if market is in trending or ranging mode based on momentum thresholds.
-    Returns: "trending" or "ranging"
+    More aggressive scaling function for crypto that allows strong signals
+    to reach higher confidence values.
     """
-    # Focus on short-term analyses for intraday
-    short_term_analyses = timeframe_groups.get('short', []) + timeframe_groups.get('intermediate', [])
+    # For crypto, we want a steeper curve that allows values above 0.6 to scale more aggressively
+    if x < 0.4:
+        return x  # Keep lower values as is
+    elif x < 0.7:
+        return x * 1.15  # Slight boost for medium signals
+    else:
+        # More aggressive boost for strong signals, capped at 1.0
+        return min(1.0, x * 1.3)
+
+def _calculate_directional_score(timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]]) -> float:
+    """
+    Calculate directional agreement score with emphasis on short and intermediate timeframes.
+    In crypto, these timeframes often provide the most actionable signals.
+    """
+    scores = []
+    weights = []
     
-    if not short_term_analyses:
-        return "unknown"
+    # Get the dominant bias from each timeframe group
+    group_biases = {}
+    for group_name, group in timeframe_groups.items():
+        if not group:
+            continue
+            
+        # Average the momentum bias for the group
+        biases = [
+            1 if a.momentum_bias == MultiTimeframeDirection.BULLISH else
+            -1 if a.momentum_bias == MultiTimeframeDirection.BEARISH else 0
+            for a in group
+        ]
+        if not biases:
+            continue
+            
+        avg_bias = sum(biases) / len(biases)
+        group_biases[group_name] = avg_bias
+        
+        # Calculate internal alignment within the group
+        internal_alignment = sum(a.internal_alignment for a in group) / len(group)
+        
+        # Calculate score based on strength of bias
+        score = abs(avg_bias) * internal_alignment
+        scores.append(score)
+        
+        # Assign weight based on timeframe importance
+        if group_name == 'short':
+            weights.append(SHORT_TERM_IMPORTANCE)
+        elif group_name == 'intermediate':
+            weights.append(INTERMEDIATE_IMPORTANCE)
+        elif group_name == 'long':
+            weights.append(LONG_TERM_IMPORTANCE)
+        else:  # context
+            weights.append(CONTEXT_IMPORTANCE)
     
-    # Use existing momentum constants to determine market regime
-    momentum_strengths = []
-    for analysis in short_term_analyses:
-        if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL:
-            # Add momentum strength based on internal alignment and volume
-            if analysis.internal_alignment > 0.7 and analysis.volume_strength > 0.65:
-                momentum_strengths.append(STRONG_MOMENTUM)
-            elif analysis.internal_alignment > 0.5 and analysis.volume_strength > 0.5:
-                momentum_strengths.append(MODERATE_MOMENTUM)
-            else:
-                momentum_strengths.append(WEAK_MOMENTUM)
+    # Calculate cross-timeframe agreement
+    agreement_bonus = 0.0
+    if len(group_biases) >= 2:
+        # Check if short and intermediate agree
+        if 'short' in group_biases and 'intermediate' in group_biases:
+            short_sign = 1 if group_biases['short'] > 0 else -1 if group_biases['short'] < 0 else 0
+            int_sign = 1 if group_biases['intermediate'] > 0 else -1 if group_biases['intermediate'] < 0 else 0
+            if short_sign != 0 and int_sign != 0 and short_sign == int_sign:
+                agreement_bonus += 0.15  # Significant bonus for short-intermediate agreement
+        
+        # Check if intermediate and long agree
+        if 'intermediate' in group_biases and 'long' in group_biases:
+            int_sign = 1 if group_biases['intermediate'] > 0 else -1 if group_biases['intermediate'] < 0 else 0
+            long_sign = 1 if group_biases['long'] > 0 else -1 if group_biases['long'] < 0 else 0
+            if int_sign != 0 and long_sign != 0 and int_sign == long_sign:
+                agreement_bonus += 0.10  # Bonus for intermediate-long agreement
+    
+    if not scores:
+        return 0.0
+        
+    # Calculate weighted average
+    weighted_sum = sum(s * w for s, w in zip(scores, weights))
+    total_weight = sum(weights)
+    
+    base_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+    
+    # Apply agreement bonus and cap at 1.0
+    return min(1.0, base_score + agreement_bonus)
+
+def _calculate_volume_score(analyses: List[TimeframeGroupAnalysis]) -> float:
+    """
+    Calculate volume confirmation score with emphasis on recent volume activity.
+    In crypto, volume spikes often precede significant moves.
+    """
+    if not analyses:
+        return 0.0
+    
+    weighted_scores = []
+    
+    for analysis in analyses:
+        # Basic score is volume strength
+        score = analysis.volume_strength
+        
+        # Apply multiplier based on timeframe
+        if analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
+            multiplier = 1.2  # Higher weight for short-term volume in crypto
+        elif analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES}:
+            multiplier = 1.1  # Good weight for intermediate timeframes
         else:
-            momentum_strengths.append(LOW_MOMENTUM)
+            multiplier = 0.9  # Less weight for long-term volume
+            
+        # Apply action-based adjustments
+        if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
+            multiplier *= 1.25  # Volume in trending markets is more significant
+        elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
+            multiplier *= 1.15  # Volume in accumulation/distribution is also important
+            
+        weighted_scores.append(score * multiplier * analysis.internal_alignment)
     
-    # If no valid momentum strengths, default to unknown
-    if not momentum_strengths:
-        return "unknown"
+    avg_volume_score = sum(weighted_scores) / len(weighted_scores) if weighted_scores else 0.0
     
-    # Calculate average momentum strength
-    avg_momentum = sum(momentum_strengths) / len(momentum_strengths)
+    # Apply a more aggressive scaling for crypto markets
+    if avg_volume_score > 0.7:
+        avg_volume_score *= 1.2  # Boost high volume signals
     
-    # Determine market regime based on momentum thresholds
-    if avg_momentum >= MODERATE_MOMENTUM:
-        return "trending"
-    else:
-        return "ranging"
-    
-def _adjust_weights_for_market_regime(regime: str) -> Dict[str, float]:
+    return min(1.0, avg_volume_score)
+
+def _calculate_momentum_score(timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]]) -> float:
     """
-    Adjust component weights based on market regime.
+    Calculate momentum score focusing on short and intermediate timeframes.
+    For crypto trading, momentum is particularly important.
     """
-    if regime == "trending":
-        return {
-            "volume": VOLUME_WEIGHT * 1.1,
-            "directional": CONSISTENCY_WEIGHT * 1.2,
-            "alignment": ALIGNMENT_WEIGHT * 0.9,
-            "intraday": INTRADAY_WEIGHT * 1.1
-        }
-    elif regime == "ranging":
-        return {
-            "volume": VOLUME_WEIGHT * 0.9,
-            "directional": CONSISTENCY_WEIGHT * 0.8,
-            "alignment": ALIGNMENT_WEIGHT * 1.2,
-            "intraday": INTRADAY_WEIGHT * 1.2
-        }
+    # Focus primarily on short and intermediate timeframes
+    relevant_groups = []
+    if timeframe_groups['short']:
+        relevant_groups.extend(timeframe_groups['short'])
+    if timeframe_groups['intermediate']:
+        relevant_groups.extend(timeframe_groups['intermediate'])
+        
+    if not relevant_groups:
+        return 0.0
+    
+    # Calculate average momentum
+    momentum_values = []
+    for analysis in relevant_groups:
+        # Convert momentum bias to a numeric value
+        if analysis.momentum_bias == MultiTimeframeDirection.BULLISH:
+            momentum = 1.0
+        elif analysis.momentum_bias == MultiTimeframeDirection.BEARISH:
+            momentum = -1.0
+        else:
+            momentum = 0.0
+            
+        # Adjust by internal alignment - more aligned = more reliable momentum
+        adjusted_momentum = abs(momentum) * analysis.internal_alignment
+        
+        # Further adjust by volume - volume confirms momentum
+        adjusted_momentum *= (0.5 + 0.5 * analysis.volume_strength)
+        
+        momentum_values.append(adjusted_momentum)
+    
+    avg_momentum = sum(momentum_values) / len(momentum_values) if momentum_values else 0.0
+    
+    # Apply a steeper curve for crypto momentum
+    if avg_momentum > 0.6:
+        return min(1.0, avg_momentum * 1.3)  # Boost strong momentum
     else:
-        return {
-            "volume": VOLUME_WEIGHT,
-            "directional": CONSISTENCY_WEIGHT,
-            "alignment": ALIGNMENT_WEIGHT,
-            "intraday": INTRADAY_WEIGHT
-        }
+        return avg_momentum
+
+def _calculate_volatility_adjustment(analyses: List[TimeframeGroupAnalysis]) -> float:
+    """
+    Calculate volatility adjustment factor. In crypto, higher volatility 
+    often leads to clearer signals and better trading opportunities.
+    """
+    # Count analyses with high volatility
+    high_volatility_count = sum(1 for a in analyses if a.volatility_state == VolatilityState.HIGH)
+    
+    # If most timeframes show high volatility, apply a boost
+    if high_volatility_count >= max(1, len(analyses) * 0.5):
+        return VOLATILITY_BOOST
+    return 1.0
 
 def _group_analyses_by_timeframe(analyses: List[TimeframeGroupAnalysis]) -> Dict[str, List[TimeframeGroupAnalysis]]:
     """Group analyses by timeframe category."""
@@ -250,126 +348,3 @@ def _group_analyses_by_timeframe(analyses: List[TimeframeGroupAnalysis]) -> Dict
             _TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES
         }]
     }
-
-def _sort_analyses_by_reliability(analyses: List[TimeframeGroupAnalysis]) -> List[TimeframeGroupAnalysis]:
-    """Sort analyses by their reliability (combination of internal alignment and volume strength)."""
-    return sorted(
-        analyses,
-        key=lambda a: (a.internal_alignment * a.volume_strength),
-        reverse=True
-    )
-
-def _calculate_volume_confirmation(analyses: List[TimeframeGroupAnalysis], 
-                                  timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]],
-                                  total_weight: float) -> float:
-    """Calculate volume confirmation score with reliability-based weighting."""
-    volume_scores = []
-    
-    # Each timeframe is weighted by its phase_weight from settings (already built in)
-    # and further adjusted by its reliability
-    for analysis in analyses:
-        # Base score is volume strength
-        base_score = analysis.volume_strength
-        
-        # Weight by reliability factor - higher for more reliable signals
-        reliability_factor = (analysis.internal_alignment + 0.5) / 1.5  # Scale between 0.33 and 1.0
-        
-        # Apply action-based boost
-        if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
-            base_score *= MARKUP_MARKDOWN_BOOST
-        elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
-            base_score *= ACCUMULATION_DISTRIBUTION_BOOST
-            
-        volume_scores.append(base_score * (analysis.group_weight / total_weight) * reliability_factor)
-
-    return sum(volume_scores)
-
-def _calculate_directional_agreement(timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]], 
-                                    total_weight: float) -> float:
-    """Calculate directional agreement score prioritizing reliable signals."""
-    directional_scores = []
-    # Prioritize intermediate timeframes for directional agreement
-    group_order = ['intermediate', 'short', 'long', 'context']
-    prev_bias = None
-    
-    for group_name in group_order:
-        group = timeframe_groups[group_name]
-        
-        # Sort each group by reliability
-        sorted_group = sorted(group, key=lambda a: a.internal_alignment * a.volume_strength, reverse=True)
-        
-        for analysis in sorted_group:
-            score = 1.0 if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL else 0.5
-            
-            # Weight by internal alignment
-            score *= (analysis.internal_alignment + 0.5) / 1.5  # Scale between 0.33 and 1.0
-
-            if prev_bias and analysis.momentum_bias == prev_bias:
-                if group_name in ['short', 'intermediate']:
-                    score *= INTRADAY_ALIGNMENT_BOOST
-                else:
-                    score *= HIGHER_TF_ALIGNMENT_BOOST
-
-            if analysis.volume_strength > VOLUME_THRESHOLD and analysis.internal_alignment > ALIGNMENT_THRESHOLD:
-                score *= VOLUME_PHASE_BOOST
-            
-            directional_scores.append(score * (analysis.group_weight / total_weight))
-            prev_bias = analysis.momentum_bias
-
-    return sum(directional_scores)
-
-def _calculate_intraday_confidence(timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]]) -> float:
-    """Calculate confidence based on short-term and intermediate timeframe alignment."""
-    if not (timeframe_groups['short'] and timeframe_groups['intermediate']):
-        return 0.0
-        
-    try:
-        # Find the short-term analysis with the highest internal alignment * volume strength
-        if len(timeframe_groups['short']) > 1:
-            short_analysis = max(
-                timeframe_groups['short'],
-                key=lambda a: a.internal_alignment * a.volume_strength
-            )
-        else:
-            short_analysis = timeframe_groups['short'][0]
-            
-        # Find the most reliable intermediate timeframe analysis
-        if len(timeframe_groups['intermediate']) > 1:
-            intermediate_analysis = max(
-                timeframe_groups['intermediate'],
-                key=lambda a: a.internal_alignment * a.volume_strength
-            )
-        else:
-            intermediate_analysis = timeframe_groups['intermediate'][0]
-        
-        if short_analysis.momentum_bias == intermediate_analysis.momentum_bias:
-            intraday_score = 1.0
-            
-            if (short_analysis.volume_strength > VOLUME_THRESHOLD and 
-                intermediate_analysis.volume_strength > VOLUME_THRESHOLD):
-                intraday_score *= INTRADAY_VOLUME_BOOST
-                
-            if short_analysis.dominant_phase == intermediate_analysis.dominant_phase:
-                intraday_score *= INTRADAY_PHASE_BOOST
-                
-            return min(1.0, intraday_score)
-    except (IndexError, AttributeError):
-        logger.warning("Error calculating intraday confidence - check timeframe group data")
-        
-    return 0.0
-
-def _calculate_minimum_confidence(analyses: List[TimeframeGroupAnalysis],
-                                 timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]]) -> float:
-    """Calculate dynamic minimum confidence threshold using most reliable signals."""
-    if len(analyses) < 2:
-        return 0.0
-    
-    # Use the two most reliable analyses instead of just the first two
-    most_reliable = analyses[:2] if len(analyses) >= 2 else analyses
-        
-    return MIN_CONFIDENCE_THRESHOLD if all(
-        a.volume_strength > VOLUME_THRESHOLD * 0.9 and  # Slightly relaxed threshold 
-        a.internal_alignment > ALIGNMENT_THRESHOLD * 0.9 and  # Slightly relaxed threshold
-        (a in timeframe_groups['short'] or a in timeframe_groups['intermediate'])
-        for a in most_reliable
-    ) else 0.0
