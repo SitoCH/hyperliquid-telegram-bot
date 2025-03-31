@@ -114,15 +114,26 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def get_candles_for_timeframes(coin: str, now: int) -> Dict[Timeframe, List[Dict[str, Any]]]:
-    """Get candles data for all timeframes with optimized lookback periods."""
+    """Get candles data for all timeframes with optimized lookback periods.
+    
+    Returns enough candles for proper Wyckoff analysis based on:
+    - Volume pattern detection
+    - Price structures identification
+    - Moving averages calculation
+    - Trend phase identification
+    """
+    # Calculate lookback periods based on candle count needed rather than days
+    # Wyckoff analysis typically needs 200-400 candles depending on timeframe
     timeframe_lookbacks = {
-        Timeframe.MINUTES_5: 14,
-        Timeframe.MINUTES_15: 40,
-        Timeframe.MINUTES_30: 60,
-        Timeframe.HOUR_1: 75,
-        Timeframe.HOURS_2: 90,
-        Timeframe.HOURS_4: 100,
-        Timeframe.HOURS_8: 125
+        # Lower timeframes need more days to get sufficient candle count
+        Timeframe.MINUTES_5: 21,     # ~6000 candles for pattern detection
+        Timeframe.MINUTES_15: 28,    # ~2700 candles for comprehensive analysis
+        Timeframe.MINUTES_30: 35,    # ~1700 candles for phase identification
+        # Higher timeframes need fewer days to maintain reasonable candle count
+        Timeframe.HOUR_1: 45,        # ~1100 candles for solid trend analysis
+        Timeframe.HOURS_2: 60,       # ~720 candles for complete cycle analysis
+        Timeframe.HOURS_4: 75,       # ~450 candles for significant levels
+        Timeframe.HOURS_8: 90        # ~270 candles for major Wyckoff structures
     }
     return {
         tf: get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
