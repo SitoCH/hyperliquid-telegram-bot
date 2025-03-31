@@ -270,118 +270,118 @@ class Timeframe(Enum):
     def __str__(self) -> str:
         return self._name
 
-# Rebalanced weights for crypto focus
+# Optimized Timeframe Settings for Intraday Crypto Trading with Hourly Analysis
 _TIMEFRAME_SETTINGS = {
-    # SHORT_TERM_TIMEFRAMES (29% total) - For scalping and quick tactical decisions
+    # SHORT_TERM_TIMEFRAMES (26% total) - Slight increase in 15m importance
     Timeframe.MINUTES_5: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.08,  # Reduced to 0.08 (from 0.084)
-        description="5min scalping",
+        phase_weight=0.05,
+        description="5min signals",
         chart_image_time_delta=pd.Timedelta(hours=6),
         
         # --- Indicator Settings ---
-        ema_length=5,
-        atr_settings=(8, 5, 12, 3, 5),
-        supertrend_multiplier=1.5,
-        base_multiplier=0.55,
-        momentum_multiplier=1.7,
-        
-        # --- Volume Analysis Settings ---
-        volume_ma_window=10,
-        
-        # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=3,
-        support_resistance_lookback=24,
-        effort_lookback=2,            # Minimal lookback for ultra-short timeframe
-        min_move_multiplier=0.4,      # Very sensitive to small moves
-        
-        # --- Adaptive Threshold Factors ---
-        spring_factor=0.6,            # Even more sensitive on ultra-short timeframes
-        liquidation_factor=0.8,
-        breakout_factor=0.7,
-        significant_levels_factor=0.6,
-        atr_multiplier=0.18,          # Tightest setting for quick reactions
-        volume_weighted_efficiency=0.35,  # Most reactive
-        high_threshold=0.75,          # Easiest to achieve
-        low_threshold=1.3             # Highest floor for noise filtering
-    ),
-    Timeframe.MINUTES_15: TimeframeSettings(
-        # --- Core Analysis Settings ---
-        phase_weight=0.21,  # Increased to 0.21 (from 0.205)
-        description="15min scalping",
-        chart_image_time_delta=pd.Timedelta(hours=12),
-        
-        # --- Indicator Settings ---
         ema_length=8,
-        atr_settings=(12, 7, 16, 5, 7),
-        supertrend_multiplier=1.7,
-        base_multiplier=0.65,
+        atr_settings=(12, 7, 14, 4, 6),
+        supertrend_multiplier=2.0,
+        base_multiplier=0.7,
         momentum_multiplier=1.5,
-        
-        # --- Volume Analysis Settings ---
-        volume_ma_window=13,
-        
-        # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=4,
-        support_resistance_lookback=30,
-        effort_lookback=3,
-        min_move_multiplier=0.5,
-        
-        # --- Adaptive Threshold Factors ---
-        spring_factor=0.7,
-        liquidation_factor=0.9,
-        breakout_factor=0.8,
-        significant_levels_factor=0.7,
-        atr_multiplier=0.2,
-        volume_weighted_efficiency=0.3,
-        high_threshold=0.8,
-        low_threshold=1.2
-    ),
-    
-    # INTERMEDIATE_TIMEFRAMES (44% total) - Primary trading decision timeframes
-    Timeframe.MINUTES_30: TimeframeSettings(
-        # --- Core Analysis Settings ---
-        phase_weight=0.21,  # Increased to 0.21 (from 0.205)
-        description="30min swings",
-        chart_image_time_delta=pd.Timedelta(hours=24),
-        
-        # --- Indicator Settings ---
-        ema_length=12,
-        atr_settings=(16, 9, 20, 6, 8),
-        supertrend_multiplier=1.9,
-        base_multiplier=0.74,
-        momentum_multiplier=1.3,
         
         # --- Volume Analysis Settings ---
         volume_ma_window=14,
         
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=5,
+        support_resistance_lookback=30,
+        effort_lookback=3,
+        min_move_multiplier=0.6,
+        
+        # --- Adaptive Threshold Factors ---
+        spring_factor=0.8,
+        liquidation_factor=1.0,
+        breakout_factor=0.85,
+        significant_levels_factor=0.8,
+        atr_multiplier=0.22,
+        volume_weighted_efficiency=0.25,
+        high_threshold=0.85,
+        low_threshold=1.2
+    ),
+    Timeframe.MINUTES_15: TimeframeSettings(
+        # --- Core Analysis Settings ---
+        phase_weight=0.21,
+        description="15min tactical entries",
+        chart_image_time_delta=pd.Timedelta(hours=12),
+        
+        # --- Indicator Settings ---
+        ema_length=9,
+        atr_settings=(13, 7, 16, 5, 7),
+        supertrend_multiplier=1.8,
+        base_multiplier=0.72,
+        momentum_multiplier=1.5,
+        
+        # --- Volume Analysis Settings ---
+        volume_ma_window=14,
+        
+        # --- Support/Resistance & Pattern Detection ---
+        spring_upthrust_window=4,
+        support_resistance_lookback=32,
+        effort_lookback=4,
+        min_move_multiplier=0.6,
+        
+        # --- Adaptive Threshold Factors ---
+        spring_factor=0.75,
+        liquidation_factor=0.9,
+        breakout_factor=0.85,
+        significant_levels_factor=0.75,
+        atr_multiplier=0.22,
+        volume_weighted_efficiency=0.3,
+        high_threshold=0.8,
+        low_threshold=1.2
+    ),
+    
+    # INTERMEDIATE_TIMEFRAMES (50% total) - Increased from 47% for better intraday focus
+    Timeframe.MINUTES_30: TimeframeSettings(
+        # --- Core Analysis Settings ---
+        phase_weight=0.23,
+        description="30min intraday swings",
+        chart_image_time_delta=pd.Timedelta(hours=24),
+        
+        # --- Indicator Settings ---
+        ema_length=12,
+        atr_settings=(16, 9, 20, 6, 8),
+        supertrend_multiplier=1.9,
+        base_multiplier=0.8,
+        momentum_multiplier=1.3,
+        
+        # --- Volume Analysis Settings ---
+        volume_ma_window=16,
+        
+        # --- Support/Resistance & Pattern Detection ---
+        spring_upthrust_window=5,
         support_resistance_lookback=42,
         effort_lookback=4,
-        min_move_multiplier=0.75,
+        min_move_multiplier=0.8,
         
         # --- Adaptive Threshold Factors ---
         spring_factor=0.85,
         liquidation_factor=0.95,
         breakout_factor=0.9,
         significant_levels_factor=0.8,
-        atr_multiplier=0.22,
+        atr_multiplier=0.23,
         volume_weighted_efficiency=0.25,
         high_threshold=0.85,
         low_threshold=1.1
     ),
     Timeframe.HOUR_1: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.23,  # Set to 0.23 (from 0.231)
-        description="1h trend",
+        phase_weight=0.27,
+        description="1h primary intraday trend",
         chart_image_time_delta=pd.Timedelta(hours=48),
         
         # --- Indicator Settings ---
         ema_length=18,
-        atr_settings=(20, 12, 26, 8, 10),
+        atr_settings=(20, 12, 24, 8, 10),
         supertrend_multiplier=2.1,
-        base_multiplier=0.98,
+        base_multiplier=0.95,
         momentum_multiplier=1.6,
         
         # --- Volume Analysis Settings ---
@@ -389,7 +389,7 @@ _TIMEFRAME_SETTINGS = {
         
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=5,
-        support_resistance_lookback=52,
+        support_resistance_lookback=54,
         effort_lookback=5,
         min_move_multiplier=1.0,
         
@@ -404,17 +404,17 @@ _TIMEFRAME_SETTINGS = {
         low_threshold=1.0
     ),
     
-    # LONG_TERM_TIMEFRAMES (12% total) - Daily bias and trend direction
+    # LONG_TERM_TIMEFRAMES (12% total) - Slightly reduced from 13% for faster intraday focus
     Timeframe.HOURS_2: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.12,  # Reduced to 0.12 (from 0.125)
-        description="2h trend",
+        phase_weight=0.12,
+        description="2h intraday bias",
         chart_image_time_delta=pd.Timedelta(hours=72),
         
         # --- Indicator Settings ---
-        ema_length=26,
+        ema_length=24,
         atr_settings=(24, 14, 30, 9, 12),
-        supertrend_multiplier=2.3,
+        supertrend_multiplier=2.2,
         base_multiplier=1.05,
         momentum_multiplier=1.6,
         
@@ -425,7 +425,7 @@ _TIMEFRAME_SETTINGS = {
         spring_upthrust_window=6,
         support_resistance_lookback=60,
         effort_lookback=6,
-        min_move_multiplier=1.25,
+        min_move_multiplier=1.2,
         
         # --- Adaptive Threshold Factors ---
         spring_factor=1.1,
@@ -438,11 +438,11 @@ _TIMEFRAME_SETTINGS = {
         low_threshold=0.9
     ),
     
-    # CONTEXT_TIMEFRAMES (15% total) - Market structure and bigger picture (capped)
+    # CONTEXT_TIMEFRAMES (12% total) - Reduced from 15% for more intraday focus
     Timeframe.HOURS_4: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.10,  # Adjusted to 0.10 (from 0.095)
-        description="4h trend",
+        phase_weight=0.08,
+        description="4h daily context",
         chart_image_time_delta=pd.Timedelta(days=4),
         
         # --- Indicator Settings ---
@@ -473,8 +473,8 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.HOURS_8: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.05,  # Reduced to 0.05 (from 0.055)
-        description="8h trend",
+        phase_weight=0.04,
+        description="8h market regime",
         chart_image_time_delta=pd.Timedelta(days=6),
         
         # --- Indicator Settings ---
