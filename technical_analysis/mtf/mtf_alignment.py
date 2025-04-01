@@ -81,22 +81,20 @@ def calculate_overall_alignment(timeframe_groups: Dict[str, List[TimeframeGroupA
 
     return sum(alignment_scores) / comparison_count
 
-# Timeframe importance weights for crypto
-SHORT_TERM_IMPORTANCE = 0.35
+SHORT_TERM_IMPORTANCE = 0.40
 INTERMEDIATE_IMPORTANCE = 0.40
-LONG_TERM_IMPORTANCE = 0.15
-CONTEXT_IMPORTANCE = 0.10
+LONG_TERM_IMPORTANCE = 0.12
+CONTEXT_IMPORTANCE = 0.08
 
 # Thresholds for confidence calculation
 BASE_CONFIDENCE_THRESHOLD = 0.25
 STRONG_SIGNAL_MULTIPLIER = 1.5
 VOLATILITY_BOOST = 1.2
 
-# Define proportion adjustments for crypto markets - now sum to exactly 1.0
-DIRECTIONAL_WEIGHT: Final[float] = 0.45
-VOLUME_WEIGHT: Final[float] = 0.25
-ALIGNMENT_WEIGHT: Final[float] = 0.20
-MOMENTUM_WEIGHT: Final[float] = 0.10
+DIRECTIONAL_WEIGHT: Final[float] = 0.35
+VOLUME_WEIGHT: Final[float] = 0.30 
+ALIGNMENT_WEIGHT: Final[float] = 0.15
+MOMENTUM_WEIGHT: Final[float] = 0.20
 
 def calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
     """
