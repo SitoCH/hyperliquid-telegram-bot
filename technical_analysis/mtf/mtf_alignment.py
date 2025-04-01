@@ -21,11 +21,12 @@ from .wyckoff_multi_timeframe_types import (
 )
 
 
-def calculate_overall_alignment(analyses: List[TimeframeGroupAnalysis]) -> float:
+def calculate_overall_alignment(timeframe_groups: Dict[str, List[TimeframeGroupAnalysis]]) -> float:
     """Calculate alignment across all timeframe groups with improved weighting."""
-    valid_analyses = [a for a in analyses if a is not None]
-    if len(valid_analyses) < 2:
-        return 0.0
+    short_term = timeframe_groups.get('short', [])
+    intermediate = timeframe_groups.get('intermediate', [])
+
+    valid_analyses = short_term + intermediate
 
     total_weight = sum(analysis.group_weight for analysis in valid_analyses)
     if total_weight == 0:
@@ -120,7 +121,7 @@ def calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> floa
     volume_score = _calculate_volume_score(analyses)
     
     # Calculate alignment between timeframes
-    alignment_score = calculate_overall_alignment(analyses)
+    alignment_score = calculate_overall_alignment(timeframe_groups)
     
     # Calculate momentum intensity
     momentum_score = _calculate_momentum_score(timeframe_groups)
