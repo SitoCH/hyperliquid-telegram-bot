@@ -17,8 +17,7 @@ from .wyckoff_multi_timeframe_types import (
      AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext,
     STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
     MIXED_MOMENTUM, LOW_MOMENTUM,
-    SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT,
-    DIRECTIONAL_WEIGHT, VOLUME_WEIGHT, PHASE_WEIGHT
+    SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT
 )
 
 
@@ -92,12 +91,11 @@ BASE_CONFIDENCE_THRESHOLD = 0.25
 STRONG_SIGNAL_MULTIPLIER = 1.5
 VOLATILITY_BOOST = 1.2
 
-# Define proportion adjustments for crypto markets
-# Rather than redefining constants, we'll adjust the proportions within the function
-CRYPTO_DIRECTIONAL_RATIO = 0.9   # Slightly lower than imported DIRECTIONAL_WEIGHT
-CRYPTO_VOLUME_RATIO = 0.85       # Slightly lower than imported VOLUME_WEIGHT
-ALIGNMENT_PROPORTION = 0.15      # New proportion for alignment
-MOMENTUM_PROPORTION = 0.10       # New proportion for momentum
+# Define proportion adjustments for crypto markets - now sum to exactly 1.0
+DIRECTIONAL_WEIGHT: Final[float] = 0.45
+VOLUME_WEIGHT: Final[float] = 0.25
+ALIGNMENT_WEIGHT: Final[float] = 0.20
+MOMENTUM_WEIGHT: Final[float] = 0.10
 
 def calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> float:
     """
@@ -130,17 +128,12 @@ def calculate_overall_confidence(analyses: List[TimeframeGroupAnalysis]) -> floa
     # Calculate volatility adjustment based on volatility state
     volatility_adjustment = _calculate_volatility_adjustment(analyses)
     
-    # Calculate the total weight to ensure proportions sum to 1.0
-    total_weight = (DIRECTIONAL_WEIGHT * CRYPTO_DIRECTIONAL_RATIO) + \
-                  (VOLUME_WEIGHT * CRYPTO_VOLUME_RATIO) + \
-                  ALIGNMENT_PROPORTION + MOMENTUM_PROPORTION
-    
-    # Combine scores with appropriate weights for crypto
+    # Use weights directly since they now sum to 1.0
     base_confidence = (
-        directional_score * (DIRECTIONAL_WEIGHT * CRYPTO_DIRECTIONAL_RATIO / total_weight) +
-        volume_score * (VOLUME_WEIGHT * CRYPTO_VOLUME_RATIO / total_weight) +
-        alignment_score * (ALIGNMENT_PROPORTION / total_weight) +
-        momentum_score * (MOMENTUM_PROPORTION / total_weight)
+        directional_score * DIRECTIONAL_WEIGHT +
+        volume_score * VOLUME_WEIGHT +
+        alignment_score * ALIGNMENT_WEIGHT +
+        momentum_score * MOMENTUM_WEIGHT
     )
     
     # Apply volatility adjustment - higher volatility can mean clearer signals in crypto

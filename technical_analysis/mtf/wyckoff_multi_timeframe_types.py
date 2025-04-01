@@ -26,11 +26,6 @@ WEAK_MOMENTUM: Final[float] = 0.3
 MIXED_MOMENTUM: Final[float] = 0.15
 LOW_MOMENTUM: Final[float] = 0.05
 
-# Analysis weight factors
-DIRECTIONAL_WEIGHT: Final[float] = 0.50
-VOLUME_WEIGHT: Final[float] = 0.35
-PHASE_WEIGHT: Final[float] = 0.15
-
 class MultiTimeframeDirection(Enum):
     BULLISH = "bullish"
     BEARISH = "bearish"
