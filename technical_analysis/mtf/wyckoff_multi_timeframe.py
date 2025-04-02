@@ -91,18 +91,13 @@ def analyze_multi_timeframe(
             context=context_analysis,
             overall_direction=overall_direction,
             momentum_intensity=momentum_intensity,
-            confidence_level= calculate_overall_confidence([
+            confidence_level= calculate_overall_confidence(
                 short_term_analysis, 
                 intermediate_analysis, 
                 long_term_analysis,
                 context_analysis
-            ]),
-            alignment_score= calculate_overall_alignment([
-                short_term_analysis, 
-                intermediate_analysis, 
-                long_term_analysis,
-                context_analysis
-            ])
+            ),
+            alignment_score= calculate_overall_alignment(short_term_analysis, intermediate_analysis)
         )
 
         # Generate comprehensive description
