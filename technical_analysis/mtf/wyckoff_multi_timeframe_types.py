@@ -14,17 +14,17 @@ INTERMEDIATE_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERME
 LONG_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES)
 CONTEXT_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES)
 
-# Volume thresholds
-STRONG_VOLUME_THRESHOLD = 0.7
-MODERATE_VOLUME_THRESHOLD = 0.4
+# Volume thresholds - slightly adjusted
+STRONG_VOLUME_THRESHOLD = 0.75  # Increased from 0.7
+MODERATE_VOLUME_THRESHOLD = 0.45  # Increased from 0.4
 LOW_VOLUME_THRESHOLD = MODERATE_VOLUME_THRESHOLD * 0.7
 
-# Momentum thresholds - adjusted to handle 5m timeframe better
-STRONG_MOMENTUM: Final[float] = 0.85  # Further increased from 0.8
-MODERATE_MOMENTUM: Final[float] = 0.6  # Further increased from 0.55
-WEAK_MOMENTUM: Final[float] = 0.38  # Further increased from 0.35
-MIXED_MOMENTUM: Final[float] = 0.22  # Further increased from 0.2
-LOW_MOMENTUM: Final[float] = 0.1  # Further increased from 0.08
+# Momentum thresholds - carefully balanced to filter noise but maintain reactivity
+STRONG_MOMENTUM: Final[float] = 0.87  # Slightly increased from 0.85
+MODERATE_MOMENTUM: Final[float] = 0.62  # Slightly increased from 0.6
+WEAK_MOMENTUM: Final[float] = 0.4  # Slightly increased from 0.38
+MIXED_MOMENTUM: Final[float] = 0.24  # Slightly increased from 0.22
+LOW_MOMENTUM: Final[float] = 0.12  # Slightly increased from 0.1
 
 class MultiTimeframeDirection(Enum):
     BULLISH = "bullish"

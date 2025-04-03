@@ -272,139 +272,139 @@ class Timeframe(Enum):
 
 # Optimized Timeframe Settings for Intraday Crypto Trading with Hourly Analysis
 _TIMEFRAME_SETTINGS = {
-    # SHORT_TERM_TIMEFRAMES (26% total) - Slight increase in 15m importance
+    # SHORT_TERM_TIMEFRAMES (24% total) - Reduced from 26% for less noise
     Timeframe.MINUTES_5: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.03,  # Reduced from 0.05 to lower overall impact
-        description="5min signals",
+        phase_weight=0.02,  # Further reduced to minimize noise impact
+        description="5min noise-filtered signals",
         chart_image_time_delta=pd.Timedelta(hours=6),
         
         # --- Indicator Settings ---
-        ema_length=10,  # Increased from 8 to smooth out noise
-        atr_settings=(14, 8, 16, 5, 7),  # Increased lookback periods
-        supertrend_multiplier=2.5,  # Increased from 2.0 for more conservative signals
-        base_multiplier=0.85,  # Increased from 0.7 to require stronger signals
-        momentum_multiplier=1.7,  # Increased from 1.5 to require stronger momentum
+        ema_length=12,  # Further increased for stronger smoothing
+        atr_settings=(16, 9, 18, 6, 8),  # Increased for more stable ATR
+        supertrend_multiplier=3.0,  # Increased to filter out small moves
+        base_multiplier=0.9,  # Increased for more conservative signals
+        momentum_multiplier=1.8,  # Increased to filter momentum noise
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=16,  # Increased from 14 for better smoothing
+        volume_ma_window=18,  # Increased for smoother volume profile
         
         # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=6,  # Increased from 5 for more context
-        support_resistance_lookback=36,  # Increased from 30 for more reliable levels
-        effort_lookback=4,  # Increased from 3 for better effort-result evaluation
-        min_move_multiplier=0.8,  # Increased from 0.6 to filter small moves
+        spring_upthrust_window=7,  # Increased to reduce false springs/upthrusts
+        support_resistance_lookback=42,  # Increased for more significant levels
+        effort_lookback=5,  # Increased to better measure true effort
+        min_move_multiplier=1.0,  # Increased to ignore minor price movements
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=0.95,  # Increased from 0.8 to reduce false springs/upthrusts
-        liquidation_factor=1.2,  # Increased from 1.0 to require stronger liquidation signals
-        breakout_factor=1.0,  # Increased from 0.85 to require clearer breakouts
-        significant_levels_factor=1.0,  # Increased from 0.8 for more meaningful levels
-        atr_multiplier=0.25,  # Increased from 0.22 for wider support/resistance zones
-        volume_weighted_efficiency=0.15,  # Reduced from 0.25 to weight volume less
-        high_threshold=1.0,  # Increased from 0.85 for more conservative filters
-        low_threshold=1.05  # Decreased from 1.2 to lower sensitivity to weak signals
+        spring_factor=1.1,  # Further increased to only detect significant springs
+        liquidation_factor=1.3,  # Increased to filter out non-liquidation events
+        breakout_factor=1.2,  # Increased for clearer breakouts
+        significant_levels_factor=1.15,  # Increased for more meaningful levels
+        atr_multiplier=0.28,  # Slightly increased for wider zones
+        volume_weighted_efficiency=0.12,  # Further reduced volume sensitivity
+        high_threshold=1.1,  # More conservative high threshold
+        low_threshold=1.0  # More balanced low threshold
     ),
     Timeframe.MINUTES_15: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.23,
+        phase_weight=0.22,  # Slightly reduced
         description="15min tactical entries",
         chart_image_time_delta=pd.Timedelta(hours=12),
         
         # --- Indicator Settings ---
-        ema_length=9,
-        atr_settings=(13, 7, 16, 5, 7),
-        supertrend_multiplier=1.8,
-        base_multiplier=0.72,
-        momentum_multiplier=1.5,
+        ema_length=11,  # Increased from 9
+        atr_settings=(15, 8, 18, 6, 8),  # Slightly increased
+        supertrend_multiplier=2.0,  # Increased from 1.8
+        base_multiplier=0.75,  # Slightly increased
+        momentum_multiplier=1.6,  # Slightly increased
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=14,
+        volume_ma_window=16,  # Increased from 14
         
         # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=4,
-        support_resistance_lookback=32,
+        spring_upthrust_window=5,  # Increased from 4
+        support_resistance_lookback=36,  # Increased from 32
         effort_lookback=4,
-        min_move_multiplier=0.6,
+        min_move_multiplier=0.7,  # Increased from 0.6
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=0.75,
-        liquidation_factor=0.9,
-        breakout_factor=0.85,
-        significant_levels_factor=0.75,
-        atr_multiplier=0.22,
-        volume_weighted_efficiency=0.3,
-        high_threshold=0.8,
-        low_threshold=1.2
+        spring_factor=0.85,  # Increased from 0.75
+        liquidation_factor=1.0,  # Increased from 0.9
+        breakout_factor=0.92,  # Increased from 0.85
+        significant_levels_factor=0.85,  # Increased from 0.75
+        atr_multiplier=0.24,  # Increased from 0.22
+        volume_weighted_efficiency=0.25,  # Reduced from 0.3
+        high_threshold=0.85,  # Increased from 0.8
+        low_threshold=1.15  # Reduced from 1.2 for better balance
     ),
     
-    # INTERMEDIATE_TIMEFRAMES (50% total) - Increased from 47% for better intraday focus
+    # INTERMEDIATE_TIMEFRAMES (52% total) - Increased from 50% as the core decision timeframes
     Timeframe.MINUTES_30: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.23,
+        phase_weight=0.24,  # Slightly increased from 0.23
         description="30min intraday swings",
         chart_image_time_delta=pd.Timedelta(hours=24),
         
         # --- Indicator Settings ---
-        ema_length=12,
-        atr_settings=(16, 9, 20, 6, 8),
-        supertrend_multiplier=1.9,
-        base_multiplier=0.8,
-        momentum_multiplier=1.3,
+        ema_length=13,  # Slightly increased from 12
+        atr_settings=(18, 10, 22, 7, 9),  # Increased for stability
+        supertrend_multiplier=2.0,  # Increased from 1.9
+        base_multiplier=0.82,  # Slightly increased
+        momentum_multiplier=1.4,  # Slightly increased
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=16,
+        volume_ma_window=17,  # Slightly increased
         
         # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=5,
-        support_resistance_lookback=42,
-        effort_lookback=4,
-        min_move_multiplier=0.8,
+        spring_upthrust_window=5, 
+        support_resistance_lookback=45,  # Slightly increased
+        effort_lookback=5,  # Increased from 4
+        min_move_multiplier=0.85,  # Slightly increased
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=0.85,
-        liquidation_factor=0.95,
-        breakout_factor=0.9,
-        significant_levels_factor=0.8,
-        atr_multiplier=0.23,
-        volume_weighted_efficiency=0.25,
-        high_threshold=0.85,
-        low_threshold=1.1
+        spring_factor=0.9,  # Slightly increased
+        liquidation_factor=1.0,  # Slightly increased
+        breakout_factor=0.95,  # Slightly increased
+        significant_levels_factor=0.85,  # Slightly increased
+        atr_multiplier=0.24,  # Slightly increased
+        volume_weighted_efficiency=0.22,  # Slightly reduced
+        high_threshold=0.88,  # Slightly increased
+        low_threshold=1.05  # Slightly reduced
     ),
     Timeframe.HOUR_1: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.27,
+        phase_weight=0.28,  # Slightly increased from 0.27
         description="1h primary intraday trend",
         chart_image_time_delta=pd.Timedelta(hours=48),
         
         # --- Indicator Settings ---
-        ema_length=18,
-        atr_settings=(20, 12, 24, 8, 10),
-        supertrend_multiplier=2.1,
-        base_multiplier=0.95,
-        momentum_multiplier=1.6,
+        ema_length=18,  # Kept the same
+        atr_settings=(22, 13, 26, 9, 11),  # Slightly increased
+        supertrend_multiplier=2.0,  # Reduced from 2.1 for better reactivity
+        base_multiplier=0.92,  # Slightly decreased for better reactivity
+        momentum_multiplier=1.5,  # Slightly decreased for better reactivity
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=19,
+        volume_ma_window=18,  # Slightly decreased from 19
         
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=5,
-        support_resistance_lookback=54,
+        support_resistance_lookback=50,  # Slightly decreased from 54
         effort_lookback=5,
-        min_move_multiplier=1.0,
+        min_move_multiplier=0.95,  # Slightly decreased from 1.0
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=1.0,
-        liquidation_factor=1.0,
-        breakout_factor=1.0,
-        significant_levels_factor=1.0,
+        spring_factor=0.95,  # Slightly decreased
+        liquidation_factor=0.95,  # Slightly decreased
+        breakout_factor=0.95,  # Slightly decreased
+        significant_levels_factor=0.95,  # Slightly decreased
         atr_multiplier=0.25,
-        volume_weighted_efficiency=0.2,
-        high_threshold=1.0,
-        low_threshold=1.0
+        volume_weighted_efficiency=0.22,  # Slightly increased
+        high_threshold=0.95,  # Slightly decreased
+        low_threshold=1.05  # Slightly increased
     ),
     
-    # LONG_TERM_TIMEFRAMES (12% total) - Slightly reduced from 13% for faster intraday focus
+    # LONG_TERM_TIMEFRAMES (12% total) - Kept the same
     Timeframe.HOURS_2: TimeframeSettings(
         # --- Core Analysis Settings ---
         phase_weight=0.12,
@@ -412,33 +412,33 @@ _TIMEFRAME_SETTINGS = {
         chart_image_time_delta=pd.Timedelta(hours=72),
         
         # --- Indicator Settings ---
-        ema_length=24,
-        atr_settings=(24, 14, 30, 9, 12),
-        supertrend_multiplier=2.2,
-        base_multiplier=1.05,
-        momentum_multiplier=1.6,
+        ema_length=22,  # Slightly decreased from 24 for better reactivity
+        atr_settings=(24, 14, 28, 9, 12),  # Slightly adjusted
+        supertrend_multiplier=2.0,  # Reduced from 2.2 for better reactivity
+        base_multiplier=1.0,  # Slightly decreased from 1.05
+        momentum_multiplier=1.5,  # Slightly decreased from 1.6
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=22,
+        volume_ma_window=20,  # Slightly decreased from 22
         
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=6,
-        support_resistance_lookback=60,
+        support_resistance_lookback=56,  # Slightly decreased from 60
         effort_lookback=6,
-        min_move_multiplier=1.2,
+        min_move_multiplier=1.1,  # Slightly decreased from 1.2
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=1.1,
-        liquidation_factor=1.05,
-        breakout_factor=1.15,
-        significant_levels_factor=1.2,
-        atr_multiplier=0.27,
-        volume_weighted_efficiency=0.15,
-        high_threshold=1.1,
-        low_threshold=0.9
+        spring_factor=1.05,  # Slightly decreased
+        liquidation_factor=1.0,  # Slightly decreased
+        breakout_factor=1.1,  # Slightly decreased
+        significant_levels_factor=1.15,  # Slightly decreased
+        atr_multiplier=0.26,  # Slightly decreased
+        volume_weighted_efficiency=0.18,  # Slightly increased
+        high_threshold=1.05,  # Slightly decreased
+        low_threshold=0.95  # Slightly increased
     ),
     
-    # CONTEXT_TIMEFRAMES (12% total) - Reduced from 15% for more intraday focus
+    # CONTEXT_TIMEFRAMES (12% total) - Kept the same
     Timeframe.HOURS_4: TimeframeSettings(
         # --- Core Analysis Settings ---
         phase_weight=0.08,
@@ -446,30 +446,30 @@ _TIMEFRAME_SETTINGS = {
         chart_image_time_delta=pd.Timedelta(days=4),
         
         # --- Indicator Settings ---
-        ema_length=32,
-        atr_settings=(32, 16, 38, 12, 16),
-        supertrend_multiplier=2.6,
-        base_multiplier=1.2,
-        momentum_multiplier=1.8,
+        ema_length=30,  # Slightly decreased from 32
+        atr_settings=(30, 16, 36, 12, 16),  # Slightly decreased
+        supertrend_multiplier=2.4,  # Slightly decreased from 2.6
+        base_multiplier=1.15,  # Slightly decreased from 1.2
+        momentum_multiplier=1.7,  # Slightly decreased from 1.8
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=26,
+        volume_ma_window=24,  # Slightly decreased from 26
         
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=7,
-        support_resistance_lookback=78,
+        support_resistance_lookback=72,  # Slightly decreased from 78
         effort_lookback=8,
-        min_move_multiplier=1.5,
+        min_move_multiplier=1.4,  # Slightly decreased from 1.5
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=1.25,
-        liquidation_factor=1.1,
-        breakout_factor=1.3,
-        significant_levels_factor=1.5,
-        atr_multiplier=0.3,
-        volume_weighted_efficiency=0.1,
-        high_threshold=1.2,
-        low_threshold=0.8
+        spring_factor=1.2,  # Slightly decreased from 1.25
+        liquidation_factor=1.05,  # Slightly decreased from 1.1
+        breakout_factor=1.25,  # Slightly decreased from 1.3
+        significant_levels_factor=1.4,  # Slightly decreased from 1.5
+        atr_multiplier=0.28,  # Slightly decreased from 0.3
+        volume_weighted_efficiency=0.12,  # Slightly increased from 0.1
+        high_threshold=1.15,  # Slightly decreased from 1.2
+        low_threshold=0.85  # Slightly increased from 0.8
     ),
     Timeframe.HOURS_8: TimeframeSettings(
         # --- Core Analysis Settings ---
@@ -478,30 +478,30 @@ _TIMEFRAME_SETTINGS = {
         chart_image_time_delta=pd.Timedelta(days=6),
         
         # --- Indicator Settings ---
-        ema_length=40,
-        atr_settings=(42, 20, 48, 14, 20),
-        supertrend_multiplier=2.8,
-        base_multiplier=1.3,
-        momentum_multiplier=1.9,
+        ema_length=36,  # Decreased from 40
+        atr_settings=(38, 20, 44, 14, 20),  # Slightly decreased
+        supertrend_multiplier=2.6,  # Decreased from 2.8
+        base_multiplier=1.25,  # Slightly decreased from 1.3
+        momentum_multiplier=1.8,  # Slightly decreased from 1.9
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=32,
+        volume_ma_window=30,  # Slightly decreased from 32
         
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=8,
-        support_resistance_lookback=104,
+        support_resistance_lookback=96,  # Slightly decreased from 104
         effort_lookback=10,
-        min_move_multiplier=2.0,
+        min_move_multiplier=1.8,  # Slightly decreased from 2.0
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=1.4,
-        liquidation_factor=1.2,
-        breakout_factor=1.5,
-        significant_levels_factor=2.0,
-        atr_multiplier=0.35,
-        volume_weighted_efficiency=0.05,
-        high_threshold=1.3,
-        low_threshold=0.7
+        spring_factor=1.35,  # Slightly decreased from 1.4
+        liquidation_factor=1.15,  # Slightly decreased from 1.2
+        breakout_factor=1.4,  # Slightly decreased from 1.5
+        significant_levels_factor=1.8,  # Slightly decreased from 2.0
+        atr_multiplier=0.32,  # Slightly decreased from 0.35
+        volume_weighted_efficiency=0.08,  # Slightly increased from 0.05
+        high_threshold=1.25,  # Slightly decreased from 1.3
+        low_threshold=0.75  # Slightly increased from 0.7
     )
 }
 
