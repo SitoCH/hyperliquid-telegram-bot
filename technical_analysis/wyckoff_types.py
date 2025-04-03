@@ -275,39 +275,39 @@ _TIMEFRAME_SETTINGS = {
     # SHORT_TERM_TIMEFRAMES (26% total) - Slight increase in 15m importance
     Timeframe.MINUTES_5: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.05,
+        phase_weight=0.03,  # Reduced from 0.05 to lower overall impact
         description="5min signals",
         chart_image_time_delta=pd.Timedelta(hours=6),
         
         # --- Indicator Settings ---
-        ema_length=8,
-        atr_settings=(12, 7, 14, 4, 6),
-        supertrend_multiplier=2.0,
-        base_multiplier=0.7,
-        momentum_multiplier=1.5,
+        ema_length=10,  # Increased from 8 to smooth out noise
+        atr_settings=(14, 8, 16, 5, 7),  # Increased lookback periods
+        supertrend_multiplier=2.5,  # Increased from 2.0 for more conservative signals
+        base_multiplier=0.85,  # Increased from 0.7 to require stronger signals
+        momentum_multiplier=1.7,  # Increased from 1.5 to require stronger momentum
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=14,
+        volume_ma_window=16,  # Increased from 14 for better smoothing
         
         # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=5,
-        support_resistance_lookback=30,
-        effort_lookback=3,
-        min_move_multiplier=0.6,
+        spring_upthrust_window=6,  # Increased from 5 for more context
+        support_resistance_lookback=36,  # Increased from 30 for more reliable levels
+        effort_lookback=4,  # Increased from 3 for better effort-result evaluation
+        min_move_multiplier=0.8,  # Increased from 0.6 to filter small moves
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=0.8,
-        liquidation_factor=1.0,
-        breakout_factor=0.85,
-        significant_levels_factor=0.8,
-        atr_multiplier=0.22,
-        volume_weighted_efficiency=0.25,
-        high_threshold=0.85,
-        low_threshold=1.2
+        spring_factor=0.95,  # Increased from 0.8 to reduce false springs/upthrusts
+        liquidation_factor=1.2,  # Increased from 1.0 to require stronger liquidation signals
+        breakout_factor=1.0,  # Increased from 0.85 to require clearer breakouts
+        significant_levels_factor=1.0,  # Increased from 0.8 for more meaningful levels
+        atr_multiplier=0.25,  # Increased from 0.22 for wider support/resistance zones
+        volume_weighted_efficiency=0.15,  # Reduced from 0.25 to weight volume less
+        high_threshold=1.0,  # Increased from 0.85 for more conservative filters
+        low_threshold=1.05  # Decreased from 1.2 to lower sensitivity to weak signals
     ),
     Timeframe.MINUTES_15: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.21,
+        phase_weight=0.23,
         description="15min tactical entries",
         chart_image_time_delta=pd.Timedelta(hours=12),
         

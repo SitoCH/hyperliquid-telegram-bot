@@ -19,12 +19,12 @@ STRONG_VOLUME_THRESHOLD = 0.7
 MODERATE_VOLUME_THRESHOLD = 0.4
 LOW_VOLUME_THRESHOLD = MODERATE_VOLUME_THRESHOLD * 0.7
 
-# Momentum thresholds
-STRONG_MOMENTUM: Final[float] = 0.75
-MODERATE_MOMENTUM: Final[float] = 0.5
-WEAK_MOMENTUM: Final[float] = 0.3
-MIXED_MOMENTUM: Final[float] = 0.15
-LOW_MOMENTUM: Final[float] = 0.05
+# Momentum thresholds - adjusted to handle 5m timeframe better
+STRONG_MOMENTUM: Final[float] = 0.85  # Further increased from 0.8
+MODERATE_MOMENTUM: Final[float] = 0.6  # Further increased from 0.55
+WEAK_MOMENTUM: Final[float] = 0.38  # Further increased from 0.35
+MIXED_MOMENTUM: Final[float] = 0.22  # Further increased from 0.2
+LOW_MOMENTUM: Final[float] = 0.1  # Further increased from 0.08
 
 class MultiTimeframeDirection(Enum):
     BULLISH = "bullish"

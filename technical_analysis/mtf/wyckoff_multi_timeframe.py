@@ -105,20 +105,26 @@ def analyze_multi_timeframe(
 
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
 
-        choppy_conditions = all(group.volatility_state == VolatilityState.HIGH for group in [all_analysis.short_term, all_analysis.intermediate])
+        # Modified volatility check - only consider intermediate timeframes to reduce noise
+        choppy_conditions = all_analysis.intermediate.volatility_state == VolatilityState.HIGH
         
-        # Enhanced notification criteria
+        # Enhanced notification criteria with more balanced checks
         notification_checks = [
             (all_analysis.confidence_level >= min_confidence, f"Low confidence: {all_analysis.confidence_level:.2f} < {min_confidence:.2f}"),
             (momentum_intensity >= WEAK_MOMENTUM, f"Weak momentum: {momentum_intensity:.2f} < {WEAK_MOMENTUM:.2f}"),
             (not choppy_conditions, "Choppy market conditions detected"),
             (all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL, "Neutral market direction"),
-            (not all_analysis.short_term.uncertain_phase, "Uncertain short-term phase"),
-            (not all_analysis.intermediate.uncertain_phase, "Uncertain intermediate-term phase"),
-            (all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD, f"Low short-term volume strength: {all_analysis.short_term.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD:.2f}"),
-            (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD, f"Low intermediate volume strength: {all_analysis.intermediate.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD:.2f}"),
-            (all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING, "Short-term market ranging"),
-            (all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING, "Intermediate-term market ranging")
+            # Be more lenient with short-term uncertainty if intermediate is certain
+            ((not all_analysis.short_term.uncertain_phase or not all_analysis.intermediate.uncertain_phase), 
+             "Both short and intermediate timeframes show uncertain phases"),
+            (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD, 
+             f"Low intermediate volume strength: {all_analysis.intermediate.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD:.2f}"),
+            (all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.9, 
+             f"Low short-term volume strength: {all_analysis.short_term.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD * 0.9:.2f}"),
+            # Instead of checking only the dominant phase, check if any phase is not ranging
+            ((all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING or 
+              all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING), 
+             "Both short and intermediate timeframes are ranging"),
         ]
         
         should_notify = all(check[0] for check in notification_checks)
@@ -237,7 +243,7 @@ def _analyze_timeframe_group(
     confident_phase_weights: Dict[WyckoffPhase, float] = {}  # Track confident phases separately
     uncertain_phase_weights: Dict[WyckoffPhase, float] = {}  # Track uncertain phases separately
     action_weights: Dict[CompositeAction, float] = {}
-    uncertain_action_weights: Dict[CompositeAction, float] = {}  # Track uncertain actions
+    uncertain_action_weights: Dict[CompositeAction, float] = {}  # Track uncertain actions separately
     total_weight = 0.0
 
     # Track exhaustion signals - symmetric treatment
@@ -250,7 +256,7 @@ def _analyze_timeframe_group(
 
     for tf, state in group.items():
         weight = tf.settings.phase_weight
-            
+
         # Detect potential exhaustion based on phase combinations - symmetric detection
         if (state.phase == WyckoffPhase.MARKUP and 
             state.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.CONSOLIDATING]):
@@ -279,7 +285,7 @@ def _analyze_timeframe_group(
             elif state.phase == WyckoffPhase.MARKDOWN:
                 downside_exhaustion += 1
 
-        # Detect rapid price movements - optimized for new volume states
+        # Detect rapid price movements - optimized for new volume state
         # Use VERY_HIGH and HIGH volume states for detecting rapid moves
         if state.phase == WyckoffPhase.MARKUP and state.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
             # Give stronger weight to VERY_HIGH volume
@@ -287,7 +293,7 @@ def _analyze_timeframe_group(
         elif state.phase == WyckoffPhase.MARKDOWN and state.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
             # Give stronger weight to VERY_HIGH volume
             rapid_bearish_moves += 1.5 if state.volume == VolumeState.VERY_HIGH else 1.0
-        
+
         # Optimize trending weight boost with the same helper
         if state.pattern == MarketPattern.TRENDING and state.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
             weight *= get_volume_weight_adjustment(state.volume)
@@ -332,7 +338,7 @@ def _analyze_timeframe_group(
         combined_action_weights = action_weights.copy()
         for action, weight in uncertain_action_weights.items():
             combined_action_weights[action] = combined_action_weights.get(action, 0) + weight
-            
+
         dominant_action = max(combined_action_weights.items(), key=lambda x: x[1])[0]
     else:
         dominant_action = CompositeAction.UNKNOWN
@@ -345,39 +351,32 @@ def _analyze_timeframe_group(
     # Enhanced volume strength calculation with improved volume state handling
     volume_factors = []
     total_volume_weight = 0.0
-    
+
     for tf, state in group.items():
         # Use timeframe-specific settings for weighting
         tf_weight = tf.settings.phase_weight
         total_volume_weight += tf_weight
-        
+
         # Use the helper for base strength determination
         base_strength = get_base_volume_strength(state.volume)
-
-        # Adjust based on effort vs result - symmetric treatment
-        if state.effort_vs_result == EffortResult.STRONG:
-            base_strength *= 1.2
-        elif state.effort_vs_result == EffortResult.WEAK:
-            base_strength *= 0.8
-            
-        # Adjust for phase confirmation - symmetric treatment for markup/markdown
         if state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN]:
+            base_strength *= 1.2
             if state.composite_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
                 base_strength *= 1.3
-        
+
         # Consider timeframe-specific volume characteristics
         # Higher importance for longer timeframes and more extreme settings
         volume_importance = tf.settings.volume_ma_window / 20.0  # Normalize based on typical window size
-        
+
         # Add the weighted volume factor to our list
         volume_factors.append((base_strength * volume_importance, tf_weight))
-    
+
     # Calculate weighted average of volume factors
     volume_strength = (
         sum(factor * weight for factor, weight in volume_factors) / total_volume_weight 
         if total_volume_weight > 0 else 0.0
     )
-    
+
     # Clamp volume strength between 0 and 1
     volume_strength = max(0.0, min(1.0, volume_strength))
 
@@ -387,7 +386,7 @@ def _analyze_timeframe_group(
         volume_strength *= 0.7
     elif downside_exhaustion >= exhaustion_threshold:
         volume_strength *= 0.7
-    
+
     # Calculate funding sentiment (-1 to 1)
     funding_signals = []
     for state in group.values():
@@ -420,7 +419,7 @@ def _analyze_timeframe_group(
     # Enhanced momentum bias calculation with clear signal weighting and transition handling
     bullish_signals = 0.0
     bearish_signals = 0.0
-        
+
     for s in group.values():
         # Primary phase signals - core market structure signals
         if is_bullish_phase(s.phase) and upside_exhaustion < len(group) // 2:
@@ -429,7 +428,7 @@ def _analyze_timeframe_group(
         elif is_bearish_phase(s.phase) and downside_exhaustion < len(group) // 2:
             # Non-exhausted bearish phase
             bearish_signals += 1.0
-        
+
         # Action signals - immediate behavior signals
         if is_bullish_action(s.composite_action):
             bullish_signals += 0.8  # Slightly less weight than phase
@@ -442,7 +441,7 @@ def _analyze_timeframe_group(
                 bullish_signals += 0.7  # Reversal in downtrend - bullish
             elif s.phase == WyckoffPhase.MARKUP:
                 bearish_signals += 0.7  # Reversal in uptrend - bearish
-        
+
         # Sentiment signals - contra-indicators often suggest reversals
         if s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE]:
             # Amplify signal based on volume state
@@ -460,21 +459,21 @@ def _analyze_timeframe_group(
                 bearish_signals += 0.6    # Regular signal with high volume
             elif s.volume != VolumeState.VERY_LOW:  # Skip very low volume
                 bearish_signals += 0.4    # Weaker signal with normal/low volume
-        
+
         # Effort-result signals - efficiency and exhaustion indicators
         if s.effort_vs_result == EffortResult.WEAK:
             if is_bearish_phase(s.phase):
                 bullish_signals += 0.4  # Weak selling effort can signal bullish potential
             elif is_bullish_phase(s.phase):
                 bearish_signals += 0.4  # Weak buying effort can signal bearish potential
-        
+
         # Volatility signals - often indicate potential change of character
         if s.volatility == VolatilityState.HIGH:
             if is_bearish_phase(s.phase):
                 bullish_signals += 0.3  # High volatility in bearish phase can signal capitulation
             elif is_bullish_phase(s.phase):
                 bearish_signals += 0.3  # High volatility in bullish phase can signal blow-off top
-                
+
         # Ranging phases get partial credit to both sides - acknowledging uncertainty
         if s.phase == WyckoffPhase.RANGING:
             # Split signal between both directions but with lower weight
@@ -499,7 +498,7 @@ def _analyze_timeframe_group(
             bearish_signals = max(bearish_signals, bullish_signals * 0.8)
             phase_momentum_override = MultiTimeframeDirection.BEARISH
     elif is_bullish_phase(dominant_phase):
-        # Strong bullish phase should limit bearish bias  
+        # Strong bullish phase should limit bearish bias
         if bearish_signals > bullish_signals and not dominant_phase_is_uncertain:
             bullish_signals = max(bullish_signals, bearish_signals * 0.8)
             phase_momentum_override = MultiTimeframeDirection.BULLISH
@@ -515,13 +514,13 @@ def _analyze_timeframe_group(
             MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals + threshold_diff else
             MultiTimeframeDirection.NEUTRAL
         )
-
+    
     # Modify momentum bias calculation for rapid moves - symmetric treatment
     if rapid_bullish_moves >= len(group) // 2:
         momentum_bias = MultiTimeframeDirection.BULLISH
     elif rapid_bearish_moves >= len(group) // 2:
         momentum_bias = MultiTimeframeDirection.BEARISH
-        
+
     # Apply phase override after all other checks
     if phase_momentum_override is not None:
         momentum_bias = phase_momentum_override
@@ -542,7 +541,9 @@ def _analyze_timeframe_group(
 
 def _calculate_group_weight(timeframes: Dict[Timeframe, WyckoffState]) -> float:
     """Calculate total weight for a timeframe group based on phase weights."""
+    # Simply use the configured weights directly from settings
     return sum(tf.settings.phase_weight for tf in timeframes.keys())
+
 
 def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overall_direction: MultiTimeframeDirection) -> float:
     """Calculate momentum intensity with optimized scoring for faster intraday response."""
@@ -551,21 +552,20 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
 
     # Check for phase inconsistency with improved efficiency
     phase_direction_conflicts = sum(
-        1 for analysis in analyses 
-        if ((overall_direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(analysis.dominant_phase)) or
-            (overall_direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase)))
+        1 for analysis in analyses if 
+        ((overall_direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(analysis.dominant_phase)) or
+         (overall_direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase)))
     )
-    
+
     # Reduced penalty for conflicts to allow faster direction changes
     conflict_ratio = phase_direction_conflicts / len(analyses) if analyses else 0
     conflict_penalty = max(0.5, 1.0 - conflict_ratio * 0.5)
-
-    # Optimize directional score calculation
+            
+    # Score calculation with simplified logic - map calculation to a function
     directional_scores = []
     short_term_volume = 0.0
     short_term_count = 0
     
-    # Score calculation with simplified logic - map calculation to a function
     for analysis in analyses:
         # Base score
         if analysis.momentum_bias == overall_direction:
@@ -575,17 +575,16 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         else:
             base_score = 0.0
         
-        # Phase alignment
-        phase_aligned = (
-            (overall_direction == MultiTimeframeDirection.BULLISH and is_bullish_phase(analysis.dominant_phase)) or
-            (overall_direction == MultiTimeframeDirection.BEARISH and is_bearish_phase(analysis.dominant_phase))
-        )
+        # Apply uncertainty adjustment uniformly across all timeframes 
+        if analysis.uncertain_phase and analysis.momentum_bias != overall_direction:
+            base_score *= 0.6  # Reduce impact of uncertain contradicting signals
         
-        # Calculate all boosts at once
+        # Phase alignment
+        phase_aligned = _is_phase_confirming_momentum(analysis)
         phase_consistency = 0.7 if not phase_aligned else 1.0
         volume_boost = 1.0 + (analysis.volume_strength * 0.35)
         phase_boost = 1.2 if phase_aligned else 1.0
-        
+
         # Funding impact
         funding_aligned = (
             (analysis.funding_sentiment > 0 and overall_direction == MultiTimeframeDirection.BULLISH) or
@@ -593,33 +592,29 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         )
         funding_impact = abs(analysis.funding_sentiment) * 0.2
         funding_boost = (1.0 + funding_impact) if funding_aligned else (1.0 - funding_impact)
-        
+
         # Combined score calculation
         score = base_score * phase_consistency * volume_boost * phase_boost * funding_boost
         directional_scores.append((score, analysis.group_weight))
-        
-        # Track short timeframe volume for boost
         if analysis.group_weight in {tf.settings.phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
             short_term_volume += analysis.volume_strength
             short_term_count += 1
-    
+
     # More aggressive volume boost calculation
     hourly_volume_boost = 1.0
     if short_term_count > 0:
         avg_short_term_volume = short_term_volume / short_term_count
         hourly_volume_boost = 1.0 + max(0, min(0.2, avg_short_term_volume - 0.4))  # Increased from 0.15 and lowered threshold
-    
+
     # Final calculation with error handling
     total_weight = sum(weight for _, weight in directional_scores)
     if total_weight == 0:
         return 0.0
-        
     weighted_momentum = sum(score * weight for score, weight in directional_scores) / total_weight
-    
+
     # Improved final value calculation with smoother scaling
     final_momentum = weighted_momentum * hourly_volume_boost * conflict_penalty
     
     # Apply less steep curve for more responsive results
     final_momentum = 1.0 / (1.0 + np.exp(-4 * (final_momentum - 0.45))) if final_momentum > 0 else 0.0
-    
     return min(1.0, final_momentum)
