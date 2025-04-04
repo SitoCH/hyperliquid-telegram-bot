@@ -228,7 +228,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
 
         # Detect composite action and Wyckoff signs
         composite_action = detect_composite_action(df, price_strength, vol_metrics, effort_vs_result.iloc[-1])
-        wyckoff_sign = detect_wyckoff_signs(df, price_strength, vol_metrics.trend_strength, is_spring, is_upthrust)
+        wyckoff_sign = detect_wyckoff_signs(df, price_strength, vol_metrics.trend_strength, is_spring, is_upthrust, timeframe)
 
         # Create WyckoffState instance
         wyckoff_state = WyckoffState(
@@ -424,8 +424,12 @@ def detect_wyckoff_signs(
     volume_trend: float,
     is_spring: bool,
     is_upthrust: bool,
+    timeframe: Timeframe
 ) -> WyckoffSign:
-    """Detect specific Wyckoff signs in market action with stricter confirmation requirements."""
+    """
+    Detect specific Wyckoff signs in market action optimized for crypto intraday trading.
+    Uses adaptive settings based on timeframe for better hourly analysis.
+    """
     if len(df) < 5:
         return WyckoffSign.NONE
 
@@ -433,67 +437,95 @@ def detect_wyckoff_signs(
     price_change = df['c'].pct_change()
     volume_change = df['v'].pct_change()
     
-    # Calculate rolling metrics for better context
-    price_volatility = df['c'].pct_change().rolling(5).std().iloc[-1]
-    volume_ma = df['v'].rolling(5).mean()
-    price_ma = df['c'].rolling(8).mean()
+    # Use timeframe-specific lookback periods instead of fixed values
+    volatility_window = max(5, timeframe.settings.spring_upthrust_window)
+    volume_ma_window = max(5, timeframe.settings.volume_ma_window // 3)  # Shorter for responsiveness
+    price_ma_window = max(8, int(timeframe.settings.ema_length * 0.75))  # Derived from EMA setting
     
-    # Minimum thresholds scaled by volatility
-    min_price_move = max(0.02, price_volatility * 1.5)
-    min_volume_surge = max(2.0, volume_change.rolling(5).std().iloc[-1] * 2)
+    # Calculate rolling metrics with adaptive windows
+    price_volatility = df['c'].pct_change().rolling(volatility_window).std().iloc[-1]
+    volume_ma = df['v'].rolling(volume_ma_window).mean()
+    price_ma = df['c'].rolling(price_ma_window).mean()
+    
+    volatility_factor = 1.2
+    if timeframe in SHORT_TERM_TIMEFRAMES:
+        volatility_factor = 0.85
+    elif timeframe in INTERMEDIATE_TIMEFRAMES:
+        volatility_factor = 1.0
 
-    # Check for strong confirmation across multiple candles
+    min_price_move = max(0.03, price_volatility * 1.5 * volatility_factor)
+    min_volume_surge = max(2.0, volume_change.rolling(volatility_window).std().iloc[-1] * 2 * volatility_factor)
+
+    # Detect market context for better signal relevance
+    is_high_volatility = price_volatility > df['c'].pct_change().rolling(volatility_window * 3).std().mean() * 1.5
+    recency_factor = 3 if is_high_volatility else 2  # More emphasis on recent bars during high volatility
+
+    # Check for strong confirmation across multiple candles with adaptive window
     def confirm_trend(window: int, threshold: float) -> bool:
+        window = min(window, len(df) - 1)  # Safety check
         recent_changes = price_change.iloc[-window:]
-        return (recent_changes > threshold).sum() >= window // 2
+        # Weighted confirmation - more recent changes have higher weight
+        weights = np.linspace(1, recency_factor, len(recent_changes))
+        weighted_confirms = (recent_changes > threshold) * weights
+        return weighted_confirms.sum() >= np.sum(weights) * 0.4  # 40% threshold
         
     def confirm_volume(window: int, threshold: float) -> bool:
+        window = min(window, len(df) - 1)  # Safety check
         recent_volume = volume_change.iloc[-window:]
-        return (recent_volume > threshold).sum() >= window // 2
+        # Weighted confirmation for volume
+        weights = np.linspace(1, recency_factor, len(recent_volume))
+        weighted_confirms = (recent_volume > threshold) * weights
+        return weighted_confirms.sum() >= np.sum(weights) * 0.4  # 40% threshold
 
-    # Selling Climax (SC) - Requires panic selling with climactic volume
-    if (price_change.iloc[-1] < -min_price_move and
-        volume_change.iloc[-1] > min_volume_surge and 
+    # Selling Climax (SC) - Optimized for crypto's sharper drops
+    if (price_change.iloc[-1] < -min_price_move * 1.2 and  # More extreme for crypto
+        volume_change.iloc[-1] > min_volume_surge * 1.1 and  # Higher volume spike
         price_strength < -STRONG_DEV_THRESHOLD and
-        df['c'].iloc[-1] < price_ma.iloc[-1] * 0.95):  # Price well below MA
+        df['c'].iloc[-1] < price_ma.iloc[-1] * 0.95):
         return WyckoffSign.SELLING_CLIMAX
         
     # Automatic Rally (AR) - Must follow a selling climax
-    if (price_change.iloc[-1] > min_price_move and
-        confirm_trend(3, min_price_move * 0.5) and
+    # In crypto, these can be very sharp and quick
+    if (price_change.iloc[-1] > min_price_move * 1.1 and
+        confirm_trend(3, min_price_move * 0.6) and
         df['l'].iloc[-1] > df['l'].iloc[-5:].min() and  # Higher low
-        price_strength < 0):
+        price_strength < 0 and  # Still overall below average
+        volume_change.iloc[-1] > 0):  # Some volume confirmation
         return WyckoffSign.AUTOMATIC_RALLY
         
     # Secondary Test (ST) - Lower volume test of support
-    if (abs(price_change.iloc[-1]) < price_volatility and
+    # Critical for crypto hourly analysis to identify accumulation
+    if (abs(price_change.iloc[-1]) < price_volatility * 0.8 and  # Reduced volatility
         df['l'].iloc[-1] >= df['l'].iloc[-5:].min() * 0.99 and  # Test previous low
+        df['l'].iloc[-1] <= df['l'].iloc[-5:].min() * 1.01 and  # Close to the low
         df['v'].iloc[-1] < volume_ma.iloc[-1] * 0.8 and  # Lower volume
-        price_strength < 0):
+        price_strength < 0):  # Still in overall downtrend
         return WyckoffSign.SECONDARY_TEST
 
     # Last Point of Support (LPS) - Spring with volume confirmation
     if (is_spring and
-        volume_trend > 0.5 and  # Strong volume
-        price_change.iloc[-1] > min_price_move and
-        confirm_volume(3, 1.2)):  # Sustained volume
+        volume_trend > 0.4 and  # Reduced from 0.5 for better sensitivity
+        price_change.iloc[-1] > min_price_move * 0.8 and  # Lower threshold for crypto
+        confirm_volume(3, 1.0)):  # Lower threshold for better detection
         return WyckoffSign.LAST_POINT_OF_SUPPORT
         
-    # Sign of Strength (SOS) - Strong move up with volume
+    # Sign of Strength (SOS) - Critical for identifying bullish continuation
     if (price_change.iloc[-1] > min_price_move * 1.5 and
-        confirm_trend(3, min_price_move) and
-        confirm_volume(3, 1.5) and
-        price_strength > 0.5):  # Clear strength
+        confirm_trend(3, min_price_move * 0.8) and  # Adjusted for crypto
+        confirm_volume(3, 1.3) and  # Slightly reduced volume requirement
+        price_strength > 0.5):
         return WyckoffSign.SIGN_OF_STRENGTH
         
     # Buying Climax (BC) - Extreme buying with high volume
-    if (price_change.iloc[-1] > min_price_move * 2 and
-        volume_change.iloc[-1] > min_volume_surge and 
+    # Crypto can have extreme volume spikes during euphoria
+    if (price_change.iloc[-1] > min_price_move * 2.0 and
+        volume_change.iloc[-1] > min_volume_surge * 1.2 and 
         price_strength > STRONG_DEV_THRESHOLD and
         df['c'].iloc[-1] > price_ma.iloc[-1] * 1.05):  # Price well above MA
         return WyckoffSign.BUYING_CLIMAX
         
     # Upthrust (UT) - False breakout with rejection
+    # Common in crypto due to stop hunting and liquidations
     if (is_upthrust and
         volume_change.iloc[-1] > min_volume_surge * 0.8 and
         price_change.iloc[-1] < -min_price_move * 0.5 and
@@ -501,24 +533,29 @@ def detect_wyckoff_signs(
         return WyckoffSign.UPTHRUST
 
     # Secondary Test Resistance (STR) - Higher test with lower volume
-    if (abs(price_change.iloc[-1]) < price_volatility and
-        df['h'].iloc[-1] <= df['h'].iloc[-5:].max() * 1.01 and
-        df['v'].iloc[-1] < volume_ma.iloc[-1] * 0.8 and
-        price_strength > 0):
+    # Crypto often tests resistance multiple times before breakout/rejection
+    if (abs(price_change.iloc[-1]) < price_volatility * 0.8 and
+        df['h'].iloc[-1] <= df['h'].iloc[-5:].max() * 1.01 and  # Test previous high
+        df['h'].iloc[-1] >= df['h'].iloc[-5:].max() * 0.99 and  # Close to the high
+        df['v'].iloc[-1] < volume_ma.iloc[-1] * 0.8 and  # Lower volume
+        price_strength > 0):  # Still in overall uptrend
         return WyckoffSign.SECONDARY_TEST_RESISTANCE
 
     # Last Point of Supply (LPSY) - Failed upthrust with volume
+    # Important for distribution detection in crypto markets
     if (is_upthrust and
-        volume_trend > 0.5 and
-        price_change.iloc[-1] < -min_price_move and
-        confirm_volume(3, 1.2)):
+        volume_trend > 0.4 and  # Significant volume context
+        price_change.iloc[-1] < -min_price_move * 0.9 and  # Sharp rejection
+        confirm_volume(3, 1.0) and  # Volume confirmation
+        price_strength > 0):  # Still above average price
         return WyckoffSign.LAST_POINT_OF_RESISTANCE
 
     # Sign of Weakness (SOW) - Strong down move with volume
+    # Critical for identifying bearish continuation
     if (price_change.iloc[-1] < -min_price_move * 1.5 and
-        confirm_trend(3, -min_price_move) and
-        confirm_volume(3, 1.5) and
-        price_strength < -0.5):
+        confirm_trend(3, -min_price_move * 0.8) and  # Consistent weakness
+        confirm_volume(3, 1.3) and  # Volume confirmation
+        price_strength < -0.5):  # Below average price
         return WyckoffSign.SIGN_OF_WEAKNESS
 
     return WyckoffSign.NONE
