@@ -25,11 +25,11 @@ VOLUME_SURGE_THRESHOLD: Final[float] = 2.8
 VOLUME_TREND_SHORT: Final[int] = 10
 VOLUME_TREND_LONG: Final[int] = 20
 
-# Add new constants
-EFFORT_VOLUME_THRESHOLD: Final[float] = 1.8
-RESULT_MIN_MOVE: Final[float] = 0.002
-HIGH_EFFICIENCY_THRESHOLD: Final[float] = 0.65
-LOW_EFFICIENCY_THRESHOLD: Final[float] = 0.25
+# Add new constants - more balanced values
+EFFORT_VOLUME_THRESHOLD: Final[float] = 1.5  # Reduced from 1.8
+RESULT_MIN_MOVE: Final[float] = 0.0018  # Fine-tuned from 0.002
+HIGH_EFFICIENCY_THRESHOLD: Final[float] = 0.60  # Adjusted from 0.65
+LOW_EFFICIENCY_THRESHOLD: Final[float] = 0.30   # Increased from 0.25 for better symmetry
 
 
 def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMetrics:
@@ -584,14 +584,14 @@ def analyze_effort_result(
     timeframe: Timeframe
 ) -> EffortResult:
     """
-    Enhanced effort vs result analysis with timeframe-specific optimization.
+    Balanced effort vs result analysis with more symmetric thresholds and a neutral zone.
     Args:
         df: Price and volume data
         vol_metrics: Volume metrics from calculate_volume_metrics
         timeframe: Current timeframe for context
     """
     try:
-        # Get recent data - use timeframe settings instead of hardcoded dictionary
+        # Get recent data - use timeframe settings
         lookback = timeframe.settings.effort_lookback
         
         recent_df = df.iloc[-lookback:]
@@ -600,62 +600,70 @@ def analyze_effort_result(
         price_change = abs(recent_df['c'].iloc[-1] - recent_df['o'].iloc[-1])
         price_range = recent_df['h'].iloc[-1] - recent_df['l'].iloc[-1]
         
-        # Skip tiny moves to avoid noise - use settings instead of hardcoded dictionary
+        # Apply minimum move threshold - symmetrically applied
         min_move = RESULT_MIN_MOVE * timeframe.settings.min_move_multiplier
-
-        if price_change < min_move:
-            return EffortResult.WEAK
-
+        
         # Calculate volume quality with timeframe context
         volume_consistency = vol_metrics.consistency
         spread_quality = 1.0 - (abs(recent_df['c'] - recent_df['o']) / (recent_df['h'] - recent_df['l'])).mean()
-        volume_quality = (volume_consistency + spread_quality) / 2
-
-        # Adjust volume quality based on timeframe expectations
+        
+        # Use balanced timeframe-specific adjustments
         if timeframe in SHORT_TERM_TIMEFRAMES:
-            # Short timeframes need stronger volume confirmation
-            volume_quality = (volume_consistency * 0.7 + spread_quality * 0.3)
+            volume_quality = (volume_consistency * 0.5 + spread_quality * 0.5)  # Equal weighting
         elif timeframe in INTERMEDIATE_TIMEFRAMES:
-            # Balanced for main trend
-            volume_quality = (volume_consistency + spread_quality) / 2
+            volume_quality = (volume_consistency * 0.5 + spread_quality * 0.5)  # Equal weighting
         else:
-            # Longer timeframes focus more on spread quality
-            volume_quality = (volume_consistency * 0.3 + spread_quality * 0.7)
+            volume_quality = (volume_consistency * 0.5 + spread_quality * 0.5)  # Equal weighting
         
         # Calculate price impact with timeframe-adjusted volume ratio
         avg_price = recent_df['c'].mean()
         price_impact = price_change / (avg_price * vol_metrics.ratio)
-
-        # Calculate efficiency score with timeframe optimization - using timeframe settings
+        
+        # Calculate efficiency score with balanced parameters
         base_efficiency = price_change / (price_range + 1e-8)
         volume_weighted_efficiency = base_efficiency * (1 + vol_metrics.strength * timeframe.settings.volume_weighted_efficiency)
-
-        # Use timeframe-specific thresholds from settings
+        
+        # Balanced thresholds from settings
         high_threshold = HIGH_EFFICIENCY_THRESHOLD * timeframe.settings.high_threshold
         low_threshold = LOW_EFFICIENCY_THRESHOLD * timeframe.settings.low_threshold
-
+        
         # Final efficiency score
         efficiency = min(1.0, volume_weighted_efficiency)
-
-        # Determine effort result with timeframe context
-        return (
-            EffortResult.STRONG if (
-                efficiency > high_threshold and 
-                volume_quality > (0.5 if timeframe in SHORT_TERM_TIMEFRAMES else 0.6)
-            )
-            else EffortResult.WEAK if (
-                efficiency < low_threshold or 
-                volume_quality < (0.2 if timeframe in SHORT_TERM_TIMEFRAMES else 0.3)
-            )
-            else EffortResult.STRONG if (
-                price_impact > 1.2 and 
-                vol_metrics.ratio > EFFORT_VOLUME_THRESHOLD * (
-                    0.8 if timeframe in SHORT_TERM_TIMEFRAMES else 1.0
-                )
-            )
-            else EffortResult.WEAK
-        )
         
+        # Calculate a balanced volume factor
+        is_short_timeframe = timeframe in SHORT_TERM_TIMEFRAMES
+        volume_factor = vol_metrics.ratio / (EFFORT_VOLUME_THRESHOLD * 
+                         (0.9 if is_short_timeframe else 1.0))
+        
+        # Define truly neutral zone conditions
+        neutral_price_change = price_change < min_move * 1.5 and price_change > min_move * 0.5
+        neutral_efficiency = efficiency > low_threshold * 1.1 and efficiency < high_threshold * 0.9
+        neutral_volume = volume_quality > 0.4 and volume_quality < 0.6
+        
+        # More symmetric condition structure with UNKNOWN state for truly ambiguous cases
+        if efficiency > high_threshold and volume_quality > 0.6:
+            return EffortResult.STRONG
+        elif efficiency < low_threshold and volume_quality < 0.4:
+            return EffortResult.WEAK
+        elif price_change < min_move * 0.5:
+            # Very small moves are generally weak
+            return EffortResult.WEAK
+        elif price_impact > 1.2 and volume_factor > 1.1:
+            # Strong price impact and enough volume
+            return EffortResult.STRONG
+        elif price_impact < 0.4 and volume_factor < 0.7:
+            # Weak price impact despite volume
+            return EffortResult.WEAK
+        elif (neutral_price_change and neutral_efficiency) or neutral_volume:
+            # Truly neutral case - neither clearly strong nor weak
+            return EffortResult.UNKNOWN
+        elif efficiency > 0.5:
+            # Slightly favor strong when near boundary but not in neutral zone
+            return EffortResult.STRONG
+        else:
+            # Default to weak for remaining cases
+            return EffortResult.WEAK
+            
     except Exception as e:
         logger.error(f"Error in effort vs result analysis: {e}")
-        return EffortResult.WEAK
+        return EffortResult.UNKNOWN  # Changed from WEAK to UNKNOWN for errors

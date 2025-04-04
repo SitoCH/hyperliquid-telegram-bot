@@ -65,11 +65,15 @@ def generate_wyckoff_description(
         explanation = sign_explanations.get(wyckoff_sign, wyckoff_sign.value)
         components.append(explanation)
     
-    # Add effort vs result analysis
+    # Add effort vs result analysis with more balanced wording
     if effort_result == EffortResult.STRONG:
-        components.append("Strong volume effectiveness")
+        components.append("Volume effectively translating to price movement")
     elif effort_result == EffortResult.WEAK:
-        components.append("Weak volume effectiveness (potential exhaustion)")
+        components.append("Volume not effectively translating to price movement") 
+    elif effort_result == EffortResult.UNKNOWN:
+        # Only add to description if truly unknown (not just neutral)
+        if phase not in [WyckoffPhase.RANGING, WyckoffPhase.ACCUMULATION, WyckoffPhase.DISTRIBUTION]:
+            components.append("Neutral volume/price relationship")
     
     # Add funding rate info if available
     if funding_state not in [FundingState.NEUTRAL, FundingState.UNKNOWN]:

@@ -292,8 +292,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=7,  # Increased to reduce false springs/upthrusts
         support_resistance_lookback=42,  # Increased for more significant levels
-        effort_lookback=5,  # Increased to better measure true effort
-        min_move_multiplier=1.0,  # Increased to ignore minor price movements
+        effort_lookback=5,  # Back to standard value for consistency
+        min_move_multiplier=0.8,  # Balanced value between 0.6 and 1.0
         
         # --- Adaptive Threshold Factors ---
         spring_factor=1.1,  # Further increased to only detect significant springs
@@ -301,9 +301,9 @@ _TIMEFRAME_SETTINGS = {
         breakout_factor=1.2,  # Increased for clearer breakouts
         significant_levels_factor=1.15,  # Increased for more meaningful levels
         atr_multiplier=0.28,  # Slightly increased for wider zones
-        volume_weighted_efficiency=0.12,  # Further reduced volume sensitivity
-        high_threshold=1.1,  # More conservative high threshold
-        low_threshold=1.0  # More balanced low threshold
+        volume_weighted_efficiency=0.18,  # More balanced value
+        high_threshold=1.0,  # Reset to neutral baseline
+        low_threshold=1.0  # Reset to neutral baseline for symmetry
     ),
     Timeframe.MINUTES_15: TimeframeSettings(
         # --- Core Analysis Settings ---
@@ -324,8 +324,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=5,  # Increased from 4
         support_resistance_lookback=36,  # Increased from 32
-        effort_lookback=4,
-        min_move_multiplier=0.7,  # Increased from 0.6
+        effort_lookback=5,  # Standardized
+        min_move_multiplier=0.7,  # More balanced
         
         # --- Adaptive Threshold Factors ---
         spring_factor=0.85,  # Increased from 0.75
@@ -333,9 +333,9 @@ _TIMEFRAME_SETTINGS = {
         breakout_factor=0.92,  # Increased from 0.85
         significant_levels_factor=0.85,  # Increased from 0.75
         atr_multiplier=0.24,  # Increased from 0.22
-        volume_weighted_efficiency=0.25,  # Reduced from 0.3
-        high_threshold=0.85,  # Increased from 0.8
-        low_threshold=1.15  # Reduced from 1.2 for better balance
+        volume_weighted_efficiency=0.22,  # More balanced
+        high_threshold=0.95,  # More neutral
+        low_threshold=0.95  # Symmetric with high threshold
     ),
     
     # INTERMEDIATE_TIMEFRAMES (52% total) - Increased from 50% as the core decision timeframes
@@ -358,8 +358,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=5, 
         support_resistance_lookback=45,  # Slightly increased
-        effort_lookback=5,  # Increased from 4
-        min_move_multiplier=0.85,  # Slightly increased
+        effort_lookback=5,  # Standard value
+        min_move_multiplier=0.75,  # Balanced value
         
         # --- Adaptive Threshold Factors ---
         spring_factor=0.9,  # Slightly increased
@@ -367,9 +367,9 @@ _TIMEFRAME_SETTINGS = {
         breakout_factor=0.95,  # Slightly increased
         significant_levels_factor=0.85,  # Slightly increased
         atr_multiplier=0.24,  # Slightly increased
-        volume_weighted_efficiency=0.22,  # Slightly reduced
-        high_threshold=0.88,  # Slightly increased
-        low_threshold=1.05  # Slightly reduced
+        volume_weighted_efficiency=0.25,  # More balanced value
+        high_threshold=0.90,  # More neutral
+        low_threshold=0.90  # Symmetric for balance
     ),
     Timeframe.HOUR_1: TimeframeSettings(
         # --- Core Analysis Settings ---
@@ -390,8 +390,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=5,
         support_resistance_lookback=50,  # Slightly decreased from 54
-        effort_lookback=5,
-        min_move_multiplier=0.95,  # Slightly decreased from 1.0
+        effort_lookback=5,  # Standard value
+        min_move_multiplier=0.9,  # More balanced
         
         # --- Adaptive Threshold Factors ---
         spring_factor=0.95,  # Slightly decreased
@@ -399,9 +399,9 @@ _TIMEFRAME_SETTINGS = {
         breakout_factor=0.95,  # Slightly decreased
         significant_levels_factor=0.95,  # Slightly decreased
         atr_multiplier=0.25,
-        volume_weighted_efficiency=0.22,  # Slightly increased
-        high_threshold=0.95,  # Slightly decreased
-        low_threshold=1.05  # Slightly increased
+        volume_weighted_efficiency=0.24,  # More balanced
+        high_threshold=1.0,  # Reset to neutral
+        low_threshold=1.0  # Symmetric with high
     ),
     
     # LONG_TERM_TIMEFRAMES (12% total) - Kept the same
