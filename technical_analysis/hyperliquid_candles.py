@@ -130,12 +130,12 @@ def get_candles_for_timeframes(coin: str, now: int) -> Dict[Timeframe, List[Dict
         Dictionary mapping timeframes to their candle data
     """
     timeframe_lookbacks = {
-        Timeframe.MINUTES_15: 28,    # ~2700 candles - For detailed accumulation/distribution patterns
-        Timeframe.MINUTES_30: 42,    # ~2000 candles - Increased from 35 to capture full market cycles
-        Timeframe.HOUR_1: 60,        # ~1440 candles - Increased from 45 to see multiple Wyckoff cycles
-        Timeframe.HOURS_2: 75,       # ~900 candles - Increased from 60 for more complete cycle analysis
-        Timeframe.HOURS_4: 90,       # ~540 candles - Increased from 75 for better long-term trend context
-        Timeframe.HOURS_8: 120,      # ~360 candles - Increased from 90 to identify major market phases
+        Timeframe.MINUTES_15: 28,
+        Timeframe.MINUTES_30: 42,
+        Timeframe.HOUR_1: 60,
+        Timeframe.HOURS_2: 75,
+        Timeframe.HOURS_4: 90,
+        Timeframe.HOURS_8: 120
     }
 
     return {
