@@ -63,7 +63,7 @@ async def selected_amount(update: Update, context: Union[CallbackContext, Contex
         
         if 'stop_loss_price' in context.user_data and 'take_profit_price' in context.user_data: # type: ignore
             await query.delete_message()
-            return await open_order(context)
+            return await open_order(context, user_state, float(hyperliquid_utils.info.all_mids()[coin]))
 
         await send_stop_loss_suggestions(query, context)
         return SELECTING_STOP_LOSS
@@ -114,7 +114,8 @@ async def selected_leverage(update: Update, context: Union[CallbackContext, Cont
 
     if 'stop_loss_price' in context.user_data and 'take_profit_price' in context.user_data: # type: ignore
         await query.delete_message()
-        return await open_order(context)
+        coin = context.user_data.get("selected_coin", "") # type: ignore
+        return await open_order(context, hyperliquid_utils.info.user_state(hyperliquid_utils.address), float(hyperliquid_utils.info.all_mids()[coin]))
 
     await send_stop_loss_suggestions(query, context)
     return SELECTING_STOP_LOSS
@@ -292,9 +293,9 @@ async def selected_take_profit(update: Update, context: Union[CallbackContext, C
         await telegram_utils.reply(update, "Invalid price. Please enter a number or 'cancel'.")
         return SELECTING_TAKE_PROFIT
 
-    return await open_order(context)
+    return await open_order(context, hyperliquid_utils.info.user_state(hyperliquid_utils.address), mid)
 
-async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
+async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE], user_state: Dict[str, Any], mid: float) -> int:
     amount = context.user_data.get('amount') # type: ignore
     if not amount:
         await telegram_utils.send("Error: No amount selected. Please restart the process.")
@@ -319,12 +320,10 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE])
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
-            user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
             available_balance = float(user_state['withdrawable'])
             balance_to_use = available_balance * amount / 100.0
             leverage = context.user_data.get('leverage', 1) # type: ignore
             exchange.update_leverage(leverage, selected_coin, False)
-            mid = float(hyperliquid_utils.info.all_mids()[selected_coin])
             sz_decimals = hyperliquid_utils.get_sz_decimals()
             sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
             if sz * mid < 10.0:
