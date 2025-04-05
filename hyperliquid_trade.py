@@ -335,7 +335,7 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE])
             open_result = exchange.market_open(selected_coin, is_long, sz)
             logger.info(open_result)
 
-            await place_stop_loss_and_take_profit_orders(exchange, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
+            await place_stop_loss_and_take_profit_orders(exchange, user_state, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
             await message.delete() # type: ignore
         else:
             await telegram_utils.send("Exchange is not enabled")
@@ -347,14 +347,13 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE])
 
 
 def place_stop_loss_order(exchange: Any, 
+    user_state: Dict[str, Any],
     selected_coin: str, 
     is_long: bool, 
     sz: float,
     stop_loss_price: float) -> None:
 
     sl_trigger_px = stop_loss_price
-
-    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
 
     liquidation_px_str = hyperliquid_utils.get_liquidation_px_str(user_state, selected_coin)
 
@@ -374,6 +373,7 @@ def place_stop_loss_order(exchange: Any,
 
 async def place_stop_loss_and_take_profit_orders(
     exchange: Any, 
+    user_state: Dict[str, Any],
     selected_coin: str, 
     is_long: bool, 
     sz: float,
@@ -381,7 +381,7 @@ async def place_stop_loss_and_take_profit_orders(
     take_profit_price: float
 ) -> None:
 
-    place_stop_loss_order(exchange, selected_coin, is_long, sz, stop_loss_price)
+    place_stop_loss_order(exchange, user_state, selected_coin, is_long, sz, stop_loss_price)
 
     if take_profit_price > 0:
         tp_trigger_px = take_profit_price
