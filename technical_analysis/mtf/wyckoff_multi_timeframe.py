@@ -615,6 +615,8 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     # Improved final value calculation with smoother scaling
     final_momentum = weighted_momentum * hourly_volume_boost * conflict_penalty
     
-    # Apply less steep curve for more responsive results
-    final_momentum = 1.0 / (1.0 + np.exp(-4 * (final_momentum - 0.45))) if final_momentum > 0 else 0.0
+    # Improved sigmoid function for more responsive hourly updates
+    # Increased steepness from 4 to 5 and adjusted center point from 0.45 to 0.42
+    # This makes the function more sensitive in the mid-range while maintaining balanced extremes
+    final_momentum = 1.0 / (1.0 + np.exp(-5 * (final_momentum - 0.42))) if final_momentum > 0 else 0.0
     return min(1.0, final_momentum)
