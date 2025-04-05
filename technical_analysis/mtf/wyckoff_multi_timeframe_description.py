@@ -100,7 +100,7 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
         f"Market Context (4h-8h):\n{context_desc}\n"
         f"Daily Bias (2h):\n{long_term_desc}\n"
         f"Intraday Trend (30m-1h):\n{intermediate_desc}\n"
-        f"Immediate Signals (5m-15m):\n{short_term_desc}\n\n"
+        f"Immediate Signals (15m):\n{short_term_desc}\n\n"
         f"{insight}"
     )
 
