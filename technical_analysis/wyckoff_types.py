@@ -87,13 +87,19 @@ def is_bearish_phase(phase: WyckoffPhase) -> bool:
 
 
 def is_bullish_action(action: CompositeAction) -> bool:
-    """Check if the given action is bullish."""
-    return action in BULLISH_ACTIONS
+    """Determine if a Wyckoff action is bullish, with more conservative classification for crypto markets."""
+    return action in {
+        CompositeAction.ACCUMULATING,
+        CompositeAction.MARKING_UP,
+    }
 
 
 def is_bearish_action(action: CompositeAction) -> bool:
-    """Check if the given action is bearish."""
-    return action in BEARISH_ACTIONS
+    """Determine if a Wyckoff action is bearish, with more conservative classification for crypto markets."""
+    return action in {
+        CompositeAction.DISTRIBUTING,
+        CompositeAction.MARKING_DOWN,
+    }
 
 class FundingState(Enum):
     HIGHLY_POSITIVE = "highly positive"

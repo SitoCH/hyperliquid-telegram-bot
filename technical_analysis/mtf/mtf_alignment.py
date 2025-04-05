@@ -36,7 +36,7 @@ ALIGNMENT_WEIGHT: Final[float] = 0.15
 MOMENTUM_WEIGHT: Final[float] = 0.20
 
 def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, intermediate_analysis: TimeframeGroupAnalysis) -> float:
-    """Calculate alignment across all timeframe groups with improved weighting."""
+    """Calculate alignment across all timeframe groups with more conservative weighting for crypto intraday trading."""
 
     total_weight = short_term_analysis.group_weight + intermediate_analysis.group_weight
 
@@ -44,38 +44,42 @@ def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, int
     # Compare short-term and intermediate analyses
     weight = (short_term_analysis.group_weight + intermediate_analysis.group_weight) / total_weight
 
-    # Phase Alignment Scoring: More nuanced approach
+    # Phase Alignment Scoring
     phase_aligned = 0.0
     if short_term_analysis.dominant_phase == intermediate_analysis.dominant_phase:
-        phase_aligned = 1.0  # Perfect alignment
+        phase_aligned = 1.0
     elif short_term_analysis.dominant_phase.value.replace('~', '') == intermediate_analysis.dominant_phase.value.replace('~', ''):
-        phase_aligned = 0.75  # Possible phase alignment
+        phase_aligned = 0.70
     elif (is_bullish_phase(short_term_analysis.dominant_phase) and is_bullish_phase(intermediate_analysis.dominant_phase)) or \
          (is_bearish_phase(short_term_analysis.dominant_phase) and is_bearish_phase(intermediate_analysis.dominant_phase)):
-        phase_aligned = 0.5  # General agreement on bullish/bearish phase
+        phase_aligned = 0.45
 
-    # Action Alignment Scoring: Refined logic
+    # Action Alignment Scoring: More conservative for crypto intraday
     action_aligned = 0.0
     if short_term_analysis.dominant_action == intermediate_analysis.dominant_action:
         action_aligned = 1.0
     elif (is_bullish_action(short_term_analysis.dominant_action) and is_bullish_action(intermediate_analysis.dominant_action)) or \
          (is_bearish_action(short_term_analysis.dominant_action) and is_bearish_action(intermediate_analysis.dominant_action)):
-        action_aligned = 0.6  # Agreement on bullish/bearish action
+        action_aligned = 0.6
 
-    # Momentum Bias Alignment: Simplified
-    bias_aligned = 1.0 if short_term_analysis.momentum_bias == intermediate_analysis.momentum_bias else 0.0
-    if short_term_analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL and intermediate_analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL:
-        bias_aligned = 0.5 if short_term_analysis.momentum_bias != intermediate_analysis.momentum_bias else 1.0
+    # Momentum Bias Alignment: More nuanced for crypto
+    bias_aligned = 0.0
+    if short_term_analysis.momentum_bias == intermediate_analysis.momentum_bias:
+        bias_aligned = 1.0
+    elif short_term_analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL and intermediate_analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL:
+        bias_aligned = 0.50 if short_term_analysis.momentum_bias != intermediate_analysis.momentum_bias else 1.0
+    else:
+        bias_aligned = 0.40
 
     # Volume Agreement: More direct comparison
     volume_agreement = 1 - abs(short_term_analysis.volume_strength - intermediate_analysis.volume_strength)
 
     # Composite Score: Adjusted Weights
     alignment_score = (
-        phase_aligned * 0.40 +  # Phase alignment (40%)
-        action_aligned * 0.30 +  # Action alignment (30%)
-        bias_aligned * 0.20 +  # Bias alignment (20%)
-        volume_agreement * 0.10  # Volume agreement (10%)
+        phase_aligned * 0.35 +
+        action_aligned * 0.35 +
+        bias_aligned * 0.20 +
+        volume_agreement * 0.10
     )
 
     alignment_scores.append(alignment_score * weight)
@@ -123,26 +127,10 @@ def calculate_overall_confidence(short_term: TimeframeGroupAnalysis, intermediat
     
     # Apply volatility adjustment - higher volatility can mean clearer signals in crypto
     adjusted_confidence = base_confidence * volatility_adjustment
-    
-    # Apply a more aggressive scaling function for crypto
-    final_confidence = _crypto_confidence_scaling(adjusted_confidence)
-    
-    # Ensure the confidence is within bounds
-    return max(min(final_confidence, 1.0), BASE_CONFIDENCE_THRESHOLD)
 
-# Update the scaling parameters to be more aggressive
-def _crypto_confidence_scaling(x: float) -> float:
-    """
-    More conservative scaling function for crypto that prevents inflation of confidence values.
-    """
-    # Less aggressive curve to avoid boosting confidence values too much
-    if x < 0.4:  # Increased threshold
-        return x * 0.95  # Slight reduction for lower values
-    elif x < 0.65:  # Increased threshold
-        return x * 1.05  # Reduced boost for medium signals from 1.25
-    else:
-        # Less aggressive boost for strong signals
-        return min(1.0, x * 1.2)  # Decreased from 1.4 to 1.2
+    # Ensure the confidence is within bounds
+    return max(min(adjusted_confidence, 1.0), BASE_CONFIDENCE_THRESHOLD)
+
 
 def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnalysis],
                                        intermediate: Optional[TimeframeGroupAnalysis],
