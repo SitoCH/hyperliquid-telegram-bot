@@ -638,9 +638,9 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         return None
 
     min_distance_sl = mid * 0.0175
-    max_distance_sl = mid * 0.06
+    max_distance_sl = mid * 0.05
     
-    min_distance_tp = mid * 0.015
+    min_distance_tp = mid * 0.0125
     max_distance_tp = mid * 0.05
 
     for timeframe in [Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.MINUTES_15, Timeframe.HOURS_4]:
