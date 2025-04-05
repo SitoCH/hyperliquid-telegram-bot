@@ -8,6 +8,7 @@ import numpy as np  # type: ignore[import]
 from utils import fmt_price
 from technical_analysis.wyckoff_types import WyckoffState, Timeframe
 from technical_analysis.significant_levels import find_significant_levels
+from matplotlib.ticker import FuncFormatter
 
 
 def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
@@ -59,7 +60,7 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, timefram
 
     buf = io.BytesIO()
     fig, ax = plt.subplots(3, 1, figsize=(10, 6), gridspec_kw={'height_ratios': [7, 1, 1]})
-
+    
     df_plot['SuperTrend_Green'] = np.where(
         df_plot['c'] > df_plot['SuperTrend'],
         df_plot['SuperTrend'],
@@ -98,23 +99,31 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, timefram
     # Apply colors based on full dataset thresholds but only to plotting window data
     macd_hist_colors = df_plot['MACD_Hist'].apply(determine_color).values
 
-    level_lines = []
-    for level in resistance_levels:
-        line = pd.Series([level] * len(df_plot), index=df_plot.index)
-        level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
-                                            label=f'R {fmt_price(level)}', linestyle='--'))
+    def price_to_percent(price):
+        return ((price / mid) - 1) * 100
     
-    for level in reversed(support_levels):
-        line = pd.Series([level] * len(df_plot), index=df_plot.index)
-        level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
-                                            label=f'S {fmt_price(level)}', linestyle=':'))
 
+    level_lines = []
+    for level in reversed(resistance_levels):
+        line = pd.Series([level] * len(df_plot), index=df_plot.index)
+        pct_diff = price_to_percent(level)
+        pct_str = f'+{pct_diff:.2f}%' if pct_diff > 0 else f'{pct_diff:.2f}%'
+        level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
+                                            label=f'R {fmt_price(level)} ({pct_str})', linestyle='--'))
+    
     is_ha_bullish = ha_df['c'].iloc[-1] >= ha_df['o'].iloc[-1]
     current_price_line = pd.Series([mid] * len(df_plot), index=df_plot.index)
     level_lines.append(mpf.make_addplot(current_price_line, ax=ax[0], 
                                         color='green' if is_ha_bullish else 'red', 
                                         width=0.5, label=f'Current {fmt_price(mid)}', 
                                         linestyle=':', alpha=0.6))
+
+    for level in support_levels:
+        line = pd.Series([level] * len(df_plot), index=df_plot.index)
+        pct_diff = price_to_percent(level)
+        pct_str = f'+{pct_diff:.2f}%' if pct_diff > 0 else f'{pct_diff:.2f}%'
+        level_lines.append(mpf.make_addplot(line, ax=ax[0], color='purple', width=0.5, 
+                                            label=f'S {fmt_price(level)} ({pct_str})', linestyle=':'))
 
     mpf.plot(ha_df,
             type='candle',
