@@ -247,21 +247,24 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         ]
 
         current_time = int(time.time() * 1000)
+        three_months_ago = current_time - (90 * 24 * 60 * 60 * 1000)
         one_month_ago = current_time - (30 * 24 * 60 * 60 * 1000)
         one_week_ago = current_time - (7 * 24 * 60 * 60 * 1000)
         one_day_ago = current_time - (24 * 60 * 60 * 1000)
 
-        user_fills = hyperliquid_utils.info.user_fills_by_time(hyperliquid_utils.address, one_month_ago)
+        user_fills = hyperliquid_utils.info.user_fills_by_time(hyperliquid_utils.address, three_months_ago)
         
         stats_1d = calculate_trading_stats(user_fills, one_day_ago)
         stats_7d = calculate_trading_stats(user_fills, one_week_ago)
         stats_30d = calculate_trading_stats(user_fills, one_month_ago)
+        stats_90d = calculate_trading_stats(user_fills, three_months_ago)
         
         btc_price_history = get_btc_price_history(one_month_ago)
         btc_current_price = get_btc_current_price()
         btc_hold_1d = calculate_btc_hold_performance(one_day_ago, btc_current_price, btc_price_history)
         btc_hold_7d = calculate_btc_hold_performance(one_week_ago, btc_current_price, btc_price_history)
         btc_hold_30d = calculate_btc_hold_performance(one_month_ago, btc_current_price, btc_price_history)
+        btc_hold_90d = calculate_btc_hold_performance(three_months_ago, btc_current_price, btc_price_history)
         
         # Format tables using the helper function
         message_lines.append("Last day:")
@@ -272,6 +275,9 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         message_lines.append("")
         message_lines.append("Last 30 days:")
         message_lines.append(format_stats_table(stats_30d, btc_hold_30d))
+        message_lines.append("")
+        message_lines.append("Last 90 days:")
+        message_lines.append(format_stats_table(stats_90d, btc_hold_90d))
         
         # Send the response
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
