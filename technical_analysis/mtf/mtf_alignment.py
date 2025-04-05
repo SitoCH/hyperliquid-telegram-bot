@@ -26,9 +26,9 @@ LONG_TERM_IMPORTANCE = 0.12
 CONTEXT_IMPORTANCE = 0.08
 
 # Thresholds for confidence calculation
-BASE_CONFIDENCE_THRESHOLD = 0.25
-STRONG_SIGNAL_MULTIPLIER = 1.5
-VOLATILITY_BOOST = 1.2
+BASE_CONFIDENCE_THRESHOLD = 0.20  # Reduced from 0.25
+STRONG_SIGNAL_MULTIPLIER = 1.3   # Reduced from 1.5
+VOLATILITY_BOOST = 1.1          # Reduced from 1.2
 
 DIRECTIONAL_WEIGHT: Final[float] = 0.35
 VOLUME_WEIGHT: Final[float] = 0.30 
@@ -133,17 +133,16 @@ def calculate_overall_confidence(short_term: TimeframeGroupAnalysis, intermediat
 # Update the scaling parameters to be more aggressive
 def _crypto_confidence_scaling(x: float) -> float:
     """
-    More aggressive scaling function for crypto that allows strong signals
-    to reach higher confidence values.
+    More conservative scaling function for crypto that prevents inflation of confidence values.
     """
-    # Even more aggressive curve to boost confidence values
-    if x < 0.35:  # Lowered from 0.4
-        return x * 1.05  # Slight boost even to lower values
-    elif x < 0.6:  # Lowered from 0.7
-        return x * 1.25  # Higher boost for medium signals
+    # Less aggressive curve to avoid boosting confidence values too much
+    if x < 0.4:  # Increased threshold
+        return x * 0.95  # Slight reduction for lower values
+    elif x < 0.65:  # Increased threshold
+        return x * 1.05  # Reduced boost for medium signals from 1.25
     else:
-        # Much more aggressive boost for strong signals
-        return min(1.0, x * 1.4)  # Increased from 1.3
+        # Less aggressive boost for strong signals
+        return min(1.0, x * 1.2)  # Decreased from 1.4 to 1.2
 
 def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnalysis],
                                        intermediate: Optional[TimeframeGroupAnalysis],
@@ -203,14 +202,14 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
             short_sign = 1 if group_biases['short'] > 0 else -1 if group_biases['short'] < 0 else 0
             int_sign = 1 if group_biases['intermediate'] > 0 else -1 if group_biases['intermediate'] < 0 else 0
             if short_sign != 0 and int_sign != 0 and short_sign == int_sign:
-                agreement_bonus += 0.15  # Significant bonus for short-intermediate agreement
+                agreement_bonus += 0.10  # Reduced from 0.15
         
         # Check if intermediate and long agree
         if 'intermediate' in group_biases and 'long' in group_biases:
             int_sign = 1 if group_biases['intermediate'] > 0 else -1 if group_biases['intermediate'] < 0 else 0
             long_sign = 1 if group_biases['long'] > 0 else -1 if group_biases['long'] < 0 else 0
             if int_sign != 0 and long_sign != 0 and int_sign == long_sign:
-                agreement_bonus += 0.10  # Bonus for intermediate-long agreement
+                agreement_bonus += 0.07  # Reduced from 0.10
     
     if not scores:
         return 0.0
@@ -220,6 +219,9 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
     total_weight = sum(weights)
     
     base_score = weighted_sum / total_weight if total_weight > 0 else 0.0
+    
+    # Apply a dampening factor to the base score to reduce overall directional confidence
+    base_score *= 0.9  # Apply 10% reduction to all directional scores
     
     # Apply agreement bonus and cap at 1.0
     return min(1.0, base_score + agreement_bonus)
@@ -257,15 +259,18 @@ def _calculate_momentum_score_direct(short_term: Optional[TimeframeGroupAnalysis
         # Further adjust by volume - volume confirms momentum
         adjusted_momentum *= (0.5 + 0.5 * analysis.volume_strength)
         
+        # Add a dampening factor to reduce overall momentum scores
+        adjusted_momentum *= 0.85  # Reduce momentum by 15%
+        
         momentum_values.append(adjusted_momentum)
     
     avg_momentum = sum(momentum_values) / len(momentum_values) if momentum_values else 0.0
     
-    # Apply a steeper curve for crypto momentum
+    # Apply a less steep curve for crypto momentum
     if avg_momentum > 0.6:
-        return min(1.0, avg_momentum * 1.3)  # Boost strong momentum
+        return min(1.0, avg_momentum * 1.1)  # Reduced boost from 1.3 to 1.1
     else:
-        return avg_momentum
+        return avg_momentum * 0.9  # Further reduction of 10% for lower momentum scores
 
 def _calculate_volume_score_direct(short_term: Optional[TimeframeGroupAnalysis], 
                                   intermediate: Optional[TimeframeGroupAnalysis],
@@ -285,25 +290,28 @@ def _calculate_volume_score_direct(short_term: Optional[TimeframeGroupAnalysis],
         
         # Apply multiplier based on timeframe
         if analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
-            multiplier = 1.2  # Higher weight for short-term volume in crypto
+            multiplier = 1.1  # Reduced from 1.2
         elif analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES}:
-            multiplier = 1.1  # Good weight for intermediate timeframes
+            multiplier = 1.0  # Reduced from 1.1
         else:
-            multiplier = 0.9  # Less weight for long-term volume
+            multiplier = 0.8  # Reduced from 0.9
             
         # Apply action-based adjustments
         if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
-            multiplier *= 1.25  # Volume in trending markets is more significant
+            multiplier *= 1.15  # Reduced from 1.25
         elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
-            multiplier *= 1.15  # Volume in accumulation/distribution is also important
+            multiplier *= 1.05  # Reduced from 1.15
             
         weighted_scores.append(score * multiplier * analysis.internal_alignment)
     
     avg_volume_score = sum(weighted_scores) / len(weighted_scores) if weighted_scores else 0.0
     
-    # Apply a more aggressive scaling for crypto markets
+    # Add a dampening factor to all volume scores
+    avg_volume_score *= 0.9
+    
+    # Apply a more controlled scaling for crypto markets
     if avg_volume_score > 0.7:
-        avg_volume_score *= 1.2  # Boost high volume signals
+        avg_volume_score *= 1.1  # Reduced from 1.2
     
     return min(1.0, avg_volume_score)
 
@@ -313,6 +321,7 @@ def _calculate_volatility_adjustment_direct(short_term: Optional[TimeframeGroupA
                                            context: Optional[TimeframeGroupAnalysis]) -> float:
     """
     Calculate volatility adjustment factor with direct timeframe parameters.
+    More conservative approach to volatility adjustment.
     """
     total_count = 0
     high_volatility_count = 0
@@ -325,7 +334,11 @@ def _calculate_volatility_adjustment_direct(short_term: Optional[TimeframeGroupA
         if analysis.volatility_state == VolatilityState.HIGH:
             high_volatility_count += 1
     
-    # If most timeframes show high volatility, apply a boost
-    if total_count > 0 and high_volatility_count >= max(1, total_count * 0.5):
+    # More conservative approach to volatility adjustment
+    # If most timeframes show high volatility, apply a smaller boost
+    if total_count > 0 and high_volatility_count >= max(2, total_count * 0.6):  # Increased threshold
         return VOLATILITY_BOOST
+    # Add a slight reduction for normal/low volatility
+    elif total_count > 0:
+        return 0.95  # 5% reduction in confidence for normal/low volatility
     return 1.0
