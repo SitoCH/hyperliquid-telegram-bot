@@ -14,7 +14,7 @@ from .mtf_alignment import calculate_overall_alignment, calculate_overall_confid
 from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext
 
 from technical_analysis.wyckoff_types import (
-    WyckoffState, WyckoffPhase, MarketPattern, _TIMEFRAME_SETTINGS,
+    WyckoffState, WyckoffPhase, WyckoffSign, MarketPattern, _TIMEFRAME_SETTINGS,
     SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
     is_bearish_action, is_bullish_action, is_bearish_phase, is_bullish_phase,
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity
@@ -104,16 +104,14 @@ def analyze_multi_timeframe(
         description = generate_all_timeframes_description(coin, all_analysis, mid, significant_levels, interactive_analysis)
 
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
-
-        # Modified volatility check - only consider intermediate timeframes to reduce noise
-        choppy_conditions = all_analysis.intermediate.volatility_state == VolatilityState.HIGH
         
-        # Enhanced notification criteria with more balanced checks
         notification_checks = [
             (all_analysis.confidence_level >= min_confidence, f"Low confidence: {all_analysis.confidence_level:.2f} < {min_confidence:.2f}"),
             (momentum_intensity >= WEAK_MOMENTUM, f"Weak momentum: {momentum_intensity:.2f} < {WEAK_MOMENTUM:.2f}"),
-            (not choppy_conditions, "Choppy market conditions detected"),
+            (all_analysis.intermediate.volatility_state != VolatilityState.HIGH, "Choppy intermediate market conditions detected"),
             (all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL, "Neutral market direction"),
+            (all_analysis.short_term.dominant_sign != WyckoffSign.SECONDARY_TEST_RESISTANCE, "Secondary Test Resistance (STR) on short-term"),
+            (all_analysis.short_term.dominant_sign != WyckoffSign.SECONDARY_TEST, "Secondary Test (ST) on short-term"),
             # Be more lenient with short-term uncertainty if intermediate is certain
             ((not all_analysis.short_term.uncertain_phase or not all_analysis.intermediate.uncertain_phase), 
              "Both short and intermediate timeframes show uncertain phases"),
@@ -235,7 +233,8 @@ def _analyze_timeframe_group(
             group_weight=0.0,
             funding_sentiment=0.0,
             liquidity_state=MarketLiquidity.UNKNOWN,
-            volatility_state=VolatilityState.UNKNOWN
+            volatility_state=VolatilityState.UNKNOWN,
+            dominant_sign=WyckoffSign.NONE
         )
 
     # Calculate weighted votes for phases and actions
@@ -244,6 +243,10 @@ def _analyze_timeframe_group(
     uncertain_phase_weights: Dict[WyckoffPhase, float] = {}  # Track uncertain phases separately
     action_weights: Dict[CompositeAction, float] = {}
     uncertain_action_weights: Dict[CompositeAction, float] = {}  # Track uncertain actions separately
+    
+    # Track Wyckoff signs
+    sign_weights: Dict[WyckoffSign, float] = {}
+    
     total_weight = 0.0
 
     # Track exhaustion signals - symmetric treatment
@@ -320,6 +323,26 @@ def _analyze_timeframe_group(
                 uncertain_action_weights[state.composite_action] = uncertain_action_weights.get(state.composite_action, 0) + (weight * 0.7)
             else:
                 action_weights[state.composite_action] = action_weights.get(state.composite_action, 0) + weight
+                
+        # Track Wyckoff signs with weights
+        if state.wyckoff_sign != WyckoffSign.NONE:
+            # Give additional weight to significant signs
+            sign_weight = weight
+            
+            # Boost weight for critical signs in certain market conditions
+            if state.wyckoff_sign in [WyckoffSign.SELLING_CLIMAX, WyckoffSign.BUYING_CLIMAX]:
+                sign_weight *= 1.3  # Climactic events are very important
+            elif state.wyckoff_sign in [WyckoffSign.SIGN_OF_STRENGTH, WyckoffSign.SIGN_OF_WEAKNESS]:
+                sign_weight *= 1.2  # SOS/SOW are key directional signals
+            elif state.wyckoff_sign in [WyckoffSign.UPTHRUST, WyckoffSign.SECONDARY_TEST]:
+                sign_weight *= 1.1  # Tests are important but less decisive
+                
+            # Further boost for signs confirmed by volume
+            if state.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
+                sign_weight *= 1.2
+                
+            # Add to sign weights dictionary
+            sign_weights[state.wyckoff_sign] = sign_weights.get(state.wyckoff_sign, 0) + sign_weight
 
     # Determine dominant phase using combined weights
     if phase_weights:
@@ -342,6 +365,20 @@ def _analyze_timeframe_group(
         dominant_action = max(combined_action_weights.items(), key=lambda x: x[1])[0]
     else:
         dominant_action = CompositeAction.UNKNOWN
+        
+    # Determine dominant Wyckoff sign
+    dominant_sign = WyckoffSign.NONE
+    if sign_weights:
+        # Get most heavily weighted sign
+        dominant_sign = max(sign_weights.items(), key=lambda x: x[1])[0]
+        
+        # Calculate sign confidence as a percentage of total weight
+        sign_weight = sign_weights[dominant_sign]
+        sign_confidence = sign_weight / total_weight if total_weight > 0 else 0
+        
+        # Only accept as dominant if it represents a significant portion of signals
+        if sign_confidence < 0.25:  # If the sign represents less than 25% of all signals
+            dominant_sign = WyckoffSign.NONE
 
     # Calculate internal alignment
     phase_alignment = max(phase_weights.values()) / total_weight if phase_weights else 0
@@ -479,6 +516,16 @@ def _analyze_timeframe_group(
             # Split signal between both directions but with lower weight
             bullish_signals += 0.2
             bearish_signals += 0.2
+            
+        # Consider Wyckoff signs for directional signals
+        if s.wyckoff_sign == WyckoffSign.SELLING_CLIMAX or s.wyckoff_sign == WyckoffSign.AUTOMATIC_RALLY:
+            bullish_signals += 0.6  # These typically indicate potential bottoming
+        elif s.wyckoff_sign == WyckoffSign.SIGN_OF_STRENGTH or s.wyckoff_sign == WyckoffSign.LAST_POINT_OF_SUPPORT:
+            bullish_signals += 0.8  # Strong bullish signals
+        elif s.wyckoff_sign == WyckoffSign.BUYING_CLIMAX or s.wyckoff_sign == WyckoffSign.UPTHRUST:
+            bearish_signals += 0.6  # These typically indicate potential topping
+        elif s.wyckoff_sign == WyckoffSign.SIGN_OF_WEAKNESS or s.wyckoff_sign == WyckoffSign.LAST_POINT_OF_RESISTANCE:
+            bearish_signals += 0.8  # Strong bearish signals
 
     # Normalize signals by count of timeframes for consistency
     if len(group) > 0:
@@ -535,7 +582,8 @@ def _analyze_timeframe_group(
         group_weight=total_weight,
         funding_sentiment=funding_sentiment,
         liquidity_state=liquidity_state,
-        volatility_state=volatility_state
+        volatility_state=volatility_state,
+        dominant_sign=dominant_sign
     )
 
 

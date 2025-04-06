@@ -5,7 +5,8 @@ from typing import Final
 from technical_analysis.wyckoff_types import (
     WyckoffPhase, CompositeAction, MarketLiquidity,
     VolatilityState, Timeframe, _TIMEFRAME_SETTINGS,
-    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES
+    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
+    WyckoffSign
 )
 
 # Recalculate group weights
@@ -42,6 +43,7 @@ class TimeframeGroupAnalysis:
     funding_sentiment: float  # -1 to 1, negative means bearish funding
     liquidity_state: MarketLiquidity
     volatility_state: VolatilityState
+    dominant_sign: WyckoffSign = WyckoffSign.NONE  # Add dominant Wyckoff sign
     uncertain_phase: bool = True  # Add this field with default value True
 
 @dataclass
