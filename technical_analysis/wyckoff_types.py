@@ -204,6 +204,7 @@ class TimeframeSettings:
     # --- Support/Resistance & Pattern Detection ---
     spring_upthrust_window: int     # For reversal pattern detection
     support_resistance_lookback: int # For S/R level identification
+    swing_lookback: int = 5         # Number of candles to analyze for recent swings
     effort_lookback: int = 5        # Periods to look back for effort-result analysis
     min_move_multiplier: float = 1.0  # Minimum price move multiplier for effort-result analysis
     
@@ -297,7 +298,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=6,  # Increased for more reliable pattern detection
         support_resistance_lookback=42,  # Increased for more significant levels
-        effort_lookback=6,  # Increased for better effort-result analysis
+        swing_lookback=4,         # Shorter lookback for more responsive swing detection
+        effort_lookback=4,        # Shorter lookback for tactical effort-result analysis
         min_move_multiplier=0.85,  # Increased for more meaningful moves
         
         # --- Adaptive Threshold Factors ---
@@ -331,7 +333,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=6, 
         support_resistance_lookback=50,  # Increased for more significant levels
-        effort_lookback=6,  # Increased for better analysis
+        swing_lookback=5,         # Balanced lookback for swing detection
+        effort_lookback=5,        # Standard lookback for effort-result analysis
         min_move_multiplier=0.85,  # Increased for more meaningful moves
         
         # --- Adaptive Threshold Factors ---
@@ -363,7 +366,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=6,  # Increased for reliability
         support_resistance_lookback=55,  # Increased for stronger level detection
-        effort_lookback=6,  # Increased for better analysis
+        swing_lookback=6,         # Slightly longer lookback to identify more significant swings
+        effort_lookback=7,        # Longer lookback for consistent effort-result analysis
         min_move_multiplier=1.0,  # Standardized for baseline
         
         # --- Adaptive Threshold Factors ---
@@ -397,7 +401,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=7,  # Increased for reliability
         support_resistance_lookback=60,  # Increased for stronger level detection
-        effort_lookback=7,  # Increased for better analysis
+        swing_lookback=8,         # Longer lookback to identify meaningful swing structures
+        effort_lookback=8,        # Longer lookback for trend-based effort-result analysis
         min_move_multiplier=1.2,  # Increased for more significant moves
         
         # --- Adaptive Threshold Factors ---
@@ -431,7 +436,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=8,  # Increased for reliability
         support_resistance_lookback=75,  # Increased for stronger levels
-        effort_lookback=9,  # Increased for better analysis
+        swing_lookback=10,        # Extended lookback for significant market structure points
+        effort_lookback=10,       # Extended lookback for broader effort-result patterns
         min_move_multiplier=1.5,  # Increased for more significant moves
         
         # --- Adaptive Threshold Factors ---
@@ -463,7 +469,8 @@ _TIMEFRAME_SETTINGS = {
         # --- Support/Resistance & Pattern Detection ---
         spring_upthrust_window=9,  # Increased for reliability
         support_resistance_lookback=100,  # Increased for stronger levels
-        effort_lookback=12,  # Increased for better analysis
+        swing_lookback=12,        # Long lookback for major swing points detection
+        effort_lookback=14,       # Long lookback for macro effort-result analysis
         min_move_multiplier=2.0,  # Increased for more significant moves
         
         # --- Adaptive Threshold Factors ---
