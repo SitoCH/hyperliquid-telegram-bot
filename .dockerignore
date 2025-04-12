@@ -3,6 +3,7 @@
 !strategies/**/*.py
 !technical_analysis/**/*.py
 !hyperliquid_utils/**/*.py
+!bot_statistics/**/*.py
 !pyproject.toml
 !uv.lock
 **/__pycache__/

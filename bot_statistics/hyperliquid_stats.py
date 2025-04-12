@@ -1,132 +1,23 @@
 import time
-import requests
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from tabulate import simple_separated_format, tabulate
-import bisect
 
 from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 from utils import fmt
 from logging_utils import logger
-
-def get_btc_price_history(start_timestamp):
-    """
-    Fetch BTC price history for a given time range.
-    
-    Args:
-        start_timestamp: Start timestamp in milliseconds
-        end_timestamp: End timestamp in milliseconds
-        
-    Returns:
-        Dictionary with timestamps as keys and prices as values
-    """
-    
-    try:
-        # Convert to seconds for CoinGecko API
-        start_sec = int(start_timestamp / 1000)
-        end_sec = time.time()
-        
-        response = requests.get(
-            "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart/range",
-            params={
-                "vs_currency": "usd",
-                "from": start_sec,
-                "to": end_sec
-            }
-        )
-        data = response.json()
-        
-        # Create a dictionary mapping timestamps to prices
-        price_history = {}
-        for timestamp_ms, price in data["prices"]:
-            price_history[int(timestamp_ms)] = price
-            
-        return price_history
-    
-    except Exception as e:
-        logger.error(f"Error fetching BTC price history: {str(e)}", exc_info=True)
-        return {}
-
-def get_btc_historical_price(timestamp, price_history):
-    """
-    Get BTC price at a specific historical timestamp.
-    
-    Args:
-        timestamp: Timestamp in milliseconds
-        price_history: Dictionary of historical prices (optional)
-    
-    Returns:
-        BTC price in USD
-    """
-    timestamps = sorted(price_history.keys())
-    if not timestamps:
-        return None
-        
-    # Find the index where timestamp would be inserted
-    idx = bisect.bisect_left(timestamps, timestamp)
-    
-    if idx == 0:
-        # If timestamp is before the earliest available data, use the earliest
-        return price_history[timestamps[0]]
-    elif idx == len(timestamps):
-        # If timestamp is after the latest available data, use the latest
-        return price_history[timestamps[-1]]
-    else:
-        # Find the closest timestamp (either before or after)
-        before = timestamps[idx-1]
-        after = timestamps[idx]
-        
-        if timestamp - before <= after - timestamp:
-            return price_history[before]
-        else:
-            return price_history[after]
-
-def get_btc_current_price():
-    """
-    Get current BTC price.
-    
-    Returns:
-        BTC price in USD
-    """
-    try:
-        response = requests.get(
-            "https://api.coingecko.com/api/v3/simple/price",
-            params={"ids": "bitcoin", "vs_currencies": "usd"}
-        )
-        data = response.json()
-        return data["bitcoin"]["usd"]
-    except Exception as e:
-        logger.error(f"Error fetching current BTC price: {str(e)}", exc_info=True)
-        return None
-
-def calculate_btc_hold_performance(start_timestamp, btc_current_price, price_history):
-    """
-    Calculate the performance of simply holding BTC from the start timestamp until now.
-    
-    Args:
-        start_timestamp: Start timestamp in milliseconds
-        btc_current_price: Current BTC price
-        price_history: Dictionary of historical prices (optional)
-    
-    Returns:
-        Dictionary with BTC hold performance
-    """
-    try:
-        starting_price = get_btc_historical_price(start_timestamp, price_history)
-        
-        if starting_price and btc_current_price:
-            pct_change = ((btc_current_price - starting_price) / starting_price) * 100
-            return {
-                'starting_price': starting_price,
-                'current_price': btc_current_price,
-                'pct_change': pct_change
-            }
-        return None
-    except Exception as e:
-        logger.error(f"Error calculating BTC hold performance: {str(e)}", exc_info=True)
-        return None
+from bot_statistics.btc_price_utils import (
+    get_btc_price_history, 
+    get_btc_current_price,
+    calculate_btc_hold_performance
+)
+from bot_statistics.sp500_price_utils import (
+    get_sp500_price_history,
+    get_sp500_current_price,
+    calculate_sp500_hold_performance
+)
 
 def calculate_trading_stats(user_fills, cutoff_timestamp):
     """
@@ -208,13 +99,14 @@ def calculate_trading_stats(user_fills, cutoff_timestamp):
         'pct_return': pct_return
     }
 
-def format_stats_table(stats, btc_hold):
+def format_stats_table(stats, btc_hold, sp500_hold=None):
     """
     Format trading statistics as a tabulated table.
     
     Args:
         stats: Dictionary containing trading statistics
-        btc_hold: Dictionary containing BTC hold performance stats (optional)
+        btc_hold: Dictionary containing BTC hold performance stats
+        sp500_hold: Dictionary containing S&P500 hold performance stats (optional)
         
     Returns:
         Formatted table as a string
@@ -230,11 +122,18 @@ def format_stats_table(stats, btc_hold):
     
     if 'total_trades' in stats and stats['total_trades'] > 0:
         table_data.append(["Bot return", f"{fmt(stats['pct_return'])}%"])
-        table_data.append(["BTC hold return", f"{fmt(btc_hold['pct_change'])}%"])
         
-        relative_performance = stats['pct_return'] - btc_hold['pct_change']
-        performance_text = f"{fmt(relative_performance)}%"
-        table_data.append(["Bot vs BTC perf.", performance_text])
+        if btc_hold:
+            table_data.append(["BTC:", ""])
+            table_data.append(["HODL return", f"{fmt(btc_hold['pct_change'])}%"])
+            relative_btc_performance = stats['pct_return'] - btc_hold['pct_change']
+            table_data.append(["Bot vs HODL perf.", f"{fmt(relative_btc_performance)}%"])
+        
+        if sp500_hold:
+            table_data.append(["S&P500:", ""])
+            table_data.append(["HODL return", f"{fmt(sp500_hold['pct_change'])}%"])
+            relative_sp500_performance = stats['pct_return'] - sp500_hold['pct_change']
+            table_data.append(["Bot vs HODL perf.", f"{fmt(relative_sp500_performance)}%"])
     
     table = tabulate(table_data, headers=["", ""], tablefmt=tablefmt, colalign=("left", "right"))
     
@@ -266,18 +165,25 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         btc_hold_30d = calculate_btc_hold_performance(one_month_ago, btc_current_price, btc_price_history)
         btc_hold_90d = calculate_btc_hold_performance(three_months_ago, btc_current_price, btc_price_history)
         
+        sp500_price_history = get_sp500_price_history(one_month_ago)
+        sp500_current_price = get_sp500_current_price()
+        sp500_hold_1d = calculate_sp500_hold_performance(one_day_ago, sp500_current_price, sp500_price_history)
+        sp500_hold_7d = calculate_sp500_hold_performance(one_week_ago, sp500_current_price, sp500_price_history)
+        sp500_hold_30d = calculate_sp500_hold_performance(one_month_ago, sp500_current_price, sp500_price_history)
+        sp500_hold_90d = calculate_sp500_hold_performance(three_months_ago, sp500_current_price, sp500_price_history)
+        
         # Format tables using the helper function
         message_lines.append("Last day:")
-        message_lines.append(format_stats_table(stats_1d, btc_hold_1d))
+        message_lines.append(format_stats_table(stats_1d, btc_hold_1d, sp500_hold_1d))
         message_lines.append("")
         message_lines.append("Last 7 days:")
-        message_lines.append(format_stats_table(stats_7d, btc_hold_7d))
+        message_lines.append(format_stats_table(stats_7d, btc_hold_7d, sp500_hold_7d))
         message_lines.append("")
         message_lines.append("Last 30 days:")
-        message_lines.append(format_stats_table(stats_30d, btc_hold_30d))
+        message_lines.append(format_stats_table(stats_30d, btc_hold_30d, sp500_hold_30d))
         message_lines.append("")
         message_lines.append("Last 90 days:")
-        message_lines.append(format_stats_table(stats_90d, btc_hold_90d))
+        message_lines.append(format_stats_table(stats_90d, btc_hold_90d, sp500_hold_90d))
         
         # Send the response
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
