@@ -64,9 +64,9 @@ class CompositeAction(Enum):
     DISTRIBUTING = "distributing supply"
     MARKING_UP = "actively pushing prices higher"
     MARKING_DOWN = "actively pushing prices lower"
-    CONSOLIDATING = "consolidating in range"  # New
-    REVERSING = "showing reversal signals"    # New
-    NEUTRAL = "showing no clear directional activity"
+    CONSOLIDATING = "consolidating in range"
+    REVERSING = "showing reversal signals"
+    NEUTRAL = "without clear action"
     UNKNOWN = "unknown"
 
 # Constant phase categorizations to avoid duplication and ensure consistency

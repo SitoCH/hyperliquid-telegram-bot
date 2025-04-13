@@ -8,7 +8,7 @@ import base64
 from utils import exchange_enabled
 
 from technical_analysis.wyckoff_types import (
-    WyckoffState, WyckoffPhase, MarketPattern, SignificantLevelsData,
+    WyckoffState, WyckoffPhase, WyckoffSign, MarketPattern, SignificantLevelsData,
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity
 )
 
@@ -53,6 +53,28 @@ def _get_volume_description(volume_strength: float) -> str:
         return "moderate volume"
     return "light volume"
 
+def _get_sign_description(sign: WyckoffSign) -> str:
+    """
+    Get a proper readable description for a Wyckoff Sign instead of the raw enum value.
+    """
+    if sign == WyckoffSign.NONE:
+        return ""
+
+    descriptions = {
+        WyckoffSign.SELLING_CLIMAX: "selling climax",
+        WyckoffSign.AUTOMATIC_RALLY: "automatic rally",
+        WyckoffSign.SECONDARY_TEST: "secondary test",
+        WyckoffSign.LAST_POINT_OF_SUPPORT: "last point of support",
+        WyckoffSign.SIGN_OF_STRENGTH: "sign of strength",
+        WyckoffSign.BUYING_CLIMAX: "buying climax",
+        WyckoffSign.UPTHRUST: "upthrust",
+        WyckoffSign.SECONDARY_TEST_RESISTANCE: "secondary test resistance",
+        WyckoffSign.LAST_POINT_OF_RESISTANCE: "last point of resistance",
+        WyckoffSign.SIGN_OF_WEAKNESS: "sign of weakness"
+    }
+    
+    return f" | {descriptions.get(sign, sign.value.lower())}"
+
 def _calculate_weighted_volume_strength(analysis: AllTimeframesAnalysis) -> float:
     """Calculate weighted volume strength across timeframes."""
     weights = _get_timeframe_weights(analysis)
@@ -68,33 +90,44 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
     alignment_pct = f"{analysis.alignment_score * 100:.0f}%"
     confidence_pct = f"{analysis.confidence_level * 100:.0f}%"
     
-    momentum = _calculate_momentum_strength(analysis)
+    # Get phase, volume, sign and action info for short and intermediate timeframes
+    short_phase = analysis.short_term.dominant_phase.value
+    if analysis.short_term.uncertain_phase and analysis.short_term.dominant_phase != WyckoffPhase.UNKNOWN:
+        short_phase = f"~{short_phase}"
+        
+    interm_phase = analysis.intermediate.dominant_phase.value
+    if analysis.intermediate.uncertain_phase and analysis.intermediate.dominant_phase != WyckoffPhase.UNKNOWN:
+        interm_phase = f"~{interm_phase}"
+
+    short_volume = _get_volume_description(analysis.short_term.volume_strength)
+    interm_volume = _get_volume_description(analysis.intermediate.volume_strength)
+
+    short_sign = _get_sign_description(analysis.short_term.dominant_sign)
+    interm_sign = _get_sign_description(analysis.intermediate.dominant_sign)
+    
+    short_action = "" if analysis.short_term.dominant_action == CompositeAction.UNKNOWN else f" | {analysis.short_term.dominant_action.value}"
+    interm_action = "" if analysis.intermediate.dominant_action == CompositeAction.UNKNOWN else f" | {analysis.intermediate.dominant_action.value}"
+
+    emoji = _get_trend_emoji_all_timeframes(analysis)
+
+    if not interactive_analysis:
+        return (
+            f"{emoji} <b>Market Analysis:</b>\n"
+            f"Confidence: {confidence_pct}\n"
+            f"Intraday Trend (30m-1h): {interm_phase} ({interm_volume}{interm_sign}{interm_action})\n"
+            f"Immediate Signals (15m): {short_phase} ({short_volume}{short_sign}{short_action})\n"
+        )
+
     short_term_desc = _get_timeframe_trend_description(analysis.short_term)
     intermediate_desc = _get_timeframe_trend_description(analysis.intermediate)
     long_term_desc = _get_timeframe_trend_description(analysis.long_term)
     context_desc = _get_timeframe_trend_description(analysis.context)
 
-    structure = _get_full_market_structure(analysis)
-    trend = _generate_trend_description(analysis)
-    sentiment = _analyze_market_sentiment(analysis)
-    
-    emoji = _get_trend_emoji_all_timeframes(analysis)
     insight = _generate_actionable_insight_all_timeframes(analysis)
 
-    base_description = (
-        f"{emoji} <b>Market Analysis:</b>\n"
-        f"Trend: {trend}\n"
-        f"Market structure: {structure}\n"
-        f"Momentum: {momentum}\n"
-        f"Sentiment: {sentiment}\n"
-        f"Confidence: {confidence_pct}\n"
-    )
-
-    if not interactive_analysis:
-        return base_description
-
     full_description = (
-        f"{base_description}\n"
+        f"{emoji} <b>Market Analysis:</b>\n"
+        f"Confidence: {confidence_pct}\n\n"
         f"<b>🔍 Timeframes:</b>\n"
         f"Timeframe alignment: {alignment_pct}\n"
         f"Market Context (4h-8h):\n{context_desc}\n"
@@ -109,278 +142,6 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
         full_description += f"\n\n{trade_suggestion}"
 
     return full_description
-
-def _calculate_momentum_strength(analysis: AllTimeframesAnalysis) -> str:
-    """Calculate and describe momentum in plain English."""
-    direction = analysis.overall_direction
-    
-    # Use match statement for cleaner momentum description
-    if analysis.momentum_intensity > STRONG_MOMENTUM:
-        return ("strong buying pressure across all timeframes" if direction == MultiTimeframeDirection.BULLISH 
-                else "strong selling pressure across all timeframes")
-    elif analysis.momentum_intensity > MODERATE_MOMENTUM:
-        return ("steady accumulation with increasing volume" if direction == MultiTimeframeDirection.BULLISH 
-                else "sustained distribution with good volume")
-    elif analysis.momentum_intensity > WEAK_MOMENTUM:
-        return ("moderate upward pressure" if direction == MultiTimeframeDirection.BULLISH 
-                else "moderate downward pressure")
-    elif analysis.momentum_intensity > MIXED_MOMENTUM:
-        return "mixed momentum with no clear direction"
-    elif analysis.momentum_intensity > LOW_MOMENTUM:
-        return "low momentum, possible consolidation phase"
-    return "very low momentum, market likely ranging"
-
-def _analyze_market_sentiment(analysis: AllTimeframesAnalysis) -> str:
-    """Analyze overall market sentiment in clear terms."""
-    signals = []
-    
-    # Analyze funding rates
-    avg_funding = (
-        analysis.short_term.funding_sentiment +
-        analysis.intermediate.funding_sentiment +
-        analysis.long_term.funding_sentiment
-    ) / 3
-    
-    # Funding rate analysis
-    if abs(avg_funding) > 0.7:
-        if avg_funding > 0:
-            signals.append("extremely high funding rates suggesting potential long squeeze")
-        else:
-            signals.append("very negative funding rates suggesting potential short squeeze")
-    elif abs(avg_funding) > 0.4:
-        if avg_funding > 0:
-            signals.append("longs paying high premiums")
-        else:
-            signals.append("shorts paying high premiums")
-    
-    # Volatility analysis with timeframe context
-    if all(group.volatility_state == VolatilityState.HIGH 
-           for group in [analysis.short_term, analysis.intermediate]):
-        if analysis.long_term.volatility_state == VolatilityState.HIGH:
-            signals.append("extreme volatility across all timeframes")
-        else:
-            signals.append("high short-term volatility, choppy conditions")
-    
-    # Volume context
-    volume_signals = []
-    for group in [analysis.short_term, analysis.intermediate, analysis.long_term]:
-        if group.volume_strength > 0.8:
-            volume_signals.append(1)
-        elif group.volume_strength < 0.3:
-            volume_signals.append(-1)
-        else:
-            volume_signals.append(0)
-    
-    avg_volume = sum(volume_signals) / len(volume_signals)
-    if abs(avg_volume) > 0.5:
-        if avg_volume > 0:
-            signals.append("strong volume confirming moves")
-        else:
-            signals.append("low volume suggesting weak conviction")
-    
-    # Combine all signals into a readable format
-    if not signals:
-        return "neutral market conditions"
-    
-    return ", ".join(signals)
-
-def _get_full_market_structure(analysis: AllTimeframesAnalysis) -> str:
-    """Get comprehensive market structure description across four timeframes."""
-    # Extract timeframes and weights
-    phases = [
-        analysis.context.dominant_phase,      
-        analysis.long_term.dominant_phase,    
-        analysis.intermediate.dominant_phase, 
-        analysis.short_term.dominant_phase    
-    ]
-    
-    weights = [
-        analysis.context.group_weight,
-        analysis.long_term.group_weight,
-        analysis.intermediate.group_weight,
-        analysis.short_term.group_weight
-    ]
-    
-    confidences = [
-        not analysis.context.uncertain_phase,
-        not analysis.long_term.uncertain_phase,
-        not analysis.intermediate.uncertain_phase,
-        not analysis.short_term.uncertain_phase
-    ]
-    
-    # Helper function to calculate weighted phase/bias contributions
-    def calculate_weighted_contributions(items, confidence_factor=0.6):
-        results = {}
-        for item, weight, is_confident in zip(items, weights, confidences):
-            factor = 1.0 if is_confident else confidence_factor
-            if item not in results:
-                results[item] = 0.0
-            results[item] += weight * factor
-        return results
-    
-    # Calculate phase and bias weights with the helper function
-    phase_weights = calculate_weighted_contributions(phases)
-    
-    biases = [
-        analysis.context.momentum_bias,      
-        analysis.long_term.momentum_bias,    
-        analysis.intermediate.momentum_bias, 
-        analysis.short_term.momentum_bias    
-    ]
-    
-    # Use slightly higher confidence factor for biases
-    bias_weights = calculate_weighted_contributions(biases, 0.7)
-    
-    # Find dominant values
-    total_weight = sum(weights)
-    dominant_phase = max(phase_weights.keys(), key=lambda p: phase_weights[p]) if phase_weights else WyckoffPhase.UNKNOWN
-    dominant_bias = max(bias_weights.keys(), key=lambda p: bias_weights[p]) if bias_weights else MultiTimeframeDirection.NEUTRAL
-    
-    # Calculate alignments
-    phase_alignment = phase_weights.get(dominant_phase, 0) / total_weight if total_weight > 0 else 0
-    bias_alignment = bias_weights.get(dominant_bias, 0) / total_weight if total_weight > 0 else 0
-    
-    # Calculate timeframe conflicts - streamline to focus only on what's needed
-    short_term_conflict = analysis.short_term.momentum_bias != analysis.intermediate.momentum_bias
-    trend_conflict = analysis.long_term.momentum_bias != analysis.intermediate.momentum_bias
-    structural_conflict = analysis.context.momentum_bias != analysis.long_term.momentum_bias
-    
-    # Calculate volume context - use weighted approach focused on shorter timeframes
-    avg_volume_strength = (
-        analysis.short_term.volume_strength * 0.5 +
-        analysis.intermediate.volume_strength * 0.3 +
-        analysis.long_term.volume_strength * 0.2
-    )
-    
-    volume_context = ""
-    if avg_volume_strength > STRONG_VOLUME_THRESHOLD:
-        volume_context = " with strong volume"
-    elif avg_volume_strength < MODERATE_VOLUME_THRESHOLD:
-        volume_context = " on thin volume"
-    
-    # Dynamically adjust alignment threshold based on volatility
-    volatility_adjustment = 0.1 if analysis.short_term.volatility_state == VolatilityState.HIGH else 0
-    alignment_threshold = 0.7 - volatility_adjustment
-    
-    # Check conditions in order of priority for crypto trading
-    
-    # 1. High volatility conditions - most important for intraday
-    if (analysis.short_term.volatility_state == VolatilityState.HIGH and 
-        analysis.intermediate.volatility_state == VolatilityState.HIGH and
-        analysis.short_term.volume_strength > STRONG_VOLUME_THRESHOLD):
-        return f"volatile {analysis.short_term.dominant_phase.value} structure with {analysis.short_term.momentum_bias.value} momentum{volume_context}"
-    
-    # 2. Potential breakout - critical for trading opportunities
-    short_term_breakout = (
-        analysis.short_term.momentum_bias != MultiTimeframeDirection.NEUTRAL and
-        analysis.short_term.volume_strength > STRONG_VOLUME_THRESHOLD and
-        not analysis.short_term.uncertain_phase
-    )
-    
-    if short_term_breakout and short_term_conflict:
-        return f"{analysis.intermediate.dominant_phase.value} structure with potential {analysis.short_term.momentum_bias.value} breakout{volume_context}"
-    
-    # 3. Strong alignment - clear market structure
-    if phase_alignment > alignment_threshold and bias_alignment > alignment_threshold:
-        confidence = "strong" if phase_alignment > 0.8 else "clear"
-        return f"{confidence} {dominant_phase.value} structure with {dominant_bias.value} momentum{volume_context}"
-    
-    # 4. Multiple timeframe conflicts - transition phase
-    if short_term_conflict and trend_conflict:
-        if analysis.short_term.volatility_state == VolatilityState.HIGH:
-            return f"choppy market with mixed signals across timeframes{volume_context}"
-        return f"mixed signals across timeframes - transition phase{volume_context}"
-    
-    # 5. Major structural conflict - potential reversal 
-    if structural_conflict:
-        confidence = "" if analysis.short_term.uncertain_phase else "confirmed "
-        return f"possible trend reversal - {confidence}{analysis.short_term.dominant_phase.value} forming{volume_context}"
-    
-    # 6. Short term deviation - important for intraday 
-    if short_term_conflict:
-        st_bias = analysis.short_term.momentum_bias.value
-        lt_phase = analysis.long_term.dominant_phase.value
-        return f"{lt_phase} structure with {st_bias} short-term move{volume_context}"
-    
-    # 7. Default case - balanced description
-    conf_level = "developing" if phase_alignment < 0.6 else "established"
-    momentum_desc = dominant_bias.value if bias_alignment > 0.6 else "mixed"
-    return f"{conf_level} {dominant_phase.value} structure with {momentum_desc} momentum{volume_context}"
-
-def _generate_trend_description(analysis: AllTimeframesAnalysis) -> str:
-    """Generate a coherent trend description combining strength and context."""
-    # Get the trend strength
-    strength = _determine_trend_strength(analysis)
-    
-    # Handle neutral direction
-    if analysis.overall_direction == MultiTimeframeDirection.NEUTRAL:
-        if analysis.momentum_intensity < LOW_MOMENTUM:
-            return f"{strength} ranging market with minimal directional movement"
-        else:
-            return f"{strength} consolidation phase"
-    
-    # Get direction string for bullish/bearish
-    direction = analysis.overall_direction.value + " "
-    
-    # Calculate volume and conviction
-    volume_strength = _calculate_weighted_volume_strength(analysis)
-    
-    # Combine everything into a coherent description
-    volume_desc = ""
-    if volume_strength > STRONG_VOLUME_THRESHOLD:
-        volume_desc = "with high volume"
-    elif volume_strength < MODERATE_VOLUME_THRESHOLD:
-        volume_desc = "with low volume"
-    
-    conviction = ""
-    if analysis.confidence_level > HIGH_CONFIDENCE_THRESHOLD:
-        conviction = "high-conviction "
-    elif analysis.confidence_level > MODERATE_CONFIDENCE_THRESHOLD:
-        conviction = "established "
-    else:
-        conviction = "developing "
-    
-    return f"{strength} {conviction}{direction}trend {volume_desc}".strip()
-
-def _determine_market_context(analysis: AllTimeframesAnalysis) -> str:
-    """Determine overall market context considering three timeframes."""
-    volume_strength = _calculate_weighted_volume_strength(analysis)
-    
-    if analysis.overall_direction == MultiTimeframeDirection.NEUTRAL:
-        if volume_strength > STRONG_VOLUME_THRESHOLD:
-            return "high volume ranging market"
-        return "low volume consolidation"
-
-    context = analysis.overall_direction.value
-    if volume_strength > STRONG_VOLUME_THRESHOLD and analysis.confidence_level > HIGH_CONFIDENCE_THRESHOLD:
-        return f"high-conviction {context} trend"
-    elif volume_strength > MODERATE_VOLUME_THRESHOLD and analysis.confidence_level > MODERATE_CONFIDENCE_THRESHOLD:
-        return f"established {context} trend"
-    
-    return f"developing {context} bias"
-
-def _determine_trend_strength(analysis: AllTimeframesAnalysis) -> str:
-    """Determine overall trend strength considering three timeframes."""
-    # Calculate weighted alignment
-    values = [
-        analysis.short_term.internal_alignment,
-        analysis.intermediate.internal_alignment,
-        analysis.long_term.internal_alignment
-    ]
-    weights = _get_timeframe_weights(analysis)
-    
-    weighted_alignment = _weighted_average(values, weights)
-        
-    if weighted_alignment > 0.85:
-        return "extremely strong"
-    elif weighted_alignment > 0.7:
-        return "very strong"
-    elif weighted_alignment > 0.5:
-        return "strong"
-    elif weighted_alignment > 0.3:
-        return "moderate"
-    
-    return "weak"
 
 def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     """Get appropriate trend emoji based on overall analysis state."""
@@ -435,8 +196,7 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
             analysis.short_term.volume_strength * 0.6 +  # Higher weight for short timeframe volume
             analysis.intermediate.volume_strength * 0.4  # Lower weight for intermediate timeframe
         )
-        
-        # Determine momentum level using the same thresholds as _calculate_momentum_strength
+
         if analysis.momentum_intensity > STRONG_MOMENTUM:
             momentum_desc = "strong"
             position_advice = "Consider aggressive intraday positions with proper risk management."
