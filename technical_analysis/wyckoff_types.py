@@ -281,14 +281,14 @@ _TIMEFRAME_SETTINGS = {
     # SHORT_TERM_TIMEFRAMES (25% total) - Increased from 22% to account for missing 5m
     Timeframe.MINUTES_15: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.25,  # Increased to account for removed 5m timeframe
+        phase_weight=0.20,  # Reduced for less noise
         description="15min tactical entries",
         chart_image_time_delta=pd.Timedelta(hours=12),
         
         # --- Indicator Settings ---
         ema_length=14,  # Increased for more reliable signal 
         atr_settings=(18, 10, 20, 8, 10),  # Increased for stability
-        supertrend_multiplier=2.2,  # Increased for better reliability
+        supertrend_multiplier=2.0,  # Adjusted for more sensitivity
         base_multiplier=0.85,  # Increased for better robustness
         momentum_multiplier=1.8,  # Increased for fewer false signals
         
@@ -334,7 +334,7 @@ _TIMEFRAME_SETTINGS = {
         spring_upthrust_window=6, 
         support_resistance_lookback=50,  # Increased for more significant levels
         swing_lookback=5,         # Balanced lookback for swing detection
-        effort_lookback=5,        # Standard lookback for effort-result analysis
+        effort_lookback=6,        # Adjusted for better effort-result analysis
         min_move_multiplier=0.85,  # Increased for more meaningful moves
         
         # --- Adaptive Threshold Factors ---
@@ -349,7 +349,7 @@ _TIMEFRAME_SETTINGS = {
     ),
     Timeframe.HOUR_1: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.30,  # Increased to emphasize hourly decision making
+        phase_weight=0.35,  # Increased to emphasize hourly decision making
         description="1h primary daily trend",
         chart_image_time_delta=pd.Timedelta(hours=48),
         
@@ -367,7 +367,7 @@ _TIMEFRAME_SETTINGS = {
         spring_upthrust_window=6,  # Increased for reliability
         support_resistance_lookback=55,  # Increased for stronger level detection
         swing_lookback=6,         # Slightly longer lookback to identify more significant swings
-        effort_lookback=7,        # Longer lookback for consistent effort-result analysis
+        effort_lookback=8,        # Adjusted for better effort-result analysis
         min_move_multiplier=1.0,  # Standardized for baseline
         
         # --- Adaptive Threshold Factors ---
@@ -376,7 +376,7 @@ _TIMEFRAME_SETTINGS = {
         breakout_factor=1.0,  # Standardized baseline
         significant_levels_factor=1.0,  # Standardized baseline
         atr_multiplier=0.28,  # Increased for wider zones
-        volume_weighted_efficiency=0.26,  # Increased for stronger volume impact
+        volume_weighted_efficiency=0.30,  # Increased for more meaningful volume impact
         high_threshold=1.0,  # Standard baseline
         low_threshold=1.0  # Symmetric with high
     ),
