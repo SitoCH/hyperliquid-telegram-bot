@@ -217,6 +217,19 @@ class TimeframeSettings:
     volume_weighted_efficiency: float = 0.2  # Efficiency multiplier for volume impact on price movement
     high_threshold: float = 1.0     # Upper threshold for efficiency calculation
     low_threshold: float = 1.0      # Lower threshold for efficiency calculation
+    
+    # --- Wyckoff Sign Detection Parameters ---
+    wyckoff_volatility_factor: float = 1.0  # Volatility factor for sign detection
+    wyckoff_trend_lookback: int = 5         # Lookback period for trend reversal detection
+    wyckoff_st_tolerance_low: float = 0.996  # Lower tolerance for secondary test detection
+    wyckoff_st_tolerance_high: float = 1.012 # Upper tolerance for secondary test detection
+    wyckoff_lps_volume_threshold: float = 0.3 # Volume threshold for LPS/LPSY detection
+    wyckoff_lps_price_multiplier: float = 0.7 # Price multiplier for LPS/LPSY detection
+    wyckoff_sos_multiplier: float = 1.2      # Multiplier for SOS/SOW detection
+    wyckoff_ut_multiplier: float = 0.4       # Multiplier for upthrust detection
+    wyckoff_sc_multiplier: float = 1.2       # Multiplier for selling climax detection
+    wyckoff_ar_multiplier: float = 1.1       # Multiplier for automatic rally detection
+    wyckoff_confirmation_threshold: float = 0.35 # Base threshold for trend/volume confirmation
 
     # Properties to provide derived values and backward compatibility
     @property
@@ -278,7 +291,6 @@ class Timeframe(Enum):
 
 # Optimized Timeframe Settings for Intraday Crypto Trading with Hourly Analysis
 _TIMEFRAME_SETTINGS = {
-    # SHORT_TERM_TIMEFRAMES (25% total) - Increased from 22% to account for missing 5m
     Timeframe.MINUTES_15: TimeframeSettings(
         # --- Core Analysis Settings ---
         phase_weight=0.20,  # Reduced for less noise
@@ -310,10 +322,22 @@ _TIMEFRAME_SETTINGS = {
         atr_multiplier=0.28,  # Increased for wider support/resistance zones
         volume_weighted_efficiency=0.25,  # Increased for stronger volume impact analysis
         high_threshold=1.0,  # Balanced threshold
-        low_threshold=1.0  # Symmetric threshold
+        low_threshold=1.0,  # Symmetric threshold
+
+        # --- Wyckoff Sign Detection Parameters ---
+        wyckoff_volatility_factor=0.80,  # More sensitive for short-term signs
+        wyckoff_trend_lookback=4,        # Shorter lookback for faster signal detection
+        wyckoff_st_tolerance_low=0.993,  # Wider tolerance for detecting tests
+        wyckoff_st_tolerance_high=1.018, # Wider tolerance for detecting tests
+        wyckoff_lps_volume_threshold=0.25, # Lower threshold for faster signals
+        wyckoff_lps_price_multiplier=0.65, # More sensitive
+        wyckoff_sos_multiplier=1.15,     # More sensitive for SOS/SOW
+        wyckoff_ut_multiplier=0.35,      # More sensitive for upthrusts
+        wyckoff_sc_multiplier=1.1,       # More sensitive for climax
+        wyckoff_ar_multiplier=1.0,       # More sensitive for auto rally
+        wyckoff_confirmation_threshold=0.32 # Lower threshold for more frequent signals
     ),
     
-    # INTERMEDIATE_TIMEFRAMES (55% total) - Increased from 52% to emphasize hourly decision making
     Timeframe.MINUTES_30: TimeframeSettings(
         # --- Core Analysis Settings ---
         phase_weight=0.25,  # Increased slightly
@@ -345,8 +369,22 @@ _TIMEFRAME_SETTINGS = {
         atr_multiplier=0.26,  # Increased slightly
         volume_weighted_efficiency=0.28,  # Increased for stronger volume impact
         high_threshold=0.95,  # Slightly reduced for balance
-        low_threshold=0.95  # Symmetric for balance
+        low_threshold=0.95,  # Symmetric for balance
+
+        # --- Wyckoff Sign Detection Parameters ---
+        wyckoff_volatility_factor=0.90,  # Balance between sensitivity and reliability
+        wyckoff_trend_lookback=5,
+        wyckoff_st_tolerance_low=0.995,  # Moderate tolerance
+        wyckoff_st_tolerance_high=1.015,
+        wyckoff_lps_volume_threshold=0.28,
+        wyckoff_lps_price_multiplier=0.68,
+        wyckoff_sos_multiplier=1.18,
+        wyckoff_ut_multiplier=0.38,
+        wyckoff_sc_multiplier=1.15,
+        wyckoff_ar_multiplier=1.05,
+        wyckoff_confirmation_threshold=0.33
     ),
+    
     Timeframe.HOUR_1: TimeframeSettings(
         # --- Core Analysis Settings ---
         phase_weight=0.35,  # Increased to emphasize hourly decision making
@@ -378,10 +416,22 @@ _TIMEFRAME_SETTINGS = {
         atr_multiplier=0.28,  # Increased for wider zones
         volume_weighted_efficiency=0.30,  # Increased for more meaningful volume impact
         high_threshold=1.0,  # Standard baseline
-        low_threshold=1.0  # Symmetric with high
+        low_threshold=1.0,  # Symmetric with high
+
+        # --- Wyckoff Sign Detection Parameters ---
+        wyckoff_volatility_factor=1.0,   # Base reference value - primary decision timeframe
+        wyckoff_trend_lookback=5,
+        wyckoff_st_tolerance_low=0.996,  # More precise tolerance for reliability
+        wyckoff_st_tolerance_high=1.012,
+        wyckoff_lps_volume_threshold=0.30,
+        wyckoff_lps_price_multiplier=0.7,
+        wyckoff_sos_multiplier=1.15,     # Slightly more sensitive for primary decision timeframe
+        wyckoff_ut_multiplier=0.4,
+        wyckoff_sc_multiplier=1.2,
+        wyckoff_ar_multiplier=1.1,
+        wyckoff_confirmation_threshold=0.32 # Slightly lower for primary decision timeframe
     ),
     
-    # LONG_TERM_TIMEFRAMES (10% total) - Slightly reduced from 12%
     Timeframe.HOURS_2: TimeframeSettings(
         # --- Core Analysis Settings ---
         phase_weight=0.10,  # Adjusted
@@ -413,10 +463,22 @@ _TIMEFRAME_SETTINGS = {
         atr_multiplier=0.3,  # Increased for wider zones
         volume_weighted_efficiency=0.2,  # Increased for stronger volume impact
         high_threshold=1.1,  # Increased for clearer thresholds
-        low_threshold=0.9  # Decreased for clearer thresholds
+        low_threshold=0.9,  # Decreased for clearer thresholds
+
+        # --- Wyckoff Sign Detection Parameters ---
+        wyckoff_volatility_factor=1.1,   # Higher to filter noise
+        wyckoff_trend_lookback=6,        # Longer lookback
+        wyckoff_st_tolerance_low=0.997,  # Narrower tolerance for stronger signals
+        wyckoff_st_tolerance_high=1.010,
+        wyckoff_lps_volume_threshold=0.32,
+        wyckoff_lps_price_multiplier=0.75,
+        wyckoff_sos_multiplier=1.25,
+        wyckoff_ut_multiplier=0.45,
+        wyckoff_sc_multiplier=1.25,
+        wyckoff_ar_multiplier=1.15,
+        wyckoff_confirmation_threshold=0.36
     ),
     
-    # CONTEXT_TIMEFRAMES (10% total) - Reduced from 12% to balance the weightings
     Timeframe.HOURS_4: TimeframeSettings(
         # --- Core Analysis Settings ---
         phase_weight=0.07,  # Adjusted
@@ -448,8 +510,22 @@ _TIMEFRAME_SETTINGS = {
         atr_multiplier=0.32,  # Increased for wider zones
         volume_weighted_efficiency=0.15,  # Adjusted for balance
         high_threshold=1.2,  # Increased for clearer thresholds
-        low_threshold=0.8  # Decreased for clearer thresholds
+        low_threshold=0.8,  # Decreased for clearer thresholds
+
+        # --- Wyckoff Sign Detection Parameters ---
+        wyckoff_volatility_factor=1.2,   # Higher to filter more noise
+        wyckoff_trend_lookback=7,        # Longer lookback for context
+        wyckoff_st_tolerance_low=0.998,  # Narrower tolerance for stronger signals
+        wyckoff_st_tolerance_high=1.008,
+        wyckoff_lps_volume_threshold=0.35,
+        wyckoff_lps_price_multiplier=0.8,
+        wyckoff_sos_multiplier=1.3,
+        wyckoff_ut_multiplier=0.5,
+        wyckoff_sc_multiplier=1.3,
+        wyckoff_ar_multiplier=1.2,
+        wyckoff_confirmation_threshold=0.38
     ),
+    
     Timeframe.HOURS_8: TimeframeSettings(
         # --- Core Analysis Settings ---
         phase_weight=0.03,  # Adjusted
@@ -481,7 +557,20 @@ _TIMEFRAME_SETTINGS = {
         atr_multiplier=0.35,  # Increased for wider zones
         volume_weighted_efficiency=0.1,  # Adjusted for balance
         high_threshold=1.3,  # Increased for clearer thresholds
-        low_threshold=0.7  # Decreased for clearer thresholds
+        low_threshold=0.7,  # Decreased for clearer thresholds
+
+        # --- Wyckoff Sign Detection Parameters ---
+        wyckoff_volatility_factor=1.3,   # Highest to filter most noise
+        wyckoff_trend_lookback=8,        # Longest lookback for market regime
+        wyckoff_st_tolerance_low=0.999,  # Tightest tolerance for strongest signals only
+        wyckoff_st_tolerance_high=1.005,
+        wyckoff_lps_volume_threshold=0.38,
+        wyckoff_lps_price_multiplier=0.85,
+        wyckoff_sos_multiplier=1.4,
+        wyckoff_ut_multiplier=0.55,
+        wyckoff_sc_multiplier=1.4,
+        wyckoff_ar_multiplier=1.25,
+        wyckoff_confirmation_threshold=0.4
     )
 }
 
