@@ -293,182 +293,229 @@ class Timeframe(Enum):
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.20,  # Reduced for less noise
+        phase_weight=0.20,  # Balanced for responsive tactical signals
         description="15min tactical entries",
         chart_image_time_delta=pd.Timedelta(hours=12),
         
         # --- Indicator Settings ---
-        ema_length=14,  # Increased for more reliable signal 
-        atr_settings=(18, 10, 20, 8, 10),  # Increased for stability
-        supertrend_multiplier=2.0,  # Adjusted for more sensitivity
-        base_multiplier=0.85,  # Increased for better robustness
-        momentum_multiplier=1.8,  # Increased for fewer false signals
+        ema_length=10,  # Reduced for faster signal generation
+        atr_settings=(14, 8, 18, 6, 8),  # Reduced for quicker sensitivity to volatility
+        supertrend_multiplier=1.8,  # Decreased for earlier trend identification
+        base_multiplier=0.75,  # Decreased for faster signal sensitivity
+        momentum_multiplier=1.5,  # Decreased for quicker momentum detection
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=20,  # Increased for smoother volume analysis
+        volume_ma_window=14,  # Reduced for more responsive volume analysis
         
         # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=6,  # Increased for more reliable pattern detection
-        support_resistance_lookback=42,  # Increased for more significant levels
-        swing_lookback=4,         # Shorter lookback for more responsive swing detection
-        effort_lookback=4,        # Shorter lookback for tactical effort-result analysis
-        min_move_multiplier=0.85,  # Increased for more meaningful moves
+        spring_upthrust_window=4,  # Reduced for earlier pattern detection
+        support_resistance_lookback=35,  # Reduced for more immediate levels
+        swing_lookback=3,         # Reduced for faster swing detection
+        effort_lookback=3,        # Reduced for tactical short-term effort-result
+        min_move_multiplier=0.7,  # Reduced to capture smaller moves
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=1.0,  # Increased for fewer false springs
-        liquidation_factor=1.1,  # Increased to filter minor liquidations
-        breakout_factor=1.05,  # Increased for more significant breakouts
-        significant_levels_factor=1.0,  # Increased for stronger level detection
-        atr_multiplier=0.28,  # Increased for wider support/resistance zones
-        volume_weighted_efficiency=0.25,  # Increased for stronger volume impact analysis
-        high_threshold=1.0,  # Balanced threshold
-        low_threshold=1.0,  # Symmetric threshold
+        spring_factor=0.85,  # Reduced for earlier spring detection
+        liquidation_factor=0.9,  # Reduced to catch liquidation moves earlier
+        breakout_factor=0.9,  # Reduced for earlier breakout signals
+        significant_levels_factor=0.85,  # Reduced for more immediate level detection
+        atr_multiplier=0.25,  # Reduced for tighter zones
+        volume_weighted_efficiency=0.3,  # Increased for stronger volume impact
+        high_threshold=0.85,  # Reduced for earlier threshold triggers
+        low_threshold=0.85,  # Symmetric reduced threshold
 
         # --- Wyckoff Sign Detection Parameters ---
-        wyckoff_volatility_factor=0.80,  # More sensitive for short-term signs
-        wyckoff_trend_lookback=4,        # Shorter lookback for faster signal detection
-        wyckoff_st_tolerance_low=0.993,  # Wider tolerance for detecting tests
-        wyckoff_st_tolerance_high=1.018, # Wider tolerance for detecting tests
-        wyckoff_lps_volume_threshold=0.25, # Lower threshold for faster signals
-        wyckoff_lps_price_multiplier=0.65, # More sensitive
-        wyckoff_sos_multiplier=1.15,     # More sensitive for SOS/SOW
-        wyckoff_ut_multiplier=0.35,      # More sensitive for upthrusts
-        wyckoff_sc_multiplier=1.1,       # More sensitive for climax
-        wyckoff_ar_multiplier=1.0,       # More sensitive for auto rally
-        wyckoff_confirmation_threshold=0.32 # Lower threshold for more frequent signals
+        wyckoff_volatility_factor=0.7,  # Reduced for earlier sign detection
+        wyckoff_trend_lookback=3,        # Reduced for faster signal detection
+        wyckoff_st_tolerance_low=0.990,  # Wider tolerance for detecting tests earlier
+        wyckoff_st_tolerance_high=1.020, # Wider tolerance for detecting tests earlier
+        wyckoff_lps_volume_threshold=0.22, # Lower threshold for faster signals
+        wyckoff_lps_price_multiplier=0.6, # More sensitive
+        wyckoff_sos_multiplier=1.05,     # More sensitive for SOS/SOW
+        wyckoff_ut_multiplier=0.32,      # More sensitive for upthrusts
+        wyckoff_sc_multiplier=1.05,      # More sensitive for climax
+        wyckoff_ar_multiplier=0.95,      # More sensitive for auto rally
+        wyckoff_confirmation_threshold=0.28 # Lower threshold for earlier signals
     ),
     
     Timeframe.MINUTES_30: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.25,  # Increased slightly
+        phase_weight=0.25,  # Balanced for intermediate signals
         description="30min intraday swings",
         chart_image_time_delta=pd.Timedelta(hours=24),
         
         # --- Indicator Settings ---
-        ema_length=16,  # Increased for more reliable signals
-        atr_settings=(20, 12, 24, 8, 10),  # Increased for stability
-        supertrend_multiplier=2.2,  # Increased for better reliability
-        base_multiplier=0.9,  # Increased for robustness
-        momentum_multiplier=1.6,  # Increased for fewer false signals
+        ema_length=12,  # Reduced for faster signals
+        atr_settings=(16, 10, 20, 7, 9),  # Reduced for quicker adaptation
+        supertrend_multiplier=2.0,  # Reduced for earlier trend identification 
+        base_multiplier=0.8,  # Reduced for faster signal triggering
+        momentum_multiplier=1.4,  # Reduced for quicker momentum signals
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=20,  # Increased for smoother analysis
+        volume_ma_window=16,  # Reduced for more responsive analysis
         
         # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=6, 
-        support_resistance_lookback=50,  # Increased for more significant levels
-        swing_lookback=5,         # Balanced lookback for swing detection
-        effort_lookback=6,        # Adjusted for better effort-result analysis
-        min_move_multiplier=0.85,  # Increased for more meaningful moves
+        spring_upthrust_window=5,  # Slightly reduced for earlier detection
+        support_resistance_lookback=42,  # Reduced for more relevant levels
+        swing_lookback=4,         # Reduced for more responsive swing detection
+        effort_lookback=5,        # Slightly reduced for better effort-result
+        min_move_multiplier=0.75,  # Reduced to capture smaller meaningful moves
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=1.0,  # Increased for fewer false signals
-        liquidation_factor=1.05,  # Increased for better detection
-        breakout_factor=1.0,  # Increased for balanced breakout detection
-        significant_levels_factor=1.0,  # Increased for stronger levels
-        atr_multiplier=0.26,  # Increased slightly
-        volume_weighted_efficiency=0.28,  # Increased for stronger volume impact
-        high_threshold=0.95,  # Slightly reduced for balance
-        low_threshold=0.95,  # Symmetric for balance
+        spring_factor=0.9,  # Reduced for earlier spring detection
+        liquidation_factor=0.95,  # Reduced for earlier liquidation signals
+        breakout_factor=0.9,  # Reduced for earlier breakout detection
+        significant_levels_factor=0.9,  # Reduced for more immediate levels
+        atr_multiplier=0.24,  # Reduced for tighter zones
+        volume_weighted_efficiency=0.32,  # Increased for stronger volume impact
+        high_threshold=0.9,  # Reduced for earlier threshold triggers
+        low_threshold=0.9,  # Symmetric threshold
 
         # --- Wyckoff Sign Detection Parameters ---
-        wyckoff_volatility_factor=0.90,  # Balance between sensitivity and reliability
-        wyckoff_trend_lookback=5,
-        wyckoff_st_tolerance_low=0.995,  # Moderate tolerance
-        wyckoff_st_tolerance_high=1.015,
-        wyckoff_lps_volume_threshold=0.28,
-        wyckoff_lps_price_multiplier=0.68,
-        wyckoff_sos_multiplier=1.18,
-        wyckoff_ut_multiplier=0.38,
-        wyckoff_sc_multiplier=1.15,
-        wyckoff_ar_multiplier=1.05,
-        wyckoff_confirmation_threshold=0.33
+        wyckoff_volatility_factor=0.85,  # Reduced for earlier detection
+        wyckoff_trend_lookback=4,      
+        wyckoff_st_tolerance_low=0.992,  # Wider tolerance
+        wyckoff_st_tolerance_high=1.018,
+        wyckoff_lps_volume_threshold=0.25,
+        wyckoff_lps_price_multiplier=0.65,
+        wyckoff_sos_multiplier=1.12,
+        wyckoff_ut_multiplier=0.35,
+        wyckoff_sc_multiplier=1.1,
+        wyckoff_ar_multiplier=1.0,
+        wyckoff_confirmation_threshold=0.30
     ),
     
     Timeframe.HOUR_1: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.35,  # Increased to emphasize hourly decision making
+        phase_weight=0.30,  # Primary decision timeframe
         description="1h primary daily trend",
         chart_image_time_delta=pd.Timedelta(hours=48),
         
         # --- Indicator Settings ---
-        ema_length=20,  # Increased for more reliable signals
-        atr_settings=(24, 14, 28, 10, 12),  # Increased for stability
-        supertrend_multiplier=2.2,  # Increased for better reliability
-        base_multiplier=1.0,  # Increased for robustness
-        momentum_multiplier=1.7,  # Increased for fewer false signals
+        ema_length=14,  # Reduced for quicker trend identification
+        atr_settings=(18, 12, 24, 8, 10),  # Reduced for faster adaptation
+        supertrend_multiplier=2.0,  # Reduced for earlier trend changes
+        base_multiplier=0.85,  # Reduced for more sensitive base thresholds
+        momentum_multiplier=1.5,  # Reduced for quicker momentum detection
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=20,  # Standardized for better consistency
+        volume_ma_window=18,  # Reduced for more responsive volume signals
         
         # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=6,  # Increased for reliability
-        support_resistance_lookback=55,  # Increased for stronger level detection
-        swing_lookback=6,         # Slightly longer lookback to identify more significant swings
-        effort_lookback=8,        # Adjusted for better effort-result analysis
-        min_move_multiplier=1.0,  # Standardized for baseline
+        spring_upthrust_window=5,  # Reduced for earlier pattern detection
+        support_resistance_lookback=48,  # Reduced for more relevant levels
+        swing_lookback=5,         # Reduced for quicker swing identification
+        effort_lookback=6,        # Reduced for better effort-result
+        min_move_multiplier=0.85,  # Reduced to capture meaningful moves earlier
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=1.0,  # Standardized baseline
-        liquidation_factor=1.0,  # Standardized baseline
-        breakout_factor=1.0,  # Standardized baseline
-        significant_levels_factor=1.0,  # Standardized baseline
-        atr_multiplier=0.28,  # Increased for wider zones
-        volume_weighted_efficiency=0.30,  # Increased for more meaningful volume impact
-        high_threshold=1.0,  # Standard baseline
-        low_threshold=1.0,  # Symmetric with high
+        spring_factor=0.9,  # Reduced for earlier detection
+        liquidation_factor=0.9,  # Reduced for earlier detection
+        breakout_factor=0.9,  # Reduced for earlier breakout detection
+        significant_levels_factor=0.9,  # Reduced for faster level adaptation
+        atr_multiplier=0.25,  # Reduced for tigher zones
+        volume_weighted_efficiency=0.35,  # Increased for stronger volume impact
+        high_threshold=0.9,  # Reduced for earlier threshold triggers
+        low_threshold=0.9,  # Symmetric threshold
 
         # --- Wyckoff Sign Detection Parameters ---
-        wyckoff_volatility_factor=1.0,   # Base reference value - primary decision timeframe
-        wyckoff_trend_lookback=5,
-        wyckoff_st_tolerance_low=0.996,  # More precise tolerance for reliability
-        wyckoff_st_tolerance_high=1.012,
-        wyckoff_lps_volume_threshold=0.30,
-        wyckoff_lps_price_multiplier=0.7,
-        wyckoff_sos_multiplier=1.15,     # Slightly more sensitive for primary decision timeframe
-        wyckoff_ut_multiplier=0.4,
-        wyckoff_sc_multiplier=1.2,
-        wyckoff_ar_multiplier=1.1,
-        wyckoff_confirmation_threshold=0.32 # Slightly lower for primary decision timeframe
+        wyckoff_volatility_factor=0.9,   # Reduced for earlier sign detection
+        wyckoff_trend_lookback=4,        # Reduced for faster trend assessment
+        wyckoff_st_tolerance_low=0.994,  # Slightly wider tolerance
+        wyckoff_st_tolerance_high=1.015,
+        wyckoff_lps_volume_threshold=0.28,
+        wyckoff_lps_price_multiplier=0.65,
+        wyckoff_sos_multiplier=1.1,     
+        wyckoff_ut_multiplier=0.37,
+        wyckoff_sc_multiplier=1.15,
+        wyckoff_ar_multiplier=1.05,
+        wyckoff_confirmation_threshold=0.30 
     ),
     
     Timeframe.HOURS_2: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.10,  # Adjusted
+        phase_weight=0.10,  # Daily bias context
         description="2h daily bias",
         chart_image_time_delta=pd.Timedelta(hours=72),
         
         # --- Indicator Settings ---
-        ema_length=24,  # Increased for stability
-        atr_settings=(26, 16, 30, 10, 14),  # Increased for stability
-        supertrend_multiplier=2.2,  # Adjusted for consistency
-        base_multiplier=1.1,  # Increased for robustness
-        momentum_multiplier=1.7,  # Increased for fewer false signals
+        ema_length=18,  # Reduced for faster trend identification
+        atr_settings=(22, 14, 26, 9, 12),  # Reduced for faster adaptation
+        supertrend_multiplier=2.0,  # Reduced for earlier trend identification 
+        base_multiplier=0.95,  # Reduced for more sensitive signals
+        momentum_multiplier=1.5,  # Reduced for better momentum detection
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=22,  # Increased for smoother analysis
+        volume_ma_window=18,  # Reduced for more responsive analysis
         
         # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=7,  # Increased for reliability
-        support_resistance_lookback=60,  # Increased for stronger level detection
-        swing_lookback=8,         # Longer lookback to identify meaningful swing structures
-        effort_lookback=8,        # Longer lookback for trend-based effort-result analysis
-        min_move_multiplier=1.2,  # Increased for more significant moves
+        spring_upthrust_window=6,  # Reduced for earlier pattern detection
+        support_resistance_lookback=52,  # Reduced for more relevant levels
+        swing_lookback=7,         # Reduced for faster swing structure recognition
+        effort_lookback=7,        # Reduced for better trend-based effort-result analysis
+        min_move_multiplier=1.0,  # Reduced for more meaningful moves
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=1.1,  # Increased for fewer false signals
-        liquidation_factor=1.05,  # Increased for better detection
-        breakout_factor=1.15,  # Increased for stronger breakouts
-        significant_levels_factor=1.2,  # Increased for stronger levels
-        atr_multiplier=0.3,  # Increased for wider zones
-        volume_weighted_efficiency=0.2,  # Increased for stronger volume impact
-        high_threshold=1.1,  # Increased for clearer thresholds
-        low_threshold=0.9,  # Decreased for clearer thresholds
+        spring_factor=0.95,  # Reduced for earlier detection
+        liquidation_factor=0.95,  # Reduced for earlier detection
+        breakout_factor=1.0,  # Maintained for balance with shorter timeframes
+        significant_levels_factor=1.0,  # Maintained for balance
+        atr_multiplier=0.27,  # Reduced for tighter zones
+        volume_weighted_efficiency=0.25,  # Increased for better efficiency
+        high_threshold=1.0,  # Maintained as baseline
+        low_threshold=0.9,  # Slightly reduced for better sensitivity
 
         # --- Wyckoff Sign Detection Parameters ---
-        wyckoff_volatility_factor=1.1,   # Higher to filter noise
-        wyckoff_trend_lookback=6,        # Longer lookback
-        wyckoff_st_tolerance_low=0.997,  # Narrower tolerance for stronger signals
+        wyckoff_volatility_factor=1.0,   # Maintained as baseline
+        wyckoff_trend_lookback=5,       
+        wyckoff_st_tolerance_low=0.995,  # Slightly wider for better detection
+        wyckoff_st_tolerance_high=1.012,
+        wyckoff_lps_volume_threshold=0.30,
+        wyckoff_lps_price_multiplier=0.7,
+        wyckoff_sos_multiplier=1.2,
+        wyckoff_ut_multiplier=0.42,
+        wyckoff_sc_multiplier=1.2,
+        wyckoff_ar_multiplier=1.1,
+        wyckoff_confirmation_threshold=0.33
+    ),
+    
+    Timeframe.HOURS_4: TimeframeSettings(
+        # --- Core Analysis Settings ---
+        phase_weight=0.10,  # Context timeframe
+        description="4h daily context",
+        chart_image_time_delta=pd.Timedelta(days=4),
+        
+        # --- Indicator Settings ---
+        ema_length=24,  # Reduced while maintaining stability
+        atr_settings=(26, 16, 32, 12, 16),  # Reduced for better adaptation
+        supertrend_multiplier=2.2,  # Reduced while maintaining reliability
+        base_multiplier=1.0,  # Reduced for better balance
+        momentum_multiplier=1.6,  # Reduced for better momentum signals
+        
+        # --- Volume Analysis Settings ---
+        volume_ma_window=22,  # Reduced for more responsive analysis
+        
+        # --- Support/Resistance & Pattern Detection ---
+        spring_upthrust_window=7,  # Reduced while maintaining reliability
+        support_resistance_lookback=65,  # Reduced for more relevant levels
+        swing_lookback=8,        # Reduced for better market structure points
+        effort_lookback=8,       # Reduced for better effort-result patterns
+        min_move_multiplier=1.2,  # Maintained for significant moves
+        
+        # --- Adaptive Threshold Factors ---
+        spring_factor=1.1,  # Maintained for reliability
+        liquidation_factor=1.0,  # Reduced for better detection
+        breakout_factor=1.1,  # Reduced for earlier breakouts
+        significant_levels_factor=1.3,  # Reduced but still significant
+        atr_multiplier=0.29,  # Slightly reduced
+        volume_weighted_efficiency=0.18,  # Slightly increased
+        high_threshold=1.1,  # Maintained for reliable signals
+        low_threshold=0.85,  # Increased for better sensitivity
+
+        # --- Wyckoff Sign Detection Parameters ---
+        wyckoff_volatility_factor=1.1,   # Maintained for noise filtering
+        wyckoff_trend_lookback=6,        # Reduced slightly
+        wyckoff_st_tolerance_low=0.997,  # Maintained for reliability
         wyckoff_st_tolerance_high=1.010,
         wyckoff_lps_volume_threshold=0.32,
         wyckoff_lps_price_multiplier=0.75,
@@ -476,101 +523,54 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_ut_multiplier=0.45,
         wyckoff_sc_multiplier=1.25,
         wyckoff_ar_multiplier=1.15,
-        wyckoff_confirmation_threshold=0.36
-    ),
-    
-    Timeframe.HOURS_4: TimeframeSettings(
-        # --- Core Analysis Settings ---
-        phase_weight=0.07,  # Adjusted
-        description="4h daily context",
-        chart_image_time_delta=pd.Timedelta(days=4),
-        
-        # --- Indicator Settings ---
-        ema_length=32,  # Increased for stability
-        atr_settings=(32, 18, 38, 14, 18),  # Increased for stability
-        supertrend_multiplier=2.5,  # Adjusted for consistency
-        base_multiplier=1.2,  # Increased for robustness
-        momentum_multiplier=1.8,  # Increased for fewer false signals
-        
-        # --- Volume Analysis Settings ---
-        volume_ma_window=26,  # Increased for smoother analysis
-        
-        # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=8,  # Increased for reliability
-        support_resistance_lookback=75,  # Increased for stronger levels
-        swing_lookback=10,        # Extended lookback for significant market structure points
-        effort_lookback=10,       # Extended lookback for broader effort-result patterns
-        min_move_multiplier=1.5,  # Increased for more significant moves
-        
-        # --- Adaptive Threshold Factors ---
-        spring_factor=1.25,  # Increased for fewer false signals
-        liquidation_factor=1.1,  # Increased for better detection
-        breakout_factor=1.3,  # Increased for stronger breakouts
-        significant_levels_factor=1.5,  # Increased for stronger levels
-        atr_multiplier=0.32,  # Increased for wider zones
-        volume_weighted_efficiency=0.15,  # Adjusted for balance
-        high_threshold=1.2,  # Increased for clearer thresholds
-        low_threshold=0.8,  # Decreased for clearer thresholds
-
-        # --- Wyckoff Sign Detection Parameters ---
-        wyckoff_volatility_factor=1.2,   # Higher to filter more noise
-        wyckoff_trend_lookback=7,        # Longer lookback for context
-        wyckoff_st_tolerance_low=0.998,  # Narrower tolerance for stronger signals
-        wyckoff_st_tolerance_high=1.008,
-        wyckoff_lps_volume_threshold=0.35,
-        wyckoff_lps_price_multiplier=0.8,
-        wyckoff_sos_multiplier=1.3,
-        wyckoff_ut_multiplier=0.5,
-        wyckoff_sc_multiplier=1.3,
-        wyckoff_ar_multiplier=1.2,
-        wyckoff_confirmation_threshold=0.38
+        wyckoff_confirmation_threshold=0.35
     ),
     
     Timeframe.HOURS_8: TimeframeSettings(
         # --- Core Analysis Settings ---
-        phase_weight=0.03,  # Adjusted
+        phase_weight=0.05,  # Long-term market regime
         description="8h market regime",
         chart_image_time_delta=pd.Timedelta(days=6),
         
         # --- Indicator Settings ---
-        ema_length=40,  # Increased for stability
-        atr_settings=(40, 22, 46, 16, 22),  # Increased for stability
-        supertrend_multiplier=2.8,  # Increased for reliability
-        base_multiplier=1.3,  # Increased for robustness
-        momentum_multiplier=2.0,  # Increased for fewer false signals
+        ema_length=32,  # Reduced while maintaining stability
+        atr_settings=(34, 20, 40, 14, 18),  # Reduced while maintaining stability
+        supertrend_multiplier=2.5,  # Reduced slightly
+        base_multiplier=1.1,  # Reduced for better balance
+        momentum_multiplier=1.8,  # Reduced for better signals
         
         # --- Volume Analysis Settings ---
-        volume_ma_window=32,  # Increased for smoother analysis
+        volume_ma_window=28,  # Reduced for more responsive analysis
         
         # --- Support/Resistance & Pattern Detection ---
-        spring_upthrust_window=9,  # Increased for reliability
-        support_resistance_lookback=100,  # Increased for stronger levels
-        swing_lookback=12,        # Long lookback for major swing points detection
-        effort_lookback=14,       # Long lookback for macro effort-result analysis
-        min_move_multiplier=2.0,  # Increased for more significant moves
+        spring_upthrust_window=8,  # Reduced while maintaining reliability
+        support_resistance_lookback=85,  # Reduced while keeping strong levels
+        swing_lookback=10,        # Reduced for better major swing points detection
+        effort_lookback=12,       # Reduced for better effort-result analysis
+        min_move_multiplier=1.7,  # Reduced while keeping significance
         
         # --- Adaptive Threshold Factors ---
-        spring_factor=1.4,  # Increased for fewer false signals
-        liquidation_factor=1.2,  # Increased for better detection
-        breakout_factor=1.5,  # Increased for stronger breakouts
-        significant_levels_factor=2.0,  # Increased for stronger levels
-        atr_multiplier=0.35,  # Increased for wider zones
-        volume_weighted_efficiency=0.1,  # Adjusted for balance
-        high_threshold=1.3,  # Increased for clearer thresholds
-        low_threshold=0.7,  # Decreased for clearer thresholds
+        spring_factor=1.25,  # Reduced while maintaining reliability
+        liquidation_factor=1.1,  # Reduced for better detection
+        breakout_factor=1.3,  # Reduced for better detection
+        significant_levels_factor=1.8,  # Reduced while maintaining significance
+        atr_multiplier=0.32,  # Reduced slightly
+        volume_weighted_efficiency=0.12,  # Increased slightly
+        high_threshold=1.2,  # Reduced for better signals
+        low_threshold=0.75,  # Increased for better thresholds
 
         # --- Wyckoff Sign Detection Parameters ---
-        wyckoff_volatility_factor=1.3,   # Highest to filter most noise
-        wyckoff_trend_lookback=8,        # Longest lookback for market regime
-        wyckoff_st_tolerance_low=0.999,  # Tightest tolerance for strongest signals only
-        wyckoff_st_tolerance_high=1.005,
-        wyckoff_lps_volume_threshold=0.38,
-        wyckoff_lps_price_multiplier=0.85,
-        wyckoff_sos_multiplier=1.4,
-        wyckoff_ut_multiplier=0.55,
-        wyckoff_sc_multiplier=1.4,
-        wyckoff_ar_multiplier=1.25,
-        wyckoff_confirmation_threshold=0.4
+        wyckoff_volatility_factor=1.2,   # Reduced while filtering noise
+        wyckoff_trend_lookback=7,        # Reduced slightly
+        wyckoff_st_tolerance_low=0.998,  # Maintained tight tolerance
+        wyckoff_st_tolerance_high=1.006,
+        wyckoff_lps_volume_threshold=0.35,
+        wyckoff_lps_price_multiplier=0.8,
+        wyckoff_sos_multiplier=1.35,
+        wyckoff_ut_multiplier=0.5,
+        wyckoff_sc_multiplier=1.35,
+        wyckoff_ar_multiplier=1.2,
+        wyckoff_confirmation_threshold=0.38
     )
 }
 
