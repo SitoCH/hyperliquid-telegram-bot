@@ -323,7 +323,8 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE],
             available_balance = float(user_state['withdrawable'])
             balance_to_use = available_balance * amount / 100.0
             leverage = context.user_data.get('leverage', 1) # type: ignore
-            exchange.update_leverage(leverage, selected_coin, False)
+            update_leverage_result = exchange.update_leverage(leverage, selected_coin, False)
+            logger.info(update_leverage_result)
             sz_decimals = hyperliquid_utils.get_sz_decimals()
             sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
             if sz * mid < 10.0:
