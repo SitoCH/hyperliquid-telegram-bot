@@ -30,10 +30,11 @@ BASE_CONFIDENCE_THRESHOLD = 0.20  # Reduced from 0.25
 STRONG_SIGNAL_MULTIPLIER = 1.3   # Reduced from 1.5
 VOLATILITY_BOOST = 1.1          # Reduced from 1.2
 
-DIRECTIONAL_WEIGHT: Final[float] = 0.35
-VOLUME_WEIGHT: Final[float] = 0.30 
-ALIGNMENT_WEIGHT: Final[float] = 0.15
-MOMENTUM_WEIGHT: Final[float] = 0.20
+# Adjusted weights to reduce alignment importance for intraday trading
+DIRECTIONAL_WEIGHT: Final[float] = 0.40  # Increased from 0.35
+VOLUME_WEIGHT: Final[float] = 0.35       # Increased from 0.30
+ALIGNMENT_WEIGHT: Final[float] = 0.05    # Reduced from 0.15 
+MOMENTUM_WEIGHT: Final[float] = 0.20     # Unchanged
 
 def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, intermediate_analysis: TimeframeGroupAnalysis) -> float:
     """Calculate alignment across all timeframe groups with more conservative weighting for crypto intraday trading."""
@@ -184,20 +185,18 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
     
     # Calculate cross-timeframe agreement
     agreement_bonus = 0.0
-    if len(group_biases) >= 2:
-        # Check if short and intermediate agree
-        if 'short' in group_biases and 'intermediate' in group_biases:
-            short_sign = 1 if group_biases['short'] > 0 else -1 if group_biases['short'] < 0 else 0
-            int_sign = 1 if group_biases['intermediate'] > 0 else -1 if group_biases['intermediate'] < 0 else 0
-            if short_sign != 0 and int_sign != 0 and short_sign == int_sign:
-                agreement_bonus += 0.10  # Reduced from 0.15
-        
-        # Check if intermediate and long agree
-        if 'intermediate' in group_biases and 'long' in group_biases:
-            int_sign = 1 if group_biases['intermediate'] > 0 else -1 if group_biases['intermediate'] < 0 else 0
-            long_sign = 1 if group_biases['long'] > 0 else -1 if group_biases['long'] < 0 else 0
-            if int_sign != 0 and long_sign != 0 and int_sign == long_sign:
-                agreement_bonus += 0.07  # Reduced from 0.10
+    if 'short' in group_biases and 'intermediate' in group_biases:
+        short_sign = 1 if group_biases['short'] > 0 else -1 if group_biases['short'] < 0 else 0
+        int_sign = 1 if group_biases['intermediate'] > 0 else -1 if group_biases['intermediate'] < 0 else 0
+        if short_sign != 0 and int_sign != 0 and short_sign == int_sign:
+            agreement_bonus += 0.15  # Increased from 0.10 - most important agreement for intraday
+    
+    # Cross-agreement between other timeframes is less important for intraday
+    if 'intermediate' in group_biases and 'long' in group_biases:
+        int_sign = 1 if group_biases['intermediate'] > 0 else -1 if group_biases['intermediate'] < 0 else 0
+        long_sign = 1 if group_biases['long'] > 0 else -1 if group_biases['long'] < 0 else 0
+        if int_sign != 0 and long_sign != 0 and int_sign == int_sign:
+            agreement_bonus += 0.05  # Reduced from 0.07
     
     if not scores:
         return 0.0
@@ -208,8 +207,8 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
     
     base_score = weighted_sum / total_weight if total_weight > 0 else 0.0
     
-    # Apply a dampening factor to the base score to reduce overall directional confidence
-    base_score *= 0.9  # Apply 10% reduction to all directional scores
+    # Less dampening for intraday signals
+    base_score *= 0.95  # Apply 5% reduction instead of 10%
     
     # Apply agreement bonus and cap at 1.0
     return min(1.0, base_score + agreement_bonus)
