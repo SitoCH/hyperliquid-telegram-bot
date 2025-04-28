@@ -388,6 +388,7 @@ def _analyze_timeframe_group(
     # Enhanced volume strength calculation with improved volume state handling
     volume_factors = []
     total_volume_weight = 0.0
+    has_very_high_volume = any(state.volume == VolumeState.VERY_HIGH for state in group.values())
 
     for tf, state in group.items():
         # Use timeframe-specific settings for weighting
@@ -396,11 +397,19 @@ def _analyze_timeframe_group(
 
         # Use the helper for base strength determination
         base_strength = get_base_volume_strength(state.volume)
+        
+        # Enhanced phase-specific volume interpretation for crypto markets
         if state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN]:
             base_strength *= 1.2
+            # Higher multiplier for active trend phases - crypto moves fast
             if state.composite_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
                 base_strength *= 1.3
-
+                
+        # Special handling for accumulation/distribution with high volume
+        if state.phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.DISTRIBUTION] and state.volume in [VolumeState.HIGH, VolumeState.VERY_HIGH]:
+            # High volume in accumulation/distribution often signals impending breakout
+            base_strength *= 1.15
+        
         # Consider timeframe-specific volume characteristics
         # Higher importance for longer timeframes and more extreme settings
         volume_importance = tf.settings.volume_ma_window / 20.0  # Normalize based on typical window size
@@ -414,15 +423,32 @@ def _analyze_timeframe_group(
         if total_volume_weight > 0 else 0.0
     )
 
+    # Better normalization for crypto's extreme volume spikes
+    if has_very_high_volume:
+        # Apply sigmoid-like normalization to prevent overvaluing extreme spikes
+        # but maintain their significance
+        volume_strength = 0.7 + (0.3 * (1.0 / (1.0 + np.exp(-5 * (volume_strength - 0.6)))))
+
     # Clamp volume strength between 0 and 1
     volume_strength = max(0.0, min(1.0, volume_strength))
 
-    # Adjust volume strength based on exhaustion signals - symmetric treatment
-    exhaustion_threshold = int(len(group) * 0.6)  # Increased from len(group) // 2 to be more conservative
-    if upside_exhaustion >= exhaustion_threshold:
-        volume_strength *= 0.7
-    elif downside_exhaustion >= exhaustion_threshold:
-        volume_strength *= 0.7
+    # Improved exhaustion detection for crypto markets
+    exhaustion_threshold = int(len(group) * 0.5)  # More sensitive than before (was 0.6)
+    severe_exhaustion_threshold = int(len(group) * 0.75)
+
+    # Different penalties based on severity
+    if upside_exhaustion >= severe_exhaustion_threshold or downside_exhaustion >= severe_exhaustion_threshold:
+        volume_strength *= 0.6  # Severe exhaustion (stronger penalty)
+    elif upside_exhaustion >= exhaustion_threshold or downside_exhaustion >= exhaustion_threshold:
+        volume_strength *= 0.75  # Moderate exhaustion
+
+    # Check for divergence between volume and price - common in crypto turning points
+    divergence_count = sum(1 for s in group.values() if
+        (s.effort_vs_result == EffortResult.WEAK and s.volume in [VolumeState.HIGH, VolumeState.VERY_HIGH]))
+
+    # Apply penalty for significant divergence
+    if divergence_count >= len(group) // 3:
+        volume_strength *= 0.85
 
     # Calculate funding sentiment (-1 to 1)
     funding_signals = []
