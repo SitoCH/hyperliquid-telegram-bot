@@ -397,11 +397,11 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
     if mid <= 0:
         return None
 
-    min_distance_sl = mid * 0.02
+    min_distance_sl = mid * 0.0175
     max_distance_sl = mid * 0.045
     
-    min_distance_tp = mid * 0.0125
-    max_distance_tp = mid * 0.03
+    min_distance_tp = mid * 0.01
+    max_distance_tp = mid * 0.0325
 
     for timeframe in [Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15, Timeframe.HOURS_4]:
         tp_resistances, tp_supports, sl_resistances, sl_supports = get_valid_levels(
