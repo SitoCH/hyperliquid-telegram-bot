@@ -113,12 +113,7 @@ def analyze_multi_timeframe(
             (all_analysis.short_term.dominant_sign != WyckoffSign.SECONDARY_TEST_RESISTANCE, "Secondary Test Resistance (STR) on short-term"),
             (all_analysis.short_term.dominant_sign != WyckoffSign.SECONDARY_TEST, "Secondary Test (ST) on short-term"),
             # Be more lenient with short-term uncertainty if intermediate is certain
-            ((not all_analysis.short_term.uncertain_phase or not all_analysis.intermediate.uncertain_phase), 
-             "Both short and intermediate timeframes show uncertain phases"),
-            (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD, 
-             f"Low intermediate volume strength: {all_analysis.intermediate.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD:.2f}"),
-            (all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.9, 
-             f"Low short-term volume strength: {all_analysis.short_term.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD * 0.9:.2f}"),
+            ((not all_analysis.short_term.uncertain_phase or not all_analysis.intermediate.uncertain_phase), "Both short and intermediate timeframes show uncertain phases"),
             # Instead of checking only the dominant phase, check if any phase is not ranging
             ((all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING or 
               all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING), 
@@ -145,7 +140,11 @@ def analyze_multi_timeframe(
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.ACCUMULATION or
                  all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BULLISH or
                  all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BULLISH, 
-                 "Missing bullish confirmation signals")
+                 "Missing bullish confirmation signals"),
+                (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD, 
+                f"Low intermediate volume strength: {all_analysis.intermediate.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD:.2f}"),
+                (all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.9, 
+                f"Low short-term volume strength: {all_analysis.short_term.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD * 0.9:.2f}"),
             ]
             
             should_notify = all(check[0] for check in bullish_checks)
@@ -166,7 +165,11 @@ def analyze_multi_timeframe(
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.DISTRIBUTION or
                  all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BEARISH or
                  all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BEARISH,
-                 "Missing bearish confirmation signals")
+                 "Missing bearish confirmation signals"),
+                (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.7, 
+                f"Low intermediate volume strength: {all_analysis.intermediate.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD * 0.7:.2f}"),
+                (all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.9 * 0.7, 
+                f"Low short-term volume strength: {all_analysis.short_term.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD * 0.9 * 0.7:.2f}"),
             ]
             
             should_notify = all(check[0] for check in bearish_checks)
@@ -390,6 +393,32 @@ def _analyze_timeframe_group(
     total_volume_weight = 0.0
     has_very_high_volume = any(state.volume == VolumeState.VERY_HIGH for state in group.values())
 
+    # Calculate momentum bias early to use in volume strength calculation
+    bullish_signals = 0.0
+    bearish_signals = 0.0
+
+    for s in group.values():
+        # Primary phase signals - core market structure signals
+        if is_bullish_phase(s.phase) and upside_exhaustion < len(group) // 2:
+            # Non-exhausted bullish phase
+            bullish_signals += 1.0
+        elif is_bearish_phase(s.phase) and downside_exhaustion < len(group) // 2:
+            # Non-exhausted bearish phase
+            bearish_signals += 1.0
+
+        # Action signals - immediate behavior signals
+        if is_bullish_action(s.composite_action):
+            bullish_signals += 0.8  # Slightly less weight than phase
+        elif is_bearish_action(s.composite_action):
+            bearish_signals += 0.8
+    
+    # Simple directional bias detection for volume adjustments
+    directional_bias = MultiTimeframeDirection.NEUTRAL
+    if bullish_signals > bearish_signals + 0.1:
+        directional_bias = MultiTimeframeDirection.BULLISH
+    elif bearish_signals > bullish_signals + 0.1:
+        directional_bias = MultiTimeframeDirection.BEARISH
+
     for tf, state in group.items():
         # Use timeframe-specific settings for weighting
         tf_weight = tf.settings.phase_weight
@@ -410,6 +439,12 @@ def _analyze_timeframe_group(
             # High volume in accumulation/distribution often signals impending breakout
             base_strength *= 1.15
         
+        # Direction-specific volume interpretation
+        # Lower volume requirements for bearish moves
+        if directional_bias == MultiTimeframeDirection.BEARISH:
+            # For bearish bias, increase effective volume strength
+            base_strength *= 1.3  # 30% boost to volume strength for bearish bias
+        
         # Consider timeframe-specific volume characteristics
         # Higher importance for longer timeframes and more extreme settings
         volume_importance = tf.settings.volume_ma_window / 20.0  # Normalize based on typical window size
@@ -428,6 +463,12 @@ def _analyze_timeframe_group(
         # Apply sigmoid-like normalization to prevent overvaluing extreme spikes
         # but maintain their significance
         volume_strength = 0.7 + (0.3 * (1.0 / (1.0 + np.exp(-5 * (volume_strength - 0.6)))))
+
+    # Direction-specific volume adjustment - applies to final value
+    if directional_bias == MultiTimeframeDirection.BEARISH:
+        # For bearish moves, allow lower volume thresholds
+        # This is in addition to the per-state adjustment above
+        volume_strength = min(1.0, volume_strength * 1.15)  # 15% additional boost
 
     # Clamp volume strength between 0 and 1
     volume_strength = max(0.0, min(1.0, volume_strength))
@@ -480,24 +521,8 @@ def _analyze_timeframe_group(
     volatility_state = max(volatility_counts.items(), key=lambda x: x[1])[0]
 
     # Enhanced momentum bias calculation with clear signal weighting and transition handling
-    bullish_signals = 0.0
-    bearish_signals = 0.0
 
     for s in group.values():
-        # Primary phase signals - core market structure signals
-        if is_bullish_phase(s.phase) and upside_exhaustion < len(group) // 2:
-            # Non-exhausted bullish phase
-            bullish_signals += 1.0
-        elif is_bearish_phase(s.phase) and downside_exhaustion < len(group) // 2:
-            # Non-exhausted bearish phase
-            bearish_signals += 1.0
-
-        # Action signals - immediate behavior signals
-        if is_bullish_action(s.composite_action):
-            bullish_signals += 0.8  # Slightly less weight than phase
-        elif is_bearish_action(s.composite_action):
-            bearish_signals += 0.8
-        
         # Transition signals - early reversal indicators
         if s.composite_action == CompositeAction.REVERSING:
             if s.phase == WyckoffPhase.MARKDOWN:
