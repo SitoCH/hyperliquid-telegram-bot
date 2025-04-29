@@ -132,12 +132,14 @@ def detect_wyckoff_signs(
         sign_scores[WyckoffSign.AUTOMATIC_RALLY] = price_change.iloc[-1] * (1 + volume_change.iloc[-1])
         
     # Secondary Test (ST) - stricter tolerance range
-    if (abs(price_change.iloc[-1]) < price_volatility * 0.8 and  # Less volatility
-        df['l'].iloc[-1] >= recent_low * st_tolerance_low * 1.005 and  # Tighter tolerance
-        df['l'].iloc[-1] <= recent_low * st_tolerance_high * 0.995 and  # Tighter tolerance
-        current_volume < volume_ma.iloc[-1] * 0.8 and
-        price_strength < -0.3):  # Require more negative strength
-        sign_scores[WyckoffSign.SECONDARY_TEST] = 1.0 / (abs(df['l'].iloc[-1] / recent_low - 1.0) + 0.01)
+    if (abs(price_change.iloc[-1]) < price_volatility * 0.6 and  # Stricter volatility threshold
+        df['l'].iloc[-1] >= recent_low * 1.001 and  # Simplified and tighter tolerance
+        df['l'].iloc[-1] <= recent_low * 1.015 and  # Upper bound more restrictive
+        current_volume < volume_ma.iloc[-1] * 0.7 and  # Lower volume requirement
+        price_strength < -0.5 and  # Stronger negative price strength
+        df['v'].iloc[-1] < df['v'].iloc[-5:].min() * 1.2):  # Ensure truly decreased volume
+        # Modified scoring formula to reduce sensitivity
+        sign_scores[WyckoffSign.SECONDARY_TEST] = 0.7 / (abs(df['l'].iloc[-1] / recent_low - 1.0) + 0.03)
 
     # Last Point of Support (LPS)
     if (is_spring and
@@ -171,12 +173,14 @@ def detect_wyckoff_signs(
         sign_scores[WyckoffSign.UPTHRUST] = abs(price_change.iloc[-1]) * volume_change.iloc[-1]
 
     # Secondary Test Resistance (STR) - stricter tolerance range
-    if (abs(price_change.iloc[-1]) < price_volatility * 0.8 and  # Less volatility
-        df['h'].iloc[-1] <= recent_high * (2 - st_tolerance_low * 0.995) and  # Tighter tolerance
-        df['h'].iloc[-1] >= recent_high * (2 - st_tolerance_high * 1.005) and  # Tighter tolerance
-        current_volume < volume_ma.iloc[-1] * 0.8 and
-        price_strength > 0.3):  # Require more positive strength
-        sign_scores[WyckoffSign.SECONDARY_TEST_RESISTANCE] = 1.0 / (abs(df['h'].iloc[-1] / recent_high - 1.0) + 0.01)
+    if (abs(price_change.iloc[-1]) < price_volatility * 0.6 and  # Stricter volatility threshold
+        df['h'].iloc[-1] <= recent_high * 0.999 and  # Simplified and tighter tolerance
+        df['h'].iloc[-1] >= recent_high * 0.985 and  # Lower bound more restrictive
+        current_volume < volume_ma.iloc[-1] * 0.7 and  # Lower volume requirement
+        price_strength > 0.5 and  # Stronger positive price strength
+        df['v'].iloc[-1] < df['v'].iloc[-5:].min() * 1.2):  # Ensure truly decreased volume
+        # Modified scoring formula to reduce sensitivity
+        sign_scores[WyckoffSign.SECONDARY_TEST_RESISTANCE] = 0.7 / (abs(df['h'].iloc[-1] / recent_high - 1.0) + 0.03)
 
     # Last Point of Supply (LPSY)
     if (is_upthrust and
