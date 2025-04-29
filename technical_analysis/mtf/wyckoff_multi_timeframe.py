@@ -107,7 +107,6 @@ def analyze_multi_timeframe(
         
         notification_checks = [
             (all_analysis.confidence_level >= min_confidence, f"Low confidence: {all_analysis.confidence_level:.2f} < {min_confidence:.2f}"),
-            (momentum_intensity >= WEAK_MOMENTUM, f"Weak momentum: {momentum_intensity:.2f} < {WEAK_MOMENTUM:.2f}"),
             (all_analysis.intermediate.volatility_state != VolatilityState.HIGH, "Choppy intermediate market conditions detected"),
             (all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL, "Neutral market direction"),
             (all_analysis.short_term.dominant_sign != WyckoffSign.SECONDARY_TEST_RESISTANCE, "Secondary Test Resistance (STR) on short-term"),
@@ -134,6 +133,7 @@ def analyze_multi_timeframe(
             bullish_checks = [
                 (all_analysis.short_term.internal_alignment >= 0.50, f"Low short-term alignment: {all_analysis.short_term.internal_alignment:.2f} < 0.50"),
                 (all_analysis.intermediate.internal_alignment >= 0.45, f"Low intermediate alignment: {all_analysis.intermediate.internal_alignment:.2f} < 0.45"),
+                (momentum_intensity >= WEAK_MOMENTUM, f"Weak momentum: {momentum_intensity:.2f} < {WEAK_MOMENTUM:.2f}"),
                 (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKUP or 
                  all_analysis.short_term.dominant_phase == WyckoffPhase.ACCUMULATION or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKUP or
@@ -159,6 +159,7 @@ def analyze_multi_timeframe(
             bearish_checks = [
                 (all_analysis.short_term.internal_alignment >= 0.50, f"Low short-term alignment: {all_analysis.short_term.internal_alignment:.2f} < 0.50"),
                 (all_analysis.intermediate.internal_alignment >= 0.45, f"Low intermediate alignment: {all_analysis.intermediate.internal_alignment:.2f} < 0.45"),
+                (momentum_intensity >= WEAK_MOMENTUM * 0.85, f"Weak momentum: {momentum_intensity:.2f} < {WEAK_MOMENTUM * 0.85:.2f}"),
                 (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKDOWN or 
                  all_analysis.short_term.dominant_phase == WyckoffPhase.DISTRIBUTION or
                  all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKDOWN or
