@@ -646,105 +646,64 @@ def _calculate_group_weight(timeframes: Dict[Timeframe, WyckoffState]) -> float:
 
 
 def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overall_direction: MultiTimeframeDirection) -> float:
-    """Calculate momentum intensity with optimized scoring for faster intraday response."""
-    if not analyses:
+    """Calculate momentum intensity with a streamlined approach for intraday crypto trading."""
+    if not analyses or overall_direction == MultiTimeframeDirection.NEUTRAL:
         return 0.0
     
-    # Direction-specific adjustments
-    direction_factor = 0.85 if overall_direction == MultiTimeframeDirection.BEARISH else 1.0
+    # Fast path for rapid move detection with high volume
+    rapid_moves = sum(1 for a in analyses if (
+        (a.momentum_bias == overall_direction and a.volume_strength > 0.7) or
+        (a.dominant_sign in [WyckoffSign.SIGN_OF_STRENGTH, WyckoffSign.SIGN_OF_WEAKNESS] and a.volume_strength > 0.6)
+    ))
+    if rapid_moves >= len(analyses) // 2:
+        return 0.8 if overall_direction == MultiTimeframeDirection.BEARISH else 0.85
     
-    # Check for phase inconsistency with improved efficiency
-    phase_direction_conflicts = sum(
-        1 for analysis in analyses if 
-        ((overall_direction == MultiTimeframeDirection.BULLISH and is_bearish_phase(analysis.dominant_phase)) or
-         (overall_direction == MultiTimeframeDirection.BEARISH and is_bullish_phase(analysis.dominant_phase)))
+    # Direction-specific base parameters
+    is_bearish = overall_direction == MultiTimeframeDirection.BEARISH
+    base_momentum = 0.45 if is_bearish else 0.4
+    
+    # 1. Calculate alignment score (simpler approach)
+    aligned_count = sum(1 for a in analyses if a.momentum_bias == overall_direction)
+    alignment_score = aligned_count / len(analyses) if analyses else 0
+    
+    # 2. Calculate phase confirmation score (with direction-specific handling)
+    phase_confirmations = sum(1 for a in analyses if (
+        (is_bearish and (is_bearish_phase(a.dominant_phase) or a.dominant_phase == WyckoffPhase.DISTRIBUTION)) or
+        (not is_bearish and (is_bullish_phase(a.dominant_phase) or a.dominant_phase == WyckoffPhase.ACCUMULATION))
+    ))
+    phase_score = phase_confirmations / len(analyses) if analyses else 0
+    
+    # 3. Calculate volume support (directionally aware)
+    volume_score = sum(a.volume_strength * a.group_weight for a in analyses) / sum(a.group_weight for a in analyses)
+    # Apply direction-specific volume discount factor
+    volume_factor = 1.3 if is_bearish else 1.0
+    adjusted_volume = min(1.0, volume_score * volume_factor)
+    
+    # 4. Calculate timeframe agreement (weight intermediate timeframes more)
+    short_term_aligned = any(a.momentum_bias == overall_direction 
+                            for a in analyses if a.group_weight in {tf.settings.phase_weight for tf in SHORT_TERM_TIMEFRAMES})
+    intermediate_aligned = any(a.momentum_bias == overall_direction 
+                              for a in analyses if a.group_weight in {tf.settings.phase_weight for tf in INTERMEDIATE_TIMEFRAMES})
+    timeframe_bonus = 0.1 if (short_term_aligned and intermediate_aligned) else 0.0
+    
+    # Combine scores with simplified formula
+    raw_momentum = (
+        base_momentum +
+        (alignment_score * 0.25) +
+        (phase_score * 0.20) +
+        (adjusted_volume * 0.15) +
+        timeframe_bonus
     )
-
-    # Reduced penalty for conflicts to allow faster direction changes
-    # Be more lenient with bearish moves - they often happen with mixed signals
-    conflict_ratio = phase_direction_conflicts / len(analyses) if analyses else 0
-    if overall_direction == MultiTimeframeDirection.BEARISH:
-        # Less penalty for bearish moves with conflicting phases
-        conflict_penalty = max(0.7, 1.0 - conflict_ratio * 0.3)
+    
+    # Apply final direction-specific adjustment
+    if is_bearish:
+        # Lower sigmoid threshold for bearish moves (0.35 vs 0.4)
+        final_momentum = 1.0 / (1.0 + np.exp(-6 * (raw_momentum - 0.35)))
     else:
-        conflict_penalty = max(0.5, 1.0 - conflict_ratio * 0.5)
-            
-    # Score calculation with simplified logic
-    directional_scores = []
-    short_term_volume = 0.0
-    short_term_count = 0
+        final_momentum = 1.0 / (1.0 + np.exp(-6 * (raw_momentum - 0.4)))
     
-    for analysis in analyses:
-        # Base score - be more lenient with neutral signals in bearish direction
-        if analysis.momentum_bias == overall_direction:
-            base_score = 1.0
-        elif analysis.momentum_bias == MultiTimeframeDirection.NEUTRAL:
-            # Neutral signals are more likely to turn bearish than bullish
-            base_score = 0.6 if overall_direction == MultiTimeframeDirection.BEARISH else 0.5
-        else:
-            base_score = 0.0
-        
-        # Apply uncertainty adjustment - be more lenient with uncertainty in bearish moves
-        uncertainty_factor = 0.7 if overall_direction == MultiTimeframeDirection.BEARISH else 0.6
-        if analysis.uncertain_phase and analysis.momentum_bias != overall_direction:
-            base_score *= uncertainty_factor
-        
-        # Phase alignment - adjusted for bearish scenarios
-        phase_aligned = _is_phase_confirming_momentum(analysis)
-        # Less requirement for perfect phase alignment in bearish moves
-        phase_consistency = 0.8 if (not phase_aligned and overall_direction == MultiTimeframeDirection.BEARISH) else (0.7 if not phase_aligned else 1.0)
-        
-        # Volume boost - amplified for bearish moves
-        volume_factor = 0.45 if overall_direction == MultiTimeframeDirection.BEARISH else 0.35
-        volume_boost = 1.0 + (analysis.volume_strength * volume_factor)
-        
-        # Phase boost
-        phase_boost = 1.2 if phase_aligned else 1.0
-
-        # Funding impact
-        funding_aligned = (
-            (analysis.funding_sentiment > 0 and overall_direction == MultiTimeframeDirection.BULLISH) or
-            (analysis.funding_sentiment < 0 and overall_direction == MultiTimeframeDirection.BEARISH)
-        )
-        funding_impact = abs(analysis.funding_sentiment) * 0.2
-        funding_boost = (1.0 + funding_impact) if funding_aligned else (1.0 - funding_impact)
-
-        # Combined score calculation
-        score = base_score * phase_consistency * volume_boost * phase_boost * funding_boost
-        directional_scores.append((score, analysis.group_weight))
-        
-        # Track short-term volume
-        if analysis.group_weight in {tf.settings.phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
-            short_term_volume += analysis.volume_strength
-            short_term_count += 1
-
-    # More aggressive volume boost calculation
-    hourly_volume_boost = 1.0
-    if short_term_count > 0:
-        avg_short_term_volume = short_term_volume / short_term_count
-        # Lower threshold for bearish scenarios
-        volume_threshold = 0.35 if overall_direction == MultiTimeframeDirection.BEARISH else 0.4
-        hourly_volume_boost = 1.0 + max(0, min(0.2, avg_short_term_volume - volume_threshold))
-
-    # Final calculation with error handling
-    total_weight = sum(weight for _, weight in directional_scores)
-    if total_weight == 0:
-        return 0.0
-        
-    weighted_momentum = sum(score * weight for score, weight in directional_scores) / total_weight
-
-    # Apply direction factor to final calculation
-    final_momentum = weighted_momentum * hourly_volume_boost * conflict_penalty * direction_factor
-    
-    # Adjust sigmoid center point based on direction
-    # Lower center point for bearish moves (0.38 vs 0.42)
-    sigmoid_center = 0.38 if overall_direction == MultiTimeframeDirection.BEARISH else 0.42
-    
-    # Improved sigmoid function for more responsive updates
-    final_momentum = 1.0 / (1.0 + np.exp(-5 * (final_momentum - sigmoid_center))) if final_momentum > 0 else 0.0
-    
-    # Return 0.01 minimum for non-NEUTRAL directions to prevent zero values blocking notifications
-    if overall_direction != MultiTimeframeDirection.NEUTRAL and final_momentum < 0.01:
+    # Ensure minimum non-zero value
+    if final_momentum < 0.01:
         final_momentum = 0.01
         
     return min(1.0, final_momentum)
