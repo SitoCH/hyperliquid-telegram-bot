@@ -20,11 +20,6 @@ from .wyckoff_multi_timeframe_types import (
     SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT
 )
 
-SHORT_TERM_IMPORTANCE = 0.40
-INTERMEDIATE_IMPORTANCE = 0.40
-LONG_TERM_IMPORTANCE = 0.12
-CONTEXT_IMPORTANCE = 0.08
-
 # Thresholds for confidence calculation
 BASE_CONFIDENCE_THRESHOLD = 0.20
 STRONG_SIGNAL_MULTIPLIER = 1.3
@@ -33,6 +28,32 @@ DIRECTIONAL_WEIGHT: Final[float] = 0.35
 VOLUME_WEIGHT: Final[float] = 0.35
 ALIGNMENT_WEIGHT: Final[float] = 0.10
 MOMENTUM_WEIGHT: Final[float] = 0.20
+
+def _calculate_timeframe_importance() -> Tuple[float, float, float, float]:
+    """
+    Calculate the importance of each timeframe group based on the phase_weight
+    values from timeframe settings.
+    """
+    # Extract phase weights from timeframe settings
+    short_term_weights = [_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES]
+    intermediate_weights = [_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES]
+    long_term_weights = [_TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES]
+    context_weights = [_TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES]
+    
+    # Sum weights by timeframe group
+    st_weight = sum(short_term_weights)
+    int_weight = sum(intermediate_weights)
+    lt_weight = sum(long_term_weights)
+    ctx_weight = sum(context_weights)
+    
+    total_weight = st_weight + int_weight + lt_weight + ctx_weight
+    
+    return (
+        st_weight / total_weight,
+        int_weight / total_weight,
+        lt_weight / total_weight,
+        ctx_weight / total_weight
+    )
 
 def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, intermediate_analysis: TimeframeGroupAnalysis) -> float:
     """Calculate alignment across all timeframe groups with more conservative weighting for crypto intraday trading."""
@@ -144,6 +165,9 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
     
     # Get the dominant bias from each timeframe
     group_biases = {}
+
+    # Calculate importance dynamically from phase weights
+    short_term_importance, intermediate_importance, long_term_importance, context_importance = _calculate_timeframe_importance()
     
     # Process short term
     if short_term is not None:
@@ -152,7 +176,7 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
         
         group_biases['short'] = bias
         scores.append(abs(bias) * short_term.internal_alignment)
-        weights.append(SHORT_TERM_IMPORTANCE)
+        weights.append(short_term_importance)
     
     # Process intermediate term
     if intermediate is not None:
@@ -161,7 +185,7 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
         
         group_biases['intermediate'] = bias
         scores.append(abs(bias) * intermediate.internal_alignment)
-        weights.append(INTERMEDIATE_IMPORTANCE)
+        weights.append(intermediate_importance)
     
     # Process long term
     if long_term is not None:
@@ -170,7 +194,7 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
         
         group_biases['long'] = bias
         scores.append(abs(bias) * long_term.internal_alignment)
-        weights.append(LONG_TERM_IMPORTANCE)
+        weights.append(long_term_importance)
     
     # Process context
     if context is not None:
@@ -179,7 +203,7 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
         
         group_biases['context'] = bias
         scores.append(abs(bias) * context.internal_alignment)
-        weights.append(CONTEXT_IMPORTANCE)
+        weights.append(context_importance)
     
     # Calculate cross-timeframe agreement
     agreement_bonus = 0.0
