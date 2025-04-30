@@ -26,15 +26,13 @@ LONG_TERM_IMPORTANCE = 0.12
 CONTEXT_IMPORTANCE = 0.08
 
 # Thresholds for confidence calculation
-BASE_CONFIDENCE_THRESHOLD = 0.20  # Reduced from 0.25
-STRONG_SIGNAL_MULTIPLIER = 1.3   # Reduced from 1.5
-VOLATILITY_BOOST = 1.1          # Reduced from 1.2
+BASE_CONFIDENCE_THRESHOLD = 0.20
+STRONG_SIGNAL_MULTIPLIER = 1.3
 
-# Adjusted weights to reduce alignment importance for intraday trading
-DIRECTIONAL_WEIGHT: Final[float] = 0.40  # Increased from 0.35
-VOLUME_WEIGHT: Final[float] = 0.35       # Increased from 0.30
-ALIGNMENT_WEIGHT: Final[float] = 0.05    # Reduced from 0.15 
-MOMENTUM_WEIGHT: Final[float] = 0.20     # Unchanged
+DIRECTIONAL_WEIGHT: Final[float] = 0.35
+VOLUME_WEIGHT: Final[float] = 0.35
+ALIGNMENT_WEIGHT: Final[float] = 0.10
+MOMENTUM_WEIGHT: Final[float] = 0.20
 
 def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, intermediate_analysis: TimeframeGroupAnalysis) -> float:
     """Calculate alignment across all timeframe groups with more conservative weighting for crypto intraday trading."""
@@ -324,7 +322,7 @@ def _calculate_volatility_adjustment_direct(short_term: Optional[TimeframeGroupA
     # More conservative approach to volatility adjustment
     # If most timeframes show high volatility, apply a smaller boost
     if total_count > 0 and high_volatility_count >= max(2, total_count * 0.6):  # Increased threshold
-        return VOLATILITY_BOOST
+        return 1.05  # 5% increase in confidence for high volatility
     # Add a slight reduction for normal/low volatility
     elif total_count > 0:
         return 0.95  # 5% reduction in confidence for normal/low volatility
