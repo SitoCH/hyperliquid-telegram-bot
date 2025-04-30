@@ -133,23 +133,15 @@ def calculate_overall_confidence(short_term: TimeframeGroupAnalysis, intermediat
     
     # Calculate momentum intensity directly
     momentum_score = _calculate_momentum_score_direct(short_term, intermediate)
-    
-    # Calculate volatility adjustment based on volatility state
-    volatility_adjustment = _calculate_volatility_adjustment_direct(short_term, intermediate, long_term, context)
-    
-    # Use weights directly since they now sum to 1.0
-    base_confidence = (
+
+    confidence = (
         directional_score * DIRECTIONAL_WEIGHT +
         volume_score * VOLUME_WEIGHT +
         alignment_score * ALIGNMENT_WEIGHT +
         momentum_score * MOMENTUM_WEIGHT
     )
-    
-    # Apply volatility adjustment - higher volatility can mean clearer signals in crypto
-    adjusted_confidence = base_confidence * volatility_adjustment
 
-    # Ensure the confidence is within bounds
-    return max(min(adjusted_confidence, 1.0), BASE_CONFIDENCE_THRESHOLD)
+    return max(min(confidence, 1.0), BASE_CONFIDENCE_THRESHOLD)
 
 
 def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnalysis],
@@ -293,24 +285,23 @@ def _calculate_volume_score_direct(short_term: Optional[TimeframeGroupAnalysis],
     for analysis in [short_term, intermediate, long_term, context]:
         if analysis is None:
             continue
-            
-        # Basic score is volume strength
+
         score = analysis.volume_strength
         
-        # Apply multiplier based on timeframe
-        if analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES}:
-            multiplier = 1.1  # Reduced from 1.2
-        elif analysis.group_weight in {_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES}:
-            multiplier = 1.0  # Reduced from 1.1
+        # Apply multiplier based on timeframe group
+        if analysis == short_term:
+            multiplier = 1.1
+        elif analysis == intermediate:
+            multiplier = 1.0
         else:
-            multiplier = 0.8  # Reduced from 0.9
-            
+            multiplier = 0.9
+
         # Apply action-based adjustments
         if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
-            multiplier *= 1.15  # Reduced from 1.25
+            multiplier *= 1.15
         elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
-            multiplier *= 1.05  # Reduced from 1.15
-            
+            multiplier *= 1.05
+
         weighted_scores.append(score * multiplier * analysis.internal_alignment)
     
     avg_volume_score = sum(weighted_scores) / len(weighted_scores) if weighted_scores else 0.0
@@ -323,31 +314,3 @@ def _calculate_volume_score_direct(short_term: Optional[TimeframeGroupAnalysis],
         avg_volume_score *= 1.1  # Reduced from 1.2
     
     return min(1.0, avg_volume_score)
-
-def _calculate_volatility_adjustment_direct(short_term: Optional[TimeframeGroupAnalysis],
-                                           intermediate: Optional[TimeframeGroupAnalysis],
-                                           long_term: Optional[TimeframeGroupAnalysis],
-                                           context: Optional[TimeframeGroupAnalysis]) -> float:
-    """
-    Calculate volatility adjustment factor with direct timeframe parameters.
-    More conservative approach to volatility adjustment.
-    """
-    total_count = 0
-    high_volatility_count = 0
-    
-    for analysis in [short_term, intermediate, long_term, context]:
-        if analysis is None:
-            continue
-            
-        total_count += 1
-        if analysis.volatility_state == VolatilityState.HIGH:
-            high_volatility_count += 1
-    
-    # More conservative approach to volatility adjustment
-    # If most timeframes show high volatility, apply a smaller boost
-    if total_count > 0 and high_volatility_count >= max(2, total_count * 0.6):  # Increased threshold
-        return 1.05  # 5% increase in confidence for high volatility
-    # Add a slight reduction for normal/low volatility
-    elif total_count > 0:
-        return 0.95  # 5% reduction in confidence for normal/low volatility
-    return 1.0
