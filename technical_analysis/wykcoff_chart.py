@@ -138,7 +138,6 @@ def save_to_buffer(df: pd.DataFrame, wyckoff: WyckoffState, title: str, timefram
             ylabel_lower='',
             addplot=[
                 mpf.make_addplot(df_plot['SuperTrend'], ax=ax[0], color='green', width=0.5),
-                mpf.make_addplot(df_plot['VWAP'], ax=ax[0], color='blue', width=0.5),
                 mpf.make_addplot(df_plot['EMA'], ax=ax[0], color='orange', width=0.5),
                 *level_lines,
                 mpf.make_addplot(df_plot['MACD_Hist'], type='bar', panel=1, ax=ax[1], 

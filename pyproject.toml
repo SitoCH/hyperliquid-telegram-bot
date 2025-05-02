@@ -22,6 +22,7 @@ dependencies = [
     "tzlocal>=5.2",
     "scipy>=1.14.1",
     "dacite>=1.8.1",
+    "numpy<2.0.0",
 ]
 
 [tool.pytest.ini_options]
@@ -45,6 +46,3 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "hyperliquid.utils"
 ignore_missing_imports = true
-
-[tool.uv.sources]
-pandas-ta = { git = "https://github.com/twopirllc/pandas-ta.git", branch = "development" }

@@ -338,9 +338,6 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
     else:
         df["SuperTrend"] = df["c"]
         df["SuperTrend_Flip_Detected"] = False
-
-    # VWAP for institutional reference
-    df["VWAP"] = ta.vwap(df["h"], df["l"], df["c"], df["v"])
     
     # Wyckoff Momentum Analysis with timeframe-optimized MACD
     macd = ta.macd(df["c"], 
@@ -424,31 +421,22 @@ async def send_trend_change_message(context: ContextTypes.DEFAULT_TYPE, mid: flo
 
 def get_ta_results(df: pd.DataFrame, wyckoff: WyckoffState, mid: float) -> Dict[str, Any]:
     # Check if we have enough data points
-    if len(df["SuperTrend"]) < 2 or len(df["VWAP"]) < 2:
+    if len(df["SuperTrend"]) < 2:
         logger.warning("Insufficient data for technical analysis results")
         return {
             "supertrend_prev": 0,
             "supertrend": 0,
             "supertrend_trend_prev": "unknown",
             "supertrend_trend": "unknown",
-            "vwap_prev": 0,
-            "vwap": 0,
-            "vwap_trend_prev": "unknown",
-            "vwap_trend": "unknown",
             "wyckoff": None
         }
 
     supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
-    vwap_prev, vwap = df["VWAP"].iloc[-2], df["VWAP"].iloc[-1]
 
     return {
         "supertrend_prev": supertrend_prev,
         "supertrend": supertrend,
         "supertrend_trend_prev": "uptrend" if df["SuperTrend"].shift().gt(0).iloc[-2] else "downtrend",
         "supertrend_trend": "uptrend" if df["SuperTrend"].shift().gt(0).iloc[-1] else "downtrend",
-        "vwap_prev": vwap_prev,
-        "vwap": vwap,
-        "vwap_trend_prev": "uptrend" if mid > vwap_prev else "downtrend",
-        "vwap_trend": "uptrend" if mid > vwap else "downtrend",
         "wyckoff": wyckoff
     }
