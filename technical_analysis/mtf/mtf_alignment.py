@@ -112,12 +112,6 @@ def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, int
 def calculate_overall_confidence(short_term: TimeframeGroupAnalysis, intermediate: TimeframeGroupAnalysis, long_term: TimeframeGroupAnalysis, context: TimeframeGroupAnalysis) -> float:
     """
     Calculate overall confidence using a simplified algorithm optimized for crypto.
-    
-    This new implementation focuses on:
-    1. Directional agreement between timeframes
-    2. Volume confirmation
-    3. Momentum intensity
-    4. Adaptability to crypto market volatility
     """
     
     # Calculate directional agreement score directly
@@ -134,12 +128,33 @@ def calculate_overall_confidence(short_term: TimeframeGroupAnalysis, intermediat
     # Calculate momentum intensity directly
     momentum_score = _calculate_momentum_score_direct(short_term, intermediate)
 
+    # Detect early strong signals in short timeframes that deserve higher confidence
+    early_signal_boost = 0.0
+    if short_term is not None and intermediate is not None:
+        # Boost for strong alignment in shorter timeframes
+        if short_term.internal_alignment >= 0.7 and short_term.volume_strength >= 0.65:
+            early_signal_boost += 0.1
+        
+        # Boost for clear directional bias with volume
+        if short_term.momentum_bias != MultiTimeframeDirection.NEUTRAL and short_term.volume_strength >= 0.6:
+            early_signal_boost += 0.05
+        
+        # Boost for strong alignment between short and intermediate
+        if (short_term.momentum_bias == intermediate.momentum_bias and 
+            short_term.momentum_bias != MultiTimeframeDirection.NEUTRAL and
+            short_term.volume_strength >= 0.6):
+            early_signal_boost += 0.12
+    
+    # Base confidence calculation
     confidence = (
         directional_score * DIRECTIONAL_WEIGHT +
         volume_score * VOLUME_WEIGHT +
         alignment_score * ALIGNMENT_WEIGHT +
         momentum_score * MOMENTUM_WEIGHT
     )
+    
+    # Apply early signal boost (capped)
+    confidence = min(1.0, confidence + early_signal_boost)
 
     return max(min(confidence, 1.0), BASE_CONFIDENCE_THRESHOLD)
 
@@ -231,7 +246,6 @@ def _calculate_momentum_score_direct(short_term: Optional[TimeframeGroupAnalysis
                                      intermediate: Optional[TimeframeGroupAnalysis]) -> float:
     """
     Calculate momentum score focusing on short and intermediate timeframes.
-    For crypto trading, momentum is particularly important.
     """
     # Focus primarily on short and intermediate timeframes
     relevant_analyses = []
@@ -258,27 +272,27 @@ def _calculate_momentum_score_direct(short_term: Optional[TimeframeGroupAnalysis
         adjusted_momentum = abs(momentum) * analysis.internal_alignment
         
         # Further adjust by volume - volume confirms momentum
-        adjusted_momentum *= (0.5 + 0.5 * analysis.volume_strength)
+        adjusted_momentum *= (0.6 + 0.4 * analysis.volume_strength)  # Increased base factor
         
-        # Add a dampening factor to reduce overall momentum scores
-        adjusted_momentum *= 0.85  # Reduce momentum by 15%
+        # Reduced dampening factor
+        adjusted_momentum *= 0.95  # Only reduce momentum by 5% instead of 15%
         
         momentum_values.append(adjusted_momentum)
     
     avg_momentum = sum(momentum_values) / len(momentum_values) if momentum_values else 0.0
     
-    # Apply a less steep curve for crypto momentum
-    if avg_momentum > 0.6:
-        return min(1.0, avg_momentum * 1.1)  # Reduced boost from 1.3 to 1.1
+    # Apply a more responsive curve for crypto momentum
+    if avg_momentum > 0.5:  # Lowered threshold from 0.6 to 0.5
+        return min(1.0, avg_momentum * 1.15)  # Increased boost
     else:
-        return avg_momentum * 0.9  # Further reduction of 10% for lower momentum scores
+        return avg_momentum * 0.95  # Reduced penalty
 
 def _calculate_volume_score_direct(short_term: Optional[TimeframeGroupAnalysis], 
                                   intermediate: Optional[TimeframeGroupAnalysis],
                                   long_term: Optional[TimeframeGroupAnalysis],
                                   context: Optional[TimeframeGroupAnalysis]) -> float:
     """
-    Calculate volume confirmation score with direct timeframe parameters.
+    Calculate volume confirmation score with improved early signal detection.
     """
     weighted_scores = []
     
@@ -288,29 +302,29 @@ def _calculate_volume_score_direct(short_term: Optional[TimeframeGroupAnalysis],
 
         score = analysis.volume_strength
         
-        # Apply multiplier based on timeframe group
+        # Apply multiplier based on timeframe group - increased short-term importance
         if analysis == short_term:
-            multiplier = 1.1
+            multiplier = 1.25  # Increased from 1.1
         elif analysis == intermediate:
-            multiplier = 1.0
+            multiplier = 1.05  # Increased from 1.0
         else:
             multiplier = 0.9
 
-        # Apply action-based adjustments
+        # Apply action-based adjustments - increased weights
         if analysis.dominant_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
-            multiplier *= 1.15
+            multiplier *= 1.25  # Increased from 1.15
         elif analysis.dominant_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
-            multiplier *= 1.05
+            multiplier *= 1.15  # Increased from 1.05
 
         weighted_scores.append(score * multiplier * analysis.internal_alignment)
     
     avg_volume_score = sum(weighted_scores) / len(weighted_scores) if weighted_scores else 0.0
     
-    # Add a dampening factor to all volume scores
-    avg_volume_score *= 0.9
+    # Reduced dampening factor
+    avg_volume_score *= 0.95  # Reduced penalty from 0.9
     
-    # Apply a more controlled scaling for crypto markets
-    if avg_volume_score > 0.7:
-        avg_volume_score *= 1.1  # Reduced from 1.2
+    # Apply a more aggressive scaling for crypto markets
+    if avg_volume_score > 0.6:  # Lowered threshold from 0.7
+        avg_volume_score *= 1.15  # Increased boost from 1.1
     
     return min(1.0, avg_volume_score)
