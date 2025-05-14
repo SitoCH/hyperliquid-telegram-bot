@@ -42,8 +42,6 @@ def detect_wyckoff_signs(
     # Use dedicated Wyckoff sign detection parameters from settings
     volatility_factor = timeframe.settings.wyckoff_volatility_factor
     trend_lookback = timeframe.settings.wyckoff_trend_lookback
-    st_tolerance_low = timeframe.settings.wyckoff_st_tolerance_low
-    st_tolerance_high = timeframe.settings.wyckoff_st_tolerance_high
     lps_volume_threshold = timeframe.settings.wyckoff_lps_volume_threshold
     lps_price_multiplier = timeframe.settings.wyckoff_lps_price_multiplier
     sos_multiplier = timeframe.settings.wyckoff_sos_multiplier
@@ -76,10 +74,8 @@ def detect_wyckoff_signs(
             weighted_confirms = (recent_changes > adjusted_threshold) * weights
         else:  # Down trend
             weighted_confirms = (recent_changes < -adjusted_threshold) * weights
-            
-        # Require higher confirmation threshold (adjusted up by 15%)
-        stricter_threshold = confirmation_threshold * 1.15
-        return weighted_confirms.sum() >= np.sum(weights) * stricter_threshold
+
+        return weighted_confirms.sum() >= np.sum(weights) * confirmation_threshold
         
     def confirm_volume(window: int, threshold: float) -> bool:
         """Check if volume confirms a significant move with stricter criteria."""

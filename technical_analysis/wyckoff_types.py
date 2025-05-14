@@ -215,8 +215,6 @@ class TimeframeSettings:
     
     wyckoff_volatility_factor: float = 1.0
     wyckoff_trend_lookback: int = 5
-    wyckoff_st_tolerance_low: float = 0.996
-    wyckoff_st_tolerance_high: float = 1.012
     wyckoff_lps_volume_threshold: float = 0.3
     wyckoff_lps_price_multiplier: float = 0.7
     wyckoff_sos_multiplier: float = 1.2
@@ -285,7 +283,7 @@ class Timeframe(Enum):
 # Optimized Timeframe Settings for Intraday Crypto Trading with Hourly Analysis
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.20,
+        phase_weight=0.18,
         description="15min tactical entries",
         chart_image_time_delta=pd.Timedelta(hours=12),
         
@@ -314,8 +312,6 @@ _TIMEFRAME_SETTINGS = {
 
         wyckoff_volatility_factor=0.68,
         wyckoff_trend_lookback=3,
-        wyckoff_st_tolerance_low=0.988,
-        wyckoff_st_tolerance_high=1.022,
         wyckoff_lps_volume_threshold=0.20,
         wyckoff_lps_price_multiplier=0.58,
         wyckoff_sos_multiplier=1.02,
@@ -326,7 +322,7 @@ _TIMEFRAME_SETTINGS = {
     ),
     
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.25,
+        phase_weight=0.22,
         description="30min intraday swings",
         chart_image_time_delta=pd.Timedelta(hours=24),
         
@@ -355,8 +351,6 @@ _TIMEFRAME_SETTINGS = {
 
         wyckoff_volatility_factor=0.82,
         wyckoff_trend_lookback=4,
-        wyckoff_st_tolerance_low=0.990,
-        wyckoff_st_tolerance_high=1.020,
         wyckoff_lps_volume_threshold=0.25,
         wyckoff_lps_price_multiplier=0.65,
         wyckoff_sos_multiplier=1.12,
@@ -367,7 +361,7 @@ _TIMEFRAME_SETTINGS = {
     ),
     
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.30,
+        phase_weight=0.35,
         description="1h primary daily trend",
         chart_image_time_delta=pd.Timedelta(hours=48),
         
@@ -395,9 +389,7 @@ _TIMEFRAME_SETTINGS = {
         low_threshold=0.88,
 
         wyckoff_volatility_factor=0.88,
-        wyckoff_trend_lookback=4,
-        wyckoff_st_tolerance_low=0.992,
-        wyckoff_st_tolerance_high=1.017,
+        wyckoff_trend_lookback=5,
         wyckoff_lps_volume_threshold=0.28,
         wyckoff_lps_price_multiplier=0.65,
         wyckoff_sos_multiplier=1.1,
@@ -437,8 +429,6 @@ _TIMEFRAME_SETTINGS = {
 
         wyckoff_volatility_factor=0.92,
         wyckoff_trend_lookback=4,
-        wyckoff_st_tolerance_low=0.993,
-        wyckoff_st_tolerance_high=1.014,
         wyckoff_lps_volume_threshold=0.28,
         wyckoff_lps_price_multiplier=0.68,
         wyckoff_sos_multiplier=1.15,
@@ -478,8 +468,6 @@ _TIMEFRAME_SETTINGS = {
 
         wyckoff_volatility_factor=0.95,
         wyckoff_trend_lookback=5,
-        wyckoff_st_tolerance_low=0.995,
-        wyckoff_st_tolerance_high=1.012,
         wyckoff_lps_volume_threshold=0.30,
         wyckoff_lps_price_multiplier=0.7,
         wyckoff_sos_multiplier=1.15,
@@ -519,8 +507,6 @@ _TIMEFRAME_SETTINGS = {
 
         wyckoff_volatility_factor=1.1,
         wyckoff_trend_lookback=6,
-        wyckoff_st_tolerance_low=0.996,
-        wyckoff_st_tolerance_high=1.008,
         wyckoff_lps_volume_threshold=0.32,
         wyckoff_lps_price_multiplier=0.75,
         wyckoff_sos_multiplier=1.25,
