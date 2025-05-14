@@ -145,7 +145,7 @@ def calculate_overall_confidence(short_term: TimeframeGroupAnalysis, intermediat
             short_term.volume_strength >= 0.6):
             early_signal_boost += 0.12
 
-        if (intermediate.internal_alignment >= 0.7 and 
+        if (intermediate.internal_alignment >= 0.7 and intermediate.volume_strength >= 0.6 and
             intermediate.momentum_bias != MultiTimeframeDirection.NEUTRAL):
             early_signal_boost += 0.06
     
