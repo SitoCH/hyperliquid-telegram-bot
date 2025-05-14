@@ -107,7 +107,6 @@ def analyze_multi_timeframe(
         
         notification_checks = [
             (all_analysis.confidence_level >= min_confidence, f"Low confidence: {all_analysis.confidence_level:.2f} < {min_confidence:.2f}"),
-            (all_analysis.intermediate.volatility_state != VolatilityState.HIGH, "Choppy intermediate market conditions detected"),
             (all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL, "Neutral market direction"),
             (all_analysis.short_term.dominant_sign != WyckoffSign.SECONDARY_TEST_RESISTANCE, "Secondary Test Resistance (STR) on short-term"),
             (all_analysis.short_term.dominant_sign != WyckoffSign.SECONDARY_TEST, "Secondary Test (ST) on short-term"),
