@@ -283,23 +283,23 @@ class Timeframe(Enum):
 # Optimized Timeframe Settings for Intraday Crypto Trading with Hourly Analysis
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.18,
+        phase_weight=0.15,
         description="15min tactical entries",
         chart_image_time_delta=pd.Timedelta(hours=12),
         
         ema_length=9,
         atr_settings=(12, 7, 16, 5, 7),
-        supertrend_multiplier=1.7,
+        supertrend_multiplier=1.9,
         base_multiplier=0.75,
         momentum_multiplier=1.4,
         
-        volume_ma_window=12,
+        volume_ma_window=16,
         
-        spring_upthrust_window=3,
-        support_resistance_lookback=30,
+        spring_upthrust_window=4,
+        support_resistance_lookback=36,
         swing_lookback=3,
         effort_lookback=3,
-        min_move_multiplier=0.65,
+        min_move_multiplier=0.8,
         
         spring_factor=0.80,
         liquidation_factor=0.82,
@@ -318,11 +318,11 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_ut_multiplier=0.30,
         wyckoff_sc_multiplier=1.02,
         wyckoff_ar_multiplier=0.92,
-        wyckoff_confirmation_threshold=0.25
+        wyckoff_confirmation_threshold=0.28
     ),
     
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.22,
+        phase_weight=0.20,
         description="30min intraday swings",
         chart_image_time_delta=pd.Timedelta(hours=24),
         
@@ -330,7 +330,7 @@ _TIMEFRAME_SETTINGS = {
         atr_settings=(16, 10, 20, 7, 9),
         supertrend_multiplier=2.0,
         base_multiplier=0.8,
-        momentum_multiplier=1.4,
+        momentum_multiplier=1.5,
         
         volume_ma_window=16,
         
@@ -357,11 +357,11 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_ut_multiplier=0.35,
         wyckoff_sc_multiplier=1.1,
         wyckoff_ar_multiplier=1.0,
-        wyckoff_confirmation_threshold=0.28
+        wyckoff_confirmation_threshold=0.31
     ),
     
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.35,
+        phase_weight=0.40,
         description="1h primary daily trend",
         chart_image_time_delta=pd.Timedelta(hours=48),
         
