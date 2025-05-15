@@ -218,13 +218,13 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                         position['position']['coin'],
                         f"{fmt(float(position['position']['positionValue']))}$",
                         f"{fmt(float(position['position']['unrealizedPnl']))}$",
-                        f"({fmt(float(position['position']['returnOnEquity']) * 100.0)}%)"
+                        f"{fmt(float(position['position']['returnOnEquity']) * 100.0)}%"
                     ]
                     for position in sorted_positions
                 ],
-                headers=["", "Coin", "Balance", "PnL", ""],
+                headers=["", "Coin", "Balance", "PnL $", "PnL %"],
                 tablefmt=tablefmt,
-                colalign=("left", "left", "right", "right", "left")
+                colalign=("left", "left", "right", "right", "right")
             )
 
             message_lines.append(f"<pre>{table}</pre>")
