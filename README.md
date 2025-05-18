@@ -58,6 +58,7 @@ docker-compose up -d
 | HTB_ANALYZE_COINS_WITH_OPEN_ORDERS | Include coins with open orders in analysis | "True" | False |
 | HTB_COINS_ANALYSIS_MIN_CONFIDENCE | Minimum confidence level for coin analysis notifications | "0.75" | 0.75 |
 | HTB_MONITOR_STALE_POSITIONS | Monitor positions older than 1 day with positive PnL | "True" | False |
+| HTB_USE_ISOLATED_LEVERAGE | Use isolated leverage instead of cross | "True" | True |
 | HTB_ALPHAVANTAGE_API_KEY | API key for Alpha Vantage (required for performance comparison against S&P500) | "XXXXXXXXXXXXXXXX" | None |
 
 ## Trading Strategies
