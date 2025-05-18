@@ -16,6 +16,8 @@ class PortfolioBalance:
     perp_available: float 
     spot_total: float
     stacked_total: float
+    cross_margin_ratio: float
+    cross_account_leverage: float
     
     @property
     def total(self) -> float:
@@ -46,12 +48,18 @@ def _get_portfolio_balance() -> PortfolioBalance:
     spot_state = hyperliquid_utils.info.spot_user_state(address)
     token_prices = _get_token_prices()
     staking_summary = hyperliquid_utils.info.user_staking_summary(address)
+
+    cross_margin_account_value =float(perp_state['crossMarginSummary']['accountValue'])
+    cross_margin_positions_value =float(perp_state['crossMarginSummary']['totalNtlPos'])
+    maintenance_margin = float(perp_state['crossMaintenanceMarginUsed'])
     
     return PortfolioBalance(
         perp_total=float(perp_state['marginSummary']['accountValue']),
         perp_available=float(perp_state['withdrawable']),
         spot_total=_calculate_spot_balance(spot_state, token_prices),
         stacked_total=_calculate_stacked_balance(staking_summary, token_prices),
+        cross_margin_ratio = maintenance_margin / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
+        cross_account_leverage = cross_margin_positions_value / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
     )
 
 def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
@@ -78,6 +86,12 @@ def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
         f"Total balance: {fmt(balance.perp_total)} USDC", 
         f"Available balance: {fmt(balance.perp_available)} USDC",
     ])
+
+    if balance.cross_margin_ratio > 0:
+        message.extend([
+            f"Cross margin ratio: {fmt(balance.cross_margin_ratio * 100)}%",
+            f"Cross account leverage: {fmt(balance.cross_account_leverage)}x"
+        ])
 
     return message
 
