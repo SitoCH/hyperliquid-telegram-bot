@@ -326,7 +326,7 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE],
             balance_to_use = available_balance * amount / 100.0
             leverage = context.user_data.get('leverage', 1) # type: ignore
             use_isolated_leverage = os.getenv('HTB_USE_ISOLATED_LEVERAGE', 'True') == 'True'
-            update_leverage_result = exchange.update_leverage(leverage, selected_coin, use_isolated_leverage)
+            update_leverage_result = exchange.update_leverage(leverage, selected_coin, not use_isolated_leverage)
             logger.info(update_leverage_result)
             sz_decimals = hyperliquid_utils.get_sz_decimals()
             sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
