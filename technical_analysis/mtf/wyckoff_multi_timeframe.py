@@ -98,85 +98,58 @@ def analyze_multi_timeframe(
                 context_analysis
             ),
             alignment_score= calculate_overall_alignment(short_term_analysis, intermediate_analysis)
-        )
-
-        # Generate comprehensive description
+        )        # Generate comprehensive description
         description = generate_all_timeframes_description(coin, all_analysis, mid, significant_levels, interactive_analysis)
-
-        min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.75"))
+        
+        min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
         
         notification_checks = [
             (all_analysis.confidence_level >= min_confidence, f"Low confidence: {all_analysis.confidence_level:.2f} < {min_confidence:.2f}"),
             (all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL, "Neutral market direction"),
-            (all_analysis.short_term.dominant_sign != WyckoffSign.SECONDARY_TEST_RESISTANCE, "Secondary Test Resistance (STR) on short-term"),
-            (all_analysis.short_term.dominant_sign != WyckoffSign.SECONDARY_TEST, "Secondary Test (ST) on short-term"),
-            # Be more lenient with short-term uncertainty if intermediate is certain
-            ((not all_analysis.short_term.uncertain_phase or not all_analysis.intermediate.uncertain_phase), "Both short and intermediate timeframes show uncertain phases"),
-            # Instead of checking only the dominant phase, check if any phase is not ranging
+            # Simplified phase checks - allow more signals through
             ((all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING or 
-              all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING), 
-             "Both short and intermediate timeframes are ranging"),
+              all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING or
+              all_analysis.short_term.momentum_bias != MultiTimeframeDirection.NEUTRAL or
+              all_analysis.intermediate.momentum_bias != MultiTimeframeDirection.NEUTRAL), 
+             "All timeframes are ranging or neutral"),
+            # Basic alignment check
+            (all_analysis.alignment_score >= 0.35, f"Low alignment: {all_analysis.alignment_score:.2f} < 0.35"),
         ]
         
         should_notify = all(check[0] for check in notification_checks)
-        
-        # Log reasons for not notifying
+          # Log reasons for not notifying
         if not should_notify:
             reasons = [reason for condition, reason in notification_checks if not condition]
             logger.info(f"Notification suppressed for {coin} due to following reasons:")
             for reason in reasons:
                 logger.info(f"- {reason}")
         
-        # Add direction-specific criteria
-        if should_notify and all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:
-            bullish_checks = [
-                (all_analysis.short_term.internal_alignment >= 0.50, f"Low short-term alignment: {all_analysis.short_term.internal_alignment:.2f} < 0.50"),
-                (all_analysis.intermediate.internal_alignment >= 0.45, f"Low intermediate alignment: {all_analysis.intermediate.internal_alignment:.2f} < 0.45"),
-                (momentum_intensity >= WEAK_MOMENTUM, f"Weak momentum: {momentum_intensity:.2f} < {WEAK_MOMENTUM:.2f}"),
-                (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKUP or 
-                 all_analysis.short_term.dominant_phase == WyckoffPhase.ACCUMULATION or
-                 all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKUP or
-                 all_analysis.intermediate.dominant_phase == WyckoffPhase.ACCUMULATION or
-                 all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BULLISH or
-                 all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BULLISH, 
-                 "Missing bullish confirmation signals"),
-                (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD, 
-                f"Low intermediate volume strength: {all_analysis.intermediate.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD:.2f}"),
-                (all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.9, 
-                f"Low short-term volume strength: {all_analysis.short_term.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD * 0.9:.2f}"),
-            ]
+        # Simplified direction-specific criteria - more balanced for crypto
+        if should_notify:
+            direction_checks = []
             
-            should_notify = all(check[0] for check in bullish_checks)
+            if all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:
+                direction_checks = [
+                    (all_analysis.short_term.internal_alignment >= 0.45 or all_analysis.intermediate.internal_alignment >= 0.45, 
+                     f"Low alignment in both timeframes"),
+                    (momentum_intensity >= WEAK_MOMENTUM * 0.8, f"Weak momentum: {momentum_intensity:.2f}"),
+                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.8, 
+                     f"Low volume strength: {all_analysis.intermediate.volume_strength:.2f}"),
+                ]
+            else:  # BEARISH
+                direction_checks = [
+                    (all_analysis.short_term.internal_alignment >= 0.45 or all_analysis.intermediate.internal_alignment >= 0.45, 
+                     f"Low alignment in both timeframes"),
+                    (momentum_intensity >= WEAK_MOMENTUM * 0.7, f"Weak momentum: {momentum_intensity:.2f}"),
+                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.6, 
+                     f"Low volume strength: {all_analysis.intermediate.volume_strength:.2f}"),
+                ]
             
-            if not should_notify:
-                reasons = [reason for condition, reason in bullish_checks if not condition]
-                logger.info(f"Bullish notification suppressed for {coin} due to following reasons:")
-                for reason in reasons:
-                    logger.info(f"- {reason}")
-                
-        elif should_notify:  # BEARISH
-            bearish_checks = [
-                (all_analysis.short_term.internal_alignment >= 0.50, f"Low short-term alignment: {all_analysis.short_term.internal_alignment:.2f} < 0.50"),
-                (all_analysis.intermediate.internal_alignment >= 0.45, f"Low intermediate alignment: {all_analysis.intermediate.internal_alignment:.2f} < 0.45"),
-                (momentum_intensity >= WEAK_MOMENTUM * 0.85, f"Weak momentum: {momentum_intensity:.2f} < {WEAK_MOMENTUM * 0.85:.2f}"),
-                (all_analysis.short_term.dominant_phase == WyckoffPhase.MARKDOWN or 
-                 all_analysis.short_term.dominant_phase == WyckoffPhase.DISTRIBUTION or
-                 all_analysis.intermediate.dominant_phase == WyckoffPhase.MARKDOWN or
-                 all_analysis.intermediate.dominant_phase == WyckoffPhase.DISTRIBUTION or
-                 all_analysis.short_term.momentum_bias == MultiTimeframeDirection.BEARISH or
-                 all_analysis.intermediate.momentum_bias == MultiTimeframeDirection.BEARISH,
-                 "Missing bearish confirmation signals"),
-                (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.7, 
-                f"Low intermediate volume strength: {all_analysis.intermediate.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD * 0.7:.2f}"),
-                (all_analysis.short_term.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.9 * 0.7, 
-                f"Low short-term volume strength: {all_analysis.short_term.volume_strength:.2f} < {MODERATE_VOLUME_THRESHOLD * 0.9 * 0.7:.2f}"),
-            ]
-            
-            should_notify = all(check[0] for check in bearish_checks)
+            should_notify = all(check[0] for check in direction_checks)
             
             if not should_notify:
-                reasons = [reason for condition, reason in bearish_checks if not condition]
-                logger.info(f"Bearish notification suppressed for {coin} due to following reasons:")
+                reasons = [reason for condition, reason in direction_checks if not condition]
+                logger.info(f"{all_analysis.overall_direction.value.title()} notification suppressed for {coin}:")
                 for reason in reasons:
                     logger.info(f"- {reason}")
 
@@ -386,9 +359,7 @@ def _analyze_timeframe_group(
     # Calculate internal alignment
     phase_alignment = max(phase_weights.values()) / total_weight if phase_weights else 0
     action_alignment = max(action_weights.values()) / total_weight if action_weights else 0
-    internal_alignment = (phase_alignment + action_alignment) / 2
-
-    # Enhanced volume strength calculation with improved volume state handling
+    internal_alignment = (phase_alignment + action_alignment) / 2    # Enhanced volume strength calculation with improved volume state handling
     volume_factors = []
     total_volume_weight = 0.0
     has_very_high_volume = any(state.volume == VolumeState.VERY_HIGH for state in group.values())
@@ -399,11 +370,9 @@ def _analyze_timeframe_group(
 
     for s in group.values():
         # Primary phase signals - core market structure signals
-        if is_bullish_phase(s.phase) and upside_exhaustion < len(group) // 2:
-            # Non-exhausted bullish phase
+        if is_bullish_phase(s.phase):
             bullish_signals += 1.0
-        elif is_bearish_phase(s.phase) and downside_exhaustion < len(group) // 2:
-            # Non-exhausted bearish phase
+        elif is_bearish_phase(s.phase):
             bearish_signals += 1.0
 
         # Action signals - immediate behavior signals
@@ -439,14 +408,12 @@ def _analyze_timeframe_group(
             # High volume in accumulation/distribution often signals impending breakout
             base_strength *= 1.15
         
-        # Direction-specific volume interpretation
-        # Lower volume requirements for bearish moves
+        # Direction-specific volume interpretation - crypto needs less volume for bearish moves
         if directional_bias == MultiTimeframeDirection.BEARISH:
             # For bearish bias, increase effective volume strength
             base_strength *= 1.3  # 30% boost to volume strength for bearish bias
         
         # Consider timeframe-specific volume characteristics
-        # Higher importance for longer timeframes and more extreme settings
         volume_importance = tf.settings.volume_ma_window / 20.0  # Normalize based on typical window size
 
         # Add the weighted volume factor to our list
@@ -467,29 +434,26 @@ def _analyze_timeframe_group(
     # Direction-specific volume adjustment - applies to final value
     if directional_bias == MultiTimeframeDirection.BEARISH:
         # For bearish moves, allow lower volume thresholds
-        # This is in addition to the per-state adjustment above
         volume_strength = min(1.0, volume_strength * 1.15)  # 15% additional boost
 
     # Clamp volume strength between 0 and 1
-    volume_strength = max(0.0, min(1.0, volume_strength))
+    volume_strength = max(0.0, min(1.0, volume_strength))    # Improved exhaustion detection for crypto markets
+    exhaustion_threshold = max(2, int(len(group) * 0.6))  # More balanced threshold
+    severe_exhaustion_threshold = max(3, int(len(group) * 0.8))  # Higher for severe
 
-    # Improved exhaustion detection for crypto markets
-    exhaustion_threshold = int(len(group) * 0.5)  # More sensitive than before (was 0.6)
-    severe_exhaustion_threshold = int(len(group) * 0.75)
-
-    # Different penalties based on severity
+    # Different penalties based on severity - less harsh for crypto
     if upside_exhaustion >= severe_exhaustion_threshold or downside_exhaustion >= severe_exhaustion_threshold:
-        volume_strength *= 0.6  # Severe exhaustion (stronger penalty)
+        volume_strength *= 0.75  # Reduced penalty (was 0.6)
     elif upside_exhaustion >= exhaustion_threshold or downside_exhaustion >= exhaustion_threshold:
-        volume_strength *= 0.75  # Moderate exhaustion
+        volume_strength *= 0.85  # Reduced penalty (was 0.75)
 
     # Check for divergence between volume and price - common in crypto turning points
     divergence_count = sum(1 for s in group.values() if
         (s.effort_vs_result == EffortResult.WEAK and s.volume in [VolumeState.HIGH, VolumeState.VERY_HIGH]))
 
-    # Apply penalty for significant divergence
-    if divergence_count >= len(group) // 3:
-        volume_strength *= 0.85
+    # Apply penalty for significant divergence - less harsh
+    if divergence_count >= len(group) // 2:  # More than half showing divergence
+        volume_strength *= 0.9  # Lighter penalty (was 0.85)
 
     # Calculate funding sentiment (-1 to 1)
     funding_signals = []
