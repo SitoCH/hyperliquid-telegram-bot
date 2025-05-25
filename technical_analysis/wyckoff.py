@@ -104,13 +104,17 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         )
 
 def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol_metrics: VolumeMetrics) -> tuple[bool, bool]:
-    """Enhanced spring/upthrust detection with more balanced signal generation."""
-    if idx < 4:  # Maintain original lookback for better reliability
+    """Enhanced spring/upthrust detection with improved validation and edge case handling."""
+    if idx < 4 or len(df) <= idx:  # Added upper bound check
         return False, False
     
     try:
         # Use standard window for better reliability
-        window = df.iloc[idx-4:idx+1]
+        window = df.iloc[max(0, idx-4):idx+1]  # Ensure we don't go below 0
+        
+        if len(window) < 3:  # Need minimum window size
+            return False, False
+            
         low_point = window['l'].min()
         high_point = window['h'].max()
         close = window['c'].iloc[-1]
@@ -119,6 +123,8 @@ def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol
         
         # Calculate volatility context
         price = df['c'].iloc[-1]
+        if price <= 0:  # Invalid price
+            return False, False
         
         # Get adaptive thresholds based on market conditions
         thresholds = AdaptiveThresholdManager.get_spring_upthrust_thresholds(df, timeframe)
@@ -127,25 +133,30 @@ def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol
         
         # Check for extremely large candle wicks to avoid false signals
         max_wick = thresholds.get("max_wick", 0.2)
-        if (window['h'].max() - window['l'].min()) > price * max_wick:
+        total_range = window['h'].max() - window['l'].min()
+        if total_range > price * max_wick:
             return False, False
             
         # Volume must be significant for both patterns
         if vol_metrics.strength <= 1.0:
             return False, False
         
-        # Spring detection - optimized to separate conditions for clarity
+        # Spring detection - more precise conditions
+        spring_bounce = abs(close - current_low) if current_low < low_point else 0
         is_spring = (
             current_low < low_point and         # Makes new low
             close > low_point and               # Closes above the low
-            abs(close - current_low) > price * spring_threshold  # Significant bounce
+            spring_bounce > price * spring_threshold and  # Significant bounce
+            close > current_low * 1.005        # Closes meaningfully above the low
         )
         
-        # Upthrust detection - optimized to separate conditions for clarity
+        # Upthrust detection - more precise conditions  
+        upthrust_rejection = abs(current_high - close) if current_high > high_point else 0
         is_upthrust = (
             current_high > high_point and       # Makes new high
             close < high_point and              # Closes below the high
-            abs(current_high - close) > price * upthrust_threshold  # Significant rejection
+            upthrust_rejection > price * upthrust_threshold and  # Significant rejection
+            close < current_high * 0.995       # Closes meaningfully below the high
         )
         
         return is_spring, is_upthrust
@@ -267,15 +278,19 @@ def identify_wyckoff_phase(
     effort_vs_result: pd.Series
 ) -> Tuple[WyckoffPhase, bool]:
     """Enhanced Wyckoff phase identification optimized for intraday crypto trading."""
-
-    # Calculate values internally that were previously passed as parameters
-    recent_change = df['c'].pct_change(3).iloc[-1]
-    curr_volume = df['v'].iloc[-1]
-
-    # Calculate high volume price level
-    decay_factor = -np.log(2) / 100
-    weights = np.exp(np.linspace(decay_factor * len(df), 0, len(df)))
-    weights = weights / weights.sum()
+    
+    # Use volume state from vol_metrics to avoid redundancy
+    volume_state = vol_metrics.state
+      # Calculate values internally with proper error handling
+    try:
+        recent_change = df['c'].pct_change(3).iloc[-1]
+        curr_volume = df['v'].iloc[-1]
+        
+        # Validate inputs
+        if pd.isna(recent_change) or pd.isna(curr_volume):
+            return WyckoffPhase.UNKNOWN, True
+    except (IndexError, ValueError):
+        return WyckoffPhase.UNKNOWN, True
 
     # Detect scalping opportunities based on timeframe
     is_scalp_timeframe = timeframe in SHORT_TERM_TIMEFRAMES
@@ -285,11 +300,10 @@ def identify_wyckoff_phase(
         # Use higher volume states for more reliable breakout signals
         has_significant_volume = volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH)
         if abs(recent_change) > breakout_threshold and has_significant_volume:
-            return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False
-
-    # Enhanced liquidation cascade detection with adaptive thresholds
-    volume_impulse = curr_volume / (vol_metrics.sma + 1e-8)
-    price_velocity = abs(recent_change) / (volatility.mean() + 1e-8)
+            return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False    # Enhanced liquidation cascade detection with proper safety checks
+    volume_impulse = curr_volume / max(vol_metrics.sma, 1e-8)
+    volatility_mean = max(volatility.mean(), 1e-8)
+    price_velocity = abs(recent_change) / volatility_mean
     
     # Get adaptive liquidation detection thresholds
     liquidation_thresholds = AdaptiveThresholdManager.get_liquidation_thresholds(df, timeframe)
@@ -298,21 +312,24 @@ def identify_wyckoff_phase(
     velocity_threshold = liquidation_thresholds["velocity_threshold"]
     effort_threshold = liquidation_thresholds["effort_threshold"]
 
+    # Improved liquidation detection with safety checks
     is_liquidation = (
         abs(recent_change) > price_threshold and  
         volume_impulse > vol_threshold and       
         price_velocity > velocity_threshold and   
+        len(effort_vs_result) > 0 and
         abs(effort_vs_result.iloc[-1]) > effort_threshold 
     )
 
-    # Enhanced cascade detection using hourly execution awareness
-    # Track if this signal is changing within a short period
-    cascade_signal_strength = (abs(recent_change) / price_threshold) * (volume_impulse / vol_threshold)
-
     if is_liquidation:
-        # Check for potential reversal after liquidation
+        # Calculate cascade signal strength with safety checks
+        cascade_signal_strength = (
+            (abs(recent_change) / max(price_threshold, 1e-8)) * 
+            (volume_impulse / max(vol_threshold, 1e-8))
+        )
+          # Check for potential reversal after liquidation
         if cascade_signal_strength > 1.5:  # Strong liquidation event
-            return (WyckoffPhase.ACCUMULATION if recent_change > 0 else WyckoffPhase.DISTRIBUTION), True
+            return (WyckoffPhase.ACCUMULATION if recent_change < 0 else WyckoffPhase.DISTRIBUTION), True
         return (WyckoffPhase.MARKUP if recent_change > 0 else WyckoffPhase.MARKDOWN), False
 
     # Rest of the existing phase determination logic
@@ -325,99 +342,50 @@ def determine_phase_by_price_strength(
     volume_state: VolumeState, volatility: pd.Series,
     timeframe: Timeframe
 ) -> Tuple[WyckoffPhase, bool]:
-    """Enhanced phase determination with more decisive phase identification."""
+    """Enhanced phase determination with cleaner logic and improved certainty assessment."""
 
     _, strong_dev_threshold, neutral_zone_threshold, \
     momentum_threshold, _, _ = timeframe.settings.thresholds
 
-    # Calculate trend consistency
-    vol_ratio = volatility.iloc[-1] / volatility.mean()
-    
-    # Define confirmation metrics
-    price_trend_consistency = abs(price_strength) > strong_dev_threshold * 0.6
-    momentum_consistency = abs(momentum_strength) > momentum_threshold * 0.7
-
-    # Define extreme momentum conditions
-    is_price_collapsing = momentum_strength < -momentum_threshold * 1.3 and price_strength < -strong_dev_threshold * 0.9
-    is_price_surging = momentum_strength > momentum_threshold * 1.3 and price_strength > strong_dev_threshold * 0.9
-
-    # Use volume state for more nuanced analysis
+    # Calculate trend consistency metrics
+    vol_ratio = volatility.iloc[-1] / max(volatility.mean(), 1e-8)
     has_high_volume = volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH)
     
-    # Quickly mark phases as certain if strong indicators are present
-    if abs(price_strength) > strong_dev_threshold * 1.5 and (price_strength * momentum_strength > 0):
+    # Define strength indicators
+    strong_price = abs(price_strength) > strong_dev_threshold
+    strong_momentum = abs(momentum_strength) > momentum_threshold
+    aligned_signals = (price_strength * momentum_strength) > 0
+    
+    # Very strong conditions - high certainty
+    if strong_price and strong_momentum and aligned_signals:
         if price_strength > 0:
-            return WyckoffPhase.MARKUP if momentum_strength > 0 else WyckoffPhase.DISTRIBUTION, False
-        else:
-            return WyckoffPhase.MARKDOWN if momentum_strength < 0 else WyckoffPhase.ACCUMULATION, False
-
-    # Price above threshold - potential Distribution or Markup
-    if price_strength > strong_dev_threshold:
-        # Check for a price surge (strong positive momentum)
-        if is_price_surging:
-            # If price is surging rapidly, this is markup, not distribution
             return WyckoffPhase.MARKUP, False
-
-        # Distribution requires momentum to be stabilizing or turning down
-        if momentum_strength < momentum_threshold * 0.3:  # Neutral or negative momentum
-            if volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH):
-                return WyckoffPhase.DISTRIBUTION, False
-            else:
-                return WyckoffPhase.DISTRIBUTION, not (price_trend_consistency or momentum_consistency)
         else:
-            # Strong positive momentum with positive price - still in Markup
-            markup_certainty = price_trend_consistency or (
-                volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH) or
-                momentum_consistency > 0.8
-            )
-            return WyckoffPhase.MARKUP, not markup_certainty
-
-    # Price below threshold - potential Accumulation or Markdown
-    if price_strength < -strong_dev_threshold:
-        # Check if we have a price collapse
-        if is_price_collapsing:
-            # If price is collapsing, this is markdown, not accumulation
             return WyckoffPhase.MARKDOWN, False
-
-        # Accumulation requires momentum to be stabilizing or turning up
-        if momentum_strength > -momentum_threshold * 0.3:  # Neutral or positive momentum
-            if volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH):
-                return WyckoffPhase.ACCUMULATION, False
-            else:
-                return WyckoffPhase.ACCUMULATION, not (price_trend_consistency or momentum_consistency)
-        else:
-            # Strong negative momentum with negative price - still in Markdown
-            markdown_certainty = price_trend_consistency or (
-                volume_state in (VolumeState.VERY_HIGH, VolumeState.HIGH) or
-                momentum_consistency > 0.8
-            )
-            return WyckoffPhase.MARKDOWN, not markdown_certainty
     
-    # Enhanced ranging detection with multi-factor certainty
+    # Distribution/Accumulation detection
+    if strong_price and not strong_momentum:
+        if price_strength > strong_dev_threshold:
+            # High price, low momentum suggests distribution
+            return WyckoffPhase.DISTRIBUTION, not has_high_volume
+        elif price_strength < -strong_dev_threshold:
+            # Low price, low momentum suggests accumulation
+            return WyckoffPhase.ACCUMULATION, not has_high_volume
+    
+    # Ranging conditions
     if abs(price_strength) <= neutral_zone_threshold:
-        is_low_volatility = vol_ratio < 0.9
-        
-        # Simplify ranging certainty calculation
-        conflicting_momentum = abs(momentum_strength) > momentum_threshold * 0.6
-        
-        return WyckoffPhase.RANGING, conflicting_momentum and not is_low_volatility
-
-    # Improved trend confirmation
-    trend_strength = abs(momentum_strength) / momentum_threshold
-    is_strong_trend = trend_strength > 1.2 or has_high_volume
-
-    # Check for trend phases (Markup/Markdown)
-    if price_strength > 0:
-        if momentum_strength > momentum_threshold * 0.7:
-            return WyckoffPhase.MARKUP, not is_strong_trend
-        return WyckoffPhase.MARKUP, not (price_trend_consistency or has_high_volume or momentum_strength > 0)
-    elif price_strength < 0:
-        if momentum_strength < -momentum_threshold * 0.7:
-            return WyckoffPhase.MARKDOWN, not is_strong_trend
-        return WyckoffPhase.MARKDOWN, not (price_trend_consistency or has_high_volume or momentum_strength < 0)
+        uncertain = abs(momentum_strength) > momentum_threshold * 0.5
+        return WyckoffPhase.RANGING, uncertain
     
-    # Fallback case is uncertain by default
-    return WyckoffPhase.RANGING, True
+    # Moderate strength conditions
+    if price_strength > 0:
+        phase = WyckoffPhase.MARKUP if momentum_strength > 0 else WyckoffPhase.DISTRIBUTION
+        uncertain = not (strong_price or has_high_volume)
+        return phase, uncertain
+    else:
+        phase = WyckoffPhase.MARKDOWN if momentum_strength < 0 else WyckoffPhase.ACCUMULATION
+        uncertain = not (strong_price or has_high_volume)
+        return phase, uncertain
 
 
 def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState:
@@ -481,7 +449,7 @@ def analyze_effort_result(
     timeframe: Timeframe
 ) -> EffortResult:
     """
-    Balanced effort vs result analysis with more symmetric thresholds and a neutral zone.
+    Balanced effort vs result analysis with improved validation and error handling.
     Args:
         df: Price and volume data
         vol_metrics: Volume metrics from calculate_volume_metrics
@@ -491,33 +459,49 @@ def analyze_effort_result(
         # Get recent data - use timeframe settings
         lookback = timeframe.settings.effort_lookback
         
+        if len(df) < lookback:
+            return EffortResult.UNKNOWN
+            
         recent_df = df.iloc[-lookback:]
         
-        # Calculate normalized price movement
+        # Calculate normalized price movement with validation
         price_change = abs(recent_df['c'].iloc[-1] - recent_df['o'].iloc[-1])
         price_range = recent_df['h'].iloc[-1] - recent_df['l'].iloc[-1]
         
-        # Apply minimum move threshold - symmetrically applied
+        # Validate price data
+        if price_range <= 0 or pd.isna(price_change):
+            return EffortResult.UNKNOWN
+        
+        # Apply minimum move threshold
         min_move = RESULT_MIN_MOVE * timeframe.settings.min_move_multiplier
         
-        # Calculate volume quality with timeframe context
-        volume_consistency = vol_metrics.consistency
-        spread_quality = 1.0 - (abs(recent_df['c'] - recent_df['o']) / (recent_df['h'] - recent_df['l'])).mean()
+        # Calculate volume quality with better validation
+        volume_consistency = max(0.0, min(1.0, vol_metrics.consistency))
         
-        # Use balanced timeframe-specific adjustments
-        if timeframe in SHORT_TERM_TIMEFRAMES:
-            volume_quality = (volume_consistency * 0.5 + spread_quality * 0.5)  # Equal weighting
-        elif timeframe in INTERMEDIATE_TIMEFRAMES:
-            volume_quality = (volume_consistency * 0.5 + spread_quality * 0.5)  # Equal weighting
-        else:
-            volume_quality = (volume_consistency * 0.5 + spread_quality * 0.5)  # Equal weighting
+        # Improved spread quality calculation
+        spread_ratio = (recent_df['h'] - recent_df['l'])
+        close_open_diff = abs(recent_df['c'] - recent_df['o'])
         
-        # Calculate price impact with timeframe-adjusted volume ratio
+        # Avoid division by zero
+        valid_spreads = spread_ratio > 1e-8
+        if valid_spreads.sum() == 0:
+            return EffortResult.UNKNOWN
+            
+        spread_quality = 1.0 - (close_open_diff[valid_spreads] / spread_ratio[valid_spreads]).mean()
+        spread_quality = max(0.0, min(1.0, spread_quality))
+        
+        # Balanced volume quality calculation
+        volume_quality = (volume_consistency * 0.5 + spread_quality * 0.5)
+        
+        # Calculate price impact with improved validation
         avg_price = recent_df['c'].mean()
-        price_impact = price_change / (avg_price * vol_metrics.ratio)
+        if avg_price <= 0 or vol_metrics.ratio <= 0:
+            return EffortResult.UNKNOWN
+            
+        price_impact = price_change / (avg_price * max(vol_metrics.ratio, 0.1))
         
-        # Calculate efficiency score with balanced parameters
-        base_efficiency = price_change / (price_range + 1e-8)
+        # Calculate efficiency score with validation
+        base_efficiency = price_change / max(price_range, 1e-8)
         volume_weighted_efficiency = base_efficiency * (1 + vol_metrics.strength * timeframe.settings.volume_weighted_efficiency)
         
         # Balanced thresholds from settings
@@ -525,42 +509,29 @@ def analyze_effort_result(
         low_threshold = LOW_EFFICIENCY_THRESHOLD * timeframe.settings.low_threshold
         
         # Final efficiency score
-        efficiency = min(1.0, volume_weighted_efficiency)
+        efficiency = min(1.0, max(0.0, volume_weighted_efficiency))
         
-        # Calculate a balanced volume factor
+        # Calculate balanced volume factor
         is_short_timeframe = timeframe in SHORT_TERM_TIMEFRAMES
         volume_factor = vol_metrics.ratio / (EFFORT_VOLUME_THRESHOLD * 
                          (0.9 if is_short_timeframe else 1.0))
         
-        # Define truly neutral zone conditions
-        neutral_price_change = price_change < min_move * 1.5 and price_change > min_move * 0.5
-        neutral_efficiency = efficiency > low_threshold * 1.1 and efficiency < high_threshold * 0.9
-        neutral_volume = volume_quality > 0.4 and volume_quality < 0.6
-        
-        # More symmetric condition structure with UNKNOWN state for truly ambiguous cases
+        # Clear classification logic
         if efficiency > high_threshold and volume_quality > 0.6:
             return EffortResult.STRONG
         elif efficiency < low_threshold and volume_quality < 0.4:
             return EffortResult.WEAK
         elif price_change < min_move * 0.5:
-            # Very small moves are generally weak
             return EffortResult.WEAK
         elif price_impact > 1.2 and volume_factor > 1.1:
-            # Strong price impact and enough volume
             return EffortResult.STRONG
         elif price_impact < 0.4 and volume_factor < 0.7:
-            # Weak price impact despite volume
             return EffortResult.WEAK
-        elif (neutral_price_change and neutral_efficiency) or neutral_volume:
-            # Truly neutral case - neither clearly strong nor weak
-            return EffortResult.UNKNOWN
         elif efficiency > 0.5:
-            # Slightly favor strong when near boundary but not in neutral zone
             return EffortResult.STRONG
         else:
-            # Default to weak for remaining cases
             return EffortResult.WEAK
             
     except Exception as e:
         logger.error(f"Error in effort vs result analysis: {e}")
-        return EffortResult.UNKNOWN  # Changed from WEAK to UNKNOWN for errors
+        return EffortResult.UNKNOWN
