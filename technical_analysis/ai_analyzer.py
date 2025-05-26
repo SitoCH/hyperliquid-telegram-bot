@@ -8,7 +8,7 @@ import requests
 from datetime import datetime
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
-
+from utils import fmt_price
 from logging_utils import logger
 from telegram_utils import telegram_utils
 from hyperliquid_utils.utils import hyperliquid_utils
@@ -31,7 +31,10 @@ class AIAnalysisResult:
         timeframe_signals: Dict[str, Any] | None = None,
         analysis_cost: float = 0.0,
         intraday_signal: str = "hold",
-        intraday_confidence: float = 0.5
+        intraday_confidence: float = 0.5,
+        entry_price: float = 0.0,
+        stop_loss: float = 0.0,
+        target_price: float = 0.0
     ):
         self.signal = signal
         self.confidence = confidence
@@ -43,6 +46,9 @@ class AIAnalysisResult:
         self.analysis_cost = analysis_cost
         self.intraday_signal = intraday_signal
         self.intraday_confidence = intraday_confidence
+        self.entry_price = entry_price
+        self.stop_loss = stop_loss
+        self.target_price = target_price
 
 
 class AIAnalyzer:
@@ -322,8 +328,7 @@ class AIAnalyzer:
 
     async def _perform_ai_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str) -> AIAnalysisResult:
         """Core AI analysis logic using OpenRouter.ai."""
-        logger.info(f"Performing AI analysis for {coin}")
-        
+
         try:
             # Get current market data
             mid_price = dataframes[Timeframe.MINUTES_15]['c'].iloc[-1] if not dataframes[Timeframe.MINUTES_15].empty else 0.0
@@ -400,32 +405,102 @@ class AIAnalyzer:
     def _build_analysis_message(self, coin: str, ai_result: AIAnalysisResult, send_charts: bool) -> str:
         """Build the analysis message text."""
         message = (
-            f"<b>🤖 AI Technical Analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
-            f"📊 <b>Signal:</b> {ai_result.signal.upper()}\n"
+            f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
+            f"📊 <b>Signal:</b> {ai_result.signal.title()}\n"
             f"🎯 <b>Confidence:</b> {ai_result.confidence:.1%}\n"
             f"📈 <b>Prediction:</b> {ai_result.prediction.title()}\n"
             f"⚠️ <b>Risk Level:</b> {ai_result.risk_level.title()}\n"
         )
         
-        # Add intraday signal if it's actionable (confidence >= 0.7)
-        if ai_result.intraday_confidence >= 0.7 and ai_result.intraday_signal != "hold":
-            message += (
-                f"\n💼 <b>Intraday Signal:</b> {ai_result.intraday_signal.upper()}\n"
-                f"🎯 <b>Intraday Confidence:</b> {ai_result.intraday_confidence:.1%}"
-            )
+        # Add intraday signal section
+        message += self._build_intraday_section(coin, ai_result)
         
         # Add analysis cost information
         if ai_result.analysis_cost > 0:
-            message += f"\n💰 <b>Analysis Cost:</b> ${ai_result.analysis_cost:.6f}"
+            message += f"\n💰 <b>Analysis Cost:</b> {fmt_price(ai_result.analysis_cost)} $"
         
         message += f"\n\n💬 <b>Analysis:</b>\n{ai_result.description}"
         
-        # Add timeframe signals
-        if ai_result.timeframe_signals:
-            message += "\n\n<b>📋 Timeframe Breakdown:</b>"
-            message += self._format_timeframe_signals(ai_result.timeframe_signals, send_charts)
-        
         return message
+    
+    def _build_intraday_section(self, coin: str, ai_result: AIAnalysisResult) -> str:
+        """Build the intraday trading section of the message."""
+        if ai_result.intraday_confidence < 0.7 or ai_result.intraday_signal == "hold":
+            return ""
+        
+        trade_action = "long" if ai_result.intraday_signal == "buy" else "short"
+        trade_params = self._build_trade_params(trade_action, coin, ai_result)
+        trade_link = telegram_utils.get_link(f"📈 Execute {trade_action.upper()}", trade_params)
+        
+        section = (
+            f"\n💼 <b>Intraday Signal:</b> {ai_result.intraday_signal.title()}\n"
+            f"🎯 <b>Intraday Confidence:</b> {ai_result.intraday_confidence:.1%}\n"
+            f"🔗 <b>Trade Setup:</b> {trade_link}"
+        )
+        
+        # Add formatted trade setup if price levels are available
+        trade_setup = self._build_trade_setup_format(trade_action, ai_result)
+        if trade_setup:
+            section += trade_setup
+        
+        return section
+    
+    def _build_trade_setup_format(self, trade_action: str, ai_result: AIAnalysisResult) -> str:
+        """Build formatted trade setup in Wyckoff style."""
+        if not (ai_result.entry_price > 0 and (ai_result.stop_loss > 0 or ai_result.target_price > 0)):
+            return ""
+        
+        action_title = "Long" if trade_action == "long" else "Short"
+        setup = f"\n\n💰 <b>{action_title} Trade Setup:</b>"
+        
+        # Market price (entry price)
+        if ai_result.entry_price > 0:
+            setup += f"\nMarket price: {ai_result.entry_price:.4f} USDC"
+        
+        # Stop Loss with percentage
+        if ai_result.stop_loss > 0 and ai_result.entry_price > 0:
+            if trade_action == "long":
+                sl_percentage = ((ai_result.stop_loss - ai_result.entry_price) / ai_result.entry_price) * 100
+            else:  # short
+                sl_percentage = ((ai_result.entry_price - ai_result.stop_loss) / ai_result.entry_price) * 100
+            
+            setup += f"\nStop Loss: {ai_result.stop_loss:.4f} USDC ({sl_percentage:+.1f}%)"
+        
+        # Take Profit with percentage
+        if ai_result.target_price > 0 and ai_result.entry_price > 0:
+            if trade_action == "long":
+                tp_percentage = ((ai_result.target_price - ai_result.entry_price) / ai_result.entry_price) * 100
+            else:  # short
+                tp_percentage = ((ai_result.entry_price - ai_result.target_price) / ai_result.entry_price) * 100
+            
+            setup += f"\nTake Profit: {ai_result.target_price:.4f} USDC ({tp_percentage:+.1f}%)"
+        
+        return setup
+    
+    def _build_trade_params(self, trade_action: str, coin: str, ai_result: AIAnalysisResult) -> str:
+        """Build trade parameters for the telegram link."""
+        trade_params = f"{trade_action}_{coin}"
+        if ai_result.entry_price > 0:
+            trade_params += f"_entry_{ai_result.entry_price:.4f}"
+        if ai_result.stop_loss > 0:
+            trade_params += f"_sl_{ai_result.stop_loss:.4f}"
+        if ai_result.target_price > 0:
+            trade_params += f"_tp_{ai_result.target_price:.4f}"
+        return trade_params
+    
+    def _build_price_levels(self, ai_result: AIAnalysisResult) -> str:
+        """Build price levels section."""
+        if not (ai_result.entry_price > 0 or ai_result.stop_loss > 0 or ai_result.target_price > 0):
+            return ""
+        
+        levels = "\n📋 <b>Price Levels:</b>"
+        if ai_result.entry_price > 0:
+            levels += f"\n   Entry: ${ai_result.entry_price:.4f}"
+        if ai_result.stop_loss > 0:
+            levels += f"\n   Stop Loss: ${ai_result.stop_loss:.4f}"
+        if ai_result.target_price > 0:
+            levels += f"\n   Target: ${ai_result.target_price:.4f}"
+        return levels
     
     def _format_timeframe_signals(self, timeframe_signals: Dict[str, Any], include_details: bool) -> str:
         """Format timeframe signals for display."""
@@ -449,8 +524,7 @@ class AIAnalyzer:
             raise ValueError("HTB_OPENROUTER_API_KEY environment variable not set")
         
         model = os.getenv("HTB_OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
-        max_tokens = 1000
-        temperature = 0.1
+        max_tokens = 1500
         
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -465,8 +539,10 @@ class AIAnalyzer:
                     "content": prompt
                 }
             ],
-            "max_tokens": max_tokens,
-            "temperature": temperature
+            "usage": {
+                "include": "true"
+            },
+            "max_tokens": max_tokens
         }
         
         try:
@@ -482,19 +558,9 @@ class AIAnalyzer:
             
             data = response.json()
             
-            # Extract cost information from usage data
+            # Extract actual cost from OpenRouter response
             usage = data.get("usage", {})
-            prompt_tokens = usage.get("prompt_tokens", 0)
-            completion_tokens = usage.get("completion_tokens", 0)
-            
-            # Calculate cost based on model pricing (approximate)
-            # These are example rates - adjust based on actual OpenRouter pricing
-            cost_per_1k_input = 0.0005  # $0.0005 per 1K input tokens
-            cost_per_1k_output = 0.0015  # $0.0015 per 1K output tokens
-            
-            total_cost = (prompt_tokens / 1000 * cost_per_1k_input) + (completion_tokens / 1000 * cost_per_1k_output)
-            
-            logger.info(f"AI API call: {prompt_tokens} prompt tokens, {completion_tokens} completion tokens, cost: ${total_cost:.6f}")
+            total_cost = usage.get("cost", 0.0)
             
             return data["choices"][0]["message"]["content"], total_cost
             
@@ -514,6 +580,9 @@ class AIAnalyzer:
             # Extract intraday trading signal
             intraday_signal, intraday_confidence = self._extract_intraday_signals(response_lower)
             
+            # Extract trade setup prices
+            entry_price, stop_loss, target_price = self._extract_trade_prices(ai_response)
+            
             # Clean up description
             description = ai_response.strip()
             if len(description) > 1000:
@@ -527,7 +596,10 @@ class AIAnalyzer:
                 should_notify=should_notify,
                 description=description,
                 intraday_signal=intraday_signal,
-                intraday_confidence=intraday_confidence
+                intraday_confidence=intraday_confidence,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                target_price=target_price
             )
             
         except Exception as e:
@@ -624,3 +696,43 @@ class AIAnalyzer:
             intraday_confidence = 0.5
         
         return intraday_signal, intraday_confidence
+    
+    def _extract_trade_prices(self, ai_response: str) -> tuple[float, float, float]:
+        """Extract entry price, stop loss, and target price from AI response."""
+        entry_patterns = [
+            r"entry.*price[:\s]*\$?([\d.,]+)",
+            r"entry[:\s]*\$?([\d.,]+)",
+            r"buy.*at[:\s]*\$?([\d.,]+)",
+            r"sell.*at[:\s]*\$?([\d.,]+)"
+        ]
+        
+        stop_patterns = [
+            r"stop.*loss[:\s]*\$?([\d.,]+)",
+            r"sl[:\s]*\$?([\d.,]+)",
+            r"stop[:\s]*\$?([\d.,]+)"
+        ]
+        
+        target_patterns = [
+            r"target[:\s]*\$?([\d.,]+)",
+            r"tp[:\s]*\$?([\d.,]+)",
+            r"take.*profit[:\s]*\$?([\d.,]+)"
+        ]
+        
+        entry_price = self._extract_price_from_patterns(ai_response, entry_patterns)
+        stop_loss = self._extract_price_from_patterns(ai_response, stop_patterns)
+        target_price = self._extract_price_from_patterns(ai_response, target_patterns)
+        
+        return entry_price, stop_loss, target_price
+    
+    def _extract_price_from_patterns(self, text: str, patterns: list) -> float:
+        """Extract price from text using provided patterns."""
+        import re
+        
+        for pattern in patterns:
+            match = re.search(pattern, text.lower())
+            if match:
+                try:
+                    return float(match.group(1).replace(',', ''))
+                except (ValueError, AttributeError):
+                    continue
+        return 0.0
