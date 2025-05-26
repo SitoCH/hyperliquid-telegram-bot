@@ -5,6 +5,7 @@ import pandas as pd
 from tzlocal import get_localzone
 import json
 import os
+import base64
 import requests
 from datetime import datetime
 from telegram.ext import ContextTypes
@@ -17,6 +18,7 @@ from technical_analysis.candles_cache import get_candles_with_cache
 from technical_analysis.wyckoff_types import Timeframe
 from technical_analysis.data_processor import prepare_dataframe, apply_indicators
 from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
+from utils import exchange_enabled
 
 class AIAnalysisResult:
     """Container for AI analysis results."""
@@ -192,7 +194,7 @@ class AIAnalyzer:
         should_notify = interactive_analysis or ai_result.should_notify
 
         if should_notify:
-            await self._send_ai_analysis_message(context, coin, ai_result, interactive_analysis)
+            await self._send_ai_analysis_message(context, coin, ai_result)
     
     async def _send_basic_analysis_message(self, context: ContextTypes.DEFAULT_TYPE, coin: str, reason: str) -> None:
         """Send basic analysis when AI analysis is not triggered."""
@@ -286,10 +288,40 @@ class AIAnalyzer:
             f"Funding rate magnitude: {'High' if funding_rate and abs(funding_rate.funding_rate) > 0.0005 else 'Moderate' if funding_rate and abs(funding_rate.funding_rate) > 0.0001 else 'Low'}",
             ""
         ])
-        # Enhanced prediction request
+        # Enhanced prediction request with advanced analysis
         prompt_parts.extend([
+            "=== ADVANCED ANALYSIS FRAMEWORK ===",
+            "Perform a comprehensive multi-dimensional analysis using the following methodologies:",
+            "",
+            "1. WYCKOFF ANALYSIS:",
+            "   - Identify current market phase (Accumulation, Markup, Distribution, Markdown)",
+            "   - Analyze volume-price relationships and effort vs result",
+            "   - Look for stopping volume, climax action, springs, and upthrusts",
+            "   - Determine composite operator behavior and smart money footprints",
+            "",
+            "2. ELLIOTT WAVE ANALYSIS:",
+            "   - Identify wave counts and current wave position",
+            "   - Analyze corrective vs impulsive wave patterns",
+            "   - Determine fibonacci retracement and extension levels",
+            "",
+            "3. MARKET STRUCTURE ANALYSIS:",
+            "   - Identify higher highs, higher lows, lower highs, lower lows",
+            "   - Analyze break of structure (BOS) and change of character (CHoCH)",
+            "   - Determine supply and demand zones, order blocks",
+            "   - Identify liquidity pools and potential sweeps",
+            "",
+            "4. VOLUME PROFILE ANALYSIS:",
+            "   - Analyze volume at price levels and value areas",
+            "   - Identify high volume nodes (HVN) and low volume nodes (LVN)",
+            "   - Determine point of control (POC) and volume imbalances",
+            "",
+            "5. INTERMARKET ANALYSIS:",
+            "   - Consider broader crypto market sentiment",
+            "   - Analyze correlation with major cryptocurrencies",
+            "   - Factor in funding rate implications for price discovery",
+            "",
             "=== PREDICTION REQUEST ===",
-            "Analyze the data and provide your response in the following JSON format:",
+            "Based on your comprehensive analysis, provide your response in the following JSON format:",
             "",
             "{",
             '  "signal": "buy|sell|hold",',
@@ -302,30 +334,44 @@ class AIAnalyzer:
             '  "stop_loss": 1200.00,',
             '  "target_price": 1300.00,',
             '  "time_horizon_hours": 4,',
-            '  "market_analysis": "Brief market context and current conditions...",',
-            '  "technical_analysis": "Technical indicators analysis and confluence...",',
-            '  "risk_assessment": "Risk factors and position sizing considerations...",',
-            '  "key_drivers": ["driver1", "driver2", "driver3"],',
+            '  "wyckoff_analysis": "Current phase identification, volume analysis, and composite operator behavior insights...",',
+            '  "elliott_wave_analysis": "Wave count, current position, and projected targets based on wave theory...",',
+            '  "market_structure_analysis": "BOS/CHoCH analysis, supply/demand zones, and liquidity analysis...",',
+            '  "market_analysis": "Brief market context, sentiment, and broader market conditions...",',
+            '  "technical_analysis": "Multi-timeframe technical confluence, indicators, and pattern analysis...",',
+            '  "risk_assessment": "Risk factors, position sizing, and risk management considerations...",',
+            '  "key_drivers": ["wyckoff_phase", "elliott_wave_target", "structure_break", "volume_confirmation"],',
             '  "price_predictions": {',
-            '    "1_hour": {"price": 1235.00, "change_percent": 0.5, "confidence": 0.6},',
-            '    "2_hours": {"price": 1240.00, "change_percent": 1.0, "confidence": 0.7},',
-            '    "4_hours": {"price": 1250.00, "change_percent": 1.5, "confidence": 0.8}',
+            '    "1_hour": {"price": 1235.00, "change_percent": 0.5, "confidence": 0.6, "key_level": "resistance"},',
+            '    "2_hours": {"price": 1240.00, "change_percent": 1.0, "confidence": 0.7, "key_level": "fibonacci_extension"},',
+            '    "4_hours": {"price": 1250.00, "change_percent": 1.5, "confidence": 0.8, "key_level": "wave_target"}',
             '  },',
             '  "trading_setup": {',
             '    "action": "long|short|none",',
-            '    "reason": "Rationale for the trade direction",',
-            '    "entry_strategy": "Market/limit order strategy",',
+            '    "reason": "Comprehensive rationale based on multi-method confluence",',
+            '    "entry_strategy": "Market/limit order strategy with precise timing",',
             '    "risk_reward_ratio": 2.5,',
-            '    "position_size_recommendation": "Percentage of portfolio to risk"',
+            '    "position_size_recommendation": "Percentage of portfolio based on confidence and risk",',
+            '    "invalidation_level": "Price level where analysis becomes invalid"',
+            '  },',
+            '  "confluence_score": 0.85,',
+            '  "method_agreement": {',
+            '    "wyckoff": "bullish|bearish|neutral",',
+            '    "elliott_wave": "bullish|bearish|neutral",',
+            '    "market_structure": "bullish|bearish|neutral",',
+            '    "technical_indicators": "bullish|bearish|neutral"',
             '  }',
             "}",
             "",
-            "Rules:",
-            "- Only recommend BUY/SELL for intraday_signal if intraday_confidence >= 0.7",
-            "- Provide entry_price, stop_loss, and target_price only for actionable signals",
-            "- Base analysis on multi-timeframe confluence",
-            "- Keep each analysis section concise but informative",
-            "- Split analysis into market_analysis, technical_analysis, and risk_assessment sections"
+            "ANALYSIS RULES:",
+            "- Only recommend BUY/SELL for intraday_signal if intraday_confidence >= 0.7 AND confluence_score >= 0.7",
+            "- Provide entry_price, stop_loss, and target_price only for high-confidence actionable signals",
+            "- Base analysis on multi-method confluence - higher agreement = higher confidence",
+            "- Include specific Wyckoff phases, Elliott Wave counts, and structural levels",
+            "- Provide detailed reasoning for each analytical method used",
+            "- Invalidation levels are crucial for risk management",
+            "- Confluence_score should reflect agreement between different methods (0.0-1.0)",
+            "- Each analysis section should reference specific technical concepts and levels"
         ])
         
         return "\n".join(prompt_parts)
@@ -410,8 +456,7 @@ class AIAnalyzer:
         self, 
         context: ContextTypes.DEFAULT_TYPE, 
         coin: str, 
-        ai_result: AIAnalysisResult, 
-        interactive_analysis: bool
+        ai_result: AIAnalysisResult
     ) -> None:
         """Send AI analysis results to Telegram."""
         
@@ -450,33 +495,32 @@ class AIAnalyzer:
     
     def _build_intraday_section(self, coin: str, ai_result: AIAnalysisResult) -> str:
         """Build the intraday trading section of the message."""
-        if ai_result.intraday_confidence < 0.7 or ai_result.intraday_signal == "hold":
+        if ai_result.intraday_confidence < 0.6 or ai_result.intraday_signal == "hold":
             return ""
-        
-        trade_action = "long" if ai_result.intraday_signal == "buy" else "short"
-        trade_params = self._build_trade_params(trade_action, coin, ai_result)
-        trade_link = telegram_utils.get_link(f"📈 Execute {trade_action.upper()}", trade_params)
         
         section = (
             f"\n💼 <b>Intraday Signal:</b> {ai_result.intraday_signal.title()}\n"
-            f"🎯 <b>Intraday Confidence:</b> {ai_result.intraday_confidence:.1%}\n"
-            f"🔗 <b>Trade Setup:</b> {trade_link}"
+            f"🎯 <b>Intraday Confidence:</b> {ai_result.intraday_confidence:.1%}"
         )
         
-        # Add formatted trade setup if price levels are available
-        trade_setup = self._build_trade_setup_format(trade_action, ai_result)
+        trade_setup = self._build_trade_setup_format(coin, ai_result)
         if trade_setup:
             section += trade_setup
         
         return section
     
-    def _build_trade_setup_format(self, trade_action: str, ai_result: AIAnalysisResult) -> str:
-        """Build formatted trade setup in Wyckoff style."""
+    def _build_trade_setup_format(self, coin: str, ai_result: AIAnalysisResult) -> str:
+        """Build formatted trade setup."""
         if not (ai_result.entry_price > 0 and (ai_result.stop_loss > 0 or ai_result.target_price > 0)):
             return ""
-        
-        action_title = "Long" if trade_action == "long" else "Short"
-        setup = f"\n\n💰 <b>{action_title} Trade Setup:</b>"
+
+        enc_side = "L" if ai_result.intraday_signal == "buy" else "S"
+        enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(ai_result.stop_loss)}_{fmt_price(ai_result.target_price)}".encode('utf-8')).decode('utf-8')
+        trade_link = f"({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
+
+        side = "Long" if ai_result.intraday_signal == "buy" else "Short"
+
+        setup = f"\n\n<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>"
         
         # Market price (entry price)
         if ai_result.entry_price > 0:
@@ -484,7 +528,7 @@ class AIAnalyzer:
         
         # Stop Loss with percentage
         if ai_result.stop_loss > 0 and ai_result.entry_price > 0:
-            if trade_action == "long":
+            if ai_result.intraday_signal == "buy":
                 sl_percentage = ((ai_result.stop_loss - ai_result.entry_price) / ai_result.entry_price) * 100
             else:  # short
                 sl_percentage = ((ai_result.entry_price - ai_result.stop_loss) / ai_result.entry_price) * 100
@@ -493,7 +537,7 @@ class AIAnalyzer:
         
         # Take Profit with percentage
         if ai_result.target_price > 0 and ai_result.entry_price > 0:
-            if trade_action == "long":
+            if ai_result.intraday_signal == "buy":
                 tp_percentage = ((ai_result.target_price - ai_result.entry_price) / ai_result.entry_price) * 100
             else:  # short
                 tp_percentage = ((ai_result.entry_price - ai_result.target_price) / ai_result.entry_price) * 100
@@ -501,18 +545,8 @@ class AIAnalyzer:
             setup += f"\nTake Profit: {ai_result.target_price:.4f} USDC ({tp_percentage:+.1f}%)"
         
         return setup
-    
-    def _build_trade_params(self, trade_action: str, coin: str, ai_result: AIAnalysisResult) -> str:
-        """Build trade parameters for the telegram link."""
-        trade_params = f"{trade_action}_{coin}"
-        if ai_result.entry_price > 0:
-            trade_params += f"_entry_{ai_result.entry_price:.4f}"
-        if ai_result.stop_loss > 0:
-            trade_params += f"_sl_{ai_result.stop_loss:.4f}"
-        if ai_result.target_price > 0:
-            trade_params += f"_tp_{ai_result.target_price:.4f}"
-        return trade_params
-    
+
+
     def _build_price_levels(self, ai_result: AIAnalysisResult) -> str:
         """Build price levels section."""
         if not (ai_result.entry_price > 0 or ai_result.stop_loss > 0 or ai_result.target_price > 0):
@@ -620,11 +654,20 @@ class AIAnalyzer:
             market_analysis = response_data.get("market_analysis", "")
             technical_analysis = response_data.get("technical_analysis", "")
             risk_assessment = response_data.get("risk_assessment", "")
+            wyckoff_analysis = response_data.get("wyckoff_analysis", "")
+            elliott_wave_analysis = response_data.get("elliott_wave_analysis", "")
+            market_structure_analysis = response_data.get("market_structure_analysis", "")
             key_drivers = response_data.get("key_drivers", [])
             price_predictions = response_data.get("price_predictions", {})
             
             # Build description from structured sections
             description_parts = []
+            if wyckoff_analysis:
+                description_parts.append(f"🧭 Wyckoff: {wyckoff_analysis}")
+            if elliott_wave_analysis:
+                description_parts.append(f"🌊 Elliott Wave: {elliott_wave_analysis}")
+            if market_structure_analysis:
+                description_parts.append(f"🏗️ Market Structure: {market_structure_analysis}")
             if market_analysis:
                 description_parts.append(f"📊 Market: {market_analysis}")
             if technical_analysis:
@@ -635,7 +678,8 @@ class AIAnalyzer:
             description = "\n\n".join(description_parts) if description_parts else response_data.get("analysis", "Analysis not available")
             
             # Determine if we should notify based on signal strength
-            should_notify = signal in ["buy", "sell"] and confidence >= 0.6
+            min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
+            should_notify = signal in ["buy", "sell"] and confidence >= min_confidence
             
             return AIAnalysisResult(
                 signal=signal,
@@ -656,7 +700,7 @@ class AIAnalyzer:
                 risk_assessment=risk_assessment
             )
             
-        except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+        except (KeyError, ValueError, TypeError) as e:
             logger.error(f"JSON parsing failed for {coin}: {str(e)}\n{ai_response}", exc_info=True)
             return AIAnalysisResult(
                 description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
