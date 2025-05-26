@@ -28,7 +28,10 @@ class AIAnalysisResult:
         risk_level: str = "medium",
         should_notify: bool = False,
         description: str = "",
-        timeframe_signals: Dict[str, Any] | None = None
+        timeframe_signals: Dict[str, Any] | None = None,
+        analysis_cost: float = 0.0,
+        intraday_signal: str = "hold",
+        intraday_confidence: float = 0.5
     ):
         self.signal = signal
         self.confidence = confidence
@@ -37,6 +40,9 @@ class AIAnalysisResult:
         self.should_notify = should_notify
         self.description = description
         self.timeframe_signals = timeframe_signals or {}
+        self.analysis_cost = analysis_cost
+        self.intraday_signal = intraday_signal
+        self.intraday_confidence = intraday_confidence
 
 
 class AIAnalyzer:
@@ -174,7 +180,7 @@ class AIAnalyzer:
     async def _send_basic_analysis_message(self, context: ContextTypes.DEFAULT_TYPE, coin: str, reason: str) -> None:
         """Send basic analysis when AI analysis is not triggered."""
         message = (
-            f"<b>🤖 AI Analysis for {telegram_utils.get_link(coin, f'AI_TA_{coin}')}</b>\n\n"
+            f"<b>🤖 AI Analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
             f"📊 <b>Status:</b> No significant activity detected\n"
             f"💬 <b>Reason:</b> {reason}\n\n"
             f"ℹ️ <i>AI analysis is triggered only when significant market movements are detected to optimize costs.</i>"
@@ -275,6 +281,15 @@ class AIAnalyzer:
             "",
             "DIRECTIONAL BIAS: [BULLISH/BEARISH] - Choose ONE direction only",
             "",
+            "INTRADAY TRADING SIGNAL (1-4 hours):",
+            "Based on multi-timeframe confluence analysis:",
+            "Signal: [BUY/SELL/HOLD]",
+            "Confidence: ___/10 (must be 7+ for actionable signals)",
+            "Entry price: $____",
+            "Stop loss: $____",
+            "Target: $____",
+            "Time horizon: ___ hours",
+            "",
             "KEY SIGNALS:",
             "- Primary driver:",
             "- Timeframe confluence:",
@@ -286,7 +301,8 @@ class AIAnalyzer:
             "- Stop loss: $____",
             "- Target: $____",
             "",
-            "Be concise. Provide only the highest probability direction based on multi-timeframe confluence."
+            "Be concise. Provide only the highest probability direction based on multi-timeframe confluence.",
+            "For intraday signals, only recommend BUY/SELL if confidence is 7/10 or higher."
         ])
         
         return "\n".join(prompt_parts)
@@ -318,11 +334,12 @@ class AIAnalyzer:
             # Generate prompt for LLM
             prompt = self._generate_llm_prediction_prompt(coin, dataframes, funding_rate, mid_price)
             
-            # Call OpenRouter.ai API
-            ai_response = self._call_openrouter_api(prompt)
+            # Call OpenRouter.ai API and track cost
+            ai_response, analysis_cost = self._call_openrouter_api(prompt)
             
             # Parse AI response into structured result
             result = self._parse_ai_response(ai_response, coin)
+            result.analysis_cost = analysis_cost
             
             # Add timeframe analysis for additional context
             timeframe_signals = {}
@@ -340,7 +357,8 @@ class AIAnalyzer:
             return AIAnalysisResult(
                 description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
                 signal="hold",
-                confidence=0.5
+                confidence=0.5,
+                analysis_cost=0.0
             )
     
     def _get_simple_momentum(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -382,13 +400,25 @@ class AIAnalyzer:
     def _build_analysis_message(self, coin: str, ai_result: AIAnalysisResult, send_charts: bool) -> str:
         """Build the analysis message text."""
         message = (
-            f"<b>🤖 AI Technical Analysis for {telegram_utils.get_link(coin, f'AI_TA_{coin}')}</b>\n\n"
+            f"<b>🤖 AI Technical Analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
             f"📊 <b>Signal:</b> {ai_result.signal.upper()}\n"
             f"🎯 <b>Confidence:</b> {ai_result.confidence:.1%}\n"
             f"📈 <b>Prediction:</b> {ai_result.prediction.title()}\n"
-            f"⚠️ <b>Risk Level:</b> {ai_result.risk_level.title()}\n\n"
-            f"💬 <b>Analysis:</b>\n{ai_result.description}"
+            f"⚠️ <b>Risk Level:</b> {ai_result.risk_level.title()}\n"
         )
+        
+        # Add intraday signal if it's actionable (confidence >= 0.7)
+        if ai_result.intraday_confidence >= 0.7 and ai_result.intraday_signal != "hold":
+            message += (
+                f"\n💼 <b>Intraday Signal:</b> {ai_result.intraday_signal.upper()}\n"
+                f"🎯 <b>Intraday Confidence:</b> {ai_result.intraday_confidence:.1%}"
+            )
+        
+        # Add analysis cost information
+        if ai_result.analysis_cost > 0:
+            message += f"\n💰 <b>Analysis Cost:</b> ${ai_result.analysis_cost:.6f}"
+        
+        message += f"\n\n💬 <b>Analysis:</b>\n{ai_result.description}"
         
         # Add timeframe signals
         if ai_result.timeframe_signals:
@@ -412,8 +442,8 @@ class AIAnalyzer:
         
         return formatted
 
-    def _call_openrouter_api(self, prompt: str) -> str:
-        """Call OpenRouter.ai API for AI analysis."""
+    def _call_openrouter_api(self, prompt: str) -> tuple[str, float]:
+        """Call OpenRouter.ai API for AI analysis and return response with cost."""
         api_key = os.getenv("HTB_OPENROUTER_API_KEY")
         if not api_key:
             raise ValueError("HTB_OPENROUTER_API_KEY environment variable not set")
@@ -451,7 +481,22 @@ class AIAnalyzer:
                 raise ValueError(f"OpenRouter API error {response.status_code}: {response.text}")
             
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            
+            # Extract cost information from usage data
+            usage = data.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            
+            # Calculate cost based on model pricing (approximate)
+            # These are example rates - adjust based on actual OpenRouter pricing
+            cost_per_1k_input = 0.0005  # $0.0005 per 1K input tokens
+            cost_per_1k_output = 0.0015  # $0.0015 per 1K output tokens
+            
+            total_cost = (prompt_tokens / 1000 * cost_per_1k_input) + (completion_tokens / 1000 * cost_per_1k_output)
+            
+            logger.info(f"AI API call: {prompt_tokens} prompt tokens, {completion_tokens} completion tokens, cost: ${total_cost:.6f}")
+            
+            return data["choices"][0]["message"]["content"], total_cost
             
         except requests.exceptions.RequestException as e:
             raise ValueError(f"OpenRouter API request failed: {str(e)}")
@@ -459,48 +504,15 @@ class AIAnalyzer:
     def _parse_ai_response(self, ai_response: str, coin: str) -> AIAnalysisResult:
         """Parse AI response into structured analysis result."""
         try:
-            # Extract key information from AI response
-            signal = "hold"
-            confidence = 0.5
-            prediction = "sideways"
-            risk_level = "medium"
-            should_notify = False
-            
             response_lower = ai_response.lower()
             
-            # Determine signal from directional bias
-            if "bullish" in response_lower:
-                signal = "buy"
-                prediction = "bullish"
-                should_notify = True
-            elif "bearish" in response_lower:
-                signal = "sell"
-                prediction = "bearish"
-                should_notify = True
+            # Extract main signals and predictions
+            signal, prediction, should_notify = self._extract_main_signals(response_lower)
+            confidence = self._extract_confidence(response_lower)
+            risk_level = self._extract_risk_level(response_lower)
             
-            # Extract confidence if mentioned
-            confidence_patterns = [
-                r"confidence[:\s]*(\d+)/10",
-                r"confidence[:\s]*(\d+)%",
-                r"(\d+)/10\s*confidence"
-            ]
-            
-            import re
-            for pattern in confidence_patterns:
-                match = re.search(pattern, response_lower)
-                if match:
-                    conf_value = int(match.group(1))
-                    if "/10" in pattern:
-                        confidence = conf_value / 10.0
-                    else:
-                        confidence = conf_value / 100.0
-                    break
-            
-            # Determine risk level
-            if "high risk" in response_lower or "risk level: high" in response_lower:
-                risk_level = "high"
-            elif "low risk" in response_lower or "risk level: low" in response_lower:
-                risk_level = "low"
+            # Extract intraday trading signal
+            intraday_signal, intraday_confidence = self._extract_intraday_signals(response_lower)
             
             # Clean up description
             description = ai_response.strip()
@@ -513,7 +525,9 @@ class AIAnalyzer:
                 prediction=prediction,
                 risk_level=risk_level,
                 should_notify=should_notify,
-                description=description
+                description=description,
+                intraday_signal=intraday_signal,
+                intraday_confidence=intraday_confidence
             )
             
         except Exception as e:
@@ -521,5 +535,92 @@ class AIAnalyzer:
             return AIAnalysisResult(
                 description=f"AI analysis for {coin}: {ai_response[:500]}...",
                 signal="hold",
-                confidence=0.5
+                confidence=0.5,
+                intraday_signal="hold",
+                intraday_confidence=0.5
             )
+    
+    def _extract_main_signals(self, response_lower: str) -> tuple[str, str, bool]:
+        """Extract main signal, prediction and notification flag."""
+        signal = "hold"
+        prediction = "sideways"
+        should_notify = False
+        
+        if "bullish" in response_lower:
+            signal = "buy"
+            prediction = "bullish"
+            should_notify = True
+        elif "bearish" in response_lower:
+            signal = "sell"
+            prediction = "bearish"
+            should_notify = True
+        
+        return signal, prediction, should_notify
+    
+    def _extract_confidence(self, response_lower: str) -> float:
+        """Extract confidence score from AI response."""
+        import re
+        
+        confidence_patterns = [
+            r"confidence[:\s]*(\d+)/10",
+            r"confidence[:\s]*(\d+)%",
+            r"(\d+)/10\s*confidence"
+        ]
+        
+        for pattern in confidence_patterns:
+            match = re.search(pattern, response_lower)
+            if match:
+                conf_value = int(match.group(1))
+                if "/10" in pattern:
+                    return conf_value / 10.0
+                else:
+                    return conf_value / 100.0
+        
+        return 0.5
+    
+    def _extract_risk_level(self, response_lower: str) -> str:
+        """Extract risk level from AI response."""
+        if "high risk" in response_lower or "risk level: high" in response_lower:
+            return "high"
+        elif "low risk" in response_lower or "risk level: low" in response_lower:
+            return "low"
+        return "medium"
+    
+    def _extract_intraday_signals(self, response_lower: str) -> tuple[str, float]:
+        """Extract intraday trading signal and confidence."""
+        import re
+        
+        # Extract intraday trading signal
+        intraday_patterns = [
+            r"signal[:\s]*(buy|sell|hold)",
+            r"intraday.*signal[:\s]*(buy|sell|hold)",
+            r"trading.*signal[:\s]*(buy|sell|hold)"
+        ]
+        
+        intraday_signal = "hold"
+        for pattern in intraday_patterns:
+            match = re.search(pattern, response_lower)
+            if match:
+                intraday_signal = match.group(1).lower()
+                break
+        
+        # Extract intraday confidence
+        intraday_conf_patterns = [
+            r"intraday.*confidence[:\s]*(\d+)/10",
+            r"signal.*confidence[:\s]*(\d+)/10",
+            r"trading.*confidence[:\s]*(\d+)/10"
+        ]
+        
+        intraday_confidence = 0.5
+        for pattern in intraday_conf_patterns:
+            match = re.search(pattern, response_lower)
+            if match:
+                intraday_confidence = int(match.group(1)) / 10.0
+                break
+        
+        # Only use intraday signal if confidence is 7+ out of 10
+        if intraday_confidence < 0.7:
+            intraday_signal = "hold"
+            intraday_confidence = 0.5
+        
+        return intraday_signal, intraday_confidence
