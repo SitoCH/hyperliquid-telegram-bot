@@ -60,6 +60,34 @@ docker-compose up -d
 | HTB_MONITOR_STALE_POSITIONS | Monitor positions older than 1 day with positive PnL | "True" | False |
 | HTB_USE_ISOLATED_LEVERAGE | Use isolated leverage instead of cross | "True" | True |
 | HTB_ALPHAVANTAGE_API_KEY | API key for Alpha Vantage (required for performance comparison against S&P500) | "XXXXXXXXXXXXXXXX" | None |
+| HTB_ANALYSIS_MODE | Analysis mode for technical analysis | "wyckoff" or "llm" | "wyckoff" |
+| HTB_OPENROUTER_API_KEY | OpenRouter.ai API key (required for LLM analysis mode) | "sk-or-v1-xxxxx" | None |
+| HTB_OPENROUTER_MODEL | OpenRouter model to use for AI analysis | "google/gemini-2.0-flash-001" | "google/gemini-2.0-flash-001" |
+
+## Technical Analysis Modes
+
+The bot supports two different technical analysis modes that can be switched using the `HTB_ANALYSIS_MODE` environment variable:
+
+### Wyckoff Analysis Mode (Default)
+
+The default mode uses traditional Wyckoff methodology to analyze market phases across multiple timeframes with volume pattern detection and chart generation.
+
+### LLM Analysis Mode
+
+An AI-powered mode that uses large language models to provide natural language analysis, confidence scoring, risk assessment, and price predictions with timeframes.
+
+To use LLM mode, you need to:
+1. Set `HTB_ANALYSIS_MODE=llm`
+2. Configure `HTB_OPENROUTER_API_KEY` with your OpenRouter.ai API key
+3. Optionally customize the model
+
+Example configuration for LLM mode:
+```yaml
+environment:
+  HTB_ANALYSIS_MODE: "llm"
+  HTB_OPENROUTER_API_KEY: "sk-or-v1-xxxxx"
+  HTB_OPENROUTER_MODEL: "anthropic/claude-3.5-sonnet"
+```
 
 ## Trading Strategies
 
