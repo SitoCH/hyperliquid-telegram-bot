@@ -1,4 +1,5 @@
 import time
+import re
 from typing import Dict, Any, List
 import pandas as pd
 from tzlocal import get_localzone
@@ -34,7 +35,12 @@ class AIAnalysisResult:
         intraday_confidence: float = 0.5,
         entry_price: float = 0.0,
         stop_loss: float = 0.0,
-        target_price: float = 0.0
+        target_price: float = 0.0,
+        key_drivers: List[str] | None = None,
+        price_predictions: Dict[str, Any] | None = None,
+        market_analysis: str = "",
+        technical_analysis: str = "",
+        risk_assessment: str = ""
     ):
         self.signal = signal
         self.confidence = confidence
@@ -49,6 +55,11 @@ class AIAnalysisResult:
         self.entry_price = entry_price
         self.stop_loss = stop_loss
         self.target_price = target_price
+        self.key_drivers = key_drivers or []
+        self.price_predictions = price_predictions or {}
+        self.market_analysis = market_analysis
+        self.technical_analysis = technical_analysis
+        self.risk_assessment = risk_assessment
 
 
 class AIAnalyzer:
@@ -186,7 +197,7 @@ class AIAnalyzer:
     async def _send_basic_analysis_message(self, context: ContextTypes.DEFAULT_TYPE, coin: str, reason: str) -> None:
         """Send basic analysis when AI analysis is not triggered."""
         message = (
-            f"<b>🤖 AI Analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
+            f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n"
             f"📊 <b>Status:</b> No significant activity detected\n"
             f"💬 <b>Reason:</b> {reason}\n\n"
             f"ℹ️ <i>AI analysis is triggered only when significant market movements are detected to optimize costs.</i>"
@@ -278,37 +289,43 @@ class AIAnalyzer:
         # Enhanced prediction request
         prompt_parts.extend([
             "=== PREDICTION REQUEST ===",
-            "Analyze the data and provide ONLY the most probable directional move:",
+            "Analyze the data and provide your response in the following JSON format:",
             "",
-            "PRICE PREDICTIONS:",
-            "1 hour: $____ (% change: ____, confidence: ___/10)",
-            "2 hours: $____ (% change: ____, confidence: ___/10)", 
-            "4 hours: $____ (% change: ____, confidence: ___/10)",
+            "{",
+            '  "signal": "buy|sell|hold",',
+            '  "confidence": 0.7,',
+            '  "prediction": "bullish|bearish|sideways",',
+            '  "risk_level": "low|medium|high",',
+            '  "intraday_signal": "buy|sell|hold",',
+            '  "intraday_confidence": 0.8,',
+            '  "entry_price": 1234.56,',
+            '  "stop_loss": 1200.00,',
+            '  "target_price": 1300.00,',
+            '  "time_horizon_hours": 4,',
+            '  "market_analysis": "Brief market context and current conditions...",',
+            '  "technical_analysis": "Technical indicators analysis and confluence...",',
+            '  "risk_assessment": "Risk factors and position sizing considerations...",',
+            '  "key_drivers": ["driver1", "driver2", "driver3"],',
+            '  "price_predictions": {',
+            '    "1_hour": {"price": 1235.00, "change_percent": 0.5, "confidence": 0.6},',
+            '    "2_hours": {"price": 1240.00, "change_percent": 1.0, "confidence": 0.7},',
+            '    "4_hours": {"price": 1250.00, "change_percent": 1.5, "confidence": 0.8}',
+            '  },',
+            '  "trading_setup": {',
+            '    "action": "long|short|none",',
+            '    "reason": "Rationale for the trade direction",',
+            '    "entry_strategy": "Market/limit order strategy",',
+            '    "risk_reward_ratio": 2.5,',
+            '    "position_size_recommendation": "Percentage of portfolio to risk"',
+            '  }',
+            "}",
             "",
-            "DIRECTIONAL BIAS: [BULLISH/BEARISH] - Choose ONE direction only",
-            "",
-            "INTRADAY TRADING SIGNAL (1-4 hours):",
-            "Based on multi-timeframe confluence analysis:",
-            "Signal: [BUY/SELL/HOLD]",
-            "Confidence: ___/10 (must be 7+ for actionable signals)",
-            "Entry price: $____",
-            "Stop loss: $____",
-            "Target: $____",
-            "Time horizon: ___ hours",
-            "",
-            "KEY SIGNALS:",
-            "- Primary driver:",
-            "- Timeframe confluence:",
-            "- Volume confirmation:",
-            "- Risk level: [LOW/MEDIUM/HIGH]",
-            "",
-            "TRADE SETUP (for the chosen direction only):",
-            "- Entry: $____",
-            "- Stop loss: $____",
-            "- Target: $____",
-            "",
-            "Be concise. Provide only the highest probability direction based on multi-timeframe confluence.",
-            "For intraday signals, only recommend BUY/SELL if confidence is 7/10 or higher."
+            "Rules:",
+            "- Only recommend BUY/SELL for intraday_signal if intraday_confidence >= 0.7",
+            "- Provide entry_price, stop_loss, and target_price only for actionable signals",
+            "- Base analysis on multi-timeframe confluence",
+            "- Keep each analysis section concise but informative",
+            "- Split analysis into market_analysis, technical_analysis, and risk_assessment sections"
         ])
         
         return "\n".join(prompt_parts)
@@ -394,18 +411,18 @@ class AIAnalyzer:
         context: ContextTypes.DEFAULT_TYPE, 
         coin: str, 
         ai_result: AIAnalysisResult, 
-        send_charts: bool
+        interactive_analysis: bool
     ) -> None:
         """Send AI analysis results to Telegram."""
         
         # Build analysis message
-        message = self._build_analysis_message(coin, ai_result, send_charts)
+        message = self._build_analysis_message(coin, ai_result)
         await telegram_utils.send(message, parse_mode=ParseMode.HTML)
     
-    def _build_analysis_message(self, coin: str, ai_result: AIAnalysisResult, send_charts: bool) -> str:
+    def _build_analysis_message(self, coin: str, ai_result: AIAnalysisResult) -> str:
         """Build the analysis message text."""
         message = (
-            f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
+            f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n"
             f"📊 <b>Signal:</b> {ai_result.signal.title()}\n"
             f"🎯 <b>Confidence:</b> {ai_result.confidence:.1%}\n"
             f"📈 <b>Prediction:</b> {ai_result.prediction.title()}\n"
@@ -419,8 +436,16 @@ class AIAnalyzer:
         if ai_result.analysis_cost > 0:
             message += f"\n💰 <b>Analysis Cost:</b> {fmt_price(ai_result.analysis_cost)} $"
         
-        message += f"\n\n💬 <b>Analysis:</b>\n{ai_result.description}"
+        # Add individual analysis sections for better readability
+        if ai_result.market_analysis:
+            message += f"\n\n📊 <b>Market Analysis:</b>\n{ai_result.market_analysis}"
         
+        if ai_result.technical_analysis:
+            message += f"\n\n🔧 <b>Technical Analysis:</b>\n{ai_result.technical_analysis}"
+        
+        if ai_result.risk_assessment:
+            message += f"\n\n⚠️ <b>Risk Assessment:</b>\n{ai_result.risk_assessment}"
+                
         return message
     
     def _build_intraday_section(self, coin: str, ai_result: AIAnalysisResult) -> str:
@@ -535,10 +560,17 @@ class AIAnalyzer:
             "model": model,
             "messages": [
                 {
+                    "role": "system",
+                    "content": "You are a professional cryptocurrency technical analyst. Respond ONLY with valid JSON format. Do not include any text outside the JSON structure."
+                },
+                {
                     "role": "user",
                     "content": prompt
                 }
             ],
+            "response_format": {
+                "type": "json_object"
+            },
             "usage": {
                 "include": "true"
             },
@@ -569,6 +601,67 @@ class AIAnalyzer:
     
     def _parse_ai_response(self, ai_response: str, coin: str) -> AIAnalysisResult:
         """Parse AI response into structured analysis result."""
+        try:
+            # Try to parse as JSON first
+            response_data = json.loads(ai_response)
+            
+            # Extract values from JSON response
+            signal = response_data.get("signal", "hold").lower()
+            confidence = float(response_data.get("confidence", 0.5))
+            prediction = response_data.get("prediction", "sideways").lower()
+            risk_level = response_data.get("risk_level", "medium").lower()
+            intraday_signal = response_data.get("intraday_signal", "hold").lower()
+            intraday_confidence = float(response_data.get("intraday_confidence", 0.5))
+            entry_price = float(response_data.get("entry_price") or 0.0)
+            stop_loss = float(response_data.get("stop_loss") or 0.0)
+            target_price = float(response_data.get("target_price") or 0.0)
+            
+            # Extract structured analysis sections
+            market_analysis = response_data.get("market_analysis", "")
+            technical_analysis = response_data.get("technical_analysis", "")
+            risk_assessment = response_data.get("risk_assessment", "")
+            key_drivers = response_data.get("key_drivers", [])
+            price_predictions = response_data.get("price_predictions", {})
+            
+            # Build description from structured sections
+            description_parts = []
+            if market_analysis:
+                description_parts.append(f"📊 Market: {market_analysis}")
+            if technical_analysis:
+                description_parts.append(f"🔧 Technical: {technical_analysis}")
+            if risk_assessment:
+                description_parts.append(f"⚠️ Risk: {risk_assessment}")
+            
+            description = "\n\n".join(description_parts) if description_parts else response_data.get("analysis", "Analysis not available")
+            
+            # Determine if we should notify based on signal strength
+            should_notify = signal in ["buy", "sell"] and confidence >= 0.6
+            
+            return AIAnalysisResult(
+                signal=signal,
+                confidence=confidence,
+                prediction=prediction,
+                risk_level=risk_level,
+                should_notify=should_notify,
+                description=description,
+                intraday_signal=intraday_signal,
+                intraday_confidence=intraday_confidence,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                target_price=target_price,
+                key_drivers=key_drivers,
+                price_predictions=price_predictions,
+                market_analysis=market_analysis,
+                technical_analysis=technical_analysis,
+                risk_assessment=risk_assessment
+            )
+            
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+            logger.error(f"JSON parsing failed for {coin}: {str(e)}\n{ai_response}", exc_info=True)
+            return self._parse_text_response(ai_response, coin)
+    
+    def _parse_text_response(self, ai_response: str, coin: str) -> AIAnalysisResult:
+        """Fallback text parsing for non-JSON responses."""
         try:
             response_lower = ai_response.lower()
             
@@ -631,7 +724,6 @@ class AIAnalyzer:
     
     def _extract_confidence(self, response_lower: str) -> float:
         """Extract confidence score from AI response."""
-        import re
         
         confidence_patterns = [
             r"confidence[:\s]*(\d+)/10",
@@ -660,7 +752,6 @@ class AIAnalyzer:
     
     def _extract_intraday_signals(self, response_lower: str) -> tuple[str, float]:
         """Extract intraday trading signal and confidence."""
-        import re
         
         # Extract intraday trading signal
         intraday_patterns = [
@@ -726,7 +817,6 @@ class AIAnalyzer:
     
     def _extract_price_from_patterns(self, text: str, patterns: list) -> float:
         """Extract price from text using provided patterns."""
-        import re
         
         for pattern in patterns:
             match = re.search(pattern, text.lower())
