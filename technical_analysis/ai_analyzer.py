@@ -68,12 +68,12 @@ class AIAnalyzer:
     """AI-based technical analysis implementation."""
     
     def __init__(self):
-        self.ai_timeframes = {
-            Timeframe.MINUTES_15: 14,
-            Timeframe.MINUTES_30: 14,
-            Timeframe.HOUR_1: 20,
-            Timeframe.HOURS_4: 30,
-            Timeframe.HOURS_8: 30
+        # Enhanced lookback periods for each timeframe (in days)
+        self.timeframe_lookback_days = {
+            Timeframe.MINUTES_15: 7.0,
+            Timeframe.MINUTES_30: 7.0,
+            Timeframe.HOUR_1: 21.0,
+            Timeframe.HOURS_4: 30.0,
         }
         
         # Enhanced thresholds for triggering AI analysis - optimized for intraday trading
@@ -132,7 +132,7 @@ class AIAnalyzer:
             reasons.append("Multi-timeframe confluence detected")
         
         # Calculate combined trigger score
-        combined_score = sum(trigger_scores) / max(len(self.ai_timeframes), 1) if trigger_scores else 0
+        combined_score = sum(trigger_scores) / max(len(self.timeframe_lookback_days), 1) if trigger_scores else 0
         adjusted_score = combined_score * session_multiplier
         
         should_analyze = adjusted_score >= self.ai_trigger_thresholds['combined_score']
@@ -387,11 +387,10 @@ class AIAnalyzer:
         now = int(time.time() * 1000)
         local_tz = get_localzone()
 
-        # Get candles for analysis
-        candles_data = {
-            tf: get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
-            for tf, lookback in self.ai_timeframes.items()
-        }
+        # Get candles for analysis - use lookback days directly
+        candles_data = {}
+        for tf, lookback_days in self.timeframe_lookback_days.items():
+            candles_data[tf] = get_candles_with_cache(coin, tf, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
 
         # Check if we have enough data for basic analysis
         if len(candles_data[Timeframe.MINUTES_15]) < 10:
@@ -479,67 +478,6 @@ class AIAnalyzer:
         prompt_parts.extend([
             "=== INTRADAY TRADING ANALYSIS FRAMEWORK ===",
             "Perform a comprehensive intraday-focused analysis optimized for Hyperliquid perpetual futures trading:",
-            "",
-            "1. INTRADAY MOMENTUM ANALYSIS:",
-            "   - Analyze 15m and 30m momentum shifts and breakouts",
-            "   - Identify short-term trend reversals and continuation patterns",
-            "   - Evaluate volume surge patterns for scalping opportunities",
-            "   - Assess price action around psychological levels and round numbers",
-            "",
-            "2. SCALPING OPPORTUNITIES:",
-            "   - Identify 1-4 hour trading windows with high probability setups",
-            "   - Analyze micro-structure breaks and pullback entries",
-            "   - Evaluate range-bound trading opportunities and breakout plays",
-            "   - Assess quick momentum trades with tight risk management",
-            "",
-            "3. SESSION-BASED ANALYSIS:",
-            "   - Consider Asian, European, and US trading session characteristics",
-            "   - Analyze opening range breakouts and session highs/lows",
-            "   - Evaluate liquidity patterns during different market hours",
-            "   - Factor in weekend positioning and session transitions",
-            "",
-            "4. WYCKOFF INTRADAY PHASES:",
-            "   - Identify short-term accumulation/distribution within trends",
-            "   - Analyze volume-price relationships for immediate entries",
-            "   - Look for springs, upthrusts, and stopping volume on lower timeframes",
-            "   - Determine smart money activity in current session",
-            "",
-            "5. ELLIOTT WAVE MICRO-COUNTS:",
-            "   - Focus on 5-wave impulse moves within 1-4 hour windows",
-            "   - Identify corrective patterns for counter-trend entries",
-            "   - Use fibonacci levels for precise entry and exit timing",
-            "",
-            "6. MARKET STRUCTURE FOR SCALPING:",
-            "   - Identify recent higher highs, higher lows patterns on 15m-1h",
-            "   - Analyze immediate support/resistance and order blocks",
-            "   - Look for liquidity sweeps and false breakouts to fade",
-            "   - Evaluate supply/demand imbalances for quick trades",
-            "",
-            "7. FUNDING RATE ARBITRAGE:",
-            "   - Assess funding rate implications for directional bias",
-            "   - Identify funding-driven price movements near 8h intervals",
-            "   - Consider perpetual futures premium/discount opportunities",
-            "",
-            "8. INTRADAY SCALPING STRATEGY FOCUS:",
-            "   - Prioritize setups with 30-240 minute holding periods",
-            "   - Focus on 1:2 or better risk-reward ratios for quick trades",
-            "   - Identify momentum breakouts on 15m-1h timeframes",
-            "   - Analyze mean reversion opportunities in ranging markets",
-            "   - Look for volume confirmation on micro-structure breaks",
-            "",
-            "9. SESSION-SPECIFIC INTRADAY PATTERNS:",
-            "   - Asian session: Range-bound trading, liquidity building",
-            "   - European session: Initial breakouts, volatility increase",
-            "   - US session: High volume moves, trend continuation/reversal",
-            "   - Overlap periods: Maximum liquidity and volatility windows",
-            "   - Weekend/holiday positioning effects on crypto markets",
-            "",
-            "10. HYPERLIQUID-SPECIFIC CONSIDERATIONS:",
-            "   - Perpetual futures dynamics and basis trading opportunities",
-            "   - Funding rate timing effects (every 1 hour)",
-            "   - Order book depth analysis for slippage assessment",
-            "   - Cross-margin vs isolated margin strategy implications",
-            "   - Leverage considerations based on volatility regime",
             "",
             "=== PREDICTION REQUEST ===",
             "Based on your comprehensive analysis, provide your response in the following JSON format:",
@@ -1007,19 +945,13 @@ class AIAnalyzer:
         """Generate candle data section for the prompt."""
         prompt_parts = ["=== CANDLE DATA ==="]
         
-        # Enhanced candle data with more candles and additional indicators
-        timeframe_candle_counts = {
-            Timeframe.MINUTES_15: 288,  # Last 72 hours (288 * 15min = 72h)
-            Timeframe.MINUTES_30: 240,  # Last 120 hours (240 * 30min = 5 days)
-            Timeframe.HOUR_1: 504,      # Last 21 days (504 * 1h = 21 days)
-            Timeframe.HOURS_4: 252      # Last 42 days (252 * 4h = 42 days)
-        }
-        
         for timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4]:
             if timeframe in dataframes:
                 df = dataframes[timeframe]
                 if not df.empty:
-                    candle_count = timeframe_candle_counts.get(timeframe, 20)
+                    # Calculate number of candles to show based on timeframe and days
+                    lookback_days = self.timeframe_lookback_days.get(timeframe, 3.0)
+                    candle_count = min(len(df), int((lookback_days * 24 * 60) / timeframe.minutes))
                     recent_candles = df.tail(candle_count)
                     
                     prompt_parts.append(f"\n{timeframe.name} Timeframe (last {len(recent_candles)} candles):")
