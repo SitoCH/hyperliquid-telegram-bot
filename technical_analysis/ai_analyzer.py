@@ -902,7 +902,7 @@ class AIAnalyzer:
                 }
             ],
             "reasoning": {
-                "max_tokens": 1500
+                "max_tokens": 2000
             },
             "response_format": {
                 "type": "json_object"
@@ -910,7 +910,7 @@ class AIAnalyzer:
             "usage": {
                 "include": "true"
             },
-            "max_tokens": 3000
+            "max_tokens": 5000
         }
         
         try:
