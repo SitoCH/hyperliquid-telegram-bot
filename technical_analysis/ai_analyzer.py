@@ -479,8 +479,33 @@ class AIAnalyzer:
             "=== INTRADAY TRADING ANALYSIS FRAMEWORK ===",
             "Perform a comprehensive intraday-focused analysis optimized for Hyperliquid perpetual futures trading:",
             "",
+            "COMPREHENSIVE TECHNICAL ANALYSIS REQUIREMENTS:",
+            "1. CORE INDICATORS: Analyze EMA, VWAP, ATR, SuperTrend, MACD confluence",
+            "2. OSCILLATORS: Consider RSI, Stochastic, Williams %R, CCI, ROC, MFI for momentum",
+            "3. BOLLINGER BANDS: Analyze squeeze/expansion patterns and price positioning",
+            "4. FIBONACCI ANALYSIS: Use Fib levels (23.6%, 38.2%, 50%, 61.8%, 78.6%) for key support/resistance",
+            "5. PIVOT POINTS: Incorporate daily pivot, R1/R2, S1/S2 for intraday levels",
+            "6. ICHIMOKU CLOUD: Analyze Tenkan/Kijun cross, cloud position, and Chikou span",
+            "7. VOLUME ANALYSIS: Volume profile, normalized volume, trend confirmation",
+            "8. WYCKOFF METHODOLOGY: Identify accumulation/distribution phases, markup/markdown",
+            "9. SUPPORT/RESISTANCE: Key levels from price action and indicators",
+            "10. MULTI-TIMEFRAME CONFLUENCE: Weight higher timeframe bias in decision",
+            "",
+            "WYCKOFF-SPECIFIC ANALYSIS:",
+            "- Phase identification (Accumulation, Markup, Distribution, Markdown)",
+            "- Volume-Price relationship analysis",
+            "- Smart money vs retail sentiment",
+            "- Cause and effect relationships",
+            "- Effort vs result divergences",
+            "",
+            "FIBONACCI PRIORITY LEVELS:",
+            "- Use Fibonacci retracements for entry/exit timing",
+            "- Identify key levels where multiple Fib levels converge",
+            "- Consider extensions for target projections",
+            "- Weight Fib confluence with other technical levels",
+            "",
             "=== PREDICTION REQUEST ===",
-            "Based on your comprehensive analysis, provide your response in the following JSON format:",
+            "Based on your comprehensive analysis of ALL PROVIDED INDICATORS, provide your response in the following JSON format:",
             "",
             "{",
             '  "recap_heading": "Brief 1-line market state summary",',
@@ -507,6 +532,10 @@ class AIAnalyzer:
             "}",
             "",
             "ANALYSIS RULES:",
+            "- COMPREHENSIVE ANALYSIS REQUIRED: You must analyze ALL provided indicators, not just a subset",
+            "- FIBONACCI FOCUS: Pay special attention to price proximity to Fibonacci levels and confluence zones",
+            "- WYCKOFF METHODOLOGY: Consider the current market phase for your analysis",
+            "- MULTI-INDICATOR CONFLUENCE: Higher agreement between indicators = higher confidence",
             "- Only recommend BUY/SELL for intraday_signal if intraday_confidence >= 0.7",
             "- Provide entry_price, stop_loss, and target_price only for high-confidence actionable signals",
             "- Base analysis on multi-method confluence - higher agreement = higher confidence",
@@ -946,37 +975,237 @@ class AIAnalyzer:
         prompt_parts = ["=== CANDLE DATA ==="]
         
         for timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4]:
-            if timeframe in dataframes:
-                df = dataframes[timeframe]
-                if not df.empty:
-                    # Calculate number of candles to show based on timeframe and days
-                    lookback_days = self.timeframe_lookback_days.get(timeframe, 3.0)
-                    candle_count = min(len(df), int((lookback_days * 24 * 60) / timeframe.minutes))
-                    recent_candles = df.tail(candle_count)
-                    
-                    prompt_parts.append(f"\n{timeframe.name} Timeframe (last {len(recent_candles)} candles):")
-                    prompt_parts.append("Time | O | H | L | C | Vol | ATR | MACD | ST | BB_Up | BB_Low | Vol_Ratio")
-                    
-                    for idx, row in recent_candles.iterrows():
-                        timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
-                        prompt_parts.append(
-                            f"{timestamp} | {row.get('o', 0):.4f} | {row.get('h', 0):.4f} | "
-                            f"{row.get('l', 0):.4f} | {row.get('c', 0):.4f} | {row.get('v', 0):.0f} | "
-                            f"{row.get('ATR', 0):.4f} | {row.get('MACD', 0):.4f} | {row.get('SuperTrend', 0):.4f} | "
-                            f"{row.get('BB_upper', 0):.4f} | {row.get('BB_lower', 0):.4f} | {row.get('v_ratio', 1):.2f}"
-                        )
-                    
-                    # Add timeframe summary
-                    trend = "Bullish" if recent_candles['c'].iloc[-1] > recent_candles['SuperTrend'].iloc[-1] else "Bearish"
-                    atr_value = recent_candles.get('ATR', pd.Series([0])).iloc[-1]
-                    
-                    prompt_parts.extend([
-                        f"Summary for {timeframe.name}:",
-                        f"- Price range: ${recent_candles['l'].min():.4f} - ${recent_candles['h'].max():.4f}",
-                        f"- Average volume: {recent_candles['v'].mean():.0f}",
-                        f"- Current trend: {trend}",
-                        f"- Volatility (ATR): {atr_value:.4f}",
-                        ""
-                    ])
+            if timeframe not in dataframes:
+                continue
+                
+            df = dataframes[timeframe]
+            if df.empty:
+                continue
+                
+            prompt_parts.extend(self._format_timeframe_data(df, timeframe))
         
         return prompt_parts
+    
+    def _format_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
+        """Format individual timeframe data."""
+        # Calculate number of candles to show
+        lookback_days = self.timeframe_lookback_days.get(timeframe, 3.0)
+        candle_count = min(len(df), int((lookback_days * 24 * 60) / timeframe.minutes))
+        recent_candles = df.tail(candle_count)
+        
+        sections = [
+            f"\n{timeframe.name} Timeframe (last {len(recent_candles)} candles):",
+            "Time | O | H | L | C | Vol | ATR | MACD | ST | BB_Up | BB_Low | Vol_Ratio"
+        ]
+        
+        # Add candle data
+        for idx, row in recent_candles.iterrows():
+            timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
+            sections.append(
+                f"{timestamp} | {row.get('o', 0):.4f} | {row.get('h', 0):.4f} | "
+                f"{row.get('l', 0):.4f} | {row.get('c', 0):.4f} | {row.get('v', 0):.0f} | "
+                f"{row.get('ATR', 0):.4f} | {row.get('MACD', 0):.4f} | {row.get('SuperTrend', 0):.4f} | "
+                f"{row.get('BB_upper', 0):.4f} | {row.get('BB_lower', 0):.4f} | {row.get('v_ratio', 1):.2f}"
+            )
+        
+        # Add comprehensive technical indicators section
+        sections.extend(self._generate_technical_indicators_section(recent_candles, timeframe))
+        
+        # Add timeframe summary
+        trend = "Bullish" if recent_candles['c'].iloc[-1] > recent_candles['SuperTrend'].iloc[-1] else "Bearish"
+        atr_value = recent_candles.get('ATR', pd.Series([0])).iloc[-1]
+        
+        sections.extend([
+            f"Summary for {timeframe.name}:",
+            f"- Price range: ${recent_candles['l'].min():.4f} - ${recent_candles['h'].max():.4f}",
+            f"- Average volume: {recent_candles['v'].mean():.0f}",
+            f"- Current trend: {trend}",
+            f"- Volatility (ATR): {atr_value:.4f}",
+            ""
+        ])
+        
+        return sections
+
+    def _generate_technical_indicators_section(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
+        """Generate comprehensive technical indicators section for the prompt."""
+        prompt_parts = [f"\n=== TECHNICAL INDICATORS - {timeframe.name} ==="]
+        
+        if df.empty:
+            prompt_parts.append("No indicator data available")
+            return prompt_parts
+        
+        # Get latest values for all indicators
+        latest = df.iloc[-1]
+        
+        # Core Technical Indicators
+        prompt_parts.extend([
+            "\n--- Core Indicators ---",
+            f"EMA: {latest.get('EMA', 0):.4f}",
+            f"VWAP: {latest.get('VWAP', 0):.4f}",
+            f"ATR: {latest.get('ATR', 0):.4f}",
+            f"SuperTrend: {latest.get('SuperTrend', 0):.4f}",
+            f"MACD: {latest.get('MACD', 0):.4f}",
+            f"MACD Signal: {latest.get('MACD_Signal', 0):.4f}",
+            f"MACD Histogram: {latest.get('MACD_Hist', 0):.4f}",
+        ])
+        
+        # Oscillators
+        prompt_parts.extend([
+            "\n--- Oscillators ---",
+            f"RSI: {latest.get('RSI', 50):.2f}",
+            f"Stochastic %K: {latest.get('STOCH_K', 50):.2f}",
+            f"Stochastic %D: {latest.get('STOCH_D', 50):.2f}",
+            f"Williams %R: {latest.get('WILLR', -50):.2f}",
+            f"CCI: {latest.get('CCI', 0):.2f}",
+            f"ROC: {latest.get('ROC', 0):.2f}%",
+            f"MFI: {latest.get('MFI', 50):.2f}",
+        ])
+        
+        # Bollinger Bands
+        prompt_parts.extend([
+            "\n--- Bollinger Bands ---",
+            f"BB Upper: {latest.get('BB_upper', 0):.4f}",
+            f"BB Middle: {latest.get('BB_middle', 0):.4f}",
+            f"BB Lower: {latest.get('BB_lower', 0):.4f}",
+            f"BB Width: {latest.get('BB_width', 0):.4f}",
+        ])
+        
+        # Fibonacci Levels
+        prompt_parts.extend([
+            "\n--- Fibonacci Retracements ---",
+            f"Fib 78.6%: {latest.get('FIB_78', 0):.4f}",
+            f"Fib 61.8%: {latest.get('FIB_61', 0):.4f}",
+            f"Fib 50.0%: {latest.get('FIB_50', 0):.4f}",
+            f"Fib 38.2%: {latest.get('FIB_38', 0):.4f}",
+            f"Fib 23.6%: {latest.get('FIB_23', 0):.4f}",
+        ])
+        
+        # Pivot Points
+        prompt_parts.extend([
+            "\n--- Pivot Points ---",
+            f"Pivot Point: {latest.get('PIVOT', 0):.4f}",
+            f"Resistance 2: {latest.get('R2', 0):.4f}",
+            f"Resistance 1: {latest.get('R1', 0):.4f}",
+            f"Support 1: {latest.get('S1', 0):.4f}",
+            f"Support 2: {latest.get('S2', 0):.4f}",
+        ])
+        
+        # Ichimoku Cloud
+        prompt_parts.extend([
+            "\n--- Ichimoku Cloud ---",
+            f"Tenkan-sen: {latest.get('TENKAN', 0):.4f}",
+            f"Kijun-sen: {latest.get('KIJUN', 0):.4f}",
+            f"Senkou Span A: {latest.get('SENKOU_A', 0):.4f}",
+            f"Senkou Span B: {latest.get('SENKOU_B', 0):.4f}",
+            f"Chikou Span: {latest.get('CHIKOU', 0):.4f}",
+        ])
+        
+        # Volume Analysis
+        prompt_parts.extend([
+            "\n--- Volume Analysis ---",
+            f"Volume: {latest.get('v', 0):.0f}",
+            f"Volume SMA: {latest.get('v_sma', 0):.0f}",
+            f"Volume Ratio: {latest.get('v_ratio', 1):.2f}",
+            f"Volume Normalized: {latest.get('v_normalized', 0):.2f}",
+            f"Volume Trend: {latest.get('v_trend', 1):.2f}",
+        ])
+        
+        # Support and Resistance Analysis
+        prompt_parts.extend(self._generate_support_resistance_analysis(df))
+        
+        # Price Action Analysis
+        prompt_parts.extend(self._generate_price_action_analysis(df))
+        
+        return prompt_parts
+    
+    def _generate_support_resistance_analysis(self, df: pd.DataFrame) -> List[str]:
+        """Generate support and resistance analysis."""
+        if df.empty or len(df) < 20:
+            return ["\n--- Support/Resistance ---", "Insufficient data for S/R analysis"]
+        
+        # Calculate recent highs and lows
+        recent_high = df['h'].rolling(window=10).max().iloc[-1]
+        recent_low = df['l'].rolling(window=10).min().iloc[-1]
+        current_price = df['c'].iloc[-1]
+        
+        # Calculate distance from key levels
+        resistance_distance = ((recent_high - current_price) / current_price) * 100
+        support_distance = ((current_price - recent_low) / current_price) * 100
+        
+        return [
+            "\n--- Support/Resistance Analysis ---",
+            f"Recent High: {recent_high:.4f} ({resistance_distance:+.2f}%)",
+            f"Recent Low: {recent_low:.4f} ({support_distance:+.2f}%)",
+            f"Range: {recent_high - recent_low:.4f} ({((recent_high - recent_low) / recent_low) * 100:.2f}%)",
+        ]
+    
+    def _generate_price_action_analysis(self, df: pd.DataFrame) -> List[str]:
+        """Generate price action analysis for Wyckoff methodology."""
+        if df.empty or len(df) < 10:
+            return ["\n--- Price Action ---", "Insufficient data for price action analysis"]
+        
+        # Calculate recent price movements
+        last_5_change = ((df['c'].iloc[-1] - df['c'].iloc[-6]) / df['c'].iloc[-6]) * 100
+        last_10_change = ((df['c'].iloc[-1] - df['c'].iloc[-11]) / df['c'].iloc[-11]) * 100
+        
+        # Volume-Price Relationship (key for Wyckoff)
+        recent_volume_avg = df['v'].tail(5).mean()
+        previous_volume_avg = df['v'].tail(10).head(5).mean()
+        volume_change = ((recent_volume_avg - previous_volume_avg) / previous_volume_avg) * 100 if previous_volume_avg > 0 else 0
+        
+        # Price volatility
+        volatility = df['c'].pct_change().tail(20).std() * 100
+        
+        # Determine potential Wyckoff phase
+        wyckoff_phase = self._analyze_wyckoff_phase(df)
+        
+        return [
+            "\n--- Price Action & Wyckoff Analysis ---",
+            f"5-period change: {last_5_change:+.2f}%",
+            f"10-period change: {last_10_change:+.2f}%",
+            f"Volume change: {volume_change:+.2f}%",
+            f"Volatility (20-period): {volatility:.2f}%",
+            f"Potential Wyckoff Phase: {wyckoff_phase}",
+        ]
+    
+    def _analyze_wyckoff_phase(self, df: pd.DataFrame) -> str:
+        """Analyze potential Wyckoff market phase based on price and volume."""
+        if df.empty or len(df) < 20:
+            return "Insufficient data"
+        
+        # Get recent price and volume data
+        prices = df['c'].tail(20)
+        volumes = df['v'].tail(20)
+        
+        # Calculate price trend and volume trend
+        price_trend = (prices.iloc[-1] - prices.iloc[0]) / prices.iloc[0]
+        volume_avg_recent = volumes.tail(10).mean()
+        volume_avg_previous = volumes.head(10).mean()
+        volume_trend = (volume_avg_recent - volume_avg_previous) / volume_avg_previous if volume_avg_previous > 0 else 0
+        
+        # Determine phase based on price and volume relationship
+        return self._classify_wyckoff_phase(price_trend, volume_trend)
+    
+    def _classify_wyckoff_phase(self, price_trend: float, volume_trend: float) -> str:
+        """Classify Wyckoff phase based on price and volume trends."""
+        # Accumulation/Distribution phases
+        if abs(price_trend) < 0.02 and volume_trend > 0.2:
+            return "Accumulation/Distribution Phase" if volume_trend > 0.5 else "Consolidation with Volume"
+        
+        # Markup/Markdown phases
+        if price_trend > 0.02 and volume_trend > 0:
+            return "Markup Phase (Bullish)"
+        if price_trend < -0.02 and volume_trend > 0:
+            return "Markdown Phase (Bearish)"
+        
+        # Low volume scenarios
+        if abs(price_trend) < 0.01 and volume_trend < -0.2:
+            return "Low Volume Consolidation"
+        
+        # Divergence scenarios
+        if price_trend > 0 and volume_trend < -0.2:
+            return "Potential Distribution (Bearish Divergence)"
+        if price_trend < 0 and volume_trend < -0.2:
+            return "Potential Accumulation (Bullish Divergence)"
+        
+        return "Transition Phase"
