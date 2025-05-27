@@ -276,6 +276,3 @@ def _add_momentum_indicators(df: pd.DataFrame) -> None:
     cci_period = min(20, max(10, len(df) // 3))
     df["CCI"] = ta.cci(df["h"], df["l"], df["c"], length=cci_period)
     
-    # Money Flow Index
-    mfi_period = min(14, max(7, len(df) // 4))
-    df["MFI"] = ta.mfi(df["h"], df["l"], df["c"], df["v"], length=mfi_period)

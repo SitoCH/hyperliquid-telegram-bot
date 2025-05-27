@@ -481,7 +481,7 @@ class AIAnalyzer:
             "",
             "COMPREHENSIVE TECHNICAL ANALYSIS REQUIREMENTS:",
             "1. CORE INDICATORS: Analyze EMA, VWAP, ATR, SuperTrend, MACD confluence",
-            "2. OSCILLATORS: Consider RSI, Stochastic, Williams %R, CCI, ROC, MFI for momentum",
+            "2. OSCILLATORS: Consider RSI, Stochastic, Williams %R, CCI, ROC for momentum",
             "3. BOLLINGER BANDS: Analyze squeeze/expansion patterns and price positioning",
             "4. FIBONACCI ANALYSIS: Use Fib levels (23.6%, 38.2%, 50%, 61.8%, 78.6%) for key support/resistance",
             "5. PIVOT POINTS: Incorporate daily pivot, R1/R2, S1/S2 for intraday levels",
@@ -640,51 +640,31 @@ class AIAnalyzer:
     
     def _build_analysis_message(self, coin: str, ai_result: AIAnalysisResult) -> str:
         """Build the analysis message text."""
-        # Start with recap heading if available
-        recap = getattr(ai_result, 'recap_heading', '')
-        if recap:
-            message = f"<b>{recap}</b>\n\n"
-        else:
-            message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
-        
-        # Add trading insight if available
-        trading_insight = getattr(ai_result, 'trading_insight', '')
-        if trading_insight:
-            message += f"💡 <b>Trading Insight:</b>\n{trading_insight}\n\n"
+
+        message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
+        message += f"<b>📊 Market Analysis:</b> {ai_result.recap_heading}\n\n"
         
         # Add signal information
         message += (
-            f"📊 <b>Signal:</b> {ai_result.signal.title()}\n"
-            f"🎯 <b>Confidence:</b> {ai_result.confidence:.1%}\n"
-            f"📈 <b>Prediction:</b> {ai_result.prediction.title()}\n"
-            f"⚠️ <b>Risk Level:</b> {ai_result.risk_level.title()}\n"
+            f"📊 <b>Signal:</b> {ai_result.signal.lower()}\n"
+            f"🎯 <b>Confidence:</b> {ai_result.confidence:.0%}\n"
+            f"📈 <b>Prediction:</b> {ai_result.prediction.lower()}\n"
+            f"⚠️ <b>Risk Level:</b> {ai_result.risk_level.lower()}"
         )
+
+        # Add trading insight if available
+        trading_insight = getattr(ai_result, 'trading_insight', '')
+        if trading_insight:
+            message += f"\n\n💡 <b>Trading Insight:</b>\n{trading_insight}"
         
-        # Add intraday signal section
-        message += self._build_intraday_section(coin, ai_result)
-        
-        # Add analysis cost information
-        if ai_result.analysis_cost > 0:
-            message += f"\n💰 <b>Analysis Cost:</b> {fmt_price(ai_result.analysis_cost)} $"
-                
-        return message
-    
-    def _build_intraday_section(self, coin: str, ai_result: AIAnalysisResult) -> str:
-        """Build the intraday trading section of the message."""
-        if ai_result.intraday_confidence < 0.6 or ai_result.intraday_signal == "hold":
-            return ""
-        
-        section = (
-            f"\n💼 <b>Intraday Signal:</b> {ai_result.intraday_signal.title()}\n"
-            f"🎯 <b>Intraday Confidence:</b> {ai_result.intraday_confidence:.1%}"
-        )
         
         trade_setup = self._build_trade_setup_format(coin, ai_result)
         if trade_setup:
-            section += trade_setup
-        
-        return section
+            message += trade_setup
+           
+        return message
     
+
     def _build_trade_setup_format(self, coin: str, ai_result: AIAnalysisResult) -> str:
         """Build formatted trade setup."""
         if not (ai_result.entry_price > 0 and (ai_result.stop_loss > 0 or ai_result.target_price > 0)):
@@ -700,7 +680,7 @@ class AIAnalyzer:
         
         # Market price (entry price)
         if ai_result.entry_price > 0:
-            setup += f"\nMarket price: {ai_result.entry_price:.4f} USDC"
+            setup += f"\nMarket price: {fmt_price(ai_result.entry_price)} USDC"
         
         # Stop Loss with percentage
         if ai_result.stop_loss > 0 and ai_result.entry_price > 0:
@@ -709,7 +689,7 @@ class AIAnalyzer:
             else:  # short
                 sl_percentage = ((ai_result.entry_price - ai_result.stop_loss) / ai_result.entry_price) * 100
             
-            setup += f"\nStop Loss: {ai_result.stop_loss:.4f} USDC ({sl_percentage:+.1f}%)"
+            setup += f"\nStop Loss: {fmt_price(ai_result.stop_loss)} USDC ({sl_percentage:+.1f}%)"
         
         # Take Profit with percentage
         if ai_result.target_price > 0 and ai_result.entry_price > 0:
@@ -718,7 +698,7 @@ class AIAnalyzer:
             else:  # short
                 tp_percentage = ((ai_result.entry_price - ai_result.target_price) / ai_result.entry_price) * 100
             
-            setup += f"\nTake Profit: {ai_result.target_price:.4f} USDC ({tp_percentage:+.1f}%)"
+            setup += f"\nTake Profit: {fmt_price(ai_result.target_price)} USDC ({tp_percentage:+.1f}%)"
         
         return setup
 
@@ -1058,7 +1038,6 @@ class AIAnalyzer:
             f"Williams %R: {latest.get('WILLR', -50):.2f}",
             f"CCI: {latest.get('CCI', 0):.2f}",
             f"ROC: {latest.get('ROC', 0):.2f}%",
-            f"MFI: {latest.get('MFI', 50):.2f}",
         ])
         
         # Bollinger Bands
