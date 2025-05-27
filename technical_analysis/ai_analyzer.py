@@ -910,7 +910,7 @@ class AIAnalyzer:
             "usage": {
                 "include": "true"
             },
-            "max_tokens": 5000
+            "max_tokens": 10000
         }
         
         try:
