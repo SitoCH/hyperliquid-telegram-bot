@@ -23,7 +23,7 @@ ANALYSIS_MODE = AnalysisMode(os.getenv("HTB_ANALYSIS_MODE", "wyckoff").lower())
 from logging_utils import logger
 from telegram_utils import telegram_utils
 from hyperliquid_utils.utils import hyperliquid_utils
-from utils import OPERATION_CANCELLED, fmt_price, log_execution_time
+from utils import OPERATION_CANCELLED, fmt, fmt_price, log_execution_time
 from technical_analysis.significant_levels import find_significant_levels
 from technical_analysis.wyckoff import detect_wyckoff_phase
 from technical_analysis.candles_utils import get_coins_to_analyze
@@ -110,6 +110,12 @@ async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
 
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Analyze candles for configured coins and categories."""
+
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+    available = float(user_state['withdrawable'])
+    if available < 5.0:
+        logger.info(f"Account balance ({fmt(available)}) is below $5, skipping analysis")
+        return
 
     all_mids = hyperliquid_utils.info.all_mids()
     coins_to_analyze = await get_coins_to_analyze(all_mids)
