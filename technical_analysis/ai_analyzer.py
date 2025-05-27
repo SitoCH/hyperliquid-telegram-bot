@@ -580,7 +580,7 @@ class AIAnalyzer:
             "",
             "{",
             '  "recap_heading": "Brief 1-line market state summary",',
-            '  "trading_insight": "Your single best intraday trading suggestion in maximum 3 lines - focus on the highest probability setup with specific actionable advice",',
+            '  "trading_insight": "Your single best intraday trading suggestion in maximum 4 lines - focus on the highest probability setup with specific actionable advice, avoid being too technical",',
             '  "signal": "buy|sell|hold",',
             '  "confidence": 0.7,',
             '  "prediction": "bullish|bearish|sideways",',
