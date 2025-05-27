@@ -76,34 +76,43 @@ class AIAnalyzer:
             Timeframe.HOURS_4: 14.0,
         }
         
-        # Enhanced thresholds for triggering AI analysis - optimized for intraday trading
+        # Enhanced thresholds for triggering AI analysis - optimized to reduce false triggers
         self.ai_trigger_thresholds = {
-            # Basic triggers
-            'price_movement': 0.015,     # 1.5% price movement (lowered for intraday)
-            'volume_spike': 1.3,         # 1.3x volume increase (more sensitive)
-            'volatility': 0.012,         # 1.2% volatility (more sensitive)
+            # Basic triggers - increased thresholds for stricter filtering
+            'price_movement': 0.025,     # 2.5% price movement (more conservative)
+            'volume_spike': 1.8,         # 1.8x volume increase (less sensitive)
+            'volatility': 0.018,         # 1.8% volatility (less sensitive)
             
-            # Intraday specific triggers
-            'momentum_breakout': 0.008,   # 0.8% breakout from range
-            'structure_break': 0.005,     # 0.5% structure level break
+            # Intraday specific triggers - more selective
+            'momentum_breakout': 0.015,   # 1.5% breakout from range
+            'structure_break': 0.012,     # 1.2% structure level break
             'macd_signal': True,          # MACD signal line crosses
             'supertrend_flip': True,      # SuperTrend direction change
-            'bb_squeeze': 0.01,           # Bollinger Band squeeze release
-            'funding_extreme': 0.0003,    # 0.03% funding rate extreme
+            'bb_squeeze': 0.015,          # Bollinger Band squeeze release
+            'funding_extreme': 0.0005,    # 0.05% funding rate extreme
+            
+            # Multi-indicator confluence requirements
+            'rsi_extreme': 80,            # RSI overbought/oversold levels
+            'rsi_oversold': 20,
+            'stoch_extreme': 80,          # Stochastic extreme levels
+            'fibonacci_proximity': 0.003, # Within 0.3% of key Fib levels
+            'pivot_proximity': 0.005,     # Within 0.5% of pivot levels
+            'ichimoku_signal': True,      # Ichimoku cloud signals
             
             # Session-based thresholds
-            'asian_session_multiplier': 0.7,    # Lower thresholds during Asian session
-            'overlap_session_multiplier': 1.2,   # Higher sensitivity during overlaps
-            'weekend_multiplier': 0.8,          # Adjusted for weekend trading
+            'asian_session_multiplier': 0.6,    # Lower thresholds during Asian session
+            'overlap_session_multiplier': 1.1,   # Slight increase during overlaps
+            'weekend_multiplier': 0.7,          # Reduced for weekend trading': 0.7,          # Reduced for weekend trading
             
-            # Combined scoring
-            'combined_score': 0.4,        # Lowered threshold for more sensitivity
-            'confluence_bonus': 0.2,      # Bonus for multiple indicators agreeing
-            'timeframe_agreement': 0.15   # Bonus for multi-timeframe confluence
+            # Combined scoring - stricter requirements
+            'combined_score': 0.6,        # Higher threshold for trigger
+            'confluence_bonus': 0.3,      # Higher bonus for multiple indicators
+            'timeframe_agreement': 0.25,  # Higher bonus for multi-timeframe agreement
+            'minimum_indicators': 3       # Minimum number of indicators needed
         }
     
     def _should_run_ai_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool) -> tuple[bool, str]:
-        """Pre-filter to determine if expensive AI analysis is warranted."""
+        """Pre-filter to determine if expensive AI analysis is warranted with strict filtering."""
         if interactive:
             return True, "Interactive analysis requested"
         
@@ -114,6 +123,7 @@ class AIAnalyzer:
         trigger_scores = []
         reasons = []
         timeframe_signals = {}
+        significant_indicators = 0
         
         # Check multiple timeframes for significant activity
         for tf, df in dataframes.items():
@@ -121,27 +131,52 @@ class AIAnalyzer:
                 continue
             
             scores, tf_reasons, signal_data = self._analyze_timeframe_triggers(df, tf, session_multiplier)
-            trigger_scores.extend(scores)
-            reasons.extend(tf_reasons)
-            timeframe_signals[tf] = signal_data
+            
+            # Only count significant scores (filter out noise)
+            significant_scores = [s for s in scores if s >= 0.15]
+            if significant_scores:
+                trigger_scores.extend(significant_scores)
+                reasons.extend(tf_reasons)
+                timeframe_signals[tf] = signal_data
+                significant_indicators += len(significant_scores)
         
-        # Calculate confluence bonus
+        # Require minimum number of significant indicators
+        if significant_indicators < self.ai_trigger_thresholds['minimum_indicators']:
+            reason = f"Insufficient significant indicators ({significant_indicators}/{self.ai_trigger_thresholds['minimum_indicators']})"
+            logger.debug(f"AI analysis skipped for {coin}: {reason}")
+            return False, reason
+        
+        # Enhanced confluence check with stricter requirements
         confluence_score = self._calculate_confluence_score(timeframe_signals)
-        if confluence_score > 0.6:
+        timeframe_agreement = self._check_timeframe_agreement(timeframe_signals)
+        
+        # Bonus only for strong confluence across multiple timeframes
+        if confluence_score > 0.8 and timeframe_agreement >= 0.7:
             trigger_scores.append(self.ai_trigger_thresholds['confluence_bonus'])
-            reasons.append("Multi-timeframe confluence detected")
+            reasons.append("Strong multi-timeframe confluence")
+        elif timeframe_agreement >= 0.6:
+            trigger_scores.append(self.ai_trigger_thresholds['timeframe_agreement'])
+            reasons.append("Timeframe agreement detected")
         
-        # Calculate combined trigger score
-        combined_score = sum(trigger_scores) / max(len(self.timeframe_lookback_days), 1) if trigger_scores else 0
-        adjusted_score = combined_score * session_multiplier
+        # Calculate combined trigger score with weighted average
+        base_score = sum(trigger_scores) / max(len(trigger_scores), 1) if trigger_scores else 0
+        adjusted_score = base_score * session_multiplier
         
-        should_analyze = adjusted_score >= self.ai_trigger_thresholds['combined_score']
+        # Additional filtering: require strong signals in primary timeframes
+        primary_tf_strength = self._check_primary_timeframe_strength(timeframe_signals)
+        if primary_tf_strength < 0.3:
+            reason = f"Weak primary timeframe signals (strength: {primary_tf_strength:.2f})"
+            logger.debug(f"AI analysis skipped for {coin}: {reason}")
+            return False, reason
+        
+        should_analyze = (adjusted_score >= self.ai_trigger_thresholds['combined_score'] and 
+                         primary_tf_strength >= 0.3)
         
         if should_analyze:
-            reason = f"Score: {adjusted_score:.2f} (session: {session_multiplier:.1f}x) - " + "; ".join(reasons[:3])
+            reason = f"Score: {adjusted_score:.2f} (session: {session_multiplier:.1f}x, indicators: {significant_indicators}) - " + "; ".join(reasons[:3])
             logger.info(f"AI analysis triggered for {coin}: {reason}")
         else:
-            reason = f"Low activity (score: {adjusted_score:.2f}, threshold: {self.ai_trigger_thresholds['combined_score']})"
+            reason = f"Low activity (score: {adjusted_score:.2f}, threshold: {self.ai_trigger_thresholds['combined_score']}, strength: {primary_tf_strength:.2f})"
             logger.debug(f"AI analysis skipped for {coin}: {reason}")
         
         return should_analyze, "; ".join(reasons) if reasons else "No significant activity detected"
@@ -176,12 +211,40 @@ class AIAnalyzer:
                 scores.append(score)
                 reasons.append(f"{tf}: High volatility {volatility:.1%}")
         
-        # RSI extremes
-        if 'rsi' in df.columns and not df['rsi'].empty:
-            rsi = df['rsi'].iloc[-1]
-            if rsi > 70 or rsi < 30:
-                scores.append(0.3)
+        # Enhanced indicator analysis with stricter thresholds
+        
+        # RSI extremes - require more extreme levels
+        if 'RSI' in df.columns and not df['RSI'].empty:
+            rsi = df['RSI'].iloc[-1]
+            if rsi > self.ai_trigger_thresholds['rsi_extreme'] or rsi < self.ai_trigger_thresholds['rsi_oversold']:
+                score = 0.3 if rsi > 85 or rsi < 15 else 0.15  # Higher score for extreme levels
+                scores.append(score)
                 reasons.append(f"{tf}: RSI extreme {rsi:.1f}")
+        
+        # Stochastic extremes - new indicator check
+        if 'STOCH_K' in df.columns and not df['STOCH_K'].empty:
+            stoch_k = df['STOCH_K'].iloc[-1]
+            if stoch_k > self.ai_trigger_thresholds['stoch_extreme'] or stoch_k < (100 - self.ai_trigger_thresholds['stoch_extreme']):
+                scores.append(0.2)
+                reasons.append(f"{tf}: Stochastic extreme {stoch_k:.1f}")
+        
+        # Fibonacci proximity check - new feature
+        fib_score = self._check_fibonacci_proximity(df)
+        if fib_score > 0:
+            scores.append(fib_score)
+            reasons.append(f"{tf}: Near Fibonacci level")
+        
+        # Pivot point proximity - new feature
+        pivot_score = self._check_pivot_proximity(df)
+        if pivot_score > 0:
+            scores.append(pivot_score)
+            reasons.append(f"{tf}: Near pivot level")
+        
+        # Ichimoku cloud signals - new indicator
+        ichimoku_score = self._check_ichimoku_signals(df)
+        if ichimoku_score > 0:
+            scores.append(ichimoku_score)
+            reasons.append(f"{tf}: Ichimoku signal")
         
         # MACD signal line crosses
         if self._check_macd_signal(df):
@@ -376,7 +439,7 @@ class AIAnalyzer:
         recent_prices = df['c'].iloc[-10:]
         if recent_prices.iloc[-1] > recent_prices.iloc[0] * 1.01:
             return "bullish"
-        elif recent_prices.iloc[-1] < recent_prices.iloc[0] * 0.99:
+        elif recent_prices.iloc[-1] < recent_prices.iloc[-0] * 0.99:
             return "bearish"
         else:
             return "neutral"
@@ -1209,3 +1272,134 @@ class AIAnalyzer:
             return "Potential Accumulation (Bullish Divergence)"
         
         return "Transition Phase"
+
+    def _check_fibonacci_proximity(self, df: pd.DataFrame) -> float:
+        """Check if price is near key Fibonacci levels."""
+        if not all(col in df.columns for col in ['FIB_23', 'FIB_38', 'FIB_50', 'FIB_61', 'FIB_78']) or df.empty:
+            return 0.0
+        
+        current_price = df['c'].iloc[-1]
+        fib_levels = [
+            df['FIB_23'].iloc[-1],
+            df['FIB_38'].iloc[-1],
+            df['FIB_50'].iloc[-1],
+            df['FIB_61'].iloc[-1],
+            df['FIB_78'].iloc[-1]
+        ]
+        
+        # Check proximity to any Fibonacci level
+        proximity_threshold = self.ai_trigger_thresholds['fibonacci_proximity']
+        for level in fib_levels:
+            if level > 0:  # Valid level
+                distance = abs(current_price - level) / current_price
+                if distance <= proximity_threshold:
+                    return 0.25  # High score for Fib proximity
+        
+        return 0.0
+    
+    def _check_pivot_proximity(self, df: pd.DataFrame) -> float:
+        """Check if price is near pivot points."""
+        if not all(col in df.columns for col in ['PIVOT', 'R1', 'R2', 'S1', 'S2']) or df.empty:
+            return 0.0
+        
+        current_price = df['c'].iloc[-1]
+        pivot_levels = [
+            df['PIVOT'].iloc[-1],
+            df['R1'].iloc[-1],
+            df['R2'].iloc[-1],
+            df['S1'].iloc[-1],
+            df['S2'].iloc[-1]
+        ]
+        
+        # Check proximity to any pivot level
+        proximity_threshold = self.ai_trigger_thresholds['pivot_proximity']
+        for level in pivot_levels:
+            if level > 0:  # Valid level
+                distance = abs(current_price - level) / current_price
+                if distance <= proximity_threshold:
+                    return 0.2  # Score for pivot proximity
+        
+        return 0.0
+    
+    def _check_ichimoku_signals(self, df: pd.DataFrame) -> float:
+        """Check for Ichimoku cloud signals."""
+        if not all(col in df.columns for col in ['TENKAN', 'KIJUN', 'SENKOU_A', 'SENKOU_B']) or len(df) < 3:
+            return 0.0
+        
+        current_price = df['c'].iloc[-1]
+        tenkan = df['TENKAN'].iloc[-1]
+        kijun = df['KIJUN'].iloc[-1]
+        senkou_a = df['SENKOU_A'].iloc[-1]
+        senkou_b = df['SENKOU_B'].iloc[-1]
+        
+        score = 0.0
+        
+        # Tenkan-Kijun cross
+        if len(df) >= 2:
+            prev_tenkan = df['TENKAN'].iloc[-2]
+            prev_kijun = df['KIJUN'].iloc[-2]
+            
+            # Bullish cross
+            if prev_tenkan <= prev_kijun and tenkan > kijun:
+                score += 0.3
+            # Bearish cross
+            elif prev_tenkan >= prev_kijun and tenkan < kijun:
+                score += 0.3
+        
+        # Cloud breakout
+        cloud_top = max(senkou_a, senkou_b)
+        cloud_bottom = min(senkou_a, senkou_b)
+        
+        if len(df) >= 2:
+            prev_price = df['c'].iloc[-2]
+            
+            # Breakout above cloud
+            if prev_price <= cloud_top and current_price > cloud_top:
+                score += 0.25
+            # Breakout below cloud
+            elif prev_price >= cloud_bottom and current_price < cloud_bottom:
+                score += 0.25
+        
+        return score
+    
+    def _check_timeframe_agreement(self, timeframe_signals: Dict) -> float:
+        """Check agreement between different timeframes."""
+        if len(timeframe_signals) < 2:
+            return 0.0
+        
+        signals = []
+        for tf_data in timeframe_signals.values():
+            if tf_data.get('strength', 0) > 0.1:  # Only consider significant signals
+                # Determine signal direction
+                if tf_data.get('momentum', 'neutral') == 'positive':
+                    signals.append(1)
+                elif tf_data.get('momentum', 'neutral') == 'negative':
+                    signals.append(-1)
+                else:
+                    signals.append(0)
+        
+        if not signals:
+            return 0.0
+        
+        # Calculate agreement percentage
+        positive_signals = sum(1 for s in signals if s > 0)
+        negative_signals = sum(1 for s in signals if s < 0)
+        total_signals = len(signals)
+        
+        # Agreement is the percentage of signals pointing in the same direction
+        agreement = max(positive_signals, negative_signals) / total_signals
+        return agreement
+    
+    def _check_primary_timeframe_strength(self, timeframe_signals: Dict) -> float:
+        """Check strength of signals in primary timeframes (15m, 1h)."""
+        primary_timeframes = [Timeframe.MINUTES_15, Timeframe.HOUR_1]
+        primary_strength = 0.0
+        primary_count = 0
+        
+        for tf, tf_data in timeframe_signals.items():
+            if tf in primary_timeframes:
+                strength = tf_data.get('strength', 0.0)
+                primary_strength += strength
+                primary_count += 1
+        
+        return primary_strength / max(primary_count, 1) if primary_count > 0 else 0.0
