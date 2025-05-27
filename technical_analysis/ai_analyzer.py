@@ -602,19 +602,12 @@ class AIAnalyzer:
             '  }',
             "}",
             "",
-            "ANALYSIS RULES:",
-            "- COMPREHENSIVE ANALYSIS REQUIRED: You must analyze ALL provided indicators, not just a subset",
-            "- FUNDING RATE ANALYSIS: Carefully analyze funding rate trends, extremes, and market sentiment implications",
-            "- FIBONACCI FOCUS: Pay special attention to price proximity to Fibonacci levels and confluence zones",
-            "- WYCKOFF METHODOLOGY: Consider the current market phase for your analysis",
-            "- MULTI-INDICATOR CONFLUENCE: Higher agreement between indicators = higher confidence",
-            "- FUNDING RATE CONSIDERATIONS: Factor in funding rate extremes as contrarian signals and market sentiment indicators",
-            "- Only recommend BUY/SELL for intraday_signal if intraday_confidence >= 0.7",
-            "- Provide entry_price, stop_loss, and target_price only for high-confidence actionable signals",
-            "- Base analysis on multi-method confluence - higher agreement = higher confidence",
-            "- Focus on the most reliable price prediction within the next 4 hours",
-            "- Prioritize scalping opportunities with 30-240 minute holding periods",
-            "- Use tight stops (0.5-2% max) for intraday positions with minimum 1:2 risk-reward ratio",
+            "ANALYSIS EXECUTION RULES:",
+            "- SIGNAL THRESHOLD: Only recommend BUY/SELL for intraday_signal if intraday_confidence >= 0.7",
+            "- PRICE LEVELS: Provide entry_price, stop_loss, and target_price only for high-confidence actionable signals",
+            "- CONFLUENCE PRIORITY: Higher agreement between multiple indicators = higher confidence rating",
+            "- TIME HORIZON: Focus on most reliable price prediction within next 4 hours for intraday trades",
+            "- POSITION TIMING: Prioritize scalping opportunities with 30-240 minute holding periods",
             "",
             "RISK MANAGEMENT RULES:",
             "- Stop loss and take profit MUST be at least 1.25% away from entry price",
@@ -645,7 +638,7 @@ class AIAnalyzer:
             # Get current market data
             mid_price = dataframes[Timeframe.MINUTES_15]['c'].iloc[-1] if not dataframes[Timeframe.MINUTES_15].empty else 0.0
             now = int(time.time() * 1000)
-            funding_rates = get_funding_with_cache(coin, now, 14)  # Get 14 days of funding rate history
+            funding_rates = get_funding_with_cache(coin, now, 5)
             
             # Generate prompt for LLM
             prompt = self._generate_llm_prediction_prompt(coin, dataframes, funding_rates, mid_price)
