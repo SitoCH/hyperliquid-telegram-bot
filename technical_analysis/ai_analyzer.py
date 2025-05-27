@@ -39,10 +39,10 @@ class AIAnalysisResult:
         stop_loss: float = 0.0,
         target_price: float = 0.0,
         key_drivers: List[str] | None = None,
-        price_predictions: Dict[str, Any] | None = None,
-        market_analysis: str = "",
-        technical_analysis: str = "",
-        risk_assessment: str = ""
+        recap_heading: str = "",
+        trading_insight: str = "",
+        time_horizon_hours: int = 4,
+        trading_setup: Dict[str, Any] | None = None
     ):
         self.signal = signal
         self.confidence = confidence
@@ -58,10 +58,10 @@ class AIAnalysisResult:
         self.stop_loss = stop_loss
         self.target_price = target_price
         self.key_drivers = key_drivers or []
-        self.price_predictions = price_predictions or {}
-        self.market_analysis = market_analysis
-        self.technical_analysis = technical_analysis
-        self.risk_assessment = risk_assessment
+        self.recap_heading = recap_heading
+        self.trading_insight = trading_insight
+        self.time_horizon_hours = time_horizon_hours
+        self.trading_setup = trading_setup or {}
 
 
 class AIAnalyzer:
@@ -69,12 +69,11 @@ class AIAnalyzer:
     
     def __init__(self):
         self.ai_timeframes = {
-            Timeframe.MINUTES_15: 28,
-            Timeframe.MINUTES_30: 42,
-            Timeframe.HOUR_1: 60,
-            Timeframe.HOURS_2: 75,
-            Timeframe.HOURS_4: 90,
-            Timeframe.HOURS_8: 120
+            Timeframe.MINUTES_15: 14,
+            Timeframe.MINUTES_30: 14,
+            Timeframe.HOUR_1: 20,
+            Timeframe.HOURS_4: 30,
+            Timeframe.HOURS_8: 30
         }
         
         # Enhanced thresholds for triggering AI analysis - optimized for intraday trading
@@ -446,7 +445,7 @@ class AIAnalyzer:
         self,
         coin: str, 
         dataframes: Dict[Timeframe, pd.DataFrame], 
-        funding_rate: FundingRateEntry | None, 
+        funding_rates: List[FundingRateEntry], 
         mid: float
     ) -> str:
         """
@@ -455,74 +454,27 @@ class AIAnalyzer:
         Args:
             coin: The cryptocurrency symbol
             dataframes: Dictionary of timeframes and their candle data
-            funding_rate: Funding rate
+            funding_rates: List of funding rate entries
             mid: Current mid price
             
         Returns:
             Formatted prompt string for LLM
         """
         prompt_parts = [
-            f"Analyze the following cryptocurrency data for {coin} and predict the price in 1, 2, and 4 hours.",
+            f"Analyze the following cryptocurrency data for {coin} and provide the most reliable price prediction within the next 4 hours.",
             f"Current price: ${mid:.4f}",
             "",
             "=== MARKET CONTEXT ===",
             f"Analysis timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
             f"24h price change: {self._calculate_24h_change(dataframes.get(Timeframe.HOUR_1), mid):.2f}%",
             "",
-            "=== CANDLE DATA ===",
-        ]    # Enhanced candle data with more candles and additional indicators
-        timeframe_candle_counts = {
-            Timeframe.MINUTES_15: 288,  # Last 72 hours (288 * 15min = 72h)
-            Timeframe.MINUTES_30: 240,  # Last 120 hours (240 * 30min = 5 days)
-            Timeframe.HOUR_1: 504,      # Last 21 days (504 * 1h = 21 days)
-            Timeframe.HOURS_4: 252      # Last 42 days (252 * 4h = 42 days)
-        }
+        ]
         
-        for timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4]:
-            if timeframe in dataframes:
-                df = dataframes[timeframe]
-                if not df.empty:
-                    candle_count = timeframe_candle_counts.get(timeframe, 20)
-                    recent_candles = df.tail(candle_count)
-                    
-                    prompt_parts.append(f"\n{timeframe.name} Timeframe (last {len(recent_candles)} candles):")
-                    prompt_parts.append("Time | O | H | L | C | Vol | ATR | MACD | ST | BB_Up | BB_Low | Vol_Ratio")
-                    
-                    for idx, row in recent_candles.iterrows():
-                        timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
-                        prompt_parts.append(
-                            f"{timestamp} | {row.get('o', 0):.4f} | {row.get('h', 0):.4f} | "
-                            f"{row.get('l', 0):.4f} | {row.get('c', 0):.4f} | {row.get('v', 0):.0f} | "
-                            f"{row.get('ATR', 0):.4f} | {row.get('MACD', 0):.4f} | {row.get('SuperTrend', 0):.4f} | "
-                            f"{row.get('BB_upper', 0):.4f} | {row.get('BB_lower', 0):.4f} | {row.get('v_ratio', 1):.2f}"
-                        )
-                    
-                    # Add timeframe summary
-                    prompt_parts.extend([
-                        f"Summary for {timeframe.name}:",
-                        f"- Price range: ${recent_candles['l'].min():.4f} - ${recent_candles['h'].max():.4f}",
-                        f"- Average volume: {recent_candles['v'].mean():.0f}",
-                        f"- Current trend: {'Bullish' if recent_candles['c'].iloc[-1] > recent_candles['SuperTrend'].iloc[-1] else 'Bearish'}",
-                        f"- Volatility (ATR): {recent_candles.get('ATR', pd.Series([0])).iloc[-1]:.4f}",
-                        ""
-                    ])
+        prompt_parts.extend(self._generate_candle_data_section(dataframes))
+        prompt_parts.extend(self._generate_funding_rates_section(funding_rates))
+        prompt_parts.extend(self._generate_market_sentiment_section(funding_rates))
+        prompt_parts.extend(self._generate_funding_thresholds_section(funding_rates))
         
-        # Enhanced funding rates data
-        prompt_parts.extend([
-            "=== FUNDING RATES ===",
-            "Time | Rate | Premium | 8h_Avg | Trend"
-        ])
-            
-        # Add market sentiment indicators
-        funding_trend = "Bullish bias" if funding_rate and funding_rate.funding_rate > 0.0001 else "Bearish bias" if funding_rate and funding_rate.funding_rate < -0.0001 else "Neutral"
-        
-        prompt_parts.extend([
-            "",
-            "=== MARKET SENTIMENT ===",
-            f"Current funding sentiment: {funding_trend}",
-            f"Funding rate magnitude: {'High' if funding_rate and abs(funding_rate.funding_rate) > 0.0005 else 'Moderate' if funding_rate and abs(funding_rate.funding_rate) > 0.0001 else 'Low'}",
-            ""
-        ])
         # Enhanced prediction request with intraday-focused analysis
         prompt_parts.extend([
             "=== INTRADAY TRADING ANALYSIS FRAMEWORK ===",
@@ -593,6 +545,8 @@ class AIAnalyzer:
             "Based on your comprehensive analysis, provide your response in the following JSON format:",
             "",
             "{",
+            '  "recap_heading": "Brief 1-line market state summary",',
+            '  "trading_insight": "Your single best intraday trading suggestion in maximum 3 lines - focus on the highest probability setup with specific actionable advice",',
             '  "signal": "buy|sell|hold",',
             '  "confidence": 0.7,',
             '  "prediction": "bullish|bearish|sideways",',
@@ -603,75 +557,29 @@ class AIAnalyzer:
             '  "stop_loss": 1200.00,',
             '  "target_price": 1300.00,',
             '  "time_horizon_hours": 4,',
-            '  "wyckoff_analysis": "Current phase identification, volume analysis, and composite operator behavior insights...",',
-            '  "elliott_wave_analysis": "Wave count, current position, and projected targets based on wave theory...",',
-            '  "market_structure_analysis": "BOS/CHoCH analysis, supply/demand zones, and liquidity analysis...",',
-            '  "market_analysis": "Brief market context, sentiment, and broader market conditions...",',
-            '  "technical_analysis": "Multi-timeframe technical confluence, indicators, and pattern analysis...",',
-            '  "risk_assessment": "Risk factors, position sizing, and risk management considerations...",',
-            '  "key_drivers": ["wyckoff_phase", "elliott_wave_target", "structure_break", "volume_confirmation"],',
-            '  "price_predictions": {',
-            '    "1_hour": {"price": 1235.00, "change_percent": 0.5, "confidence": 0.6, "key_level": "resistance"},',
-            '    "2_hours": {"price": 1240.00, "change_percent": 1.0, "confidence": 0.7, "key_level": "fibonacci_extension"},',
-            '    "4_hours": {"price": 1250.00, "change_percent": 1.5, "confidence": 0.8, "key_level": "wave_target"}',
-            '  },',
+            '  "key_drivers": ["primary_reason", "secondary_confirmation"],',
             '  "trading_setup": {',
             '    "action": "long|short|none",',
-            '    "reason": "Comprehensive rationale based on multi-method confluence",',
-            '    "entry_strategy": "Market/limit order strategy with precise timing",',
+            '    "reason": "Concise rationale for the trade",',
+            '    "entry_strategy": "Market/limit order strategy",',
             '    "risk_reward_ratio": 2.5,',
-            '    "position_size_recommendation": "Percentage of portfolio based on confidence and risk",',
             '    "invalidation_level": "Price level where analysis becomes invalid",',
-            '    "max_position_risk": "Maximum account risk percentage for this trade",',
-            '    "volatility_adjusted_position": "Position size adjusted for current volatility",',
-            '    "session_timing": "Optimal entry timing based on trading sessions"',
-            '  },',
-            '  "intraday_risk_management": {',
-            '    "account_risk_percent": 1.0,',
-            '    "max_drawdown_protection": "Stop trading if daily loss exceeds X%",',
-            '    "position_sizing_method": "ATR-based|fixed-percent|volatility-adjusted",',
-            '    "quick_exit_triggers": ["volume_drying_up", "momentum_failure", "time_stop"],',
-            '    "scale_out_levels": [{"level": 1220.0, "percentage": 50}, {"level": 1240.0, "percentage": 100}],',
-            '    "max_holding_time": "Maximum time to hold position before forced exit",',
-            '    "session_risk_limits": "Reduce position size during low-liquidity sessions"',
-            '  },',
-            '  "confluence_score": 0.85,',
-            '  "method_agreement": {',
-            '    "wyckoff": "bullish|bearish|neutral",',
-            '    "elliott_wave": "bullish|bearish|neutral",',
-            '    "market_structure": "bullish|bearish|neutral",',
-            '    "technical_indicators": "bullish|bearish|neutral"',
+            '    "session_timing": "Optimal entry timing"',
             '  }',
             "}",
             "",
             "ANALYSIS RULES:",
-            "- Only recommend BUY/SELL for intraday_signal if intraday_confidence >= 0.7 AND confluence_score >= 0.7",
+            "- Only recommend BUY/SELL for intraday_signal if intraday_confidence >= 0.7",
             "- Provide entry_price, stop_loss, and target_price only for high-confidence actionable signals",
             "- Base analysis on multi-method confluence - higher agreement = higher confidence",
-            "- Include specific Wyckoff phases, Elliott Wave counts, and structural levels",
-            "- Provide detailed reasoning for each analytical method used",
-            "- Invalidation levels are crucial for risk management",
-            "- Confluence_score should reflect agreement between different methods (0.0-1.0)",
-            "- Each analysis section should reference specific technical concepts and levels",
-            "",
-            "INTRADAY TRADING RULES:",
+            "- Focus on the most reliable price prediction within the next 4 hours",
             "- Prioritize scalping opportunities with 30-240 minute holding periods",
-            "- Focus on session-based analysis (Asian/European/US market hours)",
-            "- Identify micro-momentum breaks on 15m-1h timeframes",
-            "- Look for volume confirmation on all intraday entries",
-            "- Consider funding rate timing for 8-hour intervals",
-            "- Use tight stops (0.5-2% max) for intraday positions",
-            "- Minimum risk-reward ratio of 1:2 for intraday signals",
+            "- Use tight stops (0.5-2% max) for intraday positions with minimum 1:2 risk-reward ratio",
             "",
-            "ENHANCED RISK MANAGEMENT RULES:",
+            "RISK MANAGEMENT RULES:",
             "- Account risk should never exceed 2% per trade",
             "- Position size must be adjusted for current volatility (ATR-based)",
-            "- Include daily maximum drawdown limits (3-5% account stop)",
-            "- Provide specific exit triggers beyond stop loss",
-            "- Scale out at predetermined levels to lock profits",
-            "- Reduce position sizes during low-liquidity sessions",
-            "- Include time-based stops for momentum failures",
-            "- Consider session-specific risk adjustments"
+            "- Provide specific invalidation levels for risk management"
         ])
         
         return "\n".join(prompt_parts)
@@ -696,11 +604,10 @@ class AIAnalyzer:
             # Get current market data
             mid_price = dataframes[Timeframe.MINUTES_15]['c'].iloc[-1] if not dataframes[Timeframe.MINUTES_15].empty else 0.0
             now = int(time.time() * 1000)
-            funding_rates = get_funding_with_cache(coin, now, 1)  # Get 1 day of funding rate history
-            funding_rate = funding_rates[-1] if funding_rates else None
+            funding_rates = get_funding_with_cache(coin, now, 14)  # Get 14 days of funding rate history
             
             # Generate prompt for LLM
-            prompt = self._generate_llm_prediction_prompt(coin, dataframes, funding_rate, mid_price)
+            prompt = self._generate_llm_prediction_prompt(coin, dataframes, funding_rates, mid_price)
             
             # Call OpenRouter.ai API and track cost
             ai_response, analysis_cost = self._call_openrouter_api(prompt)
@@ -766,8 +673,20 @@ class AIAnalyzer:
     
     def _build_analysis_message(self, coin: str, ai_result: AIAnalysisResult) -> str:
         """Build the analysis message text."""
-        message = (
-            f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n"
+        # Start with recap heading if available
+        recap = getattr(ai_result, 'recap_heading', '')
+        if recap:
+            message = f"<b>{recap}</b>\n\n"
+        else:
+            message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
+        
+        # Add trading insight if available
+        trading_insight = getattr(ai_result, 'trading_insight', '')
+        if trading_insight:
+            message += f"💡 <b>Trading Insight:</b>\n{trading_insight}\n\n"
+        
+        # Add signal information
+        message += (
             f"📊 <b>Signal:</b> {ai_result.signal.title()}\n"
             f"🎯 <b>Confidence:</b> {ai_result.confidence:.1%}\n"
             f"📈 <b>Prediction:</b> {ai_result.prediction.title()}\n"
@@ -780,16 +699,6 @@ class AIAnalyzer:
         # Add analysis cost information
         if ai_result.analysis_cost > 0:
             message += f"\n💰 <b>Analysis Cost:</b> {fmt_price(ai_result.analysis_cost)} $"
-        
-        # Add individual analysis sections for better readability
-        if ai_result.market_analysis:
-            message += f"\n\n📊 <b>Market Analysis:</b>\n{ai_result.market_analysis}"
-        
-        if ai_result.technical_analysis:
-            message += f"\n\n🔧 <b>Technical Analysis:</b>\n{ai_result.technical_analysis}"
-        
-        if ai_result.risk_assessment:
-            message += f"\n\n⚠️ <b>Risk Assessment:</b>\n{ai_result.risk_assessment}"
                 
         return message
     
@@ -952,32 +861,13 @@ class AIAnalyzer:
             stop_loss = float(response_data.get("stop_loss") or 0.0)
             target_price = float(response_data.get("target_price") or 0.0)
             
-            # Extract structured analysis sections
-            market_analysis = response_data.get("market_analysis", "")
-            technical_analysis = response_data.get("technical_analysis", "")
-            risk_assessment = response_data.get("risk_assessment", "")
-            wyckoff_analysis = response_data.get("wyckoff_analysis", "")
-            elliott_wave_analysis = response_data.get("elliott_wave_analysis", "")
-            market_structure_analysis = response_data.get("market_structure_analysis", "")
+            # Extract new fields
+            recap_heading = response_data.get("recap_heading", "")
+            trading_insight = response_data.get("trading_insight", "")
             key_drivers = response_data.get("key_drivers", [])
-            price_predictions = response_data.get("price_predictions", {})
             
-            # Build description from structured sections
-            description_parts = []
-            if wyckoff_analysis:
-                description_parts.append(f"🧭 Wyckoff: {wyckoff_analysis}")
-            if elliott_wave_analysis:
-                description_parts.append(f"🌊 Elliott Wave: {elliott_wave_analysis}")
-            if market_structure_analysis:
-                description_parts.append(f"🏗️ Market Structure: {market_structure_analysis}")
-            if market_analysis:
-                description_parts.append(f"📊 Market: {market_analysis}")
-            if technical_analysis:
-                description_parts.append(f"🔧 Technical: {technical_analysis}")
-            if risk_assessment:
-                description_parts.append(f"⚠️ Risk: {risk_assessment}")
-            
-            description = "\n\n".join(description_parts) if description_parts else response_data.get("analysis", "Analysis not available")
+            # Simple description from response or fallback
+            description = response_data.get("analysis", "AI-powered intraday analysis completed")
             
             # Determine if we should notify based on signal strength
             min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
@@ -996,10 +886,8 @@ class AIAnalyzer:
                 stop_loss=stop_loss,
                 target_price=target_price,
                 key_drivers=key_drivers,
-                price_predictions=price_predictions,
-                market_analysis=market_analysis,
-                technical_analysis=technical_analysis,
-                risk_assessment=risk_assessment
+                recap_heading=recap_heading,
+                trading_insight=trading_insight
             )
             
         except (KeyError, ValueError, TypeError) as e:
@@ -1010,3 +898,153 @@ class AIAnalyzer:
                 confidence=0.5,
                 analysis_cost=0.0
             )
+
+    def _generate_funding_rates_section(self, funding_rates: List[FundingRateEntry]) -> List[str]:
+        """Generate funding rates section for the prompt."""
+        prompt_parts = [
+            "=== FUNDING RATES ===",
+            "Time | Rate | Premium | 8h_Avg | Trend"
+        ]
+        
+        if not funding_rates:
+            prompt_parts.append("No funding rate data available")
+            return prompt_parts
+            
+        # Show last 48 hours of funding rates (48 entries since they're hourly)
+        recent_funding = funding_rates[-48:] if len(funding_rates) >= 48 else funding_rates
+        
+        for i, rate in enumerate(recent_funding):
+            # Calculate 8h moving average
+            start_idx = max(0, i - 7)
+            avg_8h = sum(r.funding_rate for r in recent_funding[start_idx:i+1]) / max(1, i + 1 - start_idx)
+            
+            # Determine trend (simplified)
+            trend = "→"
+            if i > 0:
+                if rate.funding_rate > recent_funding[i-1].funding_rate:
+                    trend = "↑"
+                elif rate.funding_rate < recent_funding[i-1].funding_rate:
+                    trend = "↓"
+            
+            # Format timestamp
+            timestamp = datetime.fromtimestamp(rate.time / 1000).strftime("%m-%d %H:%M")
+            
+            prompt_parts.append(
+                f"{timestamp} | {rate.funding_rate:.6f} | {rate.premium:.6f} | {avg_8h:.6f} | {trend}"
+            )
+        
+        return prompt_parts
+    
+    def _generate_market_sentiment_section(self, funding_rates: List[FundingRateEntry]) -> List[str]:
+        """Generate market sentiment section based on funding rates."""
+        prompt_parts = ["", "=== MARKET SENTIMENT ==="]
+        
+        if not funding_rates:
+            prompt_parts.extend([
+                "Current funding sentiment: Neutral",
+                "Funding rate magnitude: Low",
+                "Current rate: 0.000000 (Neutral)",
+                ""
+            ])
+            return prompt_parts
+        
+        # Add funding rate analysis
+        from technical_analysis.funding_rates_cache import analyze_funding_rate_patterns
+        funding_analysis = analyze_funding_rate_patterns(funding_rates)
+        
+        if funding_analysis:
+            current_rate = funding_analysis.get('current_rate', 0.0)
+            sentiment = funding_analysis.get('sentiment', 'neutral')
+            trend = funding_analysis.get('trend', 'stable')
+            extremes = funding_analysis.get('extremes', {})
+            
+            funding_trend = f"{sentiment.replace('_', ' ').title()} ({trend})"
+            
+            # Simplify magnitude calculation
+            magnitude_value = extremes.get('magnitude', 0)
+            if magnitude_value > 0.0005:
+                magnitude = "High"
+            elif magnitude_value > 0.0001:
+                magnitude = "Moderate"
+            else:
+                magnitude = "Low"
+            
+            bias = "Neutral"
+            if current_rate > 0.0001:
+                bias = "Bullish bias"
+            elif current_rate < -0.0001:
+                bias = "Bearish bias"
+            
+            prompt_parts.extend([
+                f"Current funding sentiment: {funding_trend}",
+                f"Funding rate magnitude: {magnitude}",
+                f"Current rate: {current_rate:.6f} ({bias})",
+                ""
+            ])
+        
+        return prompt_parts
+    
+    def _generate_funding_thresholds_section(self, funding_rates: List[FundingRateEntry]) -> List[str]:
+        """Generate funding rate thresholds section."""
+        if not funding_rates or len(funding_rates) < 24:
+            return []
+            
+        return [
+            "=== FUNDING RATE THRESHOLDS ===",
+            "Rate Level | Threshold | Market Implication",
+            "Extremely Bullish | >0.001000 | Strong short squeeze potential",
+            "Very Bullish | >0.000500 | High premium, potential reversal",
+            "Bullish | >0.000200 | Moderate bullish sentiment", 
+            "Neutral High | >0.000100 | Slight bullish bias",
+            "Neutral Low | <-0.000100 | Slight bearish bias",
+            "Bearish | <-0.000200 | Moderate bearish sentiment",
+            "Very Bearish | <-0.000500 | High discount, potential bounce",
+            "Extremely Bearish | <-0.001000 | Strong long squeeze potential",
+            ""
+        ]
+    
+    def _generate_candle_data_section(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> List[str]:
+        """Generate candle data section for the prompt."""
+        prompt_parts = ["=== CANDLE DATA ==="]
+        
+        # Enhanced candle data with more candles and additional indicators
+        timeframe_candle_counts = {
+            Timeframe.MINUTES_15: 288,  # Last 72 hours (288 * 15min = 72h)
+            Timeframe.MINUTES_30: 240,  # Last 120 hours (240 * 30min = 5 days)
+            Timeframe.HOUR_1: 504,      # Last 21 days (504 * 1h = 21 days)
+            Timeframe.HOURS_4: 252      # Last 42 days (252 * 4h = 42 days)
+        }
+        
+        for timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4]:
+            if timeframe in dataframes:
+                df = dataframes[timeframe]
+                if not df.empty:
+                    candle_count = timeframe_candle_counts.get(timeframe, 20)
+                    recent_candles = df.tail(candle_count)
+                    
+                    prompt_parts.append(f"\n{timeframe.name} Timeframe (last {len(recent_candles)} candles):")
+                    prompt_parts.append("Time | O | H | L | C | Vol | ATR | MACD | ST | BB_Up | BB_Low | Vol_Ratio")
+                    
+                    for idx, row in recent_candles.iterrows():
+                        timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
+                        prompt_parts.append(
+                            f"{timestamp} | {row.get('o', 0):.4f} | {row.get('h', 0):.4f} | "
+                            f"{row.get('l', 0):.4f} | {row.get('c', 0):.4f} | {row.get('v', 0):.0f} | "
+                            f"{row.get('ATR', 0):.4f} | {row.get('MACD', 0):.4f} | {row.get('SuperTrend', 0):.4f} | "
+                            f"{row.get('BB_upper', 0):.4f} | {row.get('BB_lower', 0):.4f} | {row.get('v_ratio', 1):.2f}"
+                        )
+                    
+                    # Add timeframe summary
+                    trend = "Bullish" if recent_candles['c'].iloc[-1] > recent_candles['SuperTrend'].iloc[-1] else "Bearish"
+                    atr_value = recent_candles.get('ATR', pd.Series([0])).iloc[-1]
+                    
+                    prompt_parts.extend([
+                        f"Summary for {timeframe.name}:",
+                        f"- Price range: ${recent_candles['l'].min():.4f} - ${recent_candles['h'].max():.4f}",
+                        f"- Average volume: {recent_candles['v'].mean():.0f}",
+                        f"- Current trend: {trend}",
+                        f"- Volatility (ATR): {atr_value:.4f}",
+                        ""
+                    ])
+        
+        return prompt_parts

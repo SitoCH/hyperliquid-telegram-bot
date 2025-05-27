@@ -83,7 +83,7 @@ def get_funding_with_cache(coin: str, now: int, lookback_days: int) -> List[Fund
         cached_rates = [r for r in funding_rate_cache.rates if start_ts <= r.time <= end_ts]
         
         # Check if cache is recent enough
-        if cached_rates and funding_rate_cache.last_update >= end_ts - 3600000 / 12:  # 5 minues in milliseconds
+        if cached_rates and funding_rate_cache.last_update >= end_ts - 3600000 / 12:  # 5 minutes in milliseconds
             return cached_rates
             
         # Only fetch missing data
@@ -122,3 +122,84 @@ def merge_funding_rates(
     min_ts = latest_ts - (lookback_days * 86400000)
     
     return [r for r in sorted_rates if r.time >= min_ts]
+
+
+def analyze_funding_rate_patterns(funding_rates: List[FundingRateEntry]) -> Dict[str, Any]:
+    """Analyze funding rate patterns and provide thresholds and insights"""
+    if not funding_rates:
+        return {}
+    
+    rates = [r.funding_rate for r in funding_rates]
+    premiums = [r.premium for r in funding_rates]
+    
+    # Calculate statistics
+    current_rate = rates[-1] if rates else 0.0
+    avg_24h = sum(rates[-24:]) / len(rates[-24:]) if len(rates) >= 24 else current_rate
+    avg_7d = sum(rates[-168:]) / len(rates[-168:]) if len(rates) >= 168 else current_rate
+    
+    # Define funding rate thresholds
+    thresholds = {
+        'extremely_bullish': 0.001,      # 0.1% (very high positive funding)
+        'very_bullish': 0.0005,          # 0.05%
+        'bullish': 0.0002,               # 0.02%
+        'neutral_high': 0.0001,          # 0.01%
+        'neutral_low': -0.0001,          # -0.01%
+        'bearish': -0.0002,              # -0.02%
+        'very_bearish': -0.0005,         # -0.05%
+        'extremely_bearish': -0.001      # -0.1% (very high negative funding)
+    }
+    
+    # Determine current sentiment
+    sentiment = 'neutral'
+    if current_rate >= thresholds['extremely_bullish']:
+        sentiment = 'extremely_bullish'
+    elif current_rate >= thresholds['very_bullish']:
+        sentiment = 'very_bullish'
+    elif current_rate >= thresholds['bullish']:
+        sentiment = 'bullish'
+    elif current_rate >= thresholds['neutral_high']:
+        sentiment = 'neutral_bullish'
+    elif current_rate <= thresholds['extremely_bearish']:
+        sentiment = 'extremely_bearish'
+    elif current_rate <= thresholds['very_bearish']:
+        sentiment = 'very_bearish'
+    elif current_rate <= thresholds['bearish']:
+        sentiment = 'bearish'
+    elif current_rate <= thresholds['neutral_low']:
+        sentiment = 'neutral_bearish'
+    
+    # Calculate trend
+    trend = 'stable'
+    if len(rates) >= 8:
+        recent_avg = sum(rates[-8:]) / 8
+        older_avg = sum(rates[-16:-8]) / 8 if len(rates) >= 16 else recent_avg
+        if recent_avg > older_avg * 1.5:
+            trend = 'increasing'
+        elif recent_avg < older_avg * 0.5:
+            trend = 'decreasing'
+    
+    # Calculate volatility
+    if len(rates) >= 24:
+        rate_changes = [abs(rates[i] - rates[i-1]) for i in range(1, min(25, len(rates)))]
+        volatility = sum(rate_changes) / len(rate_changes)
+    else:
+        volatility = 0.0
+    
+    return {
+        'current_rate': current_rate,
+        'avg_24h': avg_24h,
+        'avg_7d': avg_7d,
+        'sentiment': sentiment,
+        'trend': trend,
+        'volatility': volatility,
+        'thresholds': thresholds,
+        'extremes': {
+            'is_extreme': abs(current_rate) >= thresholds['very_bullish'],
+            'direction': 'bullish' if current_rate > 0 else 'bearish' if current_rate < 0 else 'neutral',
+            'magnitude': abs(current_rate)
+        },
+        'mean_reversion_signal': {
+            'likely': abs(current_rate) > abs(avg_7d) * 2,
+            'direction': 'down' if current_rate > avg_7d * 2 else 'up' if current_rate < avg_7d * 2 else 'none'
+        }
+    }
