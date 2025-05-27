@@ -70,10 +70,10 @@ class AIAnalyzer:
     def __init__(self):
         # Enhanced lookback periods for each timeframe (in days)
         self.timeframe_lookback_days = {
-            Timeframe.MINUTES_15: 7.0,
-            Timeframe.MINUTES_30: 7.0,
-            Timeframe.HOUR_1: 21.0,
-            Timeframe.HOURS_4: 30.0,
+            Timeframe.MINUTES_15: 3.0,
+            Timeframe.MINUTES_30: 5.0,
+            Timeframe.HOUR_1: 14.0,
+            Timeframe.HOURS_4: 21.0,
         }
         
         # Enhanced thresholds for triggering AI analysis - optimized for intraday trading
