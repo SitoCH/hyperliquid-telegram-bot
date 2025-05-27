@@ -546,6 +546,9 @@ class AIAnalyzer:
             "RISK MANAGEMENT RULES:",
             "- Account risk should never exceed 2% per trade",
             "- Position size must be adjusted for current volatility (ATR-based)",
+            "- Stop loss and take profit MUST be at least 1.25% away from entry price",
+            "- For long positions: stop_loss < entry_price * 0.9875, target_price > entry_price * 1.0125",
+            "- For short positions: stop_loss > entry_price * 1.0125, target_price < entry_price * 0.9875",
             "- Provide specific invalidation levels for risk management"
         ])
         
@@ -807,6 +810,24 @@ class AIAnalyzer:
             entry_price = float(response_data.get("entry_price") or 0.0)
             stop_loss = float(response_data.get("stop_loss") or 0.0)
             target_price = float(response_data.get("target_price") or 0.0)
+            
+            # Validate risk management rules - ensure SL/TP are at least 1.25% away
+            if entry_price > 0:
+                min_sl_distance = entry_price * 0.0125  # 1.25%
+                min_tp_distance = entry_price * 0.0125  # 1.25%
+                
+                if intraday_signal == "buy":
+                    # For long positions: SL below entry, TP above entry
+                    if stop_loss > 0 and stop_loss > entry_price - min_sl_distance:
+                        stop_loss = 0.0  # Invalid SL, clear it
+                    if target_price > 0 and target_price < entry_price + min_tp_distance:
+                        target_price = 0.0  # Invalid TP, clear it
+                elif intraday_signal == "sell":
+                    # For short positions: SL above entry, TP below entry
+                    if stop_loss > 0 and stop_loss < entry_price + min_sl_distance:
+                        stop_loss = 0.0  # Invalid SL, clear it
+                    if target_price > 0 and target_price > entry_price - min_tp_distance:
+                        target_price = 0.0  # Invalid TP, clear it
             
             # Extract new fields
             recap_heading = response_data.get("recap_heading", "")
