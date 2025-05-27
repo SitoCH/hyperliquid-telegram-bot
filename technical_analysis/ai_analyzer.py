@@ -738,7 +738,7 @@ class AIAnalyzer:
         if not api_key:
             raise ValueError("HTB_OPENROUTER_API_KEY environment variable not set")
         
-        model = os.getenv("HTB_OPENROUTER_MODEL", "google/gemini-2.5-flash-preview-05-20:thinking")
+        model = os.getenv("HTB_OPENROUTER_MODEL", "google/gemini-2.5-flash-preview-05-20")
         
         headers = {
             "Authorization": f"Bearer {api_key}",
