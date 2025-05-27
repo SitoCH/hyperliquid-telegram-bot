@@ -647,8 +647,7 @@ class AIAnalyzer:
         if not api_key:
             raise ValueError("HTB_OPENROUTER_API_KEY environment variable not set")
         
-        model = os.getenv("HTB_OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
-        max_tokens = 1500
+        model = os.getenv("HTB_OPENROUTER_MODEL", "google/gemini-2.5-flash-preview-05-20:thinking")
         
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -667,13 +666,16 @@ class AIAnalyzer:
                     "content": prompt
                 }
             ],
+            "reasoning": {
+                "max_tokens": 1500
+            },
             "response_format": {
                 "type": "json_object"
             },
             "usage": {
                 "include": "true"
             },
-            "max_tokens": max_tokens
+            "max_tokens": 3000
         }
         
         try:

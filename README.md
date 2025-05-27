@@ -62,7 +62,7 @@ docker-compose up -d
 | HTB_ALPHAVANTAGE_API_KEY | API key for Alpha Vantage (required for performance comparison against S&P500) | "XXXXXXXXXXXXXXXX" | None |
 | HTB_ANALYSIS_MODE | Analysis mode for technical analysis | "wyckoff" or "llm" | "wyckoff" |
 | HTB_OPENROUTER_API_KEY | OpenRouter.ai API key (required for LLM analysis mode) | "sk-or-v1-xxxxx" | None |
-| HTB_OPENROUTER_MODEL | OpenRouter model to use for AI analysis | "google/gemini-2.0-flash-001" | "google/gemini-2.0-flash-001" |
+| HTB_OPENROUTER_MODEL | OpenRouter model to use for AI analysis | "gemini-2.5-flash-preview-05-20:thinking" | "gemini-2.5-flash-preview-05-20:thinking" |
 
 ## Technical Analysis Modes
 
