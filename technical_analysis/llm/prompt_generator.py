@@ -1,9 +1,9 @@
 import os
-from typing import Dict, List
+from typing import Dict, List, Any
 from datetime import datetime
 import pandas as pd
 from ..wyckoff.wyckoff_types import Timeframe
-from ..funding_rates_cache import FundingRateEntry, analyze_funding_rate_patterns
+from ..funding_rates_cache import FundingRateEntry
 
 
 class LLMPromptGenerator:
@@ -50,62 +50,27 @@ class LLMPromptGenerator:
         prompt_parts.extend(self._generate_market_sentiment_section(funding_rates))
         prompt_parts.extend(self._generate_funding_thresholds_section(funding_rates))
         
-        # Enhanced prediction request with immediate actionable analysis
+        # Streamlined analysis requirements
         prompt_parts.extend([
-            "=== IMMEDIATE TRADING OPPORTUNITY ANALYSIS ===",
-            "PRIORITY: Provide ACTIONABLE trading insights for RIGHT NOW - not future possibilities:",
+            "=== ANALYSIS REQUIREMENTS ===",
+            "FOCUS: Provide actionable trading insights for the NEXT 15-60 MINUTES only.",
             "",
-            "IMMEDIATE ACTION FOCUS:",
-            "1. CURRENT SETUP: What can I trade RIGHT NOW with the current price action?",
-            "2. ENTRY TIMING: Should I enter immediately, wait 5-15 minutes, or skip this setup?",
-            "3. SCALPING OPPORTUNITIES: Focus on 5-60 minute trades with clear entry/exit",
-            "4. MOMENTUM PLAYS: Identify breakouts, bounces, or reversals happening NOW",
-            "5. RISK/REWARD: Only suggest trades with immediate, clear risk management",
+            "KEY ANALYSIS AREAS:",
+            "1. CURRENT PRICE ACTION: Breakout, rejection, consolidation, or trend continuation?",
+            "2. IMMEDIATE LEVELS: Next 2-3 key price levels (support/resistance, Fibonacci, pivot points)",
+            "3. VOLUME CONFIRMATION: Does current volume support the price move?",
+            "4. MOMENTUM STATUS: Building, fading, or neutral momentum right now?",
+            "5. FUNDING PRESSURE: Current funding rate creating buy/sell pressure?",
+            "6. WYCKOFF PHASE: Accumulation, Markup, Distribution, or Markdown?",
             "",
-            "REAL-TIME TECHNICAL REQUIREMENTS:",
-            "1. PRICE ACTION: What is happening at this exact moment - breakout, rejection, consolidation?",
-            "2. IMMEDIATE LEVELS: What are the next 2-3 price levels that matter in the next 30 minutes?",
-            "3. VOLUME CONFIRMATION: Is current volume supporting the immediate price move?",
-            "4. MOMENTUM STATUS: Is momentum building, fading, or neutral right now?",
-            "5. FUNDING PRESSURE: Is funding creating immediate buy/sell pressure?",
+            "TRADING REQUIREMENTS:",
+            "- Only recommend BUY/SELL if there's a setup actionable in the next 5-30 minutes",
+            "- Prioritize scalping opportunities with 15-60 minute timeframes",
+            "- Minimum 1:1.5 risk/reward ratio required",
+            "- Clear invalidation levels must be provided",
             "",
-            "WYCKOFF-SPECIFIC ANALYSIS:",
-            "- Phase identification (Accumulation, Markup, Distribution, Markdown)",
-            "- Volume-Price relationship analysis",
-            "- Smart money vs retail sentiment",
-            "- Cause and effect relationships",
-            "- Effort vs result divergences",
-            "",
-            "FIBONACCI PRIORITY LEVELS:",
-            "- Use Fibonacci retracements for entry/exit timing",
-            "- Identify key levels where multiple Fib levels converge",
-            "- Consider extensions for target projections",
-            "- Weight Fib confluence with other technical levels",
-            "",
-            "FUNDING RATE ANALYSIS REQUIREMENTS:",
-            "- MANDATORY: Analyze funding rate trends, current level, and 8-hour averages",
-            "- EXTREMES: Rates >0.0005 or <-0.0005 often signal potential reversals",
-            "- SENTIMENT: High positive rates = bullish sentiment, high negative = bearish sentiment",
-            "- CONTRARIAN SIGNALS: Extreme funding rates can indicate overextended positions",
-            "- TREND ANALYSIS: Consider funding rate trend direction and magnitude changes",
-            "- CONFLUENCE: Weight funding rate analysis with technical indicators for final decision",
-            "",
-            "=== PREDICTION REQUEST ===",
-            "Analyze the CURRENT MARKET STATE and provide IMMEDIATE trading action for the next 15-60 minutes:",
-            "",
-            "IMMEDIATE ANALYSIS REQUIREMENTS:",
-            "- Focus on what's happening RIGHT NOW, not theoretical future scenarios",
-            "- Identify the most actionable setup available in the current candle/next few candles", 
-            "- Prioritize scalping opportunities with quick entry/exit (15-60 minute holds)",
-            "- Only suggest trades if there's a clear, immediate opportunity with defined risk",
-            "- If no clear setup exists RIGHT NOW, recommend 'hold' and specify what to watch for",
-            "",
-            "Based on the CURRENT price action and technical state, provide your response in JSON format:",
-            "",
-            "CRITICAL: For ANY signal (buy/sell/hold), you MUST provide complete trade setup details:",
-            "- For BUY signals: action='long', provide entry_price, stop_loss, target_price",
-            "- For SELL signals: action='short', provide entry_price, stop_loss, target_price", 
-            "- For HOLD signals: action='none', set entry_price=current_price, stop_loss=null, target_price=null",
+            "=== RESPONSE FORMAT ===",
+            "Provide your analysis in JSON format with complete trade setup details:",
             "",
             "{",
             '  "recap_heading": "Brief 1-line market state summary",',
@@ -129,57 +94,27 @@ class LLMPromptGenerator:
             '  }',
             "}",
             "",
-            "ANALYSIS EXECUTION RULES:",
-            "- IMMEDIATE ACTION ONLY: Only recommend BUY/SELL if there's a setup you can act on in the next 5-30 minutes",
-            "- CURRENT MOMENTUM: Signal must be based on what's happening RIGHT NOW, not what might happen later",
-            "- SCALPING FOCUS: Prioritize quick trades with 15-60 minute timeframes and clear exit strategies",
-            "- REAL-TIME CONFLUENCE: Only recommend trades when multiple indicators confirm the CURRENT setup",
-            "- IMMEDIATE RISK MANAGEMENT: If suggesting any trade, provide entry/stop/target for execution NOW",
-            "- NO SPECULATION: Avoid 'could', 'might', 'potentially' - focus on current market reality",
-            "- ACTIONABLE LEVELS: Provide specific price levels where action should be taken immediately",
-            "- MOMENTUM CONFIRMATION: Signal confidence >= 0.7 only when current price action confirms the setup",
-            "- CURRENT CANDLE FOCUS: Base decisions on the current and last 1-3 candles, not historical patterns",
-            "- IMMEDIATE INVALIDATION: Specify exact price levels where the setup becomes invalid",
+            "EXECUTION RULES:",
+            "- IMMEDIATE ACTION: Only recommend BUY/SELL if setup is actionable within 5-30 minutes",
+            "- CURRENT FOCUS: Signal based on what's happening NOW, not future possibilities",
+            "- SCALPING PRIORITY: Quick trades (15-60 min timeframes) with clear exits",
+            "- CONFLUENCE REQUIRED: Multiple indicators must confirm CURRENT setup",
+            "- NO SPECULATION: Focus on current market reality, not 'could/might' scenarios",
+            "- CONFIDENCE ≥0.7: Only for confirmed current price action setups",
             "",
-            "MANDATORY TRADE SETUP VALIDATION:",
-            "BEFORE providing ANY buy/sell signal, verify ALL requirements:",
-            "1. ENTRY PRICE: Must be realistic and actionable (within 0.5% of current price)",
-            "2. STOP LOSS: Must be logical level (support/resistance, Fibonacci, technical level)",
-            "3. TARGET PRICE: Must have clear reasoning (next resistance/support, measured move)",
-            "4. RISK/REWARD: Minimum 1:1.5 ratio required for any recommended trade",
+            "MANDATORY REQUIREMENTS FOR BUY/SELL SIGNALS:",
+            "1. ENTRY PRICE: Within 0.5% of current price",
+            "2. STOP LOSS: Logical technical level (S/R, Fibonacci, pivot)",
+            "3. TARGET PRICE: Clear reasoning (next S/R, measured move)",
+            "4. RISK/REWARD: Minimum 1:1.5 ratio",
             "5. ACTION FIELD: Must match signal (buy=long, sell=short, hold=none)",
-            "6. ENTRY STRATEGY: Specify market order, limit order, or conditional entry",
-            "7. INVALIDATION LEVEL: Clear price where setup fails and trade should be exited",
-            "8. SESSION TIMING: When to enter (immediate, next 15min, wait for condition)",
+            "6. ENTRY STRATEGY: Specify order type and timing",
+            "7. INVALIDATION LEVEL: Price where setup fails",
             "",
-            "SELL SIGNAL SPECIFIC REQUIREMENTS:",
-            "When signal='sell', ensure these are completed:",
-            "- trading_setup.action = 'short' (MANDATORY)",
-            "- entry_price = realistic short entry level",
-            "- stop_loss = level ABOVE entry price (higher than entry)",
-            "- target_price = level BELOW entry price (lower than entry)",
-            "- entry_strategy = specific short entry method",
-            "- reason = clear bearish rationale",
-            "",
-            "DYNAMIC RISK LEVEL ASSESSMENT:",
-            "- LOW RISK CONDITIONS: Strong multi-timeframe confluence (3+ indicators align), low volatility (ATR < 2% of price), tight stops possible (<2% from entry), clear trending market with volume confirmation, RSI 30-70 range, price within middle 50% of Bollinger Bands, funding rates normal (-0.0001 to +0.0001)",
-            "- MEDIUM RISK CONDITIONS: Moderate confluence (2 indicators agree), normal volatility (ATR 2-4% of price), standard stops (2-4% from entry), mixed signals or consolidation, RSI 20-30 or 70-80, price near Bollinger Band edges, funding rates slightly elevated (±0.0001 to ±0.0003)",
-            "- HIGH RISK CONDITIONS: Weak or conflicting indicators, high volatility (ATR >4% of price), wide stops required (>4% from entry), choppy/ranging market with low volume, RSI extremes (<20 or >80), price outside Bollinger Bands, extreme funding rates (>±0.0005), major news events or market uncertainty",
-            "- RISK ESCALATION FACTORS: Add +1 risk level if: funding rate >±0.0005, RSI >85 or <15, price >2 standard deviations from BB middle, conflicting multi-timeframe signals, low volume on breakouts",
-            "- RISK REDUCTION FACTORS: Reduce -1 risk level if: all timeframes align, volume confirms price action, clean technical levels, normal funding rates, RSI 40-60 range",
-            "",
-            "RISK LEVEL EXAMPLES:",
-            "- LOW RISK: SuperTrend bullish + RSI 45 + price above VWAP + ATR 1.5% + normal funding + volume confirmation",
-            "- MEDIUM RISK: SuperTrend bullish + RSI 75 + price near resistance + ATR 3% + elevated funding",
-            "- HIGH RISK: Conflicting signals + RSI 85 + price outside BB + ATR 6% + extreme funding + low volume",
-            "- CALCULATE RISK SCORE: Count positive/negative factors from the conditions above to determine final risk level",
-            "",
-            "MANDATORY RISK ASSESSMENT CHECKLIST:",
-            "For each analysis, evaluate and assign points based on these factors:",
-            "POSITIVE FACTORS (reduce risk): Multi-TF confluence (+1), Volume confirmation (+1), RSI 40-60 (+1), Normal funding rates (+1), Clear trend direction (+1), Price within BB middle 50% (+1)",
-            "NEGATIVE FACTORS (increase risk): Conflicting signals (-2), RSI >80 or <20 (-2), Extreme funding rates (-2), High ATR >4% (-2), Price outside BB (-1), Low volume (-1)",
-            "FINAL RISK CALCULATION: If total score >= 3 = LOW risk, score 0-2 = MEDIUM risk, score < 0 = HIGH risk",
-            "IMPORTANT: Always calculate and show your risk score reasoning in the analysis before assigning final risk level",
+            "RISK ASSESSMENT (calculate score):",
+            "POSITIVE FACTORS (+1 each): Multi-timeframe confluence, Volume confirmation, RSI 40-60, Normal funding rates, Clear trend, Price within BB middle 50%",
+            "NEGATIVE FACTORS (-1 each): Conflicting signals (-2), RSI extremes (-2), Extreme funding (-2), High ATR >4% (-2), Price outside BB, Low volume",
+            "RISK LEVELS: Score ≥3 = LOW, Score 0-2 = MEDIUM, Score <0 = HIGH",
         ])
         
         return "\n".join(prompt_parts)
@@ -481,7 +416,7 @@ class LLMPromptGenerator:
             return prompt_parts
         
         # Add funding rate analysis
-        funding_analysis = analyze_funding_rate_patterns(funding_rates)
+        funding_analysis = self.analyze_funding_rate_patterns(funding_rates)
         
         if funding_analysis:
             current_rate = funding_analysis.get('current_rate', 0.0)
@@ -533,3 +468,83 @@ class LLMPromptGenerator:
             "Extremely Bearish | <-0.001000 | Strong long squeeze potential",
             ""
         ]
+
+
+    def analyze_funding_rate_patterns(self, funding_rates: List[FundingRateEntry]) -> Dict[str, Any]:
+        """Analyze funding rate patterns and provide thresholds and insights"""
+        if not funding_rates:
+            return {}
+        
+        rates = [r.funding_rate for r in funding_rates]
+        
+        # Calculate statistics
+        current_rate = rates[-1] if rates else 0.0
+        avg_24h = sum(rates[-24:]) / len(rates[-24:]) if len(rates) >= 24 else current_rate
+        avg_7d = sum(rates[-168:]) / len(rates[-168:]) if len(rates) >= 168 else current_rate
+        
+        # Define funding rate thresholds
+        thresholds = {
+            'extremely_bullish': 0.001,      # 0.1% (very high positive funding)
+            'very_bullish': 0.0005,          # 0.05%
+            'bullish': 0.0002,               # 0.02%
+            'neutral_high': 0.0001,          # 0.01%
+            'neutral_low': -0.0001,          # -0.01%
+            'bearish': -0.0002,              # -0.02%
+            'very_bearish': -0.0005,         # -0.05%
+            'extremely_bearish': -0.001      # -0.1% (very high negative funding)
+        }
+        
+        # Determine current sentiment
+        sentiment = 'neutral'
+        if current_rate >= thresholds['extremely_bullish']:
+            sentiment = 'extremely_bullish'
+        elif current_rate >= thresholds['very_bullish']:
+            sentiment = 'very_bullish'
+        elif current_rate >= thresholds['bullish']:
+            sentiment = 'bullish'
+        elif current_rate >= thresholds['neutral_high']:
+            sentiment = 'neutral_bullish'
+        elif current_rate <= thresholds['extremely_bearish']:
+            sentiment = 'extremely_bearish'
+        elif current_rate <= thresholds['very_bearish']:
+            sentiment = 'very_bearish'
+        elif current_rate <= thresholds['bearish']:
+            sentiment = 'bearish'
+        elif current_rate <= thresholds['neutral_low']:
+            sentiment = 'neutral_bearish'
+        
+        # Calculate trend
+        trend = 'stable'
+        if len(rates) >= 8:
+            recent_avg = sum(rates[-8:]) / 8
+            older_avg = sum(rates[-16:-8]) / 8 if len(rates) >= 16 else recent_avg
+            if recent_avg > older_avg * 1.5:
+                trend = 'increasing'
+            elif recent_avg < older_avg * 0.5:
+                trend = 'decreasing'
+        
+        # Calculate volatility
+        if len(rates) >= 24:
+            rate_changes = [abs(rates[i] - rates[i-1]) for i in range(1, min(25, len(rates)))]
+            volatility = sum(rate_changes) / len(rate_changes)
+        else:
+            volatility = 0.0
+        
+        return {
+            'current_rate': current_rate,
+            'avg_24h': avg_24h,
+            'avg_7d': avg_7d,
+            'sentiment': sentiment,
+            'trend': trend,
+            'volatility': volatility,
+            'thresholds': thresholds,
+            'extremes': {
+                'is_extreme': abs(current_rate) >= thresholds['very_bullish'],
+                'direction': 'bullish' if current_rate > 0 else 'bearish' if current_rate < 0 else 'neutral',
+                'magnitude': abs(current_rate)
+            },
+            'mean_reversion_signal': {
+                'likely': abs(current_rate) > abs(avg_7d) * 2,
+                'direction': 'down' if current_rate > avg_7d * 2 else 'up' if current_rate < avg_7d * 2 else 'none'
+            }
+        }
