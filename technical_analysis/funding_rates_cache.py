@@ -130,7 +130,6 @@ def analyze_funding_rate_patterns(funding_rates: List[FundingRateEntry]) -> Dict
         return {}
     
     rates = [r.funding_rate for r in funding_rates]
-    premiums = [r.premium for r in funding_rates]
     
     # Calculate statistics
     current_rate = rates[-1] if rates else 0.0
