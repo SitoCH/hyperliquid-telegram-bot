@@ -4,7 +4,7 @@ import shutil
 from technical_analysis.candles_cache import (
     get_candles_with_cache, _round_timestamp, CACHE_DIR, clear_cache
 )
-from technical_analysis.wyckoff_types import Timeframe
+from technical_analysis.wyckoff.wyckoff_types import Timeframe
 
 @pytest.fixture
 def mock_fetch():
