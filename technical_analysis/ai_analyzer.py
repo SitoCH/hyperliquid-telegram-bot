@@ -33,8 +33,6 @@ class AIAnalysisResult:
         description: str = "",
         timeframe_signals: Dict[str, Any] | None = None,
         analysis_cost: float = 0.0,
-        intraday_signal: str = "hold",
-        intraday_confidence: float = 0.5,
         entry_price: float = 0.0,
         stop_loss: float = 0.0,
         target_price: float = 0.0,
@@ -52,8 +50,6 @@ class AIAnalysisResult:
         self.description = description
         self.timeframe_signals = timeframe_signals or {}
         self.analysis_cost = analysis_cost
-        self.intraday_signal = intraday_signal
-        self.intraday_confidence = intraday_confidence
         self.entry_price = entry_price
         self.stop_loss = stop_loss
         self.target_price = target_price
@@ -70,9 +66,9 @@ class AIAnalyzer:
     def __init__(self):
         # Enhanced lookback periods for each timeframe (in days)
         self.timeframe_lookback_days = {
-            Timeframe.MINUTES_15: 2.0,
-            Timeframe.MINUTES_30: 4.0,
-            Timeframe.HOUR_1: 7.0,
+            Timeframe.MINUTES_15: 5.0,
+            Timeframe.MINUTES_30: 5.0,
+            Timeframe.HOUR_1: 10.0,
             Timeframe.HOURS_4: 14.0,
         }
         
@@ -585,8 +581,6 @@ class AIAnalyzer:
             '  "confidence": 0.7,',
             '  "prediction": "bullish|bearish|sideways",',
             '  "risk_level": "low|medium|high",',
-            '  "intraday_signal": "buy|sell|hold",',
-            '  "intraday_confidence": 0.8,',
             '  "entry_price": 1234.56,',
             '  "stop_loss": 1200.00,',
             '  "target_price": 1300.00,',
@@ -603,17 +597,31 @@ class AIAnalyzer:
             "}",
             "",
             "ANALYSIS EXECUTION RULES:",
-            "- SIGNAL THRESHOLD: Only recommend BUY/SELL for intraday_signal if intraday_confidence >= 0.7",
+            "- SIGNAL THRESHOLD: Only recommend BUY/SELL for signal if confidence >= 0.7",
             "- PRICE LEVELS: Provide entry_price, stop_loss, and target_price only for high-confidence actionable signals",
             "- CONFLUENCE PRIORITY: Higher agreement between multiple indicators = higher confidence rating",
             "- TIME HORIZON: Focus on most reliable price prediction within next 4 hours for intraday trades",
             "- POSITION TIMING: Prioritize scalping opportunities with 30-240 minute holding periods",
             "",
-            "RISK MANAGEMENT RULES:",
-            "- Stop loss and take profit MUST be at least 1.25% away from entry price",
-            "- For long positions: stop_loss < entry_price * 0.9875, target_price > entry_price * 1.0125",
-            "- For short positions: stop_loss > entry_price * 1.0125, target_price < entry_price * 0.9875",
-            "- Provide specific invalidation levels for risk management"
+            "DYNAMIC RISK LEVEL ASSESSMENT:",
+            "- LOW RISK CONDITIONS: Strong multi-timeframe confluence (3+ indicators align), low volatility (ATR < 2% of price), tight stops possible (<2% from entry), clear trending market with volume confirmation, RSI 30-70 range, price within middle 50% of Bollinger Bands, funding rates normal (-0.0001 to +0.0001)",
+            "- MEDIUM RISK CONDITIONS: Moderate confluence (2 indicators agree), normal volatility (ATR 2-4% of price), standard stops (2-4% from entry), mixed signals or consolidation, RSI 20-30 or 70-80, price near Bollinger Band edges, funding rates slightly elevated (±0.0001 to ±0.0003)",
+            "- HIGH RISK CONDITIONS: Weak or conflicting indicators, high volatility (ATR >4% of price), wide stops required (>4% from entry), choppy/ranging market with low volume, RSI extremes (<20 or >80), price outside Bollinger Bands, extreme funding rates (>±0.0005), major news events or market uncertainty",
+            "- RISK ESCALATION FACTORS: Add +1 risk level if: funding rate >±0.0005, RSI >85 or <15, price >2 standard deviations from BB middle, conflicting multi-timeframe signals, low volume on breakouts",
+            "- RISK REDUCTION FACTORS: Reduce -1 risk level if: all timeframes align, volume confirms price action, clean technical levels, normal funding rates, RSI 40-60 range",
+            "",
+            "RISK LEVEL EXAMPLES:",
+            "- LOW RISK: SuperTrend bullish + RSI 45 + price above VWAP + ATR 1.5% + normal funding + volume confirmation",
+            "- MEDIUM RISK: SuperTrend bullish + RSI 75 + price near resistance + ATR 3% + elevated funding",
+            "- HIGH RISK: Conflicting signals + RSI 85 + price outside BB + ATR 6% + extreme funding + low volume",
+            "- CALCULATE RISK SCORE: Count positive/negative factors from the conditions above to determine final risk level",
+            "",
+            "MANDATORY RISK ASSESSMENT CHECKLIST:",
+            "For each analysis, evaluate and assign points based on these factors:",
+            "POSITIVE FACTORS (reduce risk): Multi-TF confluence (+1), Volume confirmation (+1), RSI 40-60 (+1), Normal funding rates (+1), Clear trend direction (+1), Price within BB middle 50% (+1)",
+            "NEGATIVE FACTORS (increase risk): Conflicting signals (-2), RSI >80 or <20 (-2), Extreme funding rates (-2), High ATR >4% (-2), Price outside BB (-1), Low volume (-1)",
+            "FINAL RISK CALCULATION: If total score >= 3 = LOW risk, score 0-2 = MEDIUM risk, score < 0 = HIGH risk",
+            "IMPORTANT: Always calculate and show your risk score reasoning in the analysis before assigning final risk level",
         ])
         
         return "\n".join(prompt_parts)
@@ -737,11 +745,11 @@ class AIAnalyzer:
         if not (ai_result.entry_price > 0 and (ai_result.stop_loss > 0 or ai_result.target_price > 0)):
             return ""
 
-        enc_side = "L" if ai_result.intraday_signal == "buy" else "S"
+        enc_side = "L" if ai_result.signal == "buy" else "S"
         enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(ai_result.stop_loss)}_{fmt_price(ai_result.target_price)}".encode('utf-8')).decode('utf-8')
         trade_link = f"({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
 
-        side = "Long" if ai_result.intraday_signal == "buy" else "Short"
+        side = "Long" if ai_result.signal == "buy" else "Short"
 
         setup = f"\n\n<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>"
         
@@ -751,7 +759,7 @@ class AIAnalyzer:
         
         # Stop Loss with percentage
         if ai_result.stop_loss > 0 and ai_result.entry_price > 0:
-            if ai_result.intraday_signal == "buy":
+            if ai_result.signal == "buy":
                 sl_percentage = ((ai_result.stop_loss - ai_result.entry_price) / ai_result.entry_price) * 100
             else:  # short
                 sl_percentage = ((ai_result.entry_price - ai_result.stop_loss) / ai_result.entry_price) * 100
@@ -760,7 +768,7 @@ class AIAnalyzer:
         
         # Take Profit with percentage
         if ai_result.target_price > 0 and ai_result.entry_price > 0:
-            if ai_result.intraday_signal == "buy":
+            if ai_result.signal == "buy":
                 tp_percentage = ((ai_result.target_price - ai_result.entry_price) / ai_result.entry_price) * 100
             else:  # short
                 tp_percentage = ((ai_result.entry_price - ai_result.target_price) / ai_result.entry_price) * 100
@@ -869,8 +877,6 @@ class AIAnalyzer:
             confidence = float(response_data.get("confidence", 0.5))
             prediction = response_data.get("prediction", "sideways").lower()
             risk_level = response_data.get("risk_level", "medium").lower()
-            intraday_signal = response_data.get("intraday_signal", "hold").lower()
-            intraday_confidence = float(response_data.get("intraday_confidence", 0.5))
             entry_price = float(response_data.get("entry_price") or 0.0)
             stop_loss = float(response_data.get("stop_loss") or 0.0)
             target_price = float(response_data.get("target_price") or 0.0)
@@ -880,13 +886,13 @@ class AIAnalyzer:
                 min_sl_distance = entry_price * 0.0125  # 1.25%
                 min_tp_distance = entry_price * 0.0125  # 1.25%
                 
-                if intraday_signal == "buy":
+                if signal == "buy":
                     # For long positions: SL below entry, TP above entry
                     if stop_loss > 0 and stop_loss > entry_price - min_sl_distance:
                         stop_loss = 0.0  # Invalid SL, clear it
                     if target_price > 0 and target_price < entry_price + min_tp_distance:
                         target_price = 0.0  # Invalid TP, clear it
-                elif intraday_signal == "sell":
+                elif signal == "sell":
                     # For short positions: SL above entry, TP below entry
                     if stop_loss > 0 and stop_loss < entry_price + min_sl_distance:
                         stop_loss = 0.0  # Invalid SL, clear it
@@ -912,8 +918,6 @@ class AIAnalyzer:
                 risk_level=risk_level,
                 should_notify=should_notify,
                 description=description,
-                intraday_signal=intraday_signal,
-                intraday_confidence=intraday_confidence,
                 entry_price=entry_price,
                 stop_loss=stop_loss,
                 target_price=target_price,
