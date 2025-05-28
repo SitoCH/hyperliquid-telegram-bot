@@ -204,12 +204,21 @@ class LLMAnalyzer:
         # Build analysis message
         message = self._build_analysis_message(coin, ai_result)
         await telegram_utils.send(message, parse_mode=ParseMode.HTML)
-    
+
+
     def _build_analysis_message(self, coin: str, ai_result: LLMAnalysisResult) -> str:
         """Build the analysis message text."""
 
+        # Get emoji based on signal/prediction
+        if ai_result.signal == "buy" or "bullish" in ai_result.prediction.lower() or "up" in ai_result.prediction.lower():
+            direction_emoji = "📈"
+        elif ai_result.signal == "sell" or "bearish" in ai_result.prediction.lower() or "down" in ai_result.prediction.lower():
+            direction_emoji = "📉"
+        else:
+            direction_emoji = "📊"
+
         message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
-        message += f"<b>📊 Market Analysis:</b> {ai_result.recap_heading}\n\n"
+        message += f"<b>{direction_emoji} Market Analysis:</b> {ai_result.recap_heading}\n\n"
         
         # Add signal information
         message += (
