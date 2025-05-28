@@ -152,18 +152,23 @@ class LLMPromptGenerator:
         
         sections = [
             f"\n{timeframe.name} Timeframe (last {len(recent_candles)} candles):",
-            "Time | O | H | L | C | Vol | ATR | MACD | ST | BB_Up | BB_Low | Vol_Ratio"
+            "Time | O | H | L | C | Vol | ATR | MACD | ST | RSI | BB_Up | BB_Low | EMA | VWAP"
         ]
         
-        # Add candle data
+        # Add candle data with more indicators
         for idx, row in recent_candles.iterrows():
             timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
             sections.append(
                 f"{timestamp} | {row.get('o', 0):.4f} | {row.get('h', 0):.4f} | "
                 f"{row.get('l', 0):.4f} | {row.get('c', 0):.4f} | {row.get('v', 0):.0f} | "
                 f"{row.get('ATR', 0):.4f} | {row.get('MACD', 0):.4f} | {row.get('SuperTrend', 0):.4f} | "
-                f"{row.get('BB_upper', 0):.4f} | {row.get('BB_lower', 0):.4f} | {row.get('v_ratio', 1):.2f}"
+                f"{row.get('RSI', 50):.1f} | {row.get('BB_upper', 0):.4f} | {row.get('BB_lower', 0):.4f} | "
+                f"{row.get('EMA', 0):.4f} | {row.get('VWAP', 0):.4f}"
             )
+        
+        # Add additional indicators table for last 5 candles
+        if len(recent_candles) >= 15:
+            sections.extend(self._generate_additional_indicators_table(recent_candles.tail(15), timeframe))
         
         # Add comprehensive technical indicators section
         sections.extend(self._generate_technical_indicators_section(recent_candles, timeframe))
@@ -180,6 +185,24 @@ class LLMPromptGenerator:
             f"- Volatility (ATR): {atr_value:.4f}",
             ""
         ])
+        
+        return sections
+
+    def _generate_additional_indicators_table(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
+        """Generate additional indicators table for recent candles."""
+        sections = [
+            f"\nAdditional Indicators (last {len(df)} {timeframe.name} candles):",
+            "Time | RSI | STOCH_K | STOCH_D | WILLR | CCI | ROC | BB_Mid | FIB_50 | PIVOT"
+        ]
+        
+        for idx, row in df.iterrows():
+            timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
+            sections.append(
+                f"{timestamp} | {row.get('RSI', 50):.1f} | {row.get('STOCH_K', 50):.1f} | "
+                f"{row.get('STOCH_D', 50):.1f} | {row.get('WILLR', -50):.1f} | {row.get('CCI', 0):.1f} | "
+                f"{row.get('ROC', 0):.2f} | {row.get('BB_middle', 0):.4f} | {row.get('FIB_50', 0):.4f} | "
+                f"{row.get('PIVOT', 0):.4f}"
+            )
         
         return sections
 
