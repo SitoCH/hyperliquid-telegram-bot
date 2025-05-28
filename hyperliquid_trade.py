@@ -8,8 +8,8 @@ from telegram_utils import telegram_utils
 from hyperliquid_utils.utils import hyperliquid_utils
 from telegram.constants import ParseMode
 from utils import OPERATION_CANCELLED, fmt, px_round, fmt_price
-from technical_analysis.hyperliquid_candles import get_significant_levels
-from technical_analysis.wyckoff_types import Timeframe
+from technical_analysis.wyckoff.significant_levels import get_significant_levels_from_timeframe
+from technical_analysis.wyckoff.wyckoff_types import Timeframe
 from tabulate import tabulate, simple_separated_format
 
 EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT, SELECTING_LEVERAGE = range(6)
@@ -130,7 +130,7 @@ class PriceSuggestion(NamedTuple):
 
 def get_price_suggestions(coin: str, mid: float, is_stop_loss: bool, is_long: bool) -> List[PriceSuggestion]:
     """Get price suggestions for either entry or exit points."""
-    resistance_levels, support_levels = get_significant_levels(coin, mid, Timeframe.HOUR_1, 250)
+    resistance_levels, support_levels = get_significant_levels_from_timeframe(coin, mid, Timeframe.HOUR_1, 250)
     suggestions: List[PriceSuggestion] = []
 
     # For take profit (exit), we reverse the direction compared to stop loss (entry)

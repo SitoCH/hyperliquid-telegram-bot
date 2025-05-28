@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from utils import log_execution_time
-from .wyckoff_types import Timeframe
+from .wyckoff.wyckoff_types import Timeframe
 from logging_utils import logger
 
 # Calculate cache directory relative to project root

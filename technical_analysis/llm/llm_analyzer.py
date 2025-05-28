@@ -14,14 +14,14 @@ from utils import fmt_price
 from logging_utils import logger
 from telegram_utils import telegram_utils
 from hyperliquid_utils.utils import hyperliquid_utils
-from technical_analysis.candles_cache import get_candles_with_cache
-from technical_analysis.wyckoff_types import Timeframe
-from technical_analysis.data_processor import prepare_dataframe, apply_indicators
-from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
+from ..candles_cache import get_candles_with_cache
+from ..wyckoff.wyckoff_types import Timeframe
+from ..data_processor import prepare_dataframe, apply_indicators
+from ..funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from utils import exchange_enabled
 
-class AIAnalysisResult:
-    """Container for AI analysis results."""
+class LLMAnalysisResult:
+    """Container for LLM analysis results."""
     
     def __init__(
         self,
@@ -60,7 +60,7 @@ class AIAnalysisResult:
         self.trading_setup = trading_setup or {}
 
 
-class AIAnalyzer:
+class LLMAnalyzer:
     """AI-based technical analysis implementation."""
     
     def __init__(self):
@@ -639,7 +639,7 @@ class AIAnalyzer:
             return 0.0
 
 
-    async def _perform_ai_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str) -> AIAnalysisResult:
+    async def _perform_ai_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str) -> LLMAnalysisResult:
         """Core AI analysis logic using OpenRouter.ai."""
 
         try:
@@ -671,7 +671,7 @@ class AIAnalyzer:
             
         except Exception as e:
             logger.error(f"AI analysis failed for {coin}: {str(e)}", exc_info=True)
-            return AIAnalysisResult(
+            return LLMAnalysisResult(
                 description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
                 signal="hold",
                 confidence=0.5,
@@ -705,7 +705,7 @@ class AIAnalyzer:
         self, 
         context: ContextTypes.DEFAULT_TYPE, 
         coin: str, 
-        ai_result: AIAnalysisResult
+        ai_result: LLMAnalysisResult
     ) -> None:
         """Send AI analysis results to Telegram."""
         
@@ -713,7 +713,7 @@ class AIAnalyzer:
         message = self._build_analysis_message(coin, ai_result)
         await telegram_utils.send(message, parse_mode=ParseMode.HTML)
     
-    def _build_analysis_message(self, coin: str, ai_result: AIAnalysisResult) -> str:
+    def _build_analysis_message(self, coin: str, ai_result: LLMAnalysisResult) -> str:
         """Build the analysis message text."""
 
         message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
@@ -740,7 +740,7 @@ class AIAnalyzer:
         return message
     
 
-    def _build_trade_setup_format(self, coin: str, ai_result: AIAnalysisResult) -> str:
+    def _build_trade_setup_format(self, coin: str, ai_result: LLMAnalysisResult) -> str:
         """Build formatted trade setup."""
         if not (ai_result.entry_price > 0 and (ai_result.stop_loss > 0 or ai_result.target_price > 0)):
             return ""
@@ -778,7 +778,7 @@ class AIAnalyzer:
         return setup
 
 
-    def _build_price_levels(self, ai_result: AIAnalysisResult) -> str:
+    def _build_price_levels(self, ai_result: LLMAnalysisResult) -> str:
         """Build price levels section."""
         if not (ai_result.entry_price > 0 or ai_result.stop_loss > 0 or ai_result.target_price > 0):
             return ""
@@ -866,7 +866,7 @@ class AIAnalyzer:
         except requests.exceptions.RequestException as e:
             raise ValueError(f"OpenRouter API request failed: {str(e)}")
     
-    def _parse_ai_response(self, ai_response: str, coin: str) -> AIAnalysisResult:
+    def _parse_ai_response(self, ai_response: str, coin: str) -> LLMAnalysisResult:
         """Parse AI response into structured analysis result."""
         try:
             # Try to parse as JSON first
@@ -911,7 +911,7 @@ class AIAnalyzer:
             min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
             should_notify = signal in ["buy", "sell"] and confidence >= min_confidence
             
-            return AIAnalysisResult(
+            return LLMAnalysisResult(
                 signal=signal,
                 confidence=confidence,
                 prediction=prediction,
@@ -928,7 +928,7 @@ class AIAnalyzer:
             
         except (KeyError, ValueError, TypeError) as e:
             logger.error(f"JSON parsing failed for {coin}: {str(e)}\n{ai_response}", exc_info=True)
-            return AIAnalysisResult(
+            return LLMAnalysisResult(
                 description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
                 signal="hold",
                 confidence=0.5,

@@ -7,7 +7,7 @@ from telegram_utils import telegram_utils
 import base64
 from utils import exchange_enabled
 
-from technical_analysis.wyckoff_types import (
+from ..wyckoff_types import (
     WyckoffState, WyckoffPhase, WyckoffSign, MarketPattern, SignificantLevelsData,
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity
 )

@@ -24,31 +24,16 @@ from logging_utils import logger
 from telegram_utils import telegram_utils
 from hyperliquid_utils.utils import hyperliquid_utils
 from utils import OPERATION_CANCELLED, fmt, fmt_price, log_execution_time
-from technical_analysis.significant_levels import find_significant_levels
-from technical_analysis.wyckoff import detect_wyckoff_phase
-from technical_analysis.candles_utils import get_coins_to_analyze
-from technical_analysis.candles_cache import get_candles_with_cache
-from technical_analysis.wyckoff_types import Timeframe, WyckoffState, SignificantLevelsData
-from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
-from technical_analysis.wykcoff_chart import generate_chart
-from technical_analysis.mtf.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe, MultiTimeframeDirection
-from technical_analysis.data_processor import prepare_dataframe, apply_indicators, remove_partial_candle
+from .candles_utils import get_coins_to_analyze
+from .candles_cache import get_candles_with_cache
+from .funding_rates_cache import get_funding_with_cache, FundingRateEntry
+from .data_processor import prepare_dataframe, apply_indicators, remove_partial_candle
 from hyperliquid_utils.hyperliquid_ratelimiter import hyperliquid_rate_limiter
-from technical_analysis.ai_analyzer import AIAnalyzer
-from technical_analysis.wyckoff_analyzer import WyckoffAnalyzer
+from .llm.llm_analyzer import LLMAnalyzer
+from .wyckoff.wyckoff_analyzer import WyckoffAnalyzer
 
 
 SELECTING_COIN_FOR_TA = range(1)
-
-
-def get_significant_levels(coin: str, mid: float, timeframe: Timeframe, lookback_days: int) -> Tuple[List[float], List[float]]:
-    now = int(time.time() * 1000)
-    candles = get_candles_with_cache(coin, timeframe, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
-    local_tz = get_localzone()
-    df = prepare_dataframe(candles, local_tz)
-    apply_indicators(df, timeframe)
-    funding_rates = get_funding_with_cache(coin, now, 7)
-    return find_significant_levels(df, detect_wyckoff_phase(remove_partial_candle(df, local_tz), timeframe, funding_rates), mid, timeframe)
 
 
 async def execute_ta(update: Update, context: CallbackContext) -> int:
@@ -160,5 +145,5 @@ async def analyze_candles_wyckoff(context: ContextTypes.DEFAULT_TYPE, coin: str,
 
 async def analyze_candles_llm(context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:
     """New LLM-based analysis implementation."""
-    analyzer = AIAnalyzer()
+    analyzer = LLMAnalyzer()
     await analyzer.analyze(context, coin, interactive_analysis)

@@ -4,13 +4,13 @@ import os
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any, Final
 from dataclasses import dataclass
-from technical_analysis.wyckoff_types import SignificantLevelsData
+from ..wyckoff_types import SignificantLevelsData
 from logging_utils import logger
 
 
 from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext
 
-from technical_analysis.wyckoff_types import (
+from ..wyckoff_types import (
     WyckoffState, WyckoffPhase, MarketPattern, _TIMEFRAME_SETTINGS,
     SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
     is_bearish_action, is_bullish_action, is_bearish_phase, is_bullish_phase,

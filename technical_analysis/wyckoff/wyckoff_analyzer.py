@@ -10,14 +10,14 @@ from telegram.constants import ParseMode
 from logging_utils import logger
 from telegram_utils import telegram_utils
 from hyperliquid_utils.utils import hyperliquid_utils
-from technical_analysis.candles_cache import get_candles_with_cache
-from technical_analysis.wyckoff_types import Timeframe, WyckoffState, SignificantLevelsData
-from technical_analysis.funding_rates_cache import get_funding_with_cache, FundingRateEntry
-from technical_analysis.wykcoff_chart import generate_chart
-from technical_analysis.mtf.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe
-from technical_analysis.data_processor import prepare_dataframe, apply_indicators, remove_partial_candle
-from technical_analysis.significant_levels import find_significant_levels
-from technical_analysis.wyckoff import detect_wyckoff_phase
+from ..candles_cache import get_candles_with_cache
+from .wyckoff_types import Timeframe, WyckoffState, SignificantLevelsData
+from ..funding_rates_cache import get_funding_with_cache, FundingRateEntry
+from .wykcoff_chart import generate_chart
+from .mtf.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe
+from ..data_processor import prepare_dataframe, apply_indicators, remove_partial_candle
+from .significant_levels import find_significant_levels
+from .wyckoff import detect_wyckoff_phase
 
 
 class WyckoffAnalyzer:

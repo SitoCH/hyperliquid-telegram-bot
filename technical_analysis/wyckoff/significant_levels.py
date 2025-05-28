@@ -1,10 +1,16 @@
 from typing import List, Tuple, Dict, Optional
 import pandas as pd
 import numpy as np
+import time
 from scipy.stats import norm # type: ignore[import]
 from scipy.special import expit # type: ignore[import]
+from tzlocal import get_localzone
 from .wyckoff_types import WyckoffState, WyckoffPhase, CompositeAction, FundingState, Timeframe
-from .wyckoff import MIN_PERIODS, STRONG_DEV_THRESHOLD
+from .wyckoff import MIN_PERIODS, STRONG_DEV_THRESHOLD, detect_wyckoff_phase
+from ..candles_cache import get_candles_with_cache
+from ..funding_rates_cache import get_funding_with_cache
+from ..data_processor import prepare_dataframe, apply_indicators, remove_partial_candle
+from hyperliquid_utils.utils import hyperliquid_utils
 
 def cluster_points(
     points: np.ndarray,
@@ -144,6 +150,16 @@ def score_level(
             score *= 0.85
             
     return min(score, 1.0)
+
+def get_significant_levels_from_timeframe(coin: str, mid: float, timeframe: Timeframe, lookback_days: int) -> Tuple[List[float], List[float]]:
+    now = int(time.time() * 1000)
+    candles = get_candles_with_cache(coin, timeframe, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
+    local_tz = get_localzone()
+    df = prepare_dataframe(candles, local_tz)
+    apply_indicators(df, timeframe)
+    funding_rates = get_funding_with_cache(coin, now, 7)
+    return find_significant_levels(df, detect_wyckoff_phase(remove_partial_candle(df, local_tz), timeframe, funding_rates), mid, timeframe)
+
 
 def find_significant_levels(
     df: pd.DataFrame,

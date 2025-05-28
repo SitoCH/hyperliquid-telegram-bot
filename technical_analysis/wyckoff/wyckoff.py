@@ -7,7 +7,7 @@ from .wyckoff_types import (
     CompositeAction, WyckoffSign, FundingState, VolumeState, Timeframe, VolumeMetrics,
     SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES
 )
-from .funding_rates_cache import FundingRateEntry
+from ..funding_rates_cache import FundingRateEntry
 from .wyckoff_description import generate_wyckoff_description
 from dataclasses import dataclass
 from logging_utils import logger

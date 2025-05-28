@@ -5,7 +5,6 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any, Final
 from dataclasses import dataclass
 from .wyckoff_multi_timeframe_description import generate_all_timeframes_description
-from technical_analysis.wyckoff_types import SignificantLevelsData
 from logging_utils import logger
 
 from .mtf_direction import determine_overall_direction
@@ -13,11 +12,11 @@ from .mtf_alignment import calculate_overall_alignment, calculate_overall_confid
 
 from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext
 
-from technical_analysis.wyckoff_types import (
+from ..wyckoff_types import (
     WyckoffState, WyckoffPhase, WyckoffSign, MarketPattern, _TIMEFRAME_SETTINGS,
     SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
     is_bearish_action, is_bullish_action, is_bearish_phase, is_bullish_phase,
-    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity
+    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, SignificantLevelsData
 )
 
 from .wyckoff_multi_timeframe_types import (

@@ -10,7 +10,7 @@ import pandas_ta as ta # type: ignore[import]
 from tzlocal import get_localzone
 
 from logging_utils import logger
-from technical_analysis.wyckoff_types import Timeframe
+from .wyckoff.wyckoff_types import Timeframe
 
 
 def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:

@@ -6,8 +6,8 @@ import mplfinance as mpf  # type: ignore[import]
 import numpy as np  # type: ignore[import]
 
 from utils import fmt_price
-from technical_analysis.wyckoff_types import WyckoffState, Timeframe
-from technical_analysis.significant_levels import find_significant_levels
+from .wyckoff_types import WyckoffState, Timeframe
+from .significant_levels import find_significant_levels
 from matplotlib.ticker import FuncFormatter
 
 
