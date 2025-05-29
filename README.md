@@ -62,7 +62,8 @@ docker-compose up -d
 | HTB_ALPHAVANTAGE_API_KEY | API key for Alpha Vantage (required for performance comparison against S&P500) | "XXXXXXXXXXXXXXXX" | None |
 | HTB_ANALYSIS_MODE | Analysis mode for technical analysis | "wyckoff" or "llm" | "wyckoff" |
 | HTB_OPENROUTER_API_KEY | OpenRouter.ai API key (required for LLM analysis mode) | "sk-or-v1-xxxxx" | None |
-| HTB_OPENROUTER_MODEL | OpenRouter model to use for AI analysis | "gemini-2.5-flash-preview-05-20" | "gemini-2.5-flash-preview-05-20" |
+| HTB_OPENROUTER_MAIN_MODEL | Main OpenRouter model for main LLM analysis | "openai/gpt-4.1-nano" | "openai/gpt-4.1-nano" |
+| HTB_OPENROUTER_FAST_MODEL | Fast OpenRouter model for filtering analysis | "meta-llama/llama-3.3-8b-instruct:free" | "meta-llama/llama-3.3-8b-instruct:free" |
 
 ## Technical Analysis Modes
 
@@ -77,16 +78,19 @@ The default mode uses traditional Wyckoff methodology to analyze market phases a
 An AI-powered mode that uses large language models to provide natural language analysis, confidence scoring, risk assessment, and price predictions with timeframes.
 
 To use LLM mode, you need to:
+
 1. Set `HTB_ANALYSIS_MODE=llm`
 2. Configure `HTB_OPENROUTER_API_KEY` with your OpenRouter.ai API key
-3. Optionally customize the model
+3. Optionally customize the models
 
 Example configuration for LLM mode:
+
 ```yaml
 environment:
   HTB_ANALYSIS_MODE: "llm"
   HTB_OPENROUTER_API_KEY: "sk-or-v1-xxxxx"
-  HTB_OPENROUTER_MODEL: "anthropic/claude-3.5-sonnet"
+  HTB_OPENROUTER_MAIN_MODEL: "anthropic/claude-3.5-sonnet"
+  HTB_OPENROUTER_FAST_MODEL: "meta-llama/llama-3.3-70b-instruct"
 ```
 
 ## Trading Strategies
