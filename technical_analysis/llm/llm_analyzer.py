@@ -67,14 +67,13 @@ class LLMAnalyzer:
     """AI-based technical analysis implementation."""
     
     def __init__(self):
-        # Enhanced lookback periods for each timeframe (in days)
         self.timeframe_lookback_days = {
             Timeframe.MINUTES_15: 5,
             Timeframe.MINUTES_30: 5,
-            Timeframe.HOUR_1: 10,
-            Timeframe.HOURS_4: 14,    
-        }          
-        # Initialize prompt generator, analysis filter, and OpenRouter client
+            Timeframe.HOUR_1: 14,
+            Timeframe.HOURS_4: 21,
+        }
+
         self.prompt_generator = LLMPromptGenerator(self.timeframe_lookback_days)
         self.analysis_filter = AnalysisFilter()
         self.openrouter_client = OpenRouterClient()
@@ -110,7 +109,7 @@ class LLMAnalyzer:
         if not should_analyze:
             # Send simple message for non-interactive requests when no analysis is needed
             if not interactive_analysis:
-                logger.debug(f"Skipping AI analysis for {coin}: {filter_reason}")
+                logger.debug(f"Skipping LLM analysis for {coin}: {filter_reason}")
                 return
             else:
                 # For interactive requests, still provide basic analysis
@@ -142,10 +141,11 @@ class LLMAnalyzer:
             mid_price = dataframes[Timeframe.MINUTES_15]['c'].iloc[-1] if not dataframes[Timeframe.MINUTES_15].empty else 0.0
             now = int(time.time() * 1000)
             funding_rates = get_funding_with_cache(coin, now, 5)
-              # Generate prompt for LLM
+            
+            model = os.getenv("HTB_OPENROUTER_MAIN_MODEL", "openai/gpt-4.1-nano")
             prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid_price)
-              # Call OpenRouter.ai API and track cost
-            ai_response, analysis_cost = self.openrouter_client.call_api(prompt)
+
+            ai_response, analysis_cost = self.openrouter_client.call_api(model, prompt)
             
             # Parse AI response into structured result
             result = self._parse_ai_response(ai_response, coin)

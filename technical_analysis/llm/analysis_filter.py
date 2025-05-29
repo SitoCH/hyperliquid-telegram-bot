@@ -1,5 +1,6 @@
 import pandas as pd
 import json
+import os
 from typing import Dict, Any, List, Tuple
 from datetime import datetime
 from logging_utils import logger
@@ -12,82 +13,119 @@ class AnalysisFilter:
     
     def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool) -> Tuple[bool, str]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
-        if interactive:
-            return True, "Interactive analysis requested"
+        #if interactive:
+        #    return True, "Interactive analysis requested"
         
-        # Create a lightweight data summary for the cheap model
         market_summary = self._create_market_summary(dataframes)
-        
-        # Create prompt for cheap model filtering
+
         filter_prompt = self._create_filter_prompt(coin, market_summary)
         
-        # Use cheap model to determine if detailed analysis is needed
         try:
             from .openrouter_client import OpenRouterClient
             
-            # Initialize client with cheap model for filtering
             filter_client = OpenRouterClient()
-            filter_client.model = "google/gemini-flash-8b"  # Cheap model for filtering
+
+            model = os.getenv("HTB_OPENROUTER_FAST_MODEL", "meta-llama/llama-3.3-8b-instruct:free")
+            response, _ = filter_client.call_api(model, filter_prompt)
             
-            response, cost = filter_client.call_api(filter_prompt)
-            
-            # Parse response to determine if analysis should proceed
-            should_analyze, reason = self._parse_filter_response(response, coin)
-            
-            if should_analyze:
-                logger.info(f"LLM filter triggered analysis for {coin}: {reason} (cost: ${cost:.4f})")
-            else:
-                logger.debug(f"LLM filter skipped analysis for {coin}: {reason} (cost: ${cost:.4f})")
+            should_analyze, reason = self._parse_filter_response(response)
+
+            action = "triggered" if should_analyze else "skipped"
+            logger.info(f"LLM filter {action} analysis for {coin}: {reason}")
             
             return should_analyze, reason
             
         except Exception as e:
             logger.error(f"LLM filter failed for {coin}: {str(e)}")
-            # Fallback to basic analysis if LLM filtering fails
-            return self._basic_activity_check(dataframes, coin)
+            return False, "Fallback: LLM filter failed"
     
     def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> Dict[str, Any]:
-        """Create a lightweight market summary for cheap LLM filtering."""
-        summary: Dict[str, Dict[str, Any]] = {
-            "timeframes": {}
-        }
+        """Create a comprehensive market summary for cheap LLM filtering."""
+        summary: Dict[str, Dict[str, Any]] = {"timeframes": {}}
         
         for tf, df in dataframes.items():
-            if df.empty or len(df) < 5:
+            if df.empty or len(df) < 10:
                 continue
                 
-            # Get basic price action data
             current_price = df['c'].iloc[-1]
-            open_price = df['o'].iloc[-5] if len(df) >= 5 else df['o'].iloc[0]
-            high_5 = df['h'].iloc[-5:].max()
-            low_5 = df['l'].iloc[-5:].min()
-            
-            # Calculate basic metrics
-            price_change_5 = (current_price - open_price) / open_price
-            volatility = (high_5 - low_5) / current_price
-            
-            # Volume data if available
-            volume_ratio = 1.0
-            if 'v_ratio' in df.columns and not df['v_ratio'].empty:
-                volume_ratio = df['v_ratio'].iloc[-1]
-            
-            # Basic indicator data
-            indicators = {}
-            if 'RSI' in df.columns and not df['RSI'].empty:
-                indicators['rsi'] = df['RSI'].iloc[-1]
-            if 'MACD' in df.columns and not df['MACD'].empty:
-                indicators['macd'] = df['MACD'].iloc[-1]
-            if 'SuperTrend' in df.columns and not df['SuperTrend'].empty:
-                indicators['supertrend_bullish'] = current_price > df['SuperTrend'].iloc[-1]
-            
-            summary["timeframes"][str(tf)] = {
-                "price_change_5p": round(price_change_5 * 100, 2),
-                "volatility": round(volatility * 100, 2),
-                "volume_ratio": round(volume_ratio, 2),
-                "indicators": indicators
+            timeframe_data = {
+                "price_changes": self._calculate_price_changes(df, current_price),
+                "volatility": self._calculate_volatility(df, current_price),
+                "volume": self._analyze_volume_data(df),
+                "indicators": self._analyze_all_indicators(df),
+                "levels": self._analyze_support_resistance(df),
+                "candles_analyzed": len(df)
             }
+            
+            summary["timeframes"][str(tf)] = timeframe_data
         
         return summary
+    
+    def _calculate_price_changes(self, df: pd.DataFrame, current_price: float) -> Dict[str, float]:
+        """Calculate price changes over multiple periods."""
+        lookback_periods = [5, 10, 20, 50] if len(df) >= 50 else [5, 10, min(20, len(df))]
+        price_changes = {}
+        
+        for period in lookback_periods:
+            if len(df) >= period:
+                open_price = df['o'].iloc[-period]
+                price_changes[f"{period}p"] = round((current_price - open_price) / open_price * 100, 2)
+        
+        return price_changes
+    
+    def _calculate_volatility(self, df: pd.DataFrame, current_price: float) -> float:
+        """Calculate volatility over the analysis period."""
+        high_20 = df['h'].iloc[-20:].max() if len(df) >= 20 else df['h'].max()
+        low_20 = df['l'].iloc[-20:].min() if len(df) >= 20 else df['l'].min()
+        return round((high_20 - low_20) / current_price * 100, 2)
+    
+    def _analyze_volume_data(self, df: pd.DataFrame) -> Dict[str, float]:
+        """Analyze volume patterns and trends."""
+        volume_data = {}
+        
+        if 'v_ratio' in df.columns and not df['v_ratio'].empty:
+            volume_data['current_ratio'] = round(df['v_ratio'].iloc[-1], 2)
+            volume_data['avg_5p'] = round(df['v_ratio'].iloc[-5:].mean(), 2)
+            volume_data['max_20p'] = round(df['v_ratio'].iloc[-20:].max(), 2) if len(df) >= 20 else round(df['v_ratio'].max(), 2)
+        
+        if 'v_trend' in df.columns and not df['v_trend'].empty:
+            volume_data['trend'] = round(df['v_trend'].iloc[-1], 2)
+        
+        return volume_data
+    
+    def _analyze_all_indicators(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Pass through all available technical indicators."""
+        indicators = {}
+        last_idx = -1
+        
+        # Create list of all indicators to extract
+        indicator_names = [
+            'SuperTrend', 'EMA', 'VWAP',
+            'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist', 'ROC',
+            'STOCH_K', 'STOCH_D',
+            'BB_upper', 'BB_middle', 'BB_lower', 'BB_width', 'ATR',
+            'TENKAN', 'KIJUN', 'SENKOU_A', 'SENKOU_B', 'CHIKOU'
+        ]
+        
+        # Extract all indicator values
+        for indicator in indicator_names:
+            indicators[indicator] = df[indicator].iloc[last_idx] if indicator in df.columns else None
+        
+        return indicators    
+    
+    def _analyze_support_resistance(self, df: pd.DataFrame) -> Dict[str, float]:
+        """Pass through support and resistance levels."""
+        levels: Dict[str, float] = {}
+        last_idx = -1
+        
+        # Support/resistance levels
+        level_names = ['VWAP', 'PIVOT', 'R1', 'R2', 'S1', 'S2', 
+                      'FIB_23', 'FIB_38', 'FIB_50', 'FIB_61', 'FIB_78']
+        
+        for level in level_names:
+            levels[level.lower()] = df[level].iloc[last_idx]
+        
+        return levels
     
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
@@ -133,7 +171,7 @@ Provide your analysis in JSON format:
   "key_factors": ["list", "of", "key", "deciding", "factors"]
 }}"""
     
-    def _parse_filter_response(self, response: str, coin: str) -> Tuple[bool, str]:
+    def _parse_filter_response(self, response: str) -> Tuple[bool, str]:
         """Parse the cheap LLM response to determine if analysis should proceed."""
         try:
             import json
@@ -148,25 +186,5 @@ Provide your analysis in JSON format:
             return should_analyze, detailed_reason
             
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"Failed to parse LLM filter response for {coin}: {str(e)}")
-            # Conservative fallback - if we can't parse, run analysis
+            logger.error(f"Failed to parse LLM filter response: {str(e)}")
             return True, "LLM filter parsing failed, proceeding with analysis"
-    
-    def _basic_activity_check(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str) -> Tuple[bool, str]:
-        """Basic fallback activity check when LLM filtering fails."""
-        for tf, df in dataframes.items():
-            if df.empty or len(df) < 5:
-                continue
-                
-            # Simple price movement check
-            price_change = abs((df['c'].iloc[-1] - df['c'].iloc[-5]) / df['c'].iloc[-5])
-            if price_change > 0.025:  # 2.5% movement
-                return True, f"Fallback: {price_change:.1%} price movement in {tf}"
-            
-            # Simple volume check
-            if 'v_ratio' in df.columns and not df['v_ratio'].empty:
-                volume_ratio = df['v_ratio'].iloc[-1]
-                if volume_ratio > 2.0:  # 2x volume spike
-                    return True, f"Fallback: {volume_ratio:.1f}x volume spike in {tf}"
-        
-        return False, "Fallback: No significant activity detected"

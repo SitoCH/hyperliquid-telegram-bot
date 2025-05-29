@@ -9,12 +9,11 @@ class OpenRouterClient:
     
     def __init__(self):
         self.api_key = os.getenv("HTB_OPENROUTER_API_KEY")
-        self.model = os.getenv("HTB_OPENROUTER_MODEL", "google/gemini-2.5-flash-preview-05-20")
         
         if not self.api_key:
             raise ValueError("HTB_OPENROUTER_API_KEY environment variable not set")
     
-    def call_api(self, prompt: str) -> Tuple[str, float]:
+    def call_api(self, model: str, prompt: str) -> Tuple[str, float]:
         """Call OpenRouter.ai API for AI analysis and return response with cost."""
         
         headers = {
@@ -23,7 +22,7 @@ class OpenRouterClient:
         }
         
         payload = {
-            "model": self.model,
+            "model": model,
             "messages": [
                 {
                     "role": "system",
