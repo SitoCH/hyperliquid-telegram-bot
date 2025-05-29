@@ -13,8 +13,8 @@ class AnalysisFilter:
     
     def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool) -> Tuple[bool, str]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
-        #if interactive:
-        #    return True, "Interactive analysis requested"
+        if interactive:
+            return True, "Interactive analysis requested"
         
         market_summary = self._create_market_summary(dataframes)
 
@@ -129,38 +129,37 @@ class AnalysisFilter:
     
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
-        return f"""Your role is to evaluate market conditions for {coin} and determine if they warrant expensive detailed technical analysis.
+        return f"""Your role is to act as a CONSERVATIVE filter for {coin} to determine if market conditions warrant expensive detailed technical analysis. DEFAULT TO SKIPPING ANALYSIS unless there are compelling reasons.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
-Assessment Framework:
-Analyze the market data holistically across all timeframes. Consider the interplay between:
+CONSERVATIVE FILTERING CRITERIA:
+You should ONLY recommend analysis if multiple strong conditions are met:
 
-• Price Action: Movement patterns, momentum, volatility characteristics
-• Volume Profile: Activity levels, spikes, confirmations or divergences  
-• Technical Indicators: Signal strength, extremes, convergence/divergence
-• Multi-Timeframe Context: Alignment, conflicts, cascade effects
-• Market Structure: Support/resistance levels, breakouts, trend changes
+REQUIRED CONDITIONS (must have at least 2-3):
+• STRONG price moves: >3% in shorter timeframes OR >5% in longer timeframes
+• VOLUME CONFIRMATION: Volume ratios >1.5x average with price moves
+• EXTREME indicator readings: RSI <30 or >70, significant MACD divergences
+• CLEAR breakouts: Price breaking major support/resistance with volume
+• MULTI-TIMEFRAME alignment: Same signals across multiple timeframes
 
-Market Conditions Assessment:
-Consider various scenarios that could warrant detailed analysis:
-- Significant directional moves with volume confirmation
-- Technical breakouts from consolidation patterns
-- Extreme indicator readings suggesting reversals or continuations
-- Multi-timeframe confluence suggesting major moves
-- Unusual volume activity indicating institutional interest
-- Volatility expansion after compression periods
-- Support/resistance level tests with momentum
+ADDITIONAL SUPPORTING FACTORS:
+• Volatility expansion after extended compression
+• Multiple technical indicators converging at key levels
+• Significant support/resistance level tests with momentum
+• Unusual volume spikes (>2x average) accompanying price action
 
-Decision Criteria:
-Use your analytical judgment to assess whether current conditions present:
-1. Clear trading opportunities with favorable risk/reward
-2. Market inflection points requiring detailed analysis
-3. Sufficient signal strength to justify analysis costs
-4. Potential for actionable insights
+SKIP ANALYSIS IF:
+• Normal market conditions with no exceptional signals
+• Sideways/choppy price action without clear direction
+• Low volume activity regardless of price movement
+• Mixed signals across timeframes
+• Minor price movements (<2% in most timeframes)
+• Indicators in neutral territory without extreme readings
 
-Your assessment should balance opportunity identification with cost efficiency. Consider both immediate trading signals and developing market structure changes.
+CONSERVATIVE APPROACH:
+Remember that analysis costs resources. Only recommend when there's high probability of actionable insights. When in doubt, skip the analysis. Most market conditions do NOT warrant expensive analysis.
 
 Provide your analysis in JSON format:
 {{
@@ -177,6 +176,11 @@ Provide your analysis in JSON format:
             should_analyze = data.get("should_analyze", False)
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
+
+            # Skip analysis if confidence is below 0.7
+            if confidence < 0.7:
+                should_analyze = False
+                reason = f"Low confidence ({confidence:.0%}): {reason}"
 
             detailed_reason = f"{reason} (confidence: {confidence:.0%})"
             
