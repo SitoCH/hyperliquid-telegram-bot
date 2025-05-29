@@ -21,6 +21,7 @@ from ..funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from utils import exchange_enabled
 from .prompt_generator import LLMPromptGenerator
 from .analysis_filter import AnalysisFilter
+from .openrouter_client import OpenRouterClient
 
 class LLMAnalysisResult:
     """Container for LLM analysis results."""
@@ -64,7 +65,7 @@ class LLMAnalysisResult:
 
 class LLMAnalyzer:
     """AI-based technical analysis implementation."""
-
+    
     def __init__(self):
         # Enhanced lookback periods for each timeframe (in days)
         self.timeframe_lookback_days = {
@@ -73,9 +74,10 @@ class LLMAnalyzer:
             Timeframe.HOUR_1: 10,
             Timeframe.HOURS_4: 14,    
         }          
-        # Initialize prompt generator and analysis filter
+        # Initialize prompt generator, analysis filter, and OpenRouter client
         self.prompt_generator = LLMPromptGenerator(self.timeframe_lookback_days)
         self.analysis_filter = AnalysisFilter()
+        self.openrouter_client = OpenRouterClient()
     
     async def analyze(self, context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:
         """Main AI analysis entry point."""
@@ -142,9 +144,8 @@ class LLMAnalyzer:
             funding_rates = get_funding_with_cache(coin, now, 5)
               # Generate prompt for LLM
             prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid_price)
-            
-            # Call OpenRouter.ai API and track cost
-            ai_response, analysis_cost = self._call_openrouter_api(prompt)
+              # Call OpenRouter.ai API and track cost
+            ai_response, analysis_cost = self.openrouter_client.call_api(prompt)
             
             # Parse AI response into structured result
             result = self._parse_ai_response(ai_response, coin)
@@ -305,68 +306,8 @@ class LLMAnalyzer:
             
             if include_details:
                 formatted += f" | Vol: {signal['volume_ratio']:.1f}x"
-        
         return formatted
 
-    def _call_openrouter_api(self, prompt: str) -> tuple[str, float]:
-        """Call OpenRouter.ai API for AI analysis and return response with cost."""
-        api_key = os.getenv("HTB_OPENROUTER_API_KEY")
-        if not api_key:
-            raise ValueError("HTB_OPENROUTER_API_KEY environment variable not set")
-        
-        model = os.getenv("HTB_OPENROUTER_MODEL", "google/gemini-2.5-flash-preview-05-20")
-        
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        payload = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a professional cryptocurrency technical analyst. Respond ONLY with valid JSON format. Do not include any text outside the JSON structure."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "reasoning": {
-                "max_tokens": 5000
-            },
-            "response_format": {
-                "type": "json_object"
-            },
-            "usage": {
-                "include": "true"
-            },
-            "max_tokens": 10000
-        }
-        
-        try:
-            response = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                raise ValueError(f"OpenRouter API error {response.status_code}: {response.text}")
-            
-            data = response.json()
-            
-            # Extract actual cost from OpenRouter response
-            usage = data.get("usage", {})
-            total_cost = usage.get("cost", 0.0)
-            
-            return data["choices"][0]["message"]["content"], total_cost
-            
-        except requests.exceptions.RequestException as e:
-            raise ValueError(f"OpenRouter API request failed: {str(e)}")
-    
     def _parse_ai_response(self, ai_response: str, coin: str) -> LLMAnalysisResult:
         """Parse AI response into structured analysis result."""
         try:
