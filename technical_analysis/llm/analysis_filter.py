@@ -13,8 +13,7 @@ class AnalysisFilter:
     
     def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool) -> Tuple[bool, str]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
-        if interactive:
-            return True, "Interactive analysis requested"
+
         
         market_summary = self._create_market_summary(dataframes)
 
@@ -129,37 +128,38 @@ class AnalysisFilter:
     
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
-        return f"""Your role is to act as a CONSERVATIVE filter for {coin} to determine if market conditions warrant expensive detailed technical analysis. DEFAULT TO SKIPPING ANALYSIS unless there are compelling reasons.
+        return f"""Your role is to act as a selective filter for {coin} to determine if market conditions warrant expensive detailed technical analysis. DEFAULT TO SKIPPING ANALYSIS unless there are notable market conditions.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
-CONSERVATIVE FILTERING CRITERIA:
-You should ONLY recommend analysis if multiple strong conditions are met:
+FILTERING CRITERIA:
+You should recommend analysis when at least 2 conditions are met:
 
-REQUIRED CONDITIONS (must have at least 2-3):
-• STRONG price moves: >3% in shorter timeframes OR >5% in longer timeframes
-• VOLUME CONFIRMATION: Volume ratios >1.5x average with price moves
-• EXTREME indicator readings: RSI <30 or >70, significant MACD divergences
-• CLEAR breakouts: Price breaking major support/resistance with volume
-• MULTI-TIMEFRAME alignment: Same signals across multiple timeframes
+PRIMARY CONDITIONS (look for at least 2):
+• NOTABLE price moves: >2% in shorter timeframes OR >4% in longer timeframes
+• VOLUME CONFIRMATION: Volume ratios >1.3x average with price moves
+• SIGNIFICANT indicator readings: RSI <35 or >65, notable MACD changes
+• BREAKOUTS: Price approaching or breaking major support/resistance levels
+• TIMEFRAME alignment: Similar signals across 2+ timeframes
 
-ADDITIONAL SUPPORTING FACTORS:
-• Volatility expansion after extended compression
-• Multiple technical indicators converging at key levels
-• Significant support/resistance level tests with momentum
-• Unusual volume spikes (>2x average) accompanying price action
+SUPPORTING FACTORS (strengthen the case):
+• Volatility changes after periods of low volatility
+• Technical indicators approaching key levels or convergence
+• Support/resistance level tests with decent momentum
+• Volume spikes (>1.7x average) with price action
+• Emerging patterns or trend changes
 
 SKIP ANALYSIS IF:
-• Normal market conditions with no exceptional signals
-• Sideways/choppy price action without clear direction
-• Low volume activity regardless of price movement
-• Mixed signals across timeframes
-• Minor price movements (<2% in most timeframes)
-• Indicators in neutral territory without extreme readings
+• Minimal market activity with no clear signals
+• Very choppy price action without direction
+• Extremely low volume regardless of price movement
+• Completely mixed signals across all timeframes
+• Very minor price movements (<1.5% in most timeframes)
+• All indicators firmly in neutral territory
 
-CONSERVATIVE APPROACH:
-Remember that analysis costs resources. Only recommend when there's high probability of actionable insights. When in doubt, skip the analysis. Most market conditions do NOT warrant expensive analysis.
+BALANCED APPROACH:
+Analysis should capture opportunities while managing costs. Look for developing situations that could provide actionable insights. When conditions show potential, lean toward analysis.
 
 Provide your analysis in JSON format:
 {{
