@@ -27,7 +27,7 @@ class OpenRouterClient:
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a professional cryptocurrency technical analyst. Respond ONLY with valid JSON format. Do not include any text outside the JSON structure."
+                    "content": "You are a professional cryptocurrency technical analyst specializing in intraday trading. Provide clear, actionable analysis based on technical indicators and market data. . Respond ONLY with valid JSON format. Do not include any text outside the JSON structure."
                 },
                 {
                     "role": "user",
