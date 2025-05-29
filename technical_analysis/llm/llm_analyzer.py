@@ -1,11 +1,11 @@
 import time
-import re
-from typing import Dict, Any, List
-import pandas as pd
-from tzlocal import get_localzone
-import json
 import os
+import json
 import base64
+import pandas as pd
+from typing import Dict, Any, List
+import re
+from tzlocal import get_localzone
 import requests
 from datetime import datetime
 from telegram.ext import ContextTypes
@@ -99,13 +99,13 @@ class LLMAnalyzer:
         dataframes = {
             tf: prepare_dataframe(candles, local_tz) 
             for tf, candles in candles_data.items()
-        }
-
-        # Apply basic indicators for AI analysis
+        }        # Apply basic indicators for AI analysis
         for tf, df in dataframes.items():
             if not df.empty:
-                apply_indicators(df, tf)        # Pre-filter: Check if AI analysis is needed
-        should_analyze, filter_reason = self.analysis_filter.should_run_ai_analysis(dataframes, coin, interactive_analysis)
+                apply_indicators(df, tf)
+        
+        # Pre-filter: Check if AI analysis is needed
+        should_analyze, filter_reason = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis)
         
         if not should_analyze:
             # Send simple message for non-interactive requests when no analysis is needed
@@ -367,11 +367,11 @@ class LLMAnalyzer:
                 recap_heading=recap_heading,
                 trading_insight=trading_insight
             )
-            
         except (KeyError, ValueError, TypeError) as e:
             logger.error(f"JSON parsing failed for {coin}: {str(e)}\n{ai_response}", exc_info=True)
             return LLMAnalysisResult(
-                description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",                signal="hold",
+                description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
+                signal="hold",
                 confidence=0.5,
                 analysis_cost=0.0
             )
