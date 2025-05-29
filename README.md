@@ -63,7 +63,7 @@ docker-compose up -d
 | HTB_ANALYSIS_MODE | Analysis mode for technical analysis | "wyckoff" or "llm" | "wyckoff" |
 | HTB_OPENROUTER_API_KEY | OpenRouter.ai API key (required for LLM analysis mode) | "sk-or-v1-xxxxx" | None |
 | HTB_OPENROUTER_MAIN_MODEL | Main OpenRouter model for main LLM analysis | "openai/gpt-4.1-nano" | "openai/gpt-4.1-nano" |
-| HTB_OPENROUTER_FAST_MODEL | Fast OpenRouter model for filtering analysis | "meta-llama/llama-3.3-8b-instruct:free" | "meta-llama/llama-3.3-8b-instruct:free" |
+| HTB_OPENROUTER_FAST_MODEL | Fast OpenRouter model for filtering analysis | "meta-llama/llama-4-maverick:free" | "meta-llama/llama-4-maverick:free" |
 
 ## Technical Analysis Modes
 

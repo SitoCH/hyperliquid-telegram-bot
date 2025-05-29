@@ -19,13 +19,13 @@ class AnalysisFilter:
         market_summary = self._create_market_summary(dataframes)
 
         filter_prompt = self._create_filter_prompt(coin, market_summary)
-        
+
         try:
             from .openrouter_client import OpenRouterClient
             
             filter_client = OpenRouterClient()
 
-            model = os.getenv("HTB_OPENROUTER_FAST_MODEL", "meta-llama/llama-3.3-8b-instruct:free")
+            model = os.getenv("HTB_OPENROUTER_FAST_MODEL", "meta-llama/llama-4-maverick:free")
             response, _ = filter_client.call_api(model, filter_prompt)
             
             should_analyze, reason = self._parse_filter_response(response)
@@ -36,7 +36,7 @@ class AnalysisFilter:
             return should_analyze, reason
             
         except Exception as e:
-            logger.error(f"LLM filter failed for {coin}: {str(e)}")
+            logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
             return False, "Fallback: LLM filter failed"
     
     def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> Dict[str, Any]:
@@ -129,7 +129,7 @@ class AnalysisFilter:
     
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
-        return f"""You are a sophisticated trading analysis filter for {coin}. Your role is to evaluate market conditions and determine if they warrant expensive detailed technical analysis.
+        return f"""Your role is to evaluate market conditions for {coin} and determine if they warrant expensive detailed technical analysis.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
@@ -165,12 +165,10 @@ Your assessment should balance opportunity identification with cost efficiency. 
 Provide your analysis in JSON format:
 {{
   "should_analyze": true/false,
-  "reason": "detailed explanation of your assessment",
+  "reason": "A single sentence explaining the decision",
   "confidence": 0.0-1.0,
-  "priority_level": "high/medium/low",
-  "key_factors": ["list", "of", "key", "deciding", "factors"]
 }}"""
-    
+
     def _parse_filter_response(self, response: str) -> Tuple[bool, str]:
         """Parse the cheap LLM response to determine if analysis should proceed."""
         try:
@@ -179,12 +177,11 @@ Provide your analysis in JSON format:
             should_analyze = data.get("should_analyze", False)
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
-            
-            # Add confidence to reason for logging
-            detailed_reason = f"{reason} (confidence: {confidence:.1%})"
+
+            detailed_reason = f"{reason} (confidence: {confidence:.0%})"
             
             return should_analyze, detailed_reason
             
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"Failed to parse LLM filter response: {str(e)}")
-            return True, "LLM filter parsing failed, proceeding with analysis"
+            logger.error(f"Failed to parse LLM filter response: {str(e)}", exc_info=True)
+            return False, "LLM filter parsing failed"

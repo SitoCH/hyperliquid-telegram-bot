@@ -102,27 +102,18 @@ class LLMAnalyzer:
         for tf, df in dataframes.items():
             if not df.empty:
                 apply_indicators(df, tf)
-        
-        # Pre-filter: Check if AI analysis is needed
-        should_analyze, filter_reason = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis)
+
+        should_analyze, _ = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis)
         
         if not should_analyze:
-            # Send simple message for non-interactive requests when no analysis is needed
-            if not interactive_analysis:
-                logger.debug(f"Skipping LLM analysis for {coin}: {filter_reason}")
-                return
-            else:
-                # For interactive requests, still provide basic analysis
-                await self._send_basic_analysis_message(context, coin, filter_reason)
-                return
+            return
 
-        # Perform expensive AI analysis only when triggered
-        ai_result = await self._perform_ai_analysis(dataframes, coin)
+        llm_result = await self._perform_ai_analysis(dataframes, coin)
 
-        should_notify = interactive_analysis or ai_result.should_notify
+        should_notify = interactive_analysis or llm_result.should_notify
 
         if should_notify:
-            await self._send_ai_analysis_message(context, coin, ai_result)
+            await self._send_ai_analysis_message(context, coin, llm_result)
 
     async def _send_basic_analysis_message(self, context: ContextTypes.DEFAULT_TYPE, coin: str, reason: str) -> None:
         """Send basic analysis when AI analysis is not triggered."""
