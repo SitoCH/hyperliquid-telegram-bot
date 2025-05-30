@@ -1,32 +1,59 @@
 from typing import Dict, Any, List
+from enum import Enum
+
+class Signal(Enum):
+    LONG = "long"
+    SHORT = "short"
+    HOLD = "hold"
+
+class Prediction(Enum):
+    BULLISH = "bullish"
+    BEARISH = "bearish"
+    SIDEWAYS = "sideways"
+
+class RiskLevel(Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class LLMAnalysisTradingSetup:
+
+    def __init__(
+        self,
+        stop_loss: float = 0.0,
+        take_profit: float = 0.0,
+        reason: str = "unknown",
+        risk_reward_ratio: float = 0.0,
+    ):
+        self.stop_loss = stop_loss
+        self.take_profit = take_profit
+        self.reason = reason
+        self.risk_reward_ratio = risk_reward_ratio
 
 class LLMAnalysisResult:
     """Container for LLM analysis results."""
     
     def __init__(
         self,
-        signal: str = "hold",
+        signal: Signal = Signal.HOLD,
         confidence: float = 0.5,
-        prediction: str = "sideways",
-        risk_level: str = "medium",
+        prediction: Prediction = Prediction.SIDEWAYS,
+        risk_level: RiskLevel = RiskLevel.MEDIUM,
         should_notify: bool = False,
-        stop_loss: float = 0.0,
-        target_price: float = 0.0,
         key_drivers: List[str] | None = None,
         recap_heading: str = "",
         trading_insight: str = "",
         time_horizon_hours: int = 4,
-        trading_setup: Dict[str, Any] | None = None
+        trading_setup: LLMAnalysisTradingSetup | None = None
     ):
         self.signal = signal
         self.confidence = confidence
         self.prediction = prediction
         self.risk_level = risk_level
         self.should_notify = should_notify
-        self.stop_loss = stop_loss
-        self.target_price = target_price
+
         self.key_drivers = key_drivers or []
         self.recap_heading = recap_heading
         self.trading_insight = trading_insight
         self.time_horizon_hours = time_horizon_hours
-        self.trading_setup = trading_setup or {}
+        self.trading_setup = trading_setup

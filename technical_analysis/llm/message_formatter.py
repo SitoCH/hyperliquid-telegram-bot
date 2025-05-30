@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from utils import fmt_price, exchange_enabled
 from telegram_utils import telegram_utils
-from .llm_analysis_result import LLMAnalysisResult
+from .llm_analysis_result import LLMAnalysisResult, LLMAnalysisTradingSetup, Signal, Prediction
 
 
 class LLMMessageFormatter:
@@ -27,9 +27,9 @@ class LLMMessageFormatter:
         """Build the analysis message text."""
 
         # Get emoji based on signal/prediction
-        if llm_result.signal == "long" or "bullish" in llm_result.prediction.lower():
+        if llm_result.signal == Signal.LONG or llm_result.prediction == Prediction.BULLISH:
             direction_emoji = "📈"
-        elif llm_result.signal == "short" or "bearish" in llm_result.prediction.lower():
+        elif llm_result.signal == Signal.SHORT or llm_result.prediction == Prediction.BEARISH:
             direction_emoji = "📉"
         else:
             direction_emoji = "📊"
@@ -39,10 +39,10 @@ class LLMMessageFormatter:
         
         # Add signal information
         message += (
-            f"📊 <b>Signal:</b> {llm_result.signal.lower()}\n"
+            f"📊 <b>Signal:</b> {llm_result.signal.value}\n"
             f"🎯 <b>Confidence:</b> {llm_result.confidence:.0%}\n"
-            f"📈 <b>Prediction:</b> {llm_result.prediction.lower()}\n"
-            f"⚠️ <b>Risk Level:</b> {llm_result.risk_level.lower()}\n"
+            f"📈 <b>Prediction:</b> {llm_result.prediction.value}\n"
+            f"⚠️ <b>Risk Level:</b> {llm_result.risk_level.value}\n"
             f"⏰ <b>Time Horizon:</b> {llm_result.time_horizon_hours}h"
         )
 
@@ -65,49 +65,38 @@ class LLMMessageFormatter:
 
     def _build_trade_setup_format(self, coin: str, current_price: float, llm_result: LLMAnalysisResult) -> str:
         """Build formatted trade setup."""
-        if not (current_price > 0 and (llm_result.stop_loss > 0 or llm_result.target_price > 0)):
+
+        trading_setup = llm_result.trading_setup
+
+        if not trading_setup or not (current_price > 0 and (trading_setup.stop_loss > 0 or trading_setup.take_profit > 0)):
             return ""
 
-        enc_side = "L" if llm_result.signal == "long" else "S"
-        enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(llm_result.stop_loss)}_{fmt_price(llm_result.target_price)}".encode('utf-8')).decode('utf-8')
+        enc_side = "L" if llm_result.signal == Signal.LONG else "S"
+        enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(trading_setup.stop_loss)}_{fmt_price(trading_setup.take_profit)}".encode('utf-8')).decode('utf-8')
         trade_link = f"({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
 
-        side = "Long" if llm_result.signal == "long" else "Short"
+        side = "Long" if llm_result.signal == Signal.LONG else "Short"
 
         setup = f"\n\n<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>"
-        
+        setup += f"\nReason: {trading_setup.reason}"
         setup += f"\nMarket price: {fmt_price(current_price)} USDC"
         
         # Stop Loss with percentage
-        if llm_result.stop_loss > 0:
-            if llm_result.signal == "long":
-                sl_percentage = ((llm_result.stop_loss - current_price) / current_price) * 100
+        if trading_setup.stop_loss > 0:
+            if llm_result.signal == Signal.LONG:
+                sl_percentage = ((trading_setup.stop_loss - current_price) / current_price) * 100
             else:  # short
-                sl_percentage = ((current_price - llm_result.stop_loss) / current_price) * 100
+                sl_percentage = ((current_price - trading_setup.stop_loss) / current_price) * 100
             
-            setup += f"\nStop Loss: {fmt_price(llm_result.stop_loss)} USDC ({sl_percentage:+.1f}%)"
+            setup += f"\nStop Loss: {fmt_price(trading_setup.stop_loss)} USDC ({sl_percentage:+.1f}%)"
         
         # Take Profit with percentage
-        if llm_result.target_price > 0:
-            if llm_result.signal == "long":
-                tp_percentage = ((llm_result.target_price - current_price) / current_price) * 100
+        if trading_setup.take_profit > 0:
+            if llm_result.signal == Signal.LONG:
+                tp_percentage = ((trading_setup.take_profit - current_price) / current_price) * 100
             else:  # short
-                tp_percentage = ((current_price - llm_result.target_price) / current_price) * 100
+                tp_percentage = ((current_price - trading_setup.take_profit) / current_price) * 100
             
-            setup += f"\nTake Profit: {fmt_price(llm_result.target_price)} USDC ({tp_percentage:+.1f}%)"
+            setup += f"\nTake Profit: {fmt_price(trading_setup.take_profit)} USDC ({tp_percentage:+.1f}%)"
         
         return setup
-
-
-    def _build_price_levels(self, current_price: float, llm_result: LLMAnalysisResult) -> str:
-        """Build price levels section."""
-        if not (current_price > 0 or llm_result.stop_loss > 0 or llm_result.target_price > 0):
-            return ""
-        
-        levels = "\n📋 <b>Price Levels:</b>"
-        levels += f"\n   Entry: ${fmt_price(current_price)}"
-        if llm_result.stop_loss > 0:
-            levels += f"\n   Stop Loss: ${fmt_price(current_price)}"
-        if llm_result.target_price > 0:
-            levels += f"\n   Target: ${fmt_price(current_price)}"
-        return levels

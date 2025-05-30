@@ -38,7 +38,8 @@ class AnalysisFilter:
         except Exception as e:
             logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
             return False, "Fallback: LLM filter failed"
-    
+
+
     def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> Dict[str, Any]:
         """Create a comprehensive market summary for cheap LLM filtering."""
         summary: Dict[str, Dict[str, Any]] = {"timeframes": {}}
