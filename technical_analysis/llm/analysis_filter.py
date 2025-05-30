@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Tuple
 from datetime import datetime
 from logging_utils import logger
 from ..wyckoff.wyckoff_types import Timeframe
-
+from .openrouter_client import OpenRouterClient          
 
 class AnalysisFilter:
     """Filter logic to determine when expensive AI analysis should be triggered."""
@@ -14,14 +14,15 @@ class AnalysisFilter:
     def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool) -> Tuple[bool, str]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
-        
+        if interactive:
+            return True, f"LLM filter triggered analysis for {coin}: interactive mode"
+
         market_summary = self._create_market_summary(dataframes)
 
         filter_prompt = self._create_filter_prompt(coin, market_summary)
 
         try:
-            from .openrouter_client import OpenRouterClient
-            
+
             filter_client = OpenRouterClient()
 
             model = os.getenv("HTB_OPENROUTER_FAST_MODEL", "meta-llama/llama-4-maverick:free")
