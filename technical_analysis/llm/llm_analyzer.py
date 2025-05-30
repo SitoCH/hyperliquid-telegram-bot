@@ -104,13 +104,13 @@ class LLMAnalyzer:
         if not should_analyze:
             return
 
-        llm_result = await self._perform_ai_analysis(dataframes, coin)
+        llm_result = await self._perform_llm_analysis(dataframes, coin)
 
         should_notify = interactive_analysis or llm_result.should_notify
 
         if should_notify:
             mid = float(hyperliquid_utils.info.all_mids()[coin])
-            await self._send_ai_analysis_message(context, coin, mid, llm_result)
+            await self._send_llm_analysis_message(context, coin, mid, llm_result)
 
     async def _send_basic_analysis_message(self, context: ContextTypes.DEFAULT_TYPE, coin: str, reason: str) -> None:
         """Send basic analysis when AI analysis is not triggered."""
@@ -121,7 +121,7 @@ class LLMAnalyzer:
             f"ℹ️ <i>AI analysis is triggered only when significant market movements are detected to optimize costs.</i>"
         )
         await telegram_utils.send(message, parse_mode=ParseMode.HTML)
-    async def _perform_ai_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str) -> LLMAnalysisResult:
+    async def _perform_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str) -> LLMAnalysisResult:
         """Core AI analysis logic using OpenRouter.ai."""
 
         try:
@@ -133,10 +133,10 @@ class LLMAnalyzer:
             model = os.getenv("HTB_OPENROUTER_MAIN_MODEL", "openai/gpt-4.1-nano")
             prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid_price)
 
-            ai_response = self.openrouter_client.call_api(model, prompt)
+            llm_response = self.openrouter_client.call_api(model, prompt)
             
             # Parse AI response into structured result
-            result = self._parse_ai_response(ai_response, coin)
+            result = self._parse_llm_response(llm_response, coin)
             
             # Add timeframe analysis for additional context
             timeframe_signals = {}
@@ -180,101 +180,101 @@ class LLMAnalyzer:
             "volume_ratio": volume_ratio
         }
     
-    async def _send_ai_analysis_message(
+    async def _send_llm_analysis_message(
         self, 
         context: ContextTypes.DEFAULT_TYPE, 
         coin: str,
         current_price: float,
-        ai_result: LLMAnalysisResult
+        llm_result: LLMAnalysisResult
     ) -> None:
         """Send AI analysis results to Telegram."""
         
         # Build analysis message
-        message = self._build_analysis_message(coin, current_price, ai_result)
+        message = self._build_analysis_message(coin, current_price, llm_result)
         await telegram_utils.send(message, parse_mode=ParseMode.HTML)
 
 
-    def _build_analysis_message(self, coin: str, current_price: float, ai_result: LLMAnalysisResult) -> str:
+    def _build_analysis_message(self, coin: str, current_price: float, llm_result: LLMAnalysisResult) -> str:
         """Build the analysis message text."""
 
         # Get emoji based on signal/prediction
-        if ai_result.signal == "buy" or "bullish" in ai_result.prediction.lower() or "up" in ai_result.prediction.lower():
+        if llm_result.signal == "buy" or "bullish" in llm_result.prediction.lower() or "up" in llm_result.prediction.lower():
             direction_emoji = "📈"
-        elif ai_result.signal == "sell" or "bearish" in ai_result.prediction.lower() or "down" in ai_result.prediction.lower():
+        elif llm_result.signal == "sell" or "bearish" in llm_result.prediction.lower() or "down" in llm_result.prediction.lower():
             direction_emoji = "📉"
         else:
             direction_emoji = "📊"
 
         message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
-        message += f"<b>{direction_emoji} Market Analysis:</b> {ai_result.recap_heading}\n\n"
+        message += f"<b>{direction_emoji} Market Analysis:</b> {llm_result.recap_heading}\n\n"
         
         # Add signal information
         message += (
-            f"📊 <b>Signal:</b> {ai_result.signal.lower()}\n"
-            f"🎯 <b>Confidence:</b> {ai_result.confidence:.0%}\n"
-            f"📈 <b>Prediction:</b> {ai_result.prediction.lower()}\n"
-            f"⚠️ <b>Risk Level:</b> {ai_result.risk_level.lower()}"
+            f"📊 <b>Signal:</b> {llm_result.signal.lower()}\n"
+            f"🎯 <b>Confidence:</b> {llm_result.confidence:.0%}\n"
+            f"📈 <b>Prediction:</b> {llm_result.prediction.lower()}\n"
+            f"⚠️ <b>Risk Level:</b> {llm_result.risk_level.lower()}"
         )
 
         # Add trading insight if available
-        trading_insight = getattr(ai_result, 'trading_insight', '')
+        trading_insight = getattr(llm_result, 'trading_insight', '')
         if trading_insight:
             message += f"\n\n💡 <b>Trading Insight:</b>\n{trading_insight}"
         
         
-        trade_setup = self._build_trade_setup_format(coin, current_price, ai_result)
+        trade_setup = self._build_trade_setup_format(coin, current_price, llm_result)
         if trade_setup:
             message += trade_setup
            
         return message
     
 
-    def _build_trade_setup_format(self, coin: str, current_price: float, ai_result: LLMAnalysisResult) -> str:
+    def _build_trade_setup_format(self, coin: str, current_price: float, llm_result: LLMAnalysisResult) -> str:
         """Build formatted trade setup."""
-        if not (current_price > 0 and (ai_result.stop_loss > 0 or ai_result.target_price > 0)):
+        if not (current_price > 0 and (llm_result.stop_loss > 0 or llm_result.target_price > 0)):
             return ""
 
-        enc_side = "L" if ai_result.signal == "buy" else "S"
-        enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(ai_result.stop_loss)}_{fmt_price(ai_result.target_price)}".encode('utf-8')).decode('utf-8')
+        enc_side = "L" if llm_result.signal == "buy" else "S"
+        enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(llm_result.stop_loss)}_{fmt_price(llm_result.target_price)}".encode('utf-8')).decode('utf-8')
         trade_link = f"({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
 
-        side = "Long" if ai_result.signal == "buy" else "Short"
+        side = "Long" if llm_result.signal == "buy" else "Short"
 
         setup = f"\n\n<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>"
         
         setup += f"\nMarket price: {fmt_price(current_price)} USDC"
         
         # Stop Loss with percentage
-        if ai_result.stop_loss > 0:
-            if ai_result.signal == "buy":
-                sl_percentage = ((ai_result.stop_loss - current_price) / current_price) * 100
+        if llm_result.stop_loss > 0:
+            if llm_result.signal == "buy":
+                sl_percentage = ((llm_result.stop_loss - current_price) / current_price) * 100
             else:  # short
-                sl_percentage = ((current_price - ai_result.stop_loss) / current_price) * 100
+                sl_percentage = ((current_price - llm_result.stop_loss) / current_price) * 100
             
-            setup += f"\nStop Loss: {fmt_price(ai_result.stop_loss)} USDC ({sl_percentage:+.1f}%)"
+            setup += f"\nStop Loss: {fmt_price(llm_result.stop_loss)} USDC ({sl_percentage:+.1f}%)"
         
         # Take Profit with percentage
-        if ai_result.target_price > 0:
-            if ai_result.signal == "buy":
-                tp_percentage = ((ai_result.target_price - current_price) / current_price) * 100
+        if llm_result.target_price > 0:
+            if llm_result.signal == "buy":
+                tp_percentage = ((llm_result.target_price - current_price) / current_price) * 100
             else:  # short
-                tp_percentage = ((current_price - ai_result.target_price) / current_price) * 100
+                tp_percentage = ((current_price - llm_result.target_price) / current_price) * 100
             
-            setup += f"\nTake Profit: {fmt_price(ai_result.target_price)} USDC ({tp_percentage:+.1f}%)"
+            setup += f"\nTake Profit: {fmt_price(llm_result.target_price)} USDC ({tp_percentage:+.1f}%)"
         
         return setup
 
 
-    def _build_price_levels(self, current_price: float, ai_result: LLMAnalysisResult) -> str:
+    def _build_price_levels(self, current_price: float, llm_result: LLMAnalysisResult) -> str:
         """Build price levels section."""
-        if not (current_price > 0 or ai_result.stop_loss > 0 or ai_result.target_price > 0):
+        if not (current_price > 0 or llm_result.stop_loss > 0 or llm_result.target_price > 0):
             return ""
         
         levels = "\n📋 <b>Price Levels:</b>"
         levels += f"\n   Entry: ${fmt_price(current_price)}"
-        if ai_result.stop_loss > 0:
+        if llm_result.stop_loss > 0:
             levels += f"\n   Stop Loss: ${fmt_price(current_price)}"
-        if ai_result.target_price > 0:
+        if llm_result.target_price > 0:
             levels += f"\n   Target: ${fmt_price(current_price)}"
         return levels
     
@@ -292,50 +292,31 @@ class LLMAnalyzer:
                 formatted += f" | Vol: {signal['volume_ratio']:.1f}x"
         return formatted
 
-    def _parse_ai_response(self, ai_response: str, coin: str) -> LLMAnalysisResult:
+    def _parse_llm_response(self, llm_response: str, coin: str) -> LLMAnalysisResult:
         """Parse AI response into structured analysis result."""
         try:
             # Try to parse as JSON first
-            response_data = json.loads(ai_response)
+            response_data = json.loads(llm_response)
             
             # Extract values from JSON response
-            signal = response_data.get("signal", "hold").lower()
-            confidence = float(response_data.get("confidence", 0.5))
-            prediction = response_data.get("prediction", "sideways").lower()
-            risk_level = response_data.get("risk_level", "medium").lower()
-            entry_price = float(response_data.get("entry_price") or 0.0)
+            signal = response_data.get("signal", "unknown").lower()
+            confidence = float(response_data.get("confidence", 0.0))
+            prediction = response_data.get("prediction", "unknown").lower()
+            risk_level = response_data.get("risk_level", "unknown").lower()
             stop_loss = float(response_data.get("stop_loss") or 0.0)
             target_price = float(response_data.get("target_price") or 0.0)
-            
-            # Validate risk management rules - ensure SL/TP are at least 1.25% away
-            if entry_price > 0:
-                min_sl_distance = entry_price * 0.0125  # 1.25%
-                min_tp_distance = entry_price * 0.0125  # 1.25%
-                
-                if signal == "buy":
-                    # For long positions: SL below entry, TP above entry
-                    if stop_loss > 0 and stop_loss > entry_price - min_sl_distance:
-                        stop_loss = 0.0  # Invalid SL, clear it
-                    if target_price > 0 and target_price < entry_price + min_tp_distance:
-                        target_price = 0.0  # Invalid TP, clear it
-                elif signal == "sell":
-                    # For short positions: SL above entry, TP below entry
-                    if stop_loss > 0 and stop_loss < entry_price + min_sl_distance:
-                        stop_loss = 0.0  # Invalid SL, clear it
-                    if target_price > 0 and target_price > entry_price - min_tp_distance:
-                        target_price = 0.0  # Invalid TP, clear it
-            
+                        
             # Extract new fields
             recap_heading = response_data.get("recap_heading", "")
             trading_insight = response_data.get("trading_insight", "")
             key_drivers = response_data.get("key_drivers", [])
             
             # Simple description from response or fallback
-            description = response_data.get("analysis", "AI-powered intraday analysis completed")
+            description = response_data.get("analysis", "unknown")
             
             # Determine if we should notify based on signal strength
             min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
-            should_notify = signal in ["buy", "sell"] and confidence >= min_confidence
+            should_notify = signal in ["long", "short"] and confidence >= min_confidence
             
             return LLMAnalysisResult(
                 signal=signal,
@@ -351,7 +332,7 @@ class LLMAnalyzer:
                 trading_insight=trading_insight
             )
         except (KeyError, ValueError, TypeError) as e:
-            logger.error(f"JSON parsing failed for {coin}: {str(e)}\n{ai_response}", exc_info=True)
+            logger.error(f"JSON parsing failed for {coin}: {str(e)}\n{llm_response}", exc_info=True)
             return LLMAnalysisResult(
                 description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
                 signal="hold",
