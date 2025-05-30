@@ -85,7 +85,7 @@ class LLMPromptGenerator:
             "",
             "{",
             '  "recap_heading": "Brief 1-line market state summary",',
-            '  "trading_insight": "Your IMMEDIATE actionable trade - what to do RIGHT NOW in 4-5 lines. If no clear setup exists, say \'wait for [specific condition]\'. Be direct about current price action with some basic context",',
+            '  "trading_insight": "Your IMMEDIATE actionable trade - what to do RIGHT NOW in 5 or 6 sentences. If no clear setup exists, say \'wait for [specific condition]\'. Be direct about current price action with some basic context",',
             '  "signal": "long|short|hold",',
             '  "confidence": 0.7,',
             '  "prediction": "bullish|bearish|sideways",',
