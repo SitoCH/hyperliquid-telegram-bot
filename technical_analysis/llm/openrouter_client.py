@@ -34,7 +34,7 @@ class OpenRouterClient:
                 }
             ],
             "reasoning": {
-                "max_tokens": 5000
+                "max_tokens": 10000
             },
             "response_format": {
                 "type": "json_object"
@@ -42,7 +42,7 @@ class OpenRouterClient:
             "usage": {
                 "include": "true"
             },
-            "max_tokens": 10000
+            "max_tokens": 17500
         }
         
         try:
@@ -57,6 +57,7 @@ class OpenRouterClient:
                 raise ValueError(f"OpenRouter API error {response.status_code}: {response.text}")
 
             data = response.json()
+            print(data)
             # Clean up the content by removing markdown code block wrapper if present
             content = data["choices"][0]["message"]["content"]
             if content.startswith("```json"):
