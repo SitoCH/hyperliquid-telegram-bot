@@ -99,5 +99,8 @@ class LLMMessageFormatter:
                 tp_percentage = ((current_price - trading_setup.take_profit) / current_price) * 100
             
             setup += f"\nTake Profit: {fmt_price(trading_setup.take_profit)} USDC ({tp_percentage:+.1f}%)"
+
+        if trading_setup.risk_reward_ratio > 0:
+            setup += f"\nRisk/Reward: 1:{trading_setup.risk_reward_ratio:.1f}"
         
         return setup
