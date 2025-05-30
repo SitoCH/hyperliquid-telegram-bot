@@ -50,14 +50,13 @@ class OpenRouterClient:
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=30
+                timeout=60
             )
             
             if response.status_code != 200:
                 raise ValueError(f"OpenRouter API error {response.status_code}: {response.text}")
 
             data = response.json()
-            print(data)
             # Clean up the content by removing markdown code block wrapper if present
             content = data["choices"][0]["message"]["content"]
             if content.startswith("```json"):

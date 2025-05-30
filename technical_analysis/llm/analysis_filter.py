@@ -14,8 +14,8 @@ class AnalysisFilter:
     def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool) -> Tuple[bool, str]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
-        #if interactive:
-        #    return True, f"LLM filter triggered analysis for {coin}: interactive mode"
+        if interactive:
+            return True, f"LLM filter triggered analysis for {coin}: interactive mode"
 
         market_summary = self._create_market_summary(dataframes)
 
