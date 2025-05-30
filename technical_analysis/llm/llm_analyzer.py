@@ -30,7 +30,6 @@ class LLMAnalysisResult:
         prediction: str = "sideways",
         risk_level: str = "medium",
         should_notify: bool = False,
-        description: str = "",
         timeframe_signals: Dict[str, Any] | None = None,
         stop_loss: float = 0.0,
         target_price: float = 0.0,
@@ -45,7 +44,6 @@ class LLMAnalysisResult:
         self.prediction = prediction
         self.risk_level = risk_level
         self.should_notify = should_notify
-        self.description = description
         self.timeframe_signals = timeframe_signals or {}
         self.stop_loss = stop_loss
         self.target_price = target_price
@@ -142,9 +140,8 @@ class LLMAnalyzer:
         except Exception as e:
             logger.error(f"AI analysis failed for {coin}: {str(e)}", exc_info=True)
             return LLMAnalysisResult(
-                description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
                 signal="hold",
-                confidence=0.5
+                confidence=0.0
             )
     
     def _get_simple_momentum(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -188,10 +185,7 @@ class LLMAnalyzer:
             recap_heading = response_data.get("recap_heading", "")
             trading_insight = response_data.get("trading_insight", "")
             key_drivers = response_data.get("key_drivers", [])
-            
-            # Simple description from response or fallback
-            description = response_data.get("analysis", "unknown")
-            
+                        
             # Determine if we should notify based on signal strength
             min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
             should_notify = signal in ["long", "short"] and confidence >= min_confidence
@@ -202,7 +196,6 @@ class LLMAnalyzer:
                 prediction=prediction,
                 risk_level=risk_level,
                 should_notify=should_notify,
-                description=description,
                 stop_loss=stop_loss,
                 target_price=target_price,
                 key_drivers=key_drivers,
@@ -212,7 +205,6 @@ class LLMAnalyzer:
         except (KeyError, ValueError, TypeError) as e:
             logger.error(f"JSON parsing failed for {coin}: {str(e)}\n{llm_response}", exc_info=True)
             return LLMAnalysisResult(
-                description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
                 signal="hold",
-                confidence=0.5
+                confidence=0.0
             )

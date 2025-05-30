@@ -42,14 +42,26 @@ class LLMMessageFormatter:
             f"📊 <b>Signal:</b> {llm_result.signal.lower()}\n"
             f"🎯 <b>Confidence:</b> {llm_result.confidence:.0%}\n"
             f"📈 <b>Prediction:</b> {llm_result.prediction.lower()}\n"
-            f"⚠️ <b>Risk Level:</b> {llm_result.risk_level.lower()}"
+            f"⚠️ <b>Risk Level:</b> {llm_result.risk_level.lower()}\n"
+            f"⏰ <b>Time Horizon:</b> {llm_result.time_horizon_hours}h"
         )
 
         # Add trading insight if available
         trading_insight = getattr(llm_result, 'trading_insight', '')
         if trading_insight:
             message += f"\n\n💡 <b>Trading Insight:</b>\n{trading_insight}"
-        
+
+        # Add key drivers if available
+        if llm_result.key_drivers:
+            message += "\n\n🔑 <b>Key Drivers:</b>"
+            for driver in llm_result.key_drivers:
+                message += f"\n• {driver}"
+
+        # Add timeframe signals if available
+        if llm_result.timeframe_signals:
+            timeframe_section = self._format_timeframe_signals(llm_result.timeframe_signals, False)
+            if timeframe_section:
+                message += f"\n\n📊 <b>Timeframe Signals:</b>{timeframe_section}"
         
         trade_setup = self._build_trade_setup_format(coin, current_price, llm_result)
         if trade_setup:
