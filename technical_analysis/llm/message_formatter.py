@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from utils import fmt_price, exchange_enabled
 from telegram_utils import telegram_utils
-from .llm_analyzer import LLMAnalysisResult
+from .llm_analysis_result import LLMAnalysisResult
 
 
 class LLMMessageFormatter:
