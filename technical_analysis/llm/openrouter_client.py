@@ -13,7 +13,7 @@ class OpenRouterClient:
         if not self.api_key:
             raise ValueError("HTB_OPENROUTER_API_KEY environment variable not set")
     
-    def call_api(self, model: str, prompt: str) -> Tuple[str, float]:
+    def call_api(self, model: str, prompt: str) -> str:
         """Call OpenRouter.ai API for AI analysis and return response with cost."""
         
         headers = {
@@ -55,14 +55,17 @@ class OpenRouterClient:
             
             if response.status_code != 200:
                 raise ValueError(f"OpenRouter API error {response.status_code}: {response.text}")
-            
+
             data = response.json()
+            # Clean up the content by removing markdown code block wrapper if present
+            content = data["choices"][0]["message"]["content"]
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
             
-            # Extract actual cost from OpenRouter response
-            usage = data.get("usage", {})
-            total_cost = usage.get("cost", 0.0)
-            
-            return data["choices"][0]["message"]["content"], total_cost
+            return content
             
         except requests.exceptions.RequestException as e:
             raise ValueError(f"OpenRouter API request failed: {str(e)}")

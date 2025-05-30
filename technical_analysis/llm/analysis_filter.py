@@ -26,7 +26,7 @@ class AnalysisFilter:
             filter_client = OpenRouterClient()
 
             model = os.getenv("HTB_OPENROUTER_FAST_MODEL", "meta-llama/llama-4-maverick:free")
-            response, _ = filter_client.call_api(model, filter_prompt)
+            response = filter_client.call_api(model, filter_prompt)
             
             should_analyze, reason = self._parse_filter_response(response)
 

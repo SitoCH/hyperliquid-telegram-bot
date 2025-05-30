@@ -35,8 +35,6 @@ class LLMAnalysisResult:
         should_notify: bool = False,
         description: str = "",
         timeframe_signals: Dict[str, Any] | None = None,
-        analysis_cost: float = 0.0,
-        entry_price: float = 0.0,
         stop_loss: float = 0.0,
         target_price: float = 0.0,
         key_drivers: List[str] | None = None,
@@ -52,8 +50,6 @@ class LLMAnalysisResult:
         self.should_notify = should_notify
         self.description = description
         self.timeframe_signals = timeframe_signals or {}
-        self.analysis_cost = analysis_cost
-        self.entry_price = entry_price
         self.stop_loss = stop_loss
         self.target_price = target_price
         self.key_drivers = key_drivers or []
@@ -113,7 +109,8 @@ class LLMAnalyzer:
         should_notify = interactive_analysis or llm_result.should_notify
 
         if should_notify:
-            await self._send_ai_analysis_message(context, coin, llm_result)
+            mid = float(hyperliquid_utils.info.all_mids()[coin])
+            await self._send_ai_analysis_message(context, coin, mid, llm_result)
 
     async def _send_basic_analysis_message(self, context: ContextTypes.DEFAULT_TYPE, coin: str, reason: str) -> None:
         """Send basic analysis when AI analysis is not triggered."""
@@ -136,11 +133,10 @@ class LLMAnalyzer:
             model = os.getenv("HTB_OPENROUTER_MAIN_MODEL", "openai/gpt-4.1-nano")
             prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid_price)
 
-            ai_response, analysis_cost = self.openrouter_client.call_api(model, prompt)
+            ai_response = self.openrouter_client.call_api(model, prompt)
             
             # Parse AI response into structured result
             result = self._parse_ai_response(ai_response, coin)
-            result.analysis_cost = analysis_cost
             
             # Add timeframe analysis for additional context
             timeframe_signals = {}
@@ -158,8 +154,7 @@ class LLMAnalyzer:
             return LLMAnalysisResult(
                 description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
                 signal="hold",
-                confidence=0.5,
-                analysis_cost=0.0
+                confidence=0.5
             )
     
     def _get_simple_momentum(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -188,17 +183,18 @@ class LLMAnalyzer:
     async def _send_ai_analysis_message(
         self, 
         context: ContextTypes.DEFAULT_TYPE, 
-        coin: str, 
+        coin: str,
+        current_price: float,
         ai_result: LLMAnalysisResult
     ) -> None:
         """Send AI analysis results to Telegram."""
         
         # Build analysis message
-        message = self._build_analysis_message(coin, ai_result)
+        message = self._build_analysis_message(coin, current_price, ai_result)
         await telegram_utils.send(message, parse_mode=ParseMode.HTML)
 
 
-    def _build_analysis_message(self, coin: str, ai_result: LLMAnalysisResult) -> str:
+    def _build_analysis_message(self, coin: str, current_price: float, ai_result: LLMAnalysisResult) -> str:
         """Build the analysis message text."""
 
         # Get emoji based on signal/prediction
@@ -226,16 +222,16 @@ class LLMAnalyzer:
             message += f"\n\n💡 <b>Trading Insight:</b>\n{trading_insight}"
         
         
-        trade_setup = self._build_trade_setup_format(coin, ai_result)
+        trade_setup = self._build_trade_setup_format(coin, current_price, ai_result)
         if trade_setup:
             message += trade_setup
            
         return message
     
 
-    def _build_trade_setup_format(self, coin: str, ai_result: LLMAnalysisResult) -> str:
+    def _build_trade_setup_format(self, coin: str, current_price: float, ai_result: LLMAnalysisResult) -> str:
         """Build formatted trade setup."""
-        if not (ai_result.entry_price > 0 and (ai_result.stop_loss > 0 or ai_result.target_price > 0)):
+        if not (current_price > 0 and (ai_result.stop_loss > 0 or ai_result.target_price > 0)):
             return ""
 
         enc_side = "L" if ai_result.signal == "buy" else "S"
@@ -246,43 +242,40 @@ class LLMAnalyzer:
 
         setup = f"\n\n<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>"
         
-        # Market price (entry price)
-        if ai_result.entry_price > 0:
-            setup += f"\nMarket price: {fmt_price(ai_result.entry_price)} USDC"
+        setup += f"\nMarket price: {fmt_price(current_price)} USDC"
         
         # Stop Loss with percentage
-        if ai_result.stop_loss > 0 and ai_result.entry_price > 0:
+        if ai_result.stop_loss > 0:
             if ai_result.signal == "buy":
-                sl_percentage = ((ai_result.stop_loss - ai_result.entry_price) / ai_result.entry_price) * 100
+                sl_percentage = ((ai_result.stop_loss - current_price) / current_price) * 100
             else:  # short
-                sl_percentage = ((ai_result.entry_price - ai_result.stop_loss) / ai_result.entry_price) * 100
+                sl_percentage = ((current_price - ai_result.stop_loss) / current_price) * 100
             
             setup += f"\nStop Loss: {fmt_price(ai_result.stop_loss)} USDC ({sl_percentage:+.1f}%)"
         
         # Take Profit with percentage
-        if ai_result.target_price > 0 and ai_result.entry_price > 0:
+        if ai_result.target_price > 0:
             if ai_result.signal == "buy":
-                tp_percentage = ((ai_result.target_price - ai_result.entry_price) / ai_result.entry_price) * 100
+                tp_percentage = ((ai_result.target_price - current_price) / current_price) * 100
             else:  # short
-                tp_percentage = ((ai_result.entry_price - ai_result.target_price) / ai_result.entry_price) * 100
+                tp_percentage = ((current_price - ai_result.target_price) / current_price) * 100
             
             setup += f"\nTake Profit: {fmt_price(ai_result.target_price)} USDC ({tp_percentage:+.1f}%)"
         
         return setup
 
 
-    def _build_price_levels(self, ai_result: LLMAnalysisResult) -> str:
+    def _build_price_levels(self, current_price: float, ai_result: LLMAnalysisResult) -> str:
         """Build price levels section."""
-        if not (ai_result.entry_price > 0 or ai_result.stop_loss > 0 or ai_result.target_price > 0):
+        if not (current_price > 0 or ai_result.stop_loss > 0 or ai_result.target_price > 0):
             return ""
         
         levels = "\n📋 <b>Price Levels:</b>"
-        if ai_result.entry_price > 0:
-            levels += f"\n   Entry: ${ai_result.entry_price:.4f}"
+        levels += f"\n   Entry: ${fmt_price(current_price)}"
         if ai_result.stop_loss > 0:
-            levels += f"\n   Stop Loss: ${ai_result.stop_loss:.4f}"
+            levels += f"\n   Stop Loss: ${fmt_price(current_price)}"
         if ai_result.target_price > 0:
-            levels += f"\n   Target: ${ai_result.target_price:.4f}"
+            levels += f"\n   Target: ${fmt_price(current_price)}"
         return levels
     
     def _format_timeframe_signals(self, timeframe_signals: Dict[str, Any], include_details: bool) -> str:
@@ -351,7 +344,6 @@ class LLMAnalyzer:
                 risk_level=risk_level,
                 should_notify=should_notify,
                 description=description,
-                entry_price=entry_price,
                 stop_loss=stop_loss,
                 target_price=target_price,
                 key_drivers=key_drivers,
@@ -363,6 +355,5 @@ class LLMAnalyzer:
             return LLMAnalysisResult(
                 description=f"AI analysis for {coin}: Analysis failed due to technical error. Using fallback analysis.",
                 signal="hold",
-                confidence=0.5,
-                analysis_cost=0.0
+                confidence=0.5
             )
