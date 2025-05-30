@@ -101,7 +101,7 @@ class LLMAnalyzer:
         """Parse AI response into structured analysis result."""
         try:
             # Try to parse as JSON first
-            response_data = json.loads(llm_response)            # Extract and parse enum values from JSON response
+            response_data = json.loads(llm_response)
             signal = Signal(response_data.get("signal", "hold").lower())
             confidence = float(response_data.get("confidence", 0.0))
             prediction = Prediction(response_data.get("prediction", "sideways").lower())

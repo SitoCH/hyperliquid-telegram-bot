@@ -10,7 +10,6 @@ from .openrouter_client import OpenRouterClient
 class AnalysisFilter:
     """Filter logic to determine when expensive AI analysis should be triggered."""
 
-    
     def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool) -> Tuple[bool, str]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
@@ -18,13 +17,10 @@ class AnalysisFilter:
             return True, f"LLM filter triggered analysis for {coin}: interactive mode"
 
         market_summary = self._create_market_summary(dataframes)
-
         filter_prompt = self._create_filter_prompt(coin, market_summary)
 
         try:
-
             filter_client = OpenRouterClient()
-
             model = os.getenv("HTB_OPENROUTER_FAST_MODEL", "meta-llama/llama-4-maverick:free")
             response = filter_client.call_api(model, filter_prompt)
             
@@ -127,46 +123,38 @@ class AnalysisFilter:
             levels[level.lower()] = df[level].iloc[last_idx]
         
         return levels
-    
+
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
-        return f"""Your role is to act as a selective filter for {coin} to determine if market conditions warrant expensive detailed technical analysis. DEFAULT TO SKIPPING ANALYSIS unless there are notable market conditions.
+        return f"""Your role is to act as a balanced filter for {coin} to determine if market conditions warrant expensive detailed technical analysis. Use these guidelines to make informed decisions.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
-FILTERING CRITERIA:
-You should recommend analysis when at least 2 conditions are met:
+ANALYSIS CRITERIA:
+TRIGGER ANALYSIS when you see:
+• Significant price moves: >2.5% in short timeframes (5m-1h) OR >4% in longer timeframes (4h+) 
+• Volume confirmation: Volume ratio >1.4x average during price moves
+• Clear directional indicators: RSI <35 or >65, MACD divergence, trend changes
+• Support/resistance tests: Price approaching key levels with momentum
+• Cross-timeframe alignment: Similar signals across multiple timeframes
 
-PRIMARY CONDITIONS (look for at least 2):
-• NOTABLE price moves: >2% in shorter timeframes OR >4% in longer timeframes
-• VOLUME CONFIRMATION: Volume ratios >1.3x average with price moves
-• SIGNIFICANT indicator readings: RSI <35 or >65, notable MACD changes
-• BREAKOUTS: Price approaching or breaking major support/resistance levels
-• TIMEFRAME alignment: Similar signals across 2+ timeframes
+SKIP ANALYSIS when you see:
+• Minimal activity: Price moves <1.5% across all recent periods
+• Low volume: All volume ratios <1.2x average
+• Neutral indicators: RSI 40-60, flat MACD, mixed signals
+• No clear direction: Conflicting signals across timeframes
+• Sideways action: Very low volatility with no breakout potential
 
-SUPPORTING FACTORS (strengthen the case):
-• Volatility changes after periods of low volatility
-• Technical indicators approaching key levels or convergence
-• Support/resistance level tests with decent momentum
-• Volume spikes (>1.7x average) with price action
-• Emerging patterns or trend changes
+FOCUS ON ACTIONABLE SITUATIONS:
+Look for developing patterns, momentum shifts, or technical setups that could provide trading opportunities. Balance between catching opportunities and avoiding noise.
 
-SKIP ANALYSIS IF:
-• Minimal market activity with no clear signals
-• Very choppy price action without direction
-• Extremely low volume regardless of price movement
-• Completely mixed signals across all timeframes
-• Very minor price movements (<1.5% in most timeframes)
-• All indicators firmly in neutral territory
-
-BALANCED APPROACH:
-Analysis should capture opportunities while managing costs. Look for developing situations that could provide actionable insights. When conditions show potential, lean toward analysis.
+BE SPECIFIC in your reasoning - avoid generic phrases like "multiple timeframes show notable moves". Instead, cite specific price percentages, volume ratios, or indicator readings.
 
 Provide your analysis in JSON format:
 {{
   "should_analyze": true/false,
-  "reason": "A single sentence explaining the decision",
+  "reason": "A specific sentence explaining the key condition that triggered or prevented analysis with concrete numbers",
   "confidence": 0.0-1.0,
 }}"""
 
@@ -181,7 +169,7 @@ Provide your analysis in JSON format:
 
             if confidence < 0.7:
                 should_analyze = False
-                reason = f"Low confidence. {reason}"
+                reason = f"Insufficient confidence for analysis. {reason}"
 
             detailed_reason = f"{reason} (confidence: {confidence:.0%})"
             
