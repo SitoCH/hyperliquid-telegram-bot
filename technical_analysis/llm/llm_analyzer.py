@@ -91,49 +91,16 @@ class LLMAnalyzer:
 
             llm_response = self.openrouter_client.call_api(model, prompt)
             
-            # Parse AI response into structured result
-            result = self._parse_llm_response(llm_response, coin)
-            
-            # Add timeframe analysis for additional context
-            timeframe_signals = {}
-            for tf, df in dataframes.items():
-                if not df.empty and len(df) >= 5:
-                    signal_data = self._get_simple_momentum(df)
-                    timeframe_signals[str(tf)] = signal_data
-            
-            result.timeframe_signals = timeframe_signals
-            
-            return result
-            
+            return self._parse_llm_response(llm_response, coin)
+
+
         except Exception as e:
             logger.error(f"AI analysis failed for {coin}: {str(e)}", exc_info=True)
             return LLMAnalysisResult(
                 signal="hold",
                 confidence=0.0
             )
-    
-    def _get_simple_momentum(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Simple momentum calculation for AI analysis."""
-        recent_change = (df['c'].iloc[-1] - df['c'].iloc[-5]) / df['c'].iloc[-5]
-        
-        # Volume confirmation
-        volume_ratio = 1.0
-        if 'v_ratio' in df.columns and not df['v_ratio'].empty:
-            volume_ratio = df['v_ratio'].iloc[-1]
-        
-        # Adjust strength based on volume
-        strength = abs(recent_change)
-        if volume_ratio > 1.5:
-            strength *= 1.2
-        elif volume_ratio < 0.5:
-            strength *= 0.8
-        
-        return {
-            "momentum": "positive" if recent_change > 0 else "negative",
-            "strength": strength,
-            "price_change": recent_change,
-            "volume_ratio": volume_ratio
-        }
+
     
     def _parse_llm_response(self, llm_response: str, coin: str) -> LLMAnalysisResult:
         """Parse AI response into structured analysis result."""

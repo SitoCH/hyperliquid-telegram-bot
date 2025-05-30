@@ -56,12 +56,6 @@ class LLMMessageFormatter:
             message += "\n\n🔑 <b>Key Drivers:</b>"
             for driver in llm_result.key_drivers:
                 message += f"\n• {driver}"
-
-        # Add timeframe signals if available
-        if llm_result.timeframe_signals:
-            timeframe_section = self._format_timeframe_signals(llm_result.timeframe_signals, False)
-            if timeframe_section:
-                message += f"\n\n📊 <b>Timeframe Signals:</b>{timeframe_section}"
         
         trade_setup = self._build_trade_setup_format(coin, current_price, llm_result)
         if trade_setup:
@@ -104,6 +98,7 @@ class LLMMessageFormatter:
         
         return setup
 
+
     def _build_price_levels(self, current_price: float, llm_result: LLMAnalysisResult) -> str:
         """Build price levels section."""
         if not (current_price > 0 or llm_result.stop_loss > 0 or llm_result.target_price > 0):
@@ -116,17 +111,3 @@ class LLMMessageFormatter:
         if llm_result.target_price > 0:
             levels += f"\n   Target: ${fmt_price(current_price)}"
         return levels
-    
-    def _format_timeframe_signals(self, timeframe_signals: Dict[str, Any], include_details: bool) -> str:
-        """Format timeframe signals for display."""
-        formatted = ""
-        for tf, signal in timeframe_signals.items():
-            emoji = "📈" if signal['momentum'] == "positive" else "📉"
-            formatted += (
-                f"\n{emoji} <b>{tf}:</b> {signal['momentum'].title()} "
-                f"({signal['strength']:.1%})"
-            )
-            
-            if include_details:
-                formatted += f" | Vol: {signal['volume_ratio']:.1f}x"
-        return formatted
