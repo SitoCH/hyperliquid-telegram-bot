@@ -27,9 +27,9 @@ class LLMMessageFormatter:
         """Build the analysis message text."""
 
         # Get emoji based on signal/prediction
-        if llm_result.signal == "buy" or "bullish" in llm_result.prediction.lower() or "up" in llm_result.prediction.lower():
+        if llm_result.signal == "long" or "bullish" in llm_result.prediction.lower():
             direction_emoji = "📈"
-        elif llm_result.signal == "sell" or "bearish" in llm_result.prediction.lower() or "down" in llm_result.prediction.lower():
+        elif llm_result.signal == "short" or "bearish" in llm_result.prediction.lower():
             direction_emoji = "📉"
         else:
             direction_emoji = "📊"
@@ -62,11 +62,11 @@ class LLMMessageFormatter:
         if not (current_price > 0 and (llm_result.stop_loss > 0 or llm_result.target_price > 0)):
             return ""
 
-        enc_side = "L" if llm_result.signal == "buy" else "S"
+        enc_side = "L" if llm_result.signal == "long" else "S"
         enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(llm_result.stop_loss)}_{fmt_price(llm_result.target_price)}".encode('utf-8')).decode('utf-8')
         trade_link = f"({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
 
-        side = "Long" if llm_result.signal == "buy" else "Short"
+        side = "Long" if llm_result.signal == "long" else "Short"
 
         setup = f"\n\n<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>"
         
@@ -74,7 +74,7 @@ class LLMMessageFormatter:
         
         # Stop Loss with percentage
         if llm_result.stop_loss > 0:
-            if llm_result.signal == "buy":
+            if llm_result.signal == "long":
                 sl_percentage = ((llm_result.stop_loss - current_price) / current_price) * 100
             else:  # short
                 sl_percentage = ((current_price - llm_result.stop_loss) / current_price) * 100
@@ -83,7 +83,7 @@ class LLMMessageFormatter:
         
         # Take Profit with percentage
         if llm_result.target_price > 0:
-            if llm_result.signal == "buy":
+            if llm_result.signal == "long":
                 tp_percentage = ((llm_result.target_price - current_price) / current_price) * 100
             else:  # short
                 tp_percentage = ((current_price - llm_result.target_price) / current_price) * 100
