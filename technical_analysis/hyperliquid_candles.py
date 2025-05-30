@@ -98,8 +98,9 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     available = float(user_state['withdrawable'])
-    if available < 5.0:
-        logger.info(f"Account balance ({fmt(available)}) is below $5, skipping analysis")
+    minimum_balance = 5.0
+    if available < minimum_balance:
+        logger.info(f"Account balance ({fmt(available)}$) is below {fmt(minimum_balance)}$, skipping analysis")
         return
 
     all_mids = hyperliquid_utils.info.all_mids()

@@ -178,7 +178,6 @@ Provide your analysis in JSON format:
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
 
-            # Skip analysis if confidence is below 0.7
             if confidence < 0.7:
                 should_analyze = False
                 reason = f"Low confidence. {reason}"
