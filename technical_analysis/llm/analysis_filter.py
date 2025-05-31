@@ -55,18 +55,21 @@ class AnalysisFilter:
             }
             
             summary["timeframes"][str(tf)] = timeframe_data
-        
-        # Add funding rates summary
+          # Add funding rates summary
         if funding_rates:
             latest_funding = funding_rates[-1] if funding_rates else None
-            recent_avg = sum(r.funding_rate for r in funding_rates[-24:]) / len(funding_rates[-24:]) if len(funding_rates) >= 24 else (latest_funding.funding_rate if latest_funding else 0)
+            avg_1h = sum(r.funding_rate for r in funding_rates[-1:]) / len(funding_rates[-1:]) if len(funding_rates) >= 1 else (latest_funding.funding_rate if latest_funding else 0)
+            avg_4h = sum(r.funding_rate for r in funding_rates[-4:]) / len(funding_rates[-4:]) if len(funding_rates) >= 4 else (latest_funding.funding_rate if latest_funding else 0)
+            avg_24h = sum(r.funding_rate for r in funding_rates[-24:]) / len(funding_rates[-24:]) if len(funding_rates) >= 24 else (latest_funding.funding_rate if latest_funding else 0)
             summary["funding"] = {
                 "current_rate": latest_funding.funding_rate if latest_funding else 0,
-                "24h_avg": recent_avg,
+                "1h_avg": avg_1h,
+                "4h_avg": avg_4h,
+                "24h_avg": avg_24h,
                 "data_points": len(funding_rates)
             }
         else:
-            summary["funding"] = {"current_rate": 0, "24h_avg": 0, "data_points": 0}
+            summary["funding"] = {"current_rate": 0, "1h_avg": 0, "4h_avg": 0, "24h_avg": 0, "data_points": 0}
         
         return summary
     
@@ -164,7 +167,7 @@ Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
 ANALYSIS CRITERIA:
-TRIGGER ANALYSIS when you see:
+TRIGGER ANALYSIS when you see MULTIPLE indicators aligning:
 • Significant price moves: >2.5% in short timeframes (5m-1h) OR >4% in longer timeframes (4h+) 
 • Volume confirmation: Volume ratio >1.4x average during price moves
 • Clear directional indicators: RSI <35 or >65, MACD divergence, trend changes
@@ -174,13 +177,17 @@ TRIGGER ANALYSIS when you see:
 • Funding rate divergence: Current rate significantly different from 24h average (>50% deviation)
 • Funding rate trend: Consistent directional movement in recent funding rates
 
-SKIP ANALYSIS when you see:
+REQUIRE AT LEAST 3-4 OF THESE CONDITIONS to trigger analysis. Look for convergence of signals.
+
+SKIP ANALYSIS when you see a PATTERN of weak signals:
 • Minimal activity: Price moves <1.5% across all recent periods
 • Low volume: All volume ratios <1.2x average
 • Neutral indicators: RSI 40-60, flat MACD, mixed signals
 • No clear direction: Conflicting signals across timeframes
 • Sideways action: Very low volatility with no breakout potential
 • Neutral funding: Funding rates between -0.0002 and 0.0002 with stable 24h average
+
+SKIP when MOST of these weak conditions are present simultaneously, indicating overall market stagnation.
 
 FOCUS ON ACTIONABLE SITUATIONS:
 Look for developing patterns, momentum shifts, or technical setups that could provide trading opportunities. Balance between catching opportunities and avoiding noise.
