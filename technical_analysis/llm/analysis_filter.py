@@ -9,6 +9,9 @@ from .openrouter_client import OpenRouterClient
 
 class AnalysisFilter:
     """Filter logic to determine when expensive AI analysis should be triggered."""
+    
+    # Lookback period for trend analysis
+    TREND_LOOKBACK_PERIODS = 20
 
     def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool) -> Tuple[bool, str]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
@@ -60,7 +63,7 @@ class AnalysisFilter:
     
     def _calculate_price_changes(self, df: pd.DataFrame, current_price: float) -> Dict[str, float]:
         """Calculate price changes over multiple periods."""
-        lookback_periods = [5, 10, 20, 50] if len(df) >= 50 else [5, 10, min(20, len(df))]
+        lookback_periods = [5, 10, self.TREND_LOOKBACK_PERIODS, 50] if len(df) >= 50 else [5, 10, min(self.TREND_LOOKBACK_PERIODS, len(df))]
         price_changes = {}
         
         for period in lookback_periods:
@@ -72,9 +75,9 @@ class AnalysisFilter:
     
     def _calculate_volatility(self, df: pd.DataFrame, current_price: float) -> float:
         """Calculate volatility over the analysis period."""
-        high_20 = df['h'].iloc[-20:].max() if len(df) >= 20 else df['h'].max()
-        low_20 = df['l'].iloc[-20:].min() if len(df) >= 20 else df['l'].min()
-        return round((high_20 - low_20) / current_price * 100, 2)
+        high_period = df['h'].iloc[-self.TREND_LOOKBACK_PERIODS:].max() if len(df) >= self.TREND_LOOKBACK_PERIODS else df['h'].max()
+        low_period = df['l'].iloc[-self.TREND_LOOKBACK_PERIODS:].min() if len(df) >= self.TREND_LOOKBACK_PERIODS else df['l'].min()
+        return round((high_period - low_period) / current_price * 100, 2)
     
     def _analyze_volume_data(self, df: pd.DataFrame) -> Dict[str, float]:
         """Analyze volume patterns and trends."""
@@ -83,7 +86,7 @@ class AnalysisFilter:
         if 'v_ratio' in df.columns and not df['v_ratio'].empty:
             volume_data['current_ratio'] = round(df['v_ratio'].iloc[-1], 2)
             volume_data['avg_5p'] = round(df['v_ratio'].iloc[-5:].mean(), 2)
-            volume_data['max_20p'] = round(df['v_ratio'].iloc[-20:].max(), 2) if len(df) >= 20 else round(df['v_ratio'].max(), 2)
+            volume_data['max_trend_period'] = round(df['v_ratio'].iloc[-self.TREND_LOOKBACK_PERIODS:].max(), 2) if len(df) >= self.TREND_LOOKBACK_PERIODS else round(df['v_ratio'].max(), 2)
         
         if 'v_trend' in df.columns and not df['v_trend'].empty:
             volume_data['trend'] = round(df['v_trend'].iloc[-1], 2)
@@ -91,9 +94,9 @@ class AnalysisFilter:
         return volume_data
     
     def _analyze_all_indicators(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Pass through all available technical indicators."""
+        """Pass through all available technical indicators with trend analysis values."""
         indicators = {}
-        last_idx = -1
+        lookback = min(self.TREND_LOOKBACK_PERIODS, len(df))
         
         # Create list of all indicators to extract
         indicator_names = [
@@ -104,23 +107,43 @@ class AnalysisFilter:
             'TENKAN', 'KIJUN', 'SENKOU_A', 'SENKOU_B', 'CHIKOU'
         ]
         
-        # Extract all indicator values
+        # Extract recent values for each indicator to show trends
         for indicator in indicator_names:
-            indicators[indicator] = df[indicator].iloc[last_idx] if indicator in df.columns else None
+            if indicator in df.columns:
+                values = df[indicator].iloc[-lookback:].tolist()
+                indicators[indicator] = {
+                    'current': values[-1] if values else None,
+                    'values': values
+                }
+            else:
+                indicators[indicator] = {
+                    'current': None,
+                    'values': []
+                }
         
         return indicators    
     
-    def _analyze_support_resistance(self, df: pd.DataFrame) -> Dict[str, float]:
-        """Pass through support and resistance levels."""
-        levels: Dict[str, float] = {}
-        last_idx = -1
+    def _analyze_support_resistance(self, df: pd.DataFrame) -> Dict[str, Any]:
+        """Pass through support and resistance levels with recent values for trend analysis."""
+        levels: Dict[str, Any] = {}
+        lookback = min(self.TREND_LOOKBACK_PERIODS, len(df))
         
         # Support/resistance levels
         level_names = ['VWAP', 'PIVOT', 'R1', 'R2', 'S1', 'S2', 
                       'FIB_23', 'FIB_38', 'FIB_50', 'FIB_61', 'FIB_78']
         
         for level in level_names:
-            levels[level.lower()] = df[level].iloc[last_idx]
+            if level in df.columns:
+                values = df[level].iloc[-lookback:].tolist()
+                levels[level.lower()] = {
+                    'current': values[-1] if values else None,
+                    'values': values
+                }
+            else:
+                levels[level.lower()] = {
+                    'current': None,
+                    'values': []
+                }
         
         return levels
 
