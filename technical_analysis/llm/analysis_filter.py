@@ -170,8 +170,19 @@ ANALYSIS CRITERIA:
 TRIGGER ANALYSIS when you see MORE THAN ONE of these actionable conditions:
 • Moderate price moves: >0.5% in short timeframes (5m-15m), >1.0% in medium timeframes (1h-4h), OR >2% in longer timeframes (12h+) 
 • Volume confirmation: Volume ratio >1.2x average during price moves
-• Directional indicators: RSI <35 or >65, MACD histogram divergence, trend changes
-• Support/resistance proximity: Price within 2% of key levels
+• Technical indicators showing directional bias:
+  - RSI: <35 (oversold) or >65 (overbought)
+  - MACD: Histogram divergence, signal line crossovers, or momentum shifts
+  - ROC: Rate of change indicating strong momentum
+  - Stochastic: %K or %D in extreme zones (<20 or >80)
+  - SuperTrend: Price breaking above/below SuperTrend line
+  - Bollinger Bands: Price touching bands, squeeze/expansion patterns
+  - ATR: Volatility spikes or compression patterns
+• Moving averages and trend indicators:
+  - EMA: Price breaking above/below key EMA levels
+  - VWAP: Price deviating significantly from VWAP
+  - Ichimoku: Cloud breakouts, Tenkan/Kijun crosses, or Chikou span signals
+• Support/resistance proximity: Price within 2% of key levels (VWAP, Pivot points, Fibonacci levels)
 • Cross-timeframe signals: Similar directional bias across 2+ timeframes
 • Notable funding rates: Current rate >0.0003 or <-0.0003, OR significant divergence from 24h average
 • Technical setups: Clear breakout patterns, reversal signals, or momentum shifts
