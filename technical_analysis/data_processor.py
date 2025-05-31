@@ -177,8 +177,9 @@ def _add_ema_indicator(df: pd.DataFrame, timeframe: Timeframe) -> None:
 
 def _add_vwap_indicator(df: pd.DataFrame) -> None:
     """Add VWAP (Volume Weighted Average Price) indicator."""
-    vwap_calc = ta.vwap(df["h"], df["l"], df["c"], df["v"])
-    df["VWAP"] = vwap_calc
+    typical_price = (df["h"] + df["l"] + df["c"]) / 3
+    vwap = (typical_price * df["v"]).cumsum() / df["v"].cumsum()
+    df["VWAP"] = vwap
 
 
 def _add_rsi_indicator(df: pd.DataFrame) -> None:
@@ -262,14 +263,18 @@ def _add_ichimoku_cloud(df: pd.DataFrame) -> None:
         period_52 = 52 # Senkou Span B period
     
     # Calculate Ichimoku lines using pandas_ta for accuracy
-    ichimoku = ta.ichimoku(df["h"], df["l"], df["c"], 
-                          tenkan=period_9, kijun=period_26, senkou=period_52)
+    ichimoku_result = ta.ichimoku(df["h"], df["l"], df["c"], 
+                                 tenkan=period_9, kijun=period_26, senkou=period_52)
     
-    df["TENKAN"] = ichimoku.iloc[:, 0]  # ISA_9 (Tenkan-sen)
-    df["KIJUN"] = ichimoku.iloc[:, 1]   # ISB_26 (Kijun-sen)
-    df["SENKOU_A"] = ichimoku.iloc[:, 2].shift(period_26)  # ITS_9 (Senkou Span A) 
-    df["SENKOU_B"] = ichimoku.iloc[:, 3].shift(period_26)  # IKS_26 (Senkou Span B)
-    df["CHIKOU"] = ichimoku.iloc[:, 4]  # ICS_26 (Chikou Span)
+    if ichimoku_result is not None and len(ichimoku_result) > 0:
+        ichimoku_df = ichimoku_result[0]  # Main ichimoku DataFrame
+        
+        # Extract individual components from the DataFrame
+        df["TENKAN"] = ichimoku_df[f"ITS_{period_9}"]  # Tenkan-sen (Conversion Line)
+        df["KIJUN"] = ichimoku_df[f"IKS_{period_26}"]   # Kijun-sen (Base Line)
+        df["SENKOU_A"] = ichimoku_df[f"ISA_{period_9}"].shift(period_26)  # Senkou Span A
+        df["SENKOU_B"] = ichimoku_df[f"ISB_{period_26}"].shift(period_26)  # Senkou Span B
+        df["CHIKOU"] = ichimoku_df[f"ICS_{period_26}"].shift(-period_26)  # Chikou Span (shifted backward)
 
 
 def _add_momentum_indicators(df: pd.DataFrame) -> None:
