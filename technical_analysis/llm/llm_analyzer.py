@@ -58,30 +58,27 @@ class LLMAnalyzer:
             tf: prepare_dataframe(candles, local_tz) 
             for tf, candles in candles_data.items()
         }
-        
-        # Apply basic indicators for AI analysis
+          # Apply basic indicators for AI analysis
         for tf, df in dataframes.items():
             if not df.empty:
-                apply_indicators(df, tf)
-
-        should_analyze, _ = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis)
+                apply_indicators(df, tf)        # Get funding rates for filter analysis
+        funding_rates = get_funding_with_cache(coin, now, 5)
+        should_analyze, _ = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
         
         if not should_analyze:
             return
 
         mid = float(hyperliquid_utils.info.all_mids()[coin])
-        llm_result = await self._perform_llm_analysis(dataframes, coin, mid)
+        llm_result = await self._perform_llm_analysis(dataframes, coin, mid, funding_rates)
 
         should_notify = interactive_analysis or llm_result.should_notify
         
         if should_notify:
             await self.message_formatter.send_llm_analysis_message(context, coin, mid, llm_result)
 
-    async def _perform_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, mid: float) -> LLMAnalysisResult:
+    async def _perform_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, mid: float, funding_rates: List[FundingRateEntry]) -> LLMAnalysisResult:
         """Core LLM analysis logic using OpenRouter.ai."""
         
-        now = int(time.time() * 1000)
-        funding_rates = get_funding_with_cache(coin, now, 5)
         model = os.getenv("HTB_OPENROUTER_MAIN_MODEL", "openai/gpt-4.1-nano")
         prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid)
         

@@ -9,17 +9,16 @@ from .openrouter_client import OpenRouterClient
 
 class AnalysisFilter:
     """Filter logic to determine when expensive AI analysis should be triggered."""
-    
-    # Lookback period for trend analysis
+      # Lookback period for trend analysis
     TREND_LOOKBACK_PERIODS = 20
-
-    def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool) -> Tuple[bool, str]:
+    
+    def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool, funding_rates: List) -> Tuple[bool, str]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
         if interactive:
             return True, f"LLM filter triggered analysis for {coin}: interactive mode"
 
-        market_summary = self._create_market_summary(dataframes)
+        market_summary = self._create_market_summary(dataframes, funding_rates)
         filter_prompt = self._create_filter_prompt(coin, market_summary)
 
         try:
@@ -37,9 +36,7 @@ class AnalysisFilter:
         except Exception as e:
             logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
             return False, "Fallback: LLM filter failed"
-
-
-    def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> Dict[str, Any]:
+    def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Dict[str, Any]:
         """Create a comprehensive market summary for cheap LLM filtering."""
         summary: Dict[str, Dict[str, Any]] = {"timeframes": {}}
         
@@ -58,6 +55,18 @@ class AnalysisFilter:
             }
             
             summary["timeframes"][str(tf)] = timeframe_data
+        
+        # Add funding rates summary
+        if funding_rates:
+            latest_funding = funding_rates[-1] if funding_rates else None
+            recent_avg = sum(r.funding_rate for r in funding_rates[-24:]) / len(funding_rates[-24:]) if len(funding_rates) >= 24 else (latest_funding.funding_rate if latest_funding else 0)
+            summary["funding"] = {
+                "current_rate": latest_funding.funding_rate if latest_funding else 0,
+                "24h_avg": recent_avg,
+                "data_points": len(funding_rates)
+            }
+        else:
+            summary["funding"] = {"current_rate": 0, "24h_avg": 0, "data_points": 0}
         
         return summary
     
@@ -161,6 +170,9 @@ TRIGGER ANALYSIS when you see:
 • Clear directional indicators: RSI <35 or >65, MACD divergence, trend changes
 • Support/resistance tests: Price approaching key levels with momentum
 • Cross-timeframe alignment: Similar signals across multiple timeframes
+• Extreme funding rates: Current rate >0.0005 (very bullish) or <-0.0005 (very bearish)
+• Funding rate divergence: Current rate significantly different from 24h average (>50% deviation)
+• Funding rate trend: Consistent directional movement in recent funding rates
 
 SKIP ANALYSIS when you see:
 • Minimal activity: Price moves <1.5% across all recent periods
@@ -168,6 +180,7 @@ SKIP ANALYSIS when you see:
 • Neutral indicators: RSI 40-60, flat MACD, mixed signals
 • No clear direction: Conflicting signals across timeframes
 • Sideways action: Very low volatility with no breakout potential
+• Neutral funding: Funding rates between -0.0002 and 0.0002 with stable 24h average
 
 FOCUS ON ACTIONABLE SITUATIONS:
 Look for developing patterns, momentum shifts, or technical setups that could provide trading opportunities. Balance between catching opportunities and avoiding noise.
