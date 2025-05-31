@@ -78,71 +78,57 @@ class LLMAnalyzer:
             await self.message_formatter.send_llm_analysis_message(context, coin, mid, llm_result)
 
     async def _perform_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, mid: float) -> LLMAnalysisResult:
-        """Core AI analysis logic using OpenRouter.ai."""
+        """Core LLM analysis logic using OpenRouter.ai."""
+        
+        now = int(time.time() * 1000)
+        funding_rates = get_funding_with_cache(coin, now, 5)
+        model = os.getenv("HTB_OPENROUTER_MAIN_MODEL", "openai/gpt-4.1-nano")
+        prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid)
+        
+        llm_response = self.openrouter_client.call_api(model, prompt)
+        
+        return self._parse_llm_response(llm_response, coin)
 
-        try:
-            # Get current market data            
-            now = int(time.time() * 1000)
-            funding_rates = get_funding_with_cache(coin, now, 5)
-            model = os.getenv("HTB_OPENROUTER_MAIN_MODEL", "openai/gpt-4.1-nano")
-            prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid)
-            
-            llm_response = self.openrouter_client.call_api(model, prompt)
-            
-            return self._parse_llm_response(llm_response, coin)
-        except Exception as e:
-            logger.error(f"LLM analysis failed for {coin}: {str(e)}", exc_info=True)
-            return LLMAnalysisResult(
-                signal=Signal.HOLD,
-                confidence=0.0
-            )
 
     def _parse_llm_response(self, llm_response: str, coin: str) -> LLMAnalysisResult:
         """Parse AI response into structured analysis result."""
-        try:
-            # Try to parse as JSON first
-            response_data = json.loads(llm_response)
-            signal = Signal(response_data.get("signal", "hold").lower())
-            confidence = float(response_data.get("confidence", 0.0))
-            prediction = Prediction(response_data.get("prediction", "sideways").lower())
-            risk_level = RiskLevel(response_data.get("risk_level", "medium").lower())
-         
-            # Extract new fields
-            recap_heading = response_data.get("recap_heading", "")
-            trading_insight = response_data.get("trading_insight", "")
-            key_drivers = response_data.get("key_drivers", [])
-            time_horizon_hours = int(response_data.get("time_horizon_hours", 4))
-            
-            # Parse trading setup
-            trading_setup = None
-            trading_setup_data = response_data.get("trading_setup")
-            if trading_setup_data:
-                trading_setup = LLMAnalysisTradingSetup(
-                    stop_loss=float(trading_setup_data.get("stop_loss", 0.0)),
-                    take_profit=float(trading_setup_data.get("take_profit", 0.0)),
-                    reason=trading_setup_data.get("reason", "unknown"),
-                    risk_reward_ratio=float(trading_setup_data.get("risk_reward_ratio", 0.0))
-                )
-  
-            # Determine if we should notify based on signal strength
-            min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
-            should_notify = signal in [Signal.LONG, Signal.SHORT] and confidence >= min_confidence
-            
-            return LLMAnalysisResult(
-                signal=signal,
-                confidence=confidence,
-                prediction=prediction,
-                risk_level=risk_level,
-                should_notify=should_notify,
-                key_drivers=key_drivers,
-                recap_heading=recap_heading,
-                trading_insight=trading_insight,
-                time_horizon_hours=time_horizon_hours,
-                trading_setup=trading_setup
+
+        response_data = json.loads(llm_response)
+        signal = Signal(response_data.get("signal", "hold").lower())
+        confidence = float(response_data.get("confidence", 0.0))
+        prediction = Prediction(response_data.get("prediction", "sideways").lower())
+        risk_level = RiskLevel(response_data.get("risk_level", "medium").lower())
+        
+        # Extract new fields
+        recap_heading = response_data.get("recap_heading", "")
+        trading_insight = response_data.get("trading_insight", "")
+        key_drivers = response_data.get("key_drivers", [])
+        time_horizon_hours = int(response_data.get("time_horizon_hours", 4))
+        
+        # Parse trading setup
+        trading_setup = None
+        trading_setup_data = response_data.get("trading_setup")
+        if trading_setup_data:
+            trading_setup = LLMAnalysisTradingSetup(
+                stop_loss=float(trading_setup_data.get("stop_loss", 0.0)),
+                take_profit=float(trading_setup_data.get("take_profit", 0.0)),
+                reason=trading_setup_data.get("reason", "unknown"),
+                risk_reward_ratio=float(trading_setup_data.get("risk_reward_ratio", 0.0))
             )
-        except (KeyError, ValueError, TypeError) as e:
-            logger.error(f"JSON parsing failed for {coin}: {str(e)}\n{llm_response}", exc_info=True)
-            return LLMAnalysisResult(
-                signal=Signal.HOLD,
-                confidence=0.0
-            )
+
+        # Determine if we should notify based on signal strength
+        min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
+        should_notify = signal in [Signal.LONG, Signal.SHORT] and confidence >= min_confidence
+        
+        return LLMAnalysisResult(
+            signal=signal,
+            confidence=confidence,
+            prediction=prediction,
+            risk_level=risk_level,
+            should_notify=should_notify,
+            key_drivers=key_drivers,
+            recap_heading=recap_heading,
+            trading_insight=trading_insight,
+            time_horizon_hours=time_horizon_hours,
+            trading_setup=trading_setup
+        )
