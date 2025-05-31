@@ -168,9 +168,9 @@ Current Market Data:
 
 ANALYSIS CRITERIA:
 TRIGGER ANALYSIS when you see MULTIPLE indicators aligning:
-• Significant price moves: >2.5% in short timeframes (5m-1h) OR >4% in longer timeframes (4h+) 
+• Significant price moves: >0.8% in short timeframes (5m-15m), >1.5% in medium timeframes (1h-4h), OR >3% in longer timeframes (12h+) 
 • Volume confirmation: Volume ratio >1.4x average during price moves
-• Clear directional indicators: RSI <35 or >65, MACD divergence, trend changes
+• Clear directional indicators: RSI <30 or >70, MACD histogram divergence, trend changes
 • Support/resistance tests: Price approaching key levels with momentum
 • Cross-timeframe alignment: Similar signals across multiple timeframes
 • Extreme funding rates: Current rate >0.0005 (very bullish) or <-0.0005 (very bearish)
