@@ -161,50 +161,42 @@ class AnalysisFilter:
 
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
-        return f"""Your role is to act as a balanced filter for {coin} to determine if market conditions warrant expensive detailed technical analysis. Use these guidelines to make informed decisions.
+        return f"""Your role is to act as a balanced filter for {coin} to determine if market conditions warrant expensive detailed technical analysis.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
 ANALYSIS CRITERIA:
-TRIGGER ANALYSIS when you see MULTIPLE indicators aligning:
-• Significant price moves: >0.8% in short timeframes (5m-15m), >1.5% in medium timeframes (1h-4h), OR >3% in longer timeframes (12h+) 
-• Volume confirmation: Volume ratio >1.4x average during price moves
-• Clear directional indicators: RSI <30 or >70, MACD histogram divergence, trend changes
-• Support/resistance tests: Price approaching key levels with momentum
-• Cross-timeframe alignment: Similar signals across multiple timeframes
-• Extreme funding rates: Current rate >0.0005 (very bullish) or <-0.0005 (very bearish)
-• Funding rate divergence: Current rate significantly different from 24h average (>50% deviation)
-• Funding rate trend: Consistent directional movement in recent funding rates
+TRIGGER ANALYSIS when you see MORE THAN ONE of these actionable conditions:
+• Moderate price moves: >0.5% in short timeframes (5m-15m), >1.0% in medium timeframes (1h-4h), OR >2% in longer timeframes (12h+) 
+• Volume confirmation: Volume ratio >1.2x average during price moves
+• Directional indicators: RSI <35 or >65, MACD histogram divergence, trend changes
+• Support/resistance proximity: Price within 2% of key levels
+• Cross-timeframe signals: Similar directional bias across 2+ timeframes
+• Notable funding rates: Current rate >0.0003 or <-0.0003, OR significant divergence from 24h average
+• Technical setups: Clear breakout patterns, reversal signals, or momentum shifts
 
-REQUIRE AT LEAST 3-4 OF THESE CONDITIONS to trigger analysis. Look for convergence of signals.
+REQUIRE AT LEAST 2-3 OF THESE CONDITIONS for higher confidence analysis.
 
-SKIP ANALYSIS when you see a PATTERN of weak signals:
-• Minimal activity: Price moves <1.5% across all recent periods
-• Low volume: All volume ratios <1.2x average
-• Neutral indicators: RSI 40-60, flat MACD, mixed signals
-• No clear direction: Conflicting signals across timeframes
-• Sideways action: Very low volatility with no breakout potential
-• Neutral funding: Funding rates between -0.0002 and 0.0002 with stable 24h average
+SKIP ANALYSIS only when MULTIPLE weak conditions are present:
+• Minimal activity: Price moves <0.8% across all recent periods
+• Very low volume: All volume ratios <1.1x average  
+• Completely neutral indicators: RSI 45-55, flat MACD, no clear direction
+• No proximity to levels: Price >3% away from all key support/resistance
+• Extreme low volatility: ATR suggesting range-bound action
 
-SKIP when MOST of these weak conditions are present simultaneously, indicating overall market stagnation.
-
-FOCUS ON ACTIONABLE SITUATIONS:
-Look for developing patterns, momentum shifts, or technical setups that could provide trading opportunities. Balance between catching opportunities and avoiding noise.
-
-BE SPECIFIC in your reasoning - avoid generic phrases like "multiple timeframes show notable moves". Instead, cite specific price percentages, volume ratios, or indicator readings.
+Focus on catching developing opportunities rather than perfect setups.
 
 Provide your analysis in JSON format:
 {{
   "should_analyze": true/false,
-  "reason": "A specific sentence explaining the key condition that triggered or prevented analysis with concrete numbers",
+  "reason": "Specific condition that triggered or prevented analysis with concrete numbers",
   "confidence": 0.0-1.0,
 }}"""
 
     def _parse_filter_response(self, response: str) -> Tuple[bool, str]:
         """Parse the cheap LLM response to determine if analysis should proceed."""
         try:
-            import json
             data = json.loads(response)
             should_analyze = data.get("should_analyze", False)
             reason = data.get("reason", "LLM filter decision")
@@ -219,5 +211,5 @@ Provide your analysis in JSON format:
             return should_analyze, detailed_reason
             
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"Failed to parse LLM filter response: {str(e)}", exc_info=True)
+            logger.error(f"Failed to parse LLM filter response: {str(e)}\nResponse:\n{response}", exc_info=True)
             return False, "LLM filter parsing failed"
