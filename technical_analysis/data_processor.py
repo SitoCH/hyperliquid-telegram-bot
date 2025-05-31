@@ -117,22 +117,23 @@ def _add_bollinger_bands(df: pd.DataFrame) -> None:
     """Add Bollinger Bands indicators."""
     bb_period = min(20, len(df) // 3)  # Adaptive period
     bb_std = 2.0
-    df['BB_middle'] = df['c'].rolling(window=bb_period).mean()
-    bb_std_dev = df['c'].rolling(window=bb_period).std()
-    df['BB_upper'] = df['BB_middle'] + (bb_std_dev * bb_std)
-    df['BB_lower'] = df['BB_middle'] - (bb_std_dev * bb_std)
-    df['BB_width'] = (df['BB_upper'] - df['BB_lower']) / df['BB_middle']
+    
+    bb = ta.bbands(df["c"], length=bb_period, std=bb_std)
+    df['BB_lower'] = bb[f'BBL_{bb_period}_{bb_std}']
+    df['BB_middle'] = bb[f'BBM_{bb_period}_{bb_std}']
+    df['BB_upper'] = bb[f'BBU_{bb_period}_{bb_std}']
+    df['BB_width'] = bb[f'BBB_{bb_period}_{bb_std}']
 
 
 def _add_volume_indicators(df: pd.DataFrame) -> None:
     """Add volume-based indicators."""
-    df['v_sma'] = df['v'].rolling(window=20).mean()
-    df['v_std'] = df['v'].rolling(window=20).std()
-    df['v_normalized'] = (df['v'] - df['v_sma']) / df['v_std']
+    v_sma = ta.sma(df['v'], length=20)
+    df['v_sma'] = v_sma
     df['v_ratio'] = df['v'] / df['v_sma']
     
-    # Volume trend strength
-    df['v_trend'] = df['v'].rolling(window=5).mean() / df['v'].rolling(window=20).mean()
+    v_short = ta.sma(df['v'], length=5)
+    v_long = ta.sma(df['v'], length=20)
+    df['v_trend'] = v_short / v_long
 
 
 def _add_atr_indicator(df: pd.DataFrame, atr_length: int) -> None:
@@ -140,8 +141,6 @@ def _add_atr_indicator(df: pd.DataFrame, atr_length: int) -> None:
     atr_calc = ta.atr(df["h"], df["l"], df["c"], length=atr_length)
     if atr_calc is not None:
         df["ATR"] = atr_calc
-    else:
-        df["ATR"] = pd.Series([0.0] * len(df), index=df.index)
 
 
 def _add_supertrend_indicator(df: pd.DataFrame, timeframe: Timeframe, st_length: int) -> None:
@@ -156,9 +155,6 @@ def _add_supertrend_indicator(df: pd.DataFrame, timeframe: Timeframe, st_length:
         df["SuperTrend_Flip_Detected"] = (
             supertrend[f"SUPERTd_{st_length}_{st_multiplier}"].diff().abs() == 1
         )
-    else:
-        df["SuperTrend"] = df["c"]
-        df["SuperTrend_Flip_Detected"] = False
 
 
 def _add_macd_indicator(df: pd.DataFrame, macd_fast: int, macd_slow: int, macd_signal: int) -> None:
@@ -172,8 +168,6 @@ def _add_macd_indicator(df: pd.DataFrame, macd_fast: int, macd_slow: int, macd_s
         df["MACD"] = macd[f"MACD_{macd_fast}_{macd_slow}_{macd_signal}"]
         df["MACD_Signal"] = macd[f"MACDs_{macd_fast}_{macd_slow}_{macd_signal}"]
         df["MACD_Hist"] = macd[f"MACDh_{macd_fast}_{macd_slow}_{macd_signal}"]
-    else:
-        df["MACD"] = df["MACD_Signal"] = df["MACD_Hist"] = 0.0
 
 
 def _add_ema_indicator(df: pd.DataFrame, timeframe: Timeframe) -> None:
@@ -183,7 +177,8 @@ def _add_ema_indicator(df: pd.DataFrame, timeframe: Timeframe) -> None:
 
 def _add_vwap_indicator(df: pd.DataFrame) -> None:
     """Add VWAP (Volume Weighted Average Price) indicator."""
-    df["VWAP"] = (df["v"] * df["c"]).cumsum() / df["v"].cumsum()
+    vwap_calc = ta.vwap(df["h"], df["l"], df["c"], df["v"])
+    df["VWAP"] = vwap_calc
 
 
 def _add_rsi_indicator(df: pd.DataFrame) -> None:
@@ -192,19 +187,18 @@ def _add_rsi_indicator(df: pd.DataFrame) -> None:
     rsi = ta.rsi(df["c"], length=rsi_period)
     if rsi is not None:
         df["RSI"] = rsi
-    else:
-        df["RSI"] = pd.Series([50.0] * len(df), index=df.index)
 
 
 def _add_stochastic_indicator(df: pd.DataFrame) -> None:
     """Add Stochastic oscillator."""
-    stoch_period = min(14, len(df) // 2)
-    stoch = ta.stoch(df["h"], df["l"], df["c"], k=stoch_period)
+    stoch_period = min(14, max(5, len(df) // 3))  # Ensure minimum period
+    if len(df) < stoch_period + 3:  # Need enough data for smoothing
+        return
+        
+    stoch = ta.stoch(df["h"], df["l"], df["c"], k=stoch_period, d=3, smooth_k=3)
     if stoch is not None:
         df["STOCH_K"] = stoch[f"STOCHk_{stoch_period}_3_3"]
         df["STOCH_D"] = stoch[f"STOCHd_{stoch_period}_3_3"]
-    else:
-        df["STOCH_K"] = df["STOCH_D"] = pd.Series([50.0] * len(df), index=df.index)
 
 
 def _add_fibonacci_levels(df: pd.DataFrame) -> None:
@@ -217,13 +211,29 @@ def _add_fibonacci_levels(df: pd.DataFrame) -> None:
     swing_high = df["h"].rolling(window=20).max()
     swing_low = df["l"].rolling(window=20).min()
     
-    # Calculate Fibonacci levels
+    # Determine trend direction for proper Fibonacci calculation
+    recent_close = df["c"].iloc[-1]
+    recent_high = swing_high.iloc[-1]
+    recent_low = swing_low.iloc[-1]
+    
+    # If price is closer to high, we're in uptrend - calculate from low to high
+    # If price is closer to low, we're in downtrend - calculate from high to low
     fib_range = swing_high - swing_low
-    df["FIB_23"] = swing_high - (fib_range * 0.236)
-    df["FIB_38"] = swing_high - (fib_range * 0.382)
-    df["FIB_50"] = swing_high - (fib_range * 0.5)
-    df["FIB_61"] = swing_high - (fib_range * 0.618)
-    df["FIB_78"] = swing_high - (fib_range * 0.786)
+    
+    if (recent_close - recent_low) > (recent_high - recent_close):
+        # Uptrend: retracements from swing low (support levels)
+        df["FIB_23"] = swing_low + (fib_range * 0.236)
+        df["FIB_38"] = swing_low + (fib_range * 0.382)
+        df["FIB_50"] = swing_low + (fib_range * 0.5)
+        df["FIB_61"] = swing_low + (fib_range * 0.618)
+        df["FIB_78"] = swing_low + (fib_range * 0.786)
+    else:
+        # Downtrend: retracements from swing high (resistance levels)
+        df["FIB_23"] = swing_high - (fib_range * 0.236)
+        df["FIB_38"] = swing_high - (fib_range * 0.382)
+        df["FIB_50"] = swing_high - (fib_range * 0.5)
+        df["FIB_61"] = swing_high - (fib_range * 0.618)
+        df["FIB_78"] = swing_high - (fib_range * 0.786)
 
 
 def _add_pivot_points(df: pd.DataFrame) -> None:
@@ -239,40 +249,43 @@ def _add_pivot_points(df: pd.DataFrame) -> None:
 
 def _add_ichimoku_cloud(df: pd.DataFrame) -> None:
     """Add Ichimoku Cloud indicators."""
-    # Adaptive periods based on data length
-    period_9 = min(9, max(5, len(df) // 10))
-    period_26 = min(26, max(10, len(df) // 5))
-    period_52 = min(52, max(20, len(df) // 3))
+    # Use standard Ichimoku periods or fallback for small datasets
+    if len(df) < 52:
+        # For small datasets, use proportional periods but maintain relationships
+        period_9 = max(9, len(df) // 6)  # Tenkan-sen period
+        period_26 = max(26, len(df) // 2)  # Kijun-sen period  
+        period_52 = len(df) - 1  # Senkou Span B period
+    else:
+        # Standard Ichimoku periods for proper cloud formation
+        period_9 = 9   # Tenkan-sen (Conversion Line)
+        period_26 = 26 # Kijun-sen (Base Line)
+        period_52 = 52 # Senkou Span B period
     
-    # Calculate Ichimoku lines
-    tenkan_high = df["h"].rolling(window=period_9).max()
-    tenkan_low = df["l"].rolling(window=period_9).min()
-    df["TENKAN"] = (tenkan_high + tenkan_low) / 2
+    # Calculate Ichimoku lines using pandas_ta for accuracy
+    ichimoku = ta.ichimoku(df["h"], df["l"], df["c"], 
+                          tenkan=period_9, kijun=period_26, senkou=period_52)
     
-    kijun_high = df["h"].rolling(window=period_26).max()
-    kijun_low = df["l"].rolling(window=period_26).min()
-    df["KIJUN"] = (kijun_high + kijun_low) / 2
-    
-    df["SENKOU_A"] = ((df["TENKAN"] + df["KIJUN"]) / 2).shift(period_26)
-    
-    senkou_b_high = df["h"].rolling(window=period_52).max()
-    senkou_b_low = df["l"].rolling(window=period_52).min()
-    df["SENKOU_B"] = ((senkou_b_high + senkou_b_low) / 2).shift(period_26)
-    
-    df["CHIKOU"] = df["c"].shift(-period_26)
+    df["TENKAN"] = ichimoku.iloc[:, 0]  # ISA_9 (Tenkan-sen)
+    df["KIJUN"] = ichimoku.iloc[:, 1]   # ISB_26 (Kijun-sen)
+    df["SENKOU_A"] = ichimoku.iloc[:, 2].shift(period_26)  # ITS_9 (Senkou Span A) 
+    df["SENKOU_B"] = ichimoku.iloc[:, 3].shift(period_26)  # IKS_26 (Senkou Span B)
+    df["CHIKOU"] = ichimoku.iloc[:, 4]  # ICS_26 (Chikou Span)
 
 
 def _add_momentum_indicators(df: pd.DataFrame) -> None:
     """Add momentum-based indicators."""
     # Rate of Change
     roc_period = min(12, max(5, len(df) // 5))
-    df["ROC"] = ta.roc(df["c"], length=roc_period)
+    roc_calc = ta.roc(df["c"], length=roc_period)
+    df["ROC"] = roc_calc
     
     # Williams %R
     willr_period = min(14, max(7, len(df) // 4))
-    df["WILLR"] = ta.willr(df["h"], df["l"], df["c"], length=willr_period)
+    willr_calc = ta.willr(df["h"], df["l"], df["c"], length=willr_period)
+    df["WILLR"] = willr_calc
     
     # Commodity Channel Index
     cci_period = min(20, max(10, len(df) // 3))
-    df["CCI"] = ta.cci(df["h"], df["l"], df["c"], length=cci_period)
+    cci_calc = ta.cci(df["h"], df["l"], df["c"], length=cci_period)
+    df["CCI"] = cci_calc
     
