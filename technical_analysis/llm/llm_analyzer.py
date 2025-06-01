@@ -21,6 +21,7 @@ from .analysis_filter import AnalysisFilter
 from .openrouter_client import OpenRouterClient
 from .message_formatter import LLMMessageFormatter
 from .llm_analysis_result import LLMAnalysisResult, LLMAnalysisTradingSetup, Signal, Prediction, RiskLevel
+from html import escape as escape_html
 
 
 class LLMAnalyzer:
@@ -69,7 +70,7 @@ class LLMAnalyzer:
         if not should_analyze:
             if interactive_analysis:
                 message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
-                message += f"<b>Market Analysis:</b> {reason}\n\n"
+                message += f"<b>Market Analysis:</b> {escape_html(reason)}\n\n"
                 message += f"🎯 <b>Confidence:</b> {confidence:.0%}\n"
                 await telegram_utils.send(message, parse_mode=ParseMode.HTML)
             return
