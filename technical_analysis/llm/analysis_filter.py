@@ -15,7 +15,9 @@ class AnalysisFilter:
     def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool, funding_rates: List) -> Tuple[bool, str]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
-        if interactive:
+        always_run_filter = os.getenv("HTB_ALWAYS_RUN_LLM_FILTER", "False").lower() == "true"
+        
+        if interactive and not always_run_filter:
             return True, f"LLM filter triggered analysis for {coin}: interactive mode"
 
         market_summary = self._create_market_summary(dataframes, funding_rates)

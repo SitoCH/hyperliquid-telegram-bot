@@ -55,15 +55,16 @@ docker-compose up -d
 |----------|-------------|---------|---------|
 | HTB_COINS_TO_ANALYZE | Coins to analyze hourly | "BTC,ETH" | None |
 | HTB_TOP_COINS_TO_ANALYZE | Number of top coins by open interest to analyze | "10" | None |
-| HTB_ANALYZE_COINS_WITH_OPEN_ORDERS | Include coins with open orders in analysis | "True" | False |
+| HTB_ANALYZE_COINS_WITH_OPEN_ORDERS | Include coins with open orders in analysis | "True" or "False" | "False" |
 | HTB_COINS_ANALYSIS_MIN_CONFIDENCE | Minimum confidence level for coin analysis notifications | "0.75" | 0.75 |
-| HTB_MONITOR_STALE_POSITIONS | Monitor positions older than 1 day with positive PnL | "True" | False |
-| HTB_USE_ISOLATED_LEVERAGE | Use isolated leverage instead of cross | "True" | True |
+| HTB_MONITOR_STALE_POSITIONS | Monitor positions older than 1 day with positive PnL | "True" or "False" | "False" |
+| HTB_USE_ISOLATED_LEVERAGE | Use isolated leverage instead of cross | "True" or "False" | "True" |
 | HTB_ALPHAVANTAGE_API_KEY | API key for Alpha Vantage (required for performance comparison against S&P500) | "XXXXXXXXXXXXXXXX" | None |
 | HTB_ANALYSIS_MODE | Analysis mode for technical analysis | "wyckoff" or "llm" | "wyckoff" |
 | HTB_OPENROUTER_API_KEY | OpenRouter.ai API key (required for LLM analysis mode) | "sk-or-v1-xxxxx" | None |
 | HTB_OPENROUTER_MAIN_MODEL | Main OpenRouter model for main LLM analysis | "openai/gpt-4.1-nano" | "openai/gpt-4.1-nano" |
 | HTB_OPENROUTER_FAST_MODEL | Fast OpenRouter model for filtering analysis | "meta-llama/llama-4-maverick:free" | "meta-llama/llama-4-maverick:free" |
+| HTB_ALWAYS_RUN_LLM_FILTER | Always run LLM filter (use filter before analysis) | "True" or "False" | "False" |
 
 ## Technical Analysis Modes
 
