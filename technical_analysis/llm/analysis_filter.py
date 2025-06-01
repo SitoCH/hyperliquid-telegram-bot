@@ -198,7 +198,8 @@ SKIP ANALYSIS only when MULTIPLE weak conditions are present:
 
 Focus on catching developing opportunities rather than perfect setups.
 
-Provide your analysis in JSON format:
+CRITICAL: Response must be pure JSON only - no explanations or markdown.
+Provide your analysis in the following JSON format:
 {{
   "should_analyze": true/false,
   "reason": "Specific condition that triggered or prevented analysis with concrete numbers",
