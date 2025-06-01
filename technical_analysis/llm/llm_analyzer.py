@@ -10,6 +10,7 @@ from datetime import datetime
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from logging_utils import logger
+from telegram_utils import telegram_utils
 from hyperliquid_utils.utils import hyperliquid_utils
 from ..candles_cache import get_candles_with_cache
 from ..wyckoff.wyckoff_types import Timeframe
@@ -63,9 +64,11 @@ class LLMAnalyzer:
             if not df.empty:
                 apply_indicators(df, tf)        # Get funding rates for filter analysis
         funding_rates = get_funding_with_cache(coin, now, 5)
-        should_analyze, _ = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
+        should_analyze, reason = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
         
         if not should_analyze:
+            if interactive_analysis:
+                await telegram_utils.send(f"❌ Analysis skipped for {coin}: {reason}", parse_mode=ParseMode.HTML)
             return
 
         mid = float(hyperliquid_utils.info.all_mids()[coin])
