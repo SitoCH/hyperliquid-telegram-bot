@@ -12,13 +12,13 @@ class AnalysisFilter:
       # Lookback period for trend analysis
     TREND_LOOKBACK_PERIODS = 20
     
-    def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool, funding_rates: List) -> Tuple[bool, str]:
+    def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool, funding_rates: List) -> Tuple[bool, str, float]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
         always_run_filter = os.getenv("HTB_ALWAYS_RUN_LLM_FILTER", "False").lower() == "true"
         
         if interactive and not always_run_filter:
-            return True, f"LLM filter triggered analysis for {coin}: interactive mode"
+            return True, f"LLM filter triggered analysis for {coin}: interactive mode", 1.0
 
         market_summary = self._create_market_summary(dataframes, funding_rates)
         filter_prompt = self._create_filter_prompt(coin, market_summary)
@@ -28,16 +28,18 @@ class AnalysisFilter:
             model = os.getenv("HTB_OPENROUTER_FAST_MODEL", "meta-llama/llama-4-maverick:free")
             response = filter_client.call_api(model, filter_prompt)
             
-            should_analyze, reason = self._parse_filter_response(response)
+            should_analyze, reason, confidence = self._parse_filter_response(response)
 
             action = "triggered" if should_analyze else "skipped"
-            logger.info(f"LLM filter {action} analysis for {coin}: {reason}")
+            logger.info(f"LLM filter {action} analysis for {coin}: {reason} (confidence: {confidence:.0%})")
             
-            return should_analyze, reason
+            return should_analyze, reason, confidence
             
         except Exception as e:
             logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
-            return False, "Fallback: LLM filter failed"
+            return False, "Fallback: LLM filter failed", 0.0
+
+
     def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Dict[str, Any]:
         """Create a comprehensive market summary for cheap LLM filtering."""
         summary: Dict[str, Dict[str, Any]] = {"timeframes": {}}
@@ -208,7 +210,7 @@ Provide your analysis in the following JSON format:
   "confidence": 0.0-1.0,
 }}"""
 
-    def _parse_filter_response(self, response: str) -> Tuple[bool, str]:
+    def _parse_filter_response(self, response: str) -> Tuple[bool, str, float]:
         """Parse the cheap LLM response to determine if analysis should proceed."""
         try:
             data = json.loads(response)
@@ -219,11 +221,9 @@ Provide your analysis in the following JSON format:
             if confidence < 0.7:
                 should_analyze = False
                 reason = f"Insufficient confidence for analysis. {reason}"
-
-            detailed_reason = f"{reason} (confidence: {confidence:.0%})"
             
-            return should_analyze, detailed_reason
+            return should_analyze, reason, confidence
             
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"Failed to parse LLM filter response: {str(e)}\nResponse:\n{response}", exc_info=True)
-            return False, "LLM filter parsing failed"
+            return False, "LLM filter parsing failed", 0.0

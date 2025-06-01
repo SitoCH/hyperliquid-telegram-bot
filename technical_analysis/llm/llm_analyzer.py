@@ -64,11 +64,14 @@ class LLMAnalyzer:
             if not df.empty:
                 apply_indicators(df, tf)        # Get funding rates for filter analysis
         funding_rates = get_funding_with_cache(coin, now, 5)
-        should_analyze, reason = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
+        should_analyze, reason, confidence = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
         
         if not should_analyze:
             if interactive_analysis:
-                await telegram_utils.send(f"❌ Analysis skipped for {coin}: {reason}", parse_mode=ParseMode.HTML)
+                message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
+                message += f"<b>Market Analysis:</b> {reason}\n\n"
+                message += f"🎯 <b>Confidence:</b> {confidence:.0%}\n"
+                await telegram_utils.send(message, parse_mode=ParseMode.HTML)
             return
 
         mid = float(hyperliquid_utils.info.all_mids()[coin])
