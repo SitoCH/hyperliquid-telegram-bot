@@ -84,7 +84,7 @@ class LLMAnalyzer:
             await self.message_formatter.send_llm_analysis_message(context, coin, mid, llm_result)
 
     async def _perform_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, mid: float, funding_rates: List[FundingRateEntry]) -> LLMAnalysisResult:
-        """Core LLM analysis logic using OpenRouter.ai."""
+        """Core LLM analysis logic"""
         
         model = os.getenv("HTB_LLM_MAIN_MODEL", "unknown")
         prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid)
