@@ -1,7 +1,7 @@
 import os
 import litellm
 from typing import Tuple
-from logging_utils import logger
+from logging_utils import logger, logging
 
 
 class LiteLLMClient:
@@ -17,6 +17,7 @@ class LiteLLMClient:
     
     def __init__(self):
         litellm.use_litellm_proxy = True
+        logging.getLogger("LiteLLM").setLevel(logging.WARNING)
     
     def call_api(self, model: str, prompt: str) -> str:
         """Call LiteLLM API for AI analysis and return response."""
