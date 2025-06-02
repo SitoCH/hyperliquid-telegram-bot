@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Tuple
 from datetime import datetime
 from logging_utils import logger
 from ..wyckoff.wyckoff_types import Timeframe
-from .openrouter_client import OpenRouterClient          
+from .litellm_client import LiteLLMClient          
 
 class AnalysisFilter:
     """Filter logic to determine when expensive AI analysis should be triggered."""
@@ -24,8 +24,8 @@ class AnalysisFilter:
         filter_prompt = self._create_filter_prompt(coin, market_summary)
 
         try:
-            filter_client = OpenRouterClient()
-            model = os.getenv("HTB_OPENROUTER_FAST_MODEL", "meta-llama/llama-4-maverick:free")
+            filter_client = LiteLLMClient()
+            model = os.getenv("HTB_LLM_FAST_MODEL", "unknown")
             response = filter_client.call_api(model, filter_prompt)
             
             should_analyze, reason, confidence = self._parse_filter_response(response)

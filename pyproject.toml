@@ -23,6 +23,7 @@ dependencies = [
     "scipy>=1.14.1",
     "dacite>=1.8.1",
     "numpy<2.0.0",
+    "litellm>=1.72.0",
 ]
 
 [tool.pytest.ini_options]

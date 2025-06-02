@@ -18,7 +18,7 @@ from ..data_processor import prepare_dataframe, apply_indicators
 from ..funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from .prompt_generator import LLMPromptGenerator
 from .analysis_filter import AnalysisFilter
-from .openrouter_client import OpenRouterClient
+from .litellm_client import LiteLLMClient
 from .message_formatter import LLMMessageFormatter
 from .llm_analysis_result import LLMAnalysisResult, LLMAnalysisTradingSetup, Signal, Prediction, RiskLevel
 from html import escape as escape_html
@@ -36,7 +36,7 @@ class LLMAnalyzer:
         }
         self.prompt_generator = LLMPromptGenerator(self.timeframe_lookback_days)
         self.analysis_filter = AnalysisFilter()
-        self.openrouter_client = OpenRouterClient()
+        self.llm_client = LiteLLMClient()
         self.message_formatter = LLMMessageFormatter()
     
     async def analyze(self, context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:
@@ -86,10 +86,10 @@ class LLMAnalyzer:
     async def _perform_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, mid: float, funding_rates: List[FundingRateEntry]) -> LLMAnalysisResult:
         """Core LLM analysis logic using OpenRouter.ai."""
         
-        model = os.getenv("HTB_OPENROUTER_MAIN_MODEL", "openai/gpt-4.1-nano")
+        model = os.getenv("HTB_LLM_MAIN_MODEL", "unknown")
         prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid)
         
-        llm_response = self.openrouter_client.call_api(model, prompt)
+        llm_response = self.llm_client.call_api(model, prompt)
         
         return self._parse_llm_response(llm_response, coin)
 

@@ -61,9 +61,8 @@ docker-compose up -d
 | HTB_USE_ISOLATED_LEVERAGE | Use isolated leverage instead of cross | "True" or "False" | "True" |
 | HTB_ALPHAVANTAGE_API_KEY | API key for Alpha Vantage (required for performance comparison against S&P500) | "XXXXXXXXXXXXXXXX" | None |
 | HTB_ANALYSIS_MODE | Analysis mode for technical analysis | "wyckoff" or "llm" | "wyckoff" |
-| HTB_OPENROUTER_API_KEY | OpenRouter.ai API key (required for LLM analysis mode) | "sk-or-v1-xxxxx" | None |
-| HTB_OPENROUTER_MAIN_MODEL | Main OpenRouter model for main LLM analysis | "openai/gpt-4.1-nano" | "openai/gpt-4.1-nano" |
-| HTB_OPENROUTER_FAST_MODEL | Fast OpenRouter model for filtering analysis | "meta-llama/llama-4-maverick:free" | "meta-llama/llama-4-maverick:free" |
+| HTB_LLM_MAIN_MODEL | Main model for LLM analysis | "gpt-4" | "gpt-4" |
+| HTB_LLM_FAST_MODEL | Fast model for filtering analysis | "gpt-3.5-turbo" | "gpt-3.5-turbo" |
 | HTB_ALWAYS_RUN_LLM_FILTER | Always run LLM filter (use filter before analysis) | "True" or "False" | "False" |
 
 ## Technical Analysis Modes
@@ -81,7 +80,7 @@ An AI-powered mode that uses large language models to provide natural language a
 To use LLM mode, you need to:
 
 1. Set `HTB_ANALYSIS_MODE=llm`
-2. Configure `HTB_OPENROUTER_API_KEY` with your OpenRouter.ai API key
+2. Configure the appropriate environment variables for LiteLLM (e.g., `LITELLM_PROXY_API_BASE`, `LITELLM_PROXY_API_KEY`, etc.)
 3. Optionally customize the models
 
 Example configuration for LLM mode:
@@ -89,9 +88,10 @@ Example configuration for LLM mode:
 ```yaml
 environment:
   HTB_ANALYSIS_MODE: "llm"
-  HTB_OPENROUTER_API_KEY: "sk-or-v1-xxxxx"
-  HTB_OPENROUTER_MAIN_MODEL: "anthropic/claude-3.5-sonnet"
-  HTB_OPENROUTER_FAST_MODEL: "meta-llama/llama-3.3-70b-instruct"
+  LITELLM_PROXY_API_BASE: "http://localhost:4000"
+  LITELLM_PROXY_API_KEY: "sk-xxxxx"
+  HTB_LLM_MAIN_MODEL: "gpt-4"
+  HTB_LLM_FAST_MODEL: "gpt-3.5-turbo"
 ```
 
 ## Trading Strategies
