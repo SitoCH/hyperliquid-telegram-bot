@@ -171,7 +171,7 @@ Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
 ANALYSIS CRITERIA:
-TRIGGER ANALYSIS when you see MORE THAN ONE of these actionable conditions:
+TRIGGER ANALYSIS when you see MANY of these actionable conditions, an analysis is expensive and should only be performed when warranted:
 • Moderate price moves: >0.5% in short timeframes (5m-15m), >1.0% in medium timeframes (1h-4h), OR >2% in longer timeframes (12h+) 
 • Volume confirmation: Volume ratio >1.2x average during price moves
 • Technical indicators showing directional bias:
@@ -191,7 +191,7 @@ TRIGGER ANALYSIS when you see MORE THAN ONE of these actionable conditions:
 • Notable funding rates: Current rate >0.0003 or <-0.0003, OR significant divergence from 24h average
 • Technical setups: Clear breakout patterns, reversal signals, or momentum shifts
 
-REQUIRE AT LEAST 2-3 OF THESE CONDITIONS for higher confidence analysis.
+REQUIRE AT LEAST 5-6 OF THESE CONDITIONS for higher confidence analysis.
 
 SKIP ANALYSIS only when MULTIPLE weak conditions are present:
 • Minimal activity: Price moves <0.8% across all recent periods
