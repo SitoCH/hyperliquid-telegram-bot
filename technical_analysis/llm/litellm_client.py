@@ -19,11 +19,11 @@ class LiteLLMClient:
         litellm.use_litellm_proxy = True
         logging.getLogger("LiteLLM").setLevel(logging.WARNING)
     
-    def call_api(self, model: str, prompt: str) -> str:
+    async def call_api(self, model: str, prompt: str) -> str:
         """Call LiteLLM API for AI analysis and return response."""
         
         try:
-            response = litellm.completion(
+            response = await litellm.acompletion(
                 model=model,
                 messages=[
                     {"role": "system", "content": self.SYSTEM_PROMPT},

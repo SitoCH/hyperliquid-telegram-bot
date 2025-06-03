@@ -12,7 +12,7 @@ class AnalysisFilter:
       # Lookback period for trend analysis
     TREND_LOOKBACK_PERIODS = 20
     
-    def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool, funding_rates: List) -> Tuple[bool, str, float]:
+    async def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool, funding_rates: List) -> Tuple[bool, str, float]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
         always_run_filter = os.getenv("HTB_ALWAYS_RUN_LLM_FILTER", "False").lower() == "true"
@@ -26,7 +26,7 @@ class AnalysisFilter:
         try:
             filter_client = LiteLLMClient()
             model = os.getenv("HTB_LLM_FAST_MODEL", "unknown")
-            response = filter_client.call_api(model, filter_prompt)
+            response = await filter_client.call_api(model, filter_prompt)
             
             should_analyze, reason, confidence = self._parse_filter_response(response)
 

@@ -29,8 +29,8 @@ class LLMAnalyzer:
     
     def __init__(self):
         self.timeframe_lookback_days = {
-            Timeframe.MINUTES_15: 5,
-            Timeframe.MINUTES_30: 5,
+            Timeframe.MINUTES_15: 7,
+            Timeframe.MINUTES_30: 7,
             Timeframe.HOUR_1: 14,
             Timeframe.HOURS_4: 21,
         }
@@ -65,7 +65,7 @@ class LLMAnalyzer:
             if not df.empty:
                 apply_indicators(df, tf)        # Get funding rates for filter analysis
         funding_rates = get_funding_with_cache(coin, now, 5)
-        should_analyze, reason, confidence = self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
+        should_analyze, reason, confidence = await self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
         
         if not should_analyze:
             if interactive_analysis:
@@ -89,12 +89,12 @@ class LLMAnalyzer:
         model = os.getenv("HTB_LLM_MAIN_MODEL", "unknown")
         prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid)
         
-        llm_response = self.llm_client.call_api(model, prompt)
+        llm_response = await self.llm_client.call_api(model, prompt)
         
-        return self._parse_llm_response(llm_response, coin)
+        return self._parse_llm_response(llm_response)
 
 
-    def _parse_llm_response(self, llm_response: str, coin: str) -> LLMAnalysisResult:
+    def _parse_llm_response(self, llm_response: str) -> LLMAnalysisResult:
         """Parse AI response into structured analysis result."""
 
         response_data = json.loads(llm_response)
