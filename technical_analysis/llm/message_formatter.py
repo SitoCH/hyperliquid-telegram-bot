@@ -78,8 +78,6 @@ class LLMMessageFormatter:
         side = "Long" if llm_result.signal == Signal.LONG else "Short"
 
         setup = f"\n\n<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>"
-        if trading_setup.reason:
-            setup += f"\nReason: {trading_setup.reason}"
         setup += f"\nMarket price: {fmt_price(current_price)} USDC"
 
         # Stop Loss with percentage

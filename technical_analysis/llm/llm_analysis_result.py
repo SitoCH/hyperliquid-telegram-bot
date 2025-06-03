@@ -22,13 +22,9 @@ class LLMAnalysisTradingSetup:
         self,
         stop_loss: float = 0.0,
         take_profit: float = 0.0,
-        reason: str = "unknown",
-        risk_reward_ratio: float = 0.0,
     ):
         self.stop_loss = stop_loss
         self.take_profit = take_profit
-        self.reason = reason
-        self.risk_reward_ratio = risk_reward_ratio
 
 class LLMAnalysisResult:
     """Container for LLM analysis results."""

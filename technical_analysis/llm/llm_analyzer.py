@@ -115,9 +115,7 @@ class LLMAnalyzer:
         if trading_setup_data:
             trading_setup = LLMAnalysisTradingSetup(
                 stop_loss=float(trading_setup_data.get("stop_loss", 0.0)),
-                take_profit=float(trading_setup_data.get("take_profit", 0.0)),
-                reason=trading_setup_data.get("reason", "unknown"),
-                risk_reward_ratio=float(trading_setup_data.get("risk_reward_ratio", 0.0))
+                take_profit=float(trading_setup_data.get("take_profit", 0.0))
             )
 
         # Determine if we should notify based on signal strength
