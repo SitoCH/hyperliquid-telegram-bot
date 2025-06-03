@@ -48,7 +48,7 @@ class LLMAnalyzer:
         # Get candles for analysis - use lookback days directly
         candles_data = {}
         for tf, lookback_days in self.timeframe_lookback_days.items():
-            candles_data[tf] = get_candles_with_cache(coin, tf, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
+            candles_data[tf] = await get_candles_with_cache(coin, tf, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
 
         # Check if we have enough data for basic analysis
         if len(candles_data[Timeframe.MINUTES_15]) < 10:

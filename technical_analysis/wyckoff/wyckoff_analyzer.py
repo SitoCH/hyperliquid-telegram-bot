@@ -41,7 +41,7 @@ class WyckoffAnalyzer:
         local_tz = get_localzone()
 
         # Get candles for all timeframes
-        candles_data = self._get_candles_for_timeframes(coin, now)
+        candles_data = await self._get_candles_for_timeframes(coin, now)
 
         # Check if we have enough data for basic analysis
         if len(candles_data[Timeframe.MINUTES_15]) < 10:
@@ -72,12 +72,12 @@ class WyckoffAnalyzer:
                 context, mid, dataframes, states, coin, interactive_analysis, mtf_context.description
             )
     
-    def _get_candles_for_timeframes(self, coin: str, now: int) -> Dict[Timeframe, List[Dict[str, Any]]]:
+    async def _get_candles_for_timeframes(self, coin: str, now: int) -> Dict[Timeframe, List[Dict[str, Any]]]:
         """Get candles data for all timeframes with optimized lookback periods."""
-        return {
-            tf: get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
-            for tf, lookback in self.wyckoff_timeframes.items()
-        }
+        candles_data = {}
+        for tf, lookback in self.wyckoff_timeframes.items():
+            candles_data[tf] = await get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
+        return candles_data
     
     def _analyze_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry], local_tz) -> WyckoffState:
         """Process data for a single timeframe."""

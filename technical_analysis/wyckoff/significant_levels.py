@@ -151,9 +151,9 @@ def score_level(
             
     return min(score, 1.0)
 
-def get_significant_levels_from_timeframe(coin: str, mid: float, timeframe: Timeframe, lookback_days: int) -> Tuple[List[float], List[float]]:
+async def get_significant_levels_from_timeframe(coin: str, mid: float, timeframe: Timeframe, lookback_days: int) -> Tuple[List[float], List[float]]:
     now = int(time.time() * 1000)
-    candles = get_candles_with_cache(coin, timeframe, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
+    candles = await get_candles_with_cache(coin, timeframe, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
     local_tz = get_localzone()
     df = prepare_dataframe(candles, local_tz)
     apply_indicators(df, timeframe)

@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from utils import log_execution_time
@@ -171,7 +172,7 @@ def _round_timestamp(ts: int, timeframe: Timeframe) -> int:
     ms_interval = timeframe.minutes * 60 * 1000
     return ts - (ts % ms_interval)
 
-def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_days: int, fetch_fn) -> List[Dict[str, Any]]:
+async def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_days: int, fetch_fn) -> List[Dict[str, Any]]:
     """
     Get candles using cache, handling the incomplete current candle appropriately.
     
@@ -180,7 +181,7 @@ def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_d
         timeframe: Timeframe enum value
         now: Current timestamp in milliseconds
         lookback_days: Number of days to look back
-        fetch_fn: Function to fetch candles from the exchange
+        fetch_fn: Sync function to fetch candles from the exchange (will be run in thread pool)
     """
     try:
         end_ts = now
@@ -192,7 +193,9 @@ def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_d
             # Find the timestamp of the last cached candle
             last_cached_ts = max(c['T'] for c in cached)
 
-            new_candles = fetch_fn(coin, timeframe.name, last_cached_ts, end_ts)
+            # Run sync fetch_fn in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            new_candles = await loop.run_in_executor(None, fetch_fn, coin, timeframe.name, last_cached_ts, end_ts)
             
             # Merge all candles
             merged = merge_candles(cached, new_candles, lookback_days)
@@ -204,7 +207,9 @@ def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_d
             
             return merged
 
-        candles = fetch_fn(coin, timeframe.name, start_ts, end_ts)
+        # Run sync fetch_fn in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        candles = await loop.run_in_executor(None, fetch_fn, coin, timeframe.name, start_ts, end_ts)
         if candles:
             # Cache everything except the current incomplete candle
             cache_update = [c for c in candles if c['T'] < current_candle_start]
