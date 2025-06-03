@@ -162,52 +162,57 @@ class AnalysisFilter:
                 }
         
         return levels
-
+    
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
-        return f"""Your role is to act as a balanced filter for {coin} to determine if market conditions warrant expensive detailed technical analysis.
+        return f"""You are a balanced signal filter for {coin}. Detect developing opportunities while avoiding noise and false signals.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
-ANALYSIS CRITERIA:
-TRIGGER ANALYSIS when you see MANY of these actionable conditions, an analysis is expensive and should only be performed when warranted:
-• Moderate price moves: >0.5% in short timeframes (5m-15m), >1.0% in medium timeframes (1h-4h), OR >2% in longer timeframes (12h+) 
-• Volume confirmation: Volume ratio >1.2x average during price moves
-• Technical indicators showing directional bias:
-  - RSI: <35 (oversold) or >65 (overbought)
-  - MACD: Histogram divergence, signal line crossovers, or momentum shifts
-  - ROC: Rate of change indicating strong momentum
-  - Stochastic: %K or %D in extreme zones (<20 or >80)
-  - SuperTrend: Price breaking above/below SuperTrend line
-  - Bollinger Bands: Price touching bands, squeeze/expansion patterns
-  - ATR: Volatility spikes or compression patterns
-• Moving averages and trend indicators:
-  - EMA: Price breaking above/below key EMA levels
-  - VWAP: Price deviating significantly from VWAP
-  - Ichimoku: Cloud breakouts, Tenkan/Kijun crosses, or Chikou span signals
-• Support/resistance proximity: Price within 2% of key levels (VWAP, Pivot points, Fibonacci levels)
-• Cross-timeframe signals: Similar directional bias across 2+ timeframes
-• Notable funding rates: Current rate >0.0003 or <-0.0003, OR significant divergence from 24h average
-• Technical setups: Clear breakout patterns, reversal signals, or momentum shifts
+SIGNAL DETECTION CRITERIA (require MULTIPLE confirmations):
 
-REQUIRE AT LEAST 5-6 OF THESE CONDITIONS for higher confidence analysis.
+🔥 HIGH PRIORITY SIGNALS (need 2+ conditions + volume confirmation):
+• Significant price moves: >0.5% in 5m-15m OR >1.0% in 1h+ timeframes
+• Volume confirmation required: Volume ratio >1.2x during price movement
+• Technical momentum: 
+  - RSI moving decisively from neutral (45-55) toward extremes (30/70)
+  - MACD histogram showing clear direction change with momentum
+  - Price breaking or testing key levels (SuperTrend, EMA, VWAP) with volume
 
-SKIP ANALYSIS only when MULTIPLE weak conditions are present:
-• Minimal activity: Price moves <0.8% across all recent periods
-• Very low volume: All volume ratios <1.1x average  
-• Completely neutral indicators: RSI 45-55, flat MACD, no clear direction
-• No proximity to levels: Price >3% away from all key support/resistance
-• Extreme low volatility: ATR suggesting range-bound action
+⚡ MEDIUM PRIORITY SIGNALS (need 3+ conditions):
+• Moderate price action: >0.3% moves with directional consistency
+• Indicator alignment: 2+ indicators showing same directional bias
+• Level interaction: Price within 2% of key S/R levels with momentum
+• Cross-timeframe confluence: Similar patterns across multiple timeframes
+• Volatility changes: BB squeeze releasing OR ATR expansion beginning
+• Funding anomalies: Rate >0.0003 or significant divergence from averages
 
-Focus on catching developing opportunities rather than perfect setups.
+📈 LOW PRIORITY SIGNALS (need 4+ conditions):
+• Subtle momentum shifts: ROC acceleration, Stochastic positioning
+• Ichimoku developments: Cloud interactions, component convergence
+• Volume pattern changes: Sustained above-average activity
+• Multi-indicator preparation: Several indicators approaching key levels
 
-CRITICAL: Response must be pure JSON only - no explanations or markdown.
-Provide your analysis in the following JSON format:
+NOISE REDUCTION FILTERS - SKIP when these are present:
+• Choppy action: Price reversing direction within 2-3 periods
+• Low volume moves: Price changes without volume ratio >1.15x
+• Conflicting signals: Indicators pointing in opposite directions
+• Range-bound: Price oscillating within 1% range for 5+ periods
+• Extreme low activity: All volume ratios <1.1x AND price moves <0.3%
+
+ANALYSIS DECISION LOGIC:
+• ANALYZE: High priority (2+ conditions) OR Medium priority (3+ conditions) OR Low priority (4+ conditions)
+• SKIP: Noise filters present OR insufficient confirmation
+• Confidence: Based on signal strength and confirmation quality
+
+Prefer quality signals with multiple confirmations over weak single indicators.
+
+Response must be pure JSON - no markdown, no explanations:
 {{
   "should_analyze": true/false,
-  "reason": "Specific condition that triggered or prevented analysis with concrete numbers",
-  "confidence": 0.0-1.0,
+  "reason": "Specific conditions met with concrete data points",
+  "confidence": 0.0-1.0
 }}"""
 
     def _parse_filter_response(self, response: str) -> Tuple[bool, str, float]:
