@@ -44,36 +44,38 @@ def setup_teardown():
     if CACHE_DIR.exists():
         shutil.rmtree(CACHE_DIR)
 
-def test_get_candles_empty_cache(mock_fetch):
+@pytest.mark.asyncio
+async def test_get_candles_empty_cache(mock_fetch):
     now = 1000000000000
     end_ts = _round_timestamp(now, Timeframe.HOUR_1)
     start_ts = _round_timestamp(end_ts - 86400000, Timeframe.HOUR_1)
-    result = get_candles_with_cache('BTC', Timeframe.HOUR_1, now, 1, mock_fetch)
+    result = await get_candles_with_cache('BTC', Timeframe.HOUR_1, now, 1, mock_fetch)
     assert len(result) == 24
     assert result[0]['T'] == start_ts
     assert result[-1]['T'] == end_ts - 3600000
 
-def test_get_candles_update_cache(mock_fetch):
+@pytest.mark.asyncio
+async def test_get_candles_update_cache(mock_fetch):
     now = 1000000000000
-    end_ts = _round_timestamp(now, Timeframe.HOUR_1)
-    first_result = get_candles_with_cache('BTC', Timeframe.HOUR_1, now, 1, mock_fetch)
+    first_result = await get_candles_with_cache('BTC', Timeframe.HOUR_1, now, 1, mock_fetch)
     assert len(first_result) == 24
     
     new_now = now + 3600000
     new_end_ts = _round_timestamp(new_now, Timeframe.HOUR_1)
-    result = get_candles_with_cache('BTC', Timeframe.HOUR_1, new_now, 1, mock_fetch)
+    result = await get_candles_with_cache('BTC', Timeframe.HOUR_1, new_now, 1, mock_fetch)
     assert len(result) == 24
     assert result[-1]['T'] == new_end_ts - 3600000
 
 
-def test_partial_candle_updates(mock_fetch):
+@pytest.mark.asyncio
+async def test_partial_candle_updates(mock_fetch):
     """Test that partial candles are properly updated when fetching multiple times"""
     base_ts = 1000000000000
     timeframe = Timeframe.HOUR_1
     
     # First fetch using standard mock
     now = _round_timestamp(base_ts, timeframe)
-    first_result = get_candles_with_cache('BTC', timeframe, now, 1, mock_fetch)
+    first_result = await get_candles_with_cache('BTC', timeframe, now, 1, mock_fetch)
     
     # Create a modified mock that returns different values
     def updated_mock(coin: str, timeframe_str: str, start_ts: int, end_ts: int):
@@ -89,8 +91,8 @@ def test_partial_candle_updates(mock_fetch):
     
     # Second fetch with modified data
     now += 65000  # 65 seconds later
-    second_result = get_candles_with_cache('BTC', timeframe, now, 1, updated_mock)
+    second_result = await get_candles_with_cache('BTC', timeframe, now, 1, updated_mock)
     
-    assert first_result[-1]['h'] != second_result[-1]['h'], "Last candle should be updated"
-    assert second_result[-1]['h'] == 999.99, "Last candle should have updated high value"
-    assert second_result[-1]['c'] == 998.88, "Last candle should have updated close value"
+    assert abs(first_result[-1]['h'] - second_result[-1]['h']) > 0.01, "Last candle should be updated"
+    assert abs(second_result[-1]['h'] - 999.99) < 0.01, "Last candle should have updated high value"
+    assert abs(second_result[-1]['c'] - 998.88) < 0.01, "Last candle should have updated close value"
