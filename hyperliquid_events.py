@@ -2,6 +2,7 @@ import json
 from typing import List
 from hyperliquid.utils.types import UserEventsMsg, Fill
 from telegram_utils import telegram_utils
+from logging_utils import logger
 
 def get_fill_icon(closed_pnl: float) -> str:
     return "🟢" if closed_pnl > 0 else "🔴"
@@ -60,3 +61,4 @@ def on_user_events(user_events: UserEventsMsg) -> None:
         fill_events: List[Fill] = user_events_data["fills"]
         for fill in fill_events:
             process_fill(fill)
+            logger.info(fill)
