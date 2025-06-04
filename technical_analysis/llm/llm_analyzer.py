@@ -38,7 +38,15 @@ class LLMAnalyzer:
         self.analysis_filter = AnalysisFilter()
         self.llm_client = LiteLLMClient()
         self.message_formatter = LLMMessageFormatter()
-    
+
+
+    async def send_llm_analysis_filter_message(self, coin, reason, confidence):
+        message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
+        message += f"<b>Market Analysis:</b> {escape_html(reason)}\n\n"
+        message += f"🎯 <b>Confidence:</b> {confidence:.0%}\n"
+        await telegram_utils.send(message, parse_mode=ParseMode.HTML)
+
+
     async def analyze(self, context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:
         """Main LLM analysis entry point."""
         
@@ -67,12 +75,13 @@ class LLMAnalyzer:
         funding_rates = get_funding_with_cache(coin, now, 5)
         should_analyze, reason, confidence = await self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
         
-        if not should_analyze:
+        if should_analyze:
+            if not interactive_analysis:
+                self.send_llm_analysis_filter_message(coin, reason, confidence)
+                return
+        else:
             if interactive_analysis:
-                message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
-                message += f"<b>Market Analysis:</b> {escape_html(reason)}\n\n"
-                message += f"🎯 <b>Confidence:</b> {confidence:.0%}\n"
-                await telegram_utils.send(message, parse_mode=ParseMode.HTML)
+                self.send_llm_analysis_filter_message(coin, reason, confidence)
             return
 
         mid = float(hyperliquid_utils.info.all_mids()[coin])

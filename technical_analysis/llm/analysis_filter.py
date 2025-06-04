@@ -59,7 +59,7 @@ class AnalysisFilter:
             }
             
             summary["timeframes"][str(tf)] = timeframe_data
-          # Add funding rates summary
+
         if funding_rates:
             latest_funding = funding_rates[-1] if funding_rates else None
             avg_1h = sum(r.funding_rate for r in funding_rates[-1:]) / len(funding_rates[-1:]) if len(funding_rates) >= 1 else (latest_funding.funding_rate if latest_funding else 0)
