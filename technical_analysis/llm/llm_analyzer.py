@@ -29,8 +29,8 @@ class LLMAnalyzer:
     
     def __init__(self):
         self.timeframe_lookback_days = {
-            Timeframe.MINUTES_15: 7,
-            Timeframe.MINUTES_30: 7,
+            Timeframe.MINUTES_15: 5,
+            Timeframe.MINUTES_30: 5,
             Timeframe.HOUR_1: 14,
             Timeframe.HOURS_4: 21,
         }
@@ -63,7 +63,7 @@ class LLMAnalyzer:
           # Apply basic indicators for AI analysis
         for tf, df in dataframes.items():
             if not df.empty:
-                apply_indicators(df, tf)        # Get funding rates for filter analysis
+                apply_indicators(df, tf)
         funding_rates = get_funding_with_cache(coin, now, 5)
         should_analyze, reason, confidence = await self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
         
