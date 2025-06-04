@@ -77,11 +77,11 @@ class LLMAnalyzer:
         
         if should_analyze:
             if not interactive_analysis:
-                self.send_llm_analysis_filter_message(coin, reason, confidence)
+                await self.send_llm_analysis_filter_message(coin, reason, confidence)
                 return
         else:
             if interactive_analysis:
-                self.send_llm_analysis_filter_message(coin, reason, confidence)
+                await self.send_llm_analysis_filter_message(coin, reason, confidence)
             return
 
         mid = float(hyperliquid_utils.info.all_mids()[coin])
