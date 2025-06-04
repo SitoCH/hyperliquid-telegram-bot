@@ -122,10 +122,13 @@ class LLMAnalyzer:
         trading_setup = None
         trading_setup_data = response_data.get("trading_setup")
         if trading_setup_data:
-            trading_setup = LLMAnalysisTradingSetup(
-                stop_loss=float(trading_setup_data.get("stop_loss", 0.0)),
-                take_profit=float(trading_setup_data.get("take_profit", 0.0))
-            )
+            raw_stop_loss = trading_setup_data.get("stop_loss", None)
+            raw_take_profit = trading_setup_data.get("take_profit", None)
+            if raw_stop_loss is not None and raw_take_profit is not None:
+                trading_setup = LLMAnalysisTradingSetup(
+                    stop_loss=float(raw_stop_loss),
+                    take_profit=float(raw_take_profit)
+                )
 
         # Determine if we should notify based on signal strength
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
