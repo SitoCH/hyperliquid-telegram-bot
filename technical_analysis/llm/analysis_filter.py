@@ -172,39 +172,39 @@ Current Market Data:
 
 SIGNAL DETECTION CRITERIA (require MULTIPLE confirmations):
 
-🔥 HIGH PRIORITY SIGNALS (need 2+ conditions + volume confirmation):
-• Significant price moves: >0.5% in 5m-15m OR >1.0% in 1h+ timeframes
-• Volume confirmation required: Volume ratio >1.2x during price movement
-• Technical momentum: 
-  - RSI moving decisively from neutral (45-55) toward extremes (30/70)
-  - MACD histogram showing clear direction change with momentum
-  - Price breaking or testing key levels (SuperTrend, EMA, VWAP) with volume
+🔥 HIGH PRIORITY SIGNALS (any 1 condition):
+• Strong price moves: >0.8% in any timeframe with volume ratio >1.3x
+• RSI extreme reversals: RSI <25 or >75 with directional price movement
+• MACD momentum: Histogram showing strong acceleration with volume
+• Key level breaks: Price breaking SuperTrend, EMA, or VWAP with conviction
 
-⚡ MEDIUM PRIORITY SIGNALS (need 3+ conditions):
-• Moderate price action: >0.3% moves with directional consistency
-• Indicator alignment: 2+ indicators showing same directional bias
-• Level interaction: Price within 2% of key S/R levels with momentum
-• Cross-timeframe confluence: Similar patterns across multiple timeframes
-• Volatility changes: BB squeeze releasing OR ATR expansion beginning
-• Funding anomalies: Rate >0.0003 or significant divergence from averages
+⚡ MEDIUM PRIORITY SIGNALS (any 1 condition):
+• Moderate moves: >0.4% price change with volume ratio >1.15x
+• Technical alignment: RSI and MACD pointing same direction
+• Level tests: Price within 1% of key levels with increasing volume
+• Volatility expansion: BB width increasing or ATR rising
+• Funding divergence: Rate >0.0002 or unusual funding patterns
 
-📈 LOW PRIORITY SIGNALS (need 4+ conditions):
-• Subtle momentum shifts: ROC acceleration, Stochastic positioning
-• Ichimoku developments: Cloud interactions, component convergence
-• Volume pattern changes: Sustained above-average activity
-• Multi-indicator preparation: Several indicators approaching key levels
+📈 LOW PRIORITY SIGNALS (any 1 condition):
+• Developing momentum: ROC acceleration or Stochastic crossovers
+• Volume increases: Sustained volume ratio >1.1x for 3+ periods
+• Multi-timeframe setup: Similar patterns across 2+ timeframes
+• Ichimoku signals: Cloud breaks or component alignments
 
-NOISE REDUCTION FILTERS - SKIP when these are present:
-• Choppy action: Price reversing direction within 2-3 periods
-• Low volume moves: Price changes without volume ratio >1.15x
-• Conflicting signals: Indicators pointing in opposite directions
-• Range-bound: Price oscillating within 1% range for 5+ periods
-• Extreme low activity: All volume ratios <1.1x AND price moves <0.3%
+NOISE REDUCTION - SKIP when ANY of these are present:
+• Choppy market: Price reversing direction within 3-5 periods repeatedly
+• Low conviction moves: Price changes >0.5% but volume ratio <1.1x
+• Low volume environment: Average volume ratio <1.08x across multiple timeframes
+• Conflicting signals: RSI and MACD pointing opposite directions with weak momentum
+• Range-bound action: Price oscillating within 0.5% range for 5+ periods
+• Dead market: ALL volume ratios <1.05x AND ALL price changes <0.2%
 
 ANALYSIS DECISION LOGIC:
-• ANALYZE: High priority (2+ conditions) OR Medium priority (3+ conditions) OR Low priority (4+ conditions)
-• SKIP: Noise filters present OR insufficient confirmation
-• Confidence: Based on signal strength and confirmation quality
+• ANALYZE: High priority (1+ condition) OR Medium priority (1+ condition) OR Low priority (2+ conditions)
+• SKIP: Any noise filter triggered AND no high priority signals present
+• Always analyze if funding rate >0.0003 or price change >1.0% with volume >1.2x
+
+Confidence: Based on signal strength and confirmation quality
 
 Prefer quality signals with multiple confirmations over weak single indicators.
 
@@ -222,8 +222,8 @@ Response must be pure JSON - no markdown, no explanations:
             should_analyze = data.get("should_analyze", False)
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
-
-            if confidence < 0.7:
+            
+            if confidence < 0.65:
                 should_analyze = False
                 reason = f"Insufficient confidence for analysis. {reason}"
             
