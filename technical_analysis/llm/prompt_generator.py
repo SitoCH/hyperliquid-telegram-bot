@@ -156,10 +156,18 @@ class LLMPromptGenerator:
         
         price_24h_ago = df['c'].iloc[-24] if len(df) >= 24 else df['c'].iloc[0]
         return ((current_price - price_24h_ago) / price_24h_ago) * 100
-    
+
+
     def _generate_candle_data_section(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> List[str]:
         """Generate candle data section for the prompt."""
         prompt_parts = ["=== CANDLE DATA ==="]
+
+        MAX_DAYS_CUTOFF = {
+            Timeframe.MINUTES_15: 5,
+            Timeframe.MINUTES_30: 5,
+            Timeframe.HOUR_1: 14,
+            Timeframe.HOURS_4: 21 
+        }
         
         for timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4]:
             if timeframe not in dataframes:
@@ -168,16 +176,21 @@ class LLMPromptGenerator:
             df = dataframes[timeframe]
             if df.empty:
                 continue
-                
-            prompt_parts.extend(self._format_timeframe_data(df, timeframe))
+
+            max_days = MAX_DAYS_CUTOFF.get(timeframe, 3.0)
+
+            configured_days = self.timeframe_lookback_days.get(timeframe, 3.0)
+            effective_days = min(configured_days, max_days)
+            
+            prompt_parts.extend(self._format_timeframe_data(df, timeframe, effective_days))
         
         return prompt_parts
-    
-    def _format_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
+
+
+    def _format_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, effective_days: float) -> List[str]:
         """Format individual timeframe data."""
-        # Calculate number of candles to show
-        lookback_days = self.timeframe_lookback_days.get(timeframe, 3.0)
-        candle_count = min(len(df), int((lookback_days * 24 * 60) / timeframe.minutes))
+        # Calculate number of candles to show using effective days (already limited by cutoff)
+        candle_count = min(len(df), int((effective_days * 24 * 60) / timeframe.minutes))
         recent_candles = df.tail(candle_count)
         
         sections = [
