@@ -223,7 +223,7 @@ Response must be pure JSON - no markdown, no explanations:
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
             
-            if confidence < 0.65:
+            if confidence < 0.8:
                 should_analyze = False
                 reason = f"Insufficient confidence for analysis. {reason}"
             
