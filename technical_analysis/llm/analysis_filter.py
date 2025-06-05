@@ -16,13 +16,12 @@ class AnalysisFilter:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
         always_run_filter = os.getenv("HTB_ALWAYS_RUN_LLM_FILTER", "False").lower() == "true"
-        
         if interactive and not always_run_filter:
             return True, f"LLM filter triggered analysis for {coin}: interactive mode", 1.0
-
-        # Pre-filter: Quick noise detection before expensive LLM call
-        if not self._passes_pre_filter(dataframes, funding_rates):
-            return False, f"Pre-filter rejected {coin}: insufficient activity or conflicting signals", 0.0
+        
+        passes_filter, filter_reason = self._passes_pre_filter(dataframes)
+        if not passes_filter:
+            return False, f"Pre-filter rejected {coin}: {filter_reason}", 0.0
 
         market_summary = self._create_market_summary(dataframes, funding_rates)
         filter_prompt = self._create_filter_prompt(coin, market_summary)
@@ -36,24 +35,21 @@ class AnalysisFilter:
 
             action = "triggered" if should_analyze else "skipped"
             logger.info(f"LLM filter {action} analysis for {coin}: {reason} (confidence: {confidence:.0%})")
-            
             return should_analyze, reason, confidence
             
         except Exception as e:
             logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
             return False, "Fallback: LLM filter failed", 0.0
-
-    def _passes_pre_filter(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> bool:
+    def _passes_pre_filter(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> Tuple[bool, str]:
         """Quick pre-filter to catch obvious noise before LLM analysis."""
         
         # Check if we have any meaningful data
         if not dataframes or all(df.empty or len(df) < 10 for df in dataframes.values()):
-            return False
-        
-        # Aggregate checks across all timeframes
+            return False, "Insufficient data - no meaningful dataframes available"
+
         price_changes = []
         volume_ratios = []
-        
+
         for tf, df in dataframes.items():
             if df.empty or len(df) < 5:
                 continue
@@ -67,39 +63,32 @@ class AnalysisFilter:
             # Volume ratio check
             if 'v_ratio' in df.columns and not df['v_ratio'].empty:
                 volume_ratios.append(df['v_ratio'].iloc[-1])
-          # Noise filters - fail if ANY are triggered
-        if price_changes:
-            max_price_change = max(price_changes)
-            avg_price_change = sum(price_changes) / len(price_changes)
-            
-            # Dead market: all price changes are tiny (increased threshold)
-            if max_price_change < 0.35:
-                return False
-            
-            # Low activity: average price change is minimal (increased threshold)
-            if avg_price_change < 0.25:
-                return False
+
+        # Noise filters - fail if ANY are triggered        if price_changes:
+        max_price_change = max(price_changes)
+        avg_price_change = sum(price_changes) / len(price_changes)
+
+        # Dead market: all price changes are tiny (increased threshold)
+        if max_price_change < 0.35:
+            return False, f"Dead market - max price change {max_price_change:.2f}% < 0.35%"
         
+        # Low activity: average price change is minimal (increased threshold)
+        if avg_price_change < 0.25:
+            return False, f"Low activity - avg price change {avg_price_change:.2f}% < 0.25%"
+
         if volume_ratios:
             max_volume = max(volume_ratios)
             avg_volume = sum(volume_ratios) / len(volume_ratios)
-            
+
             # Volume drought: no timeframe has decent volume (increased threshold)
             if max_volume < 1.15:
-                return False
+                return False, f"Volume drought - max volume {max_volume:.2f} < 1.15"
             
             # Weak volume across the board (increased threshold)
             if avg_volume < 1.08:
-                return False
+                return False, f"Weak volume - avg volume {avg_volume:.2f} < 1.08"
         
-        # Check funding rates for extreme signals
-        if funding_rates:
-            latest_funding = funding_rates[-1].funding_rate if funding_rates else 0
-            # Only bypass other filters if funding is extremely high
-            if abs(latest_funding) > 0.0008:
-                return True
-        
-        return True
+        return True, "Pre-filter passed"
 
     def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Dict[str, Any]:
         """Create a comprehensive market summary for cheap LLM filtering."""
@@ -284,7 +273,7 @@ Response must be pure JSON - no markdown, no explanations:
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
             
-            if confidence < 0.85:
+            if confidence < 0.80:
                 should_analyze = False
                 reason = f"Insufficient confidence ({confidence:.0%}) for analysis. {reason}"
             
