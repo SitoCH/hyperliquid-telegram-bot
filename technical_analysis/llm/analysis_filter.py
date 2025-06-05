@@ -20,6 +20,10 @@ class AnalysisFilter:
         if interactive and not always_run_filter:
             return True, f"LLM filter triggered analysis for {coin}: interactive mode", 1.0
 
+        # Pre-filter: Quick noise detection before expensive LLM call
+        if not self._passes_pre_filter(dataframes, funding_rates):
+            return False, f"Pre-filter rejected {coin}: insufficient activity or conflicting signals", 0.0
+
         market_summary = self._create_market_summary(dataframes, funding_rates)
         filter_prompt = self._create_filter_prompt(coin, market_summary)
 
@@ -39,6 +43,63 @@ class AnalysisFilter:
             logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
             return False, "Fallback: LLM filter failed", 0.0
 
+    def _passes_pre_filter(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> bool:
+        """Quick pre-filter to catch obvious noise before LLM analysis."""
+        
+        # Check if we have any meaningful data
+        if not dataframes or all(df.empty or len(df) < 10 for df in dataframes.values()):
+            return False
+        
+        # Aggregate checks across all timeframes
+        price_changes = []
+        volume_ratios = []
+        
+        for tf, df in dataframes.items():
+            if df.empty or len(df) < 5:
+                continue
+            
+            # Calculate recent price changes
+            current_price = df['c'].iloc[-1]
+            price_5p = df['o'].iloc[-5] if len(df) >= 5 else df['o'].iloc[0]
+            price_change = abs((current_price - price_5p) / price_5p * 100)
+            price_changes.append(price_change)
+            
+            # Volume ratio check
+            if 'v_ratio' in df.columns and not df['v_ratio'].empty:
+                volume_ratios.append(df['v_ratio'].iloc[-1])
+          # Noise filters - fail if ANY are triggered
+        if price_changes:
+            max_price_change = max(price_changes)
+            avg_price_change = sum(price_changes) / len(price_changes)
+            
+            # Dead market: all price changes are tiny (increased threshold)
+            if max_price_change < 0.35:
+                return False
+            
+            # Low activity: average price change is minimal (increased threshold)
+            if avg_price_change < 0.25:
+                return False
+        
+        if volume_ratios:
+            max_volume = max(volume_ratios)
+            avg_volume = sum(volume_ratios) / len(volume_ratios)
+            
+            # Volume drought: no timeframe has decent volume (increased threshold)
+            if max_volume < 1.15:
+                return False
+            
+            # Weak volume across the board (increased threshold)
+            if avg_volume < 1.08:
+                return False
+        
+        # Check funding rates for extreme signals
+        if funding_rates:
+            latest_funding = funding_rates[-1].funding_rate if funding_rates else 0
+            # Only bypass other filters if funding is extremely high
+            if abs(latest_funding) > 0.0008:
+                return True
+        
+        return True
 
     def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Dict[str, Any]:
         """Create a comprehensive market summary for cheap LLM filtering."""
@@ -172,37 +233,37 @@ Current Market Data:
 
 SIGNAL DETECTION CRITERIA (require MULTIPLE confirmations):
 
-🔥 HIGH PRIORITY SIGNALS (any 1 condition):
-• Strong price moves: >0.8% in any timeframe with volume ratio >1.3x
-• RSI extreme reversals: RSI <25 or >75 with directional price movement
-• MACD momentum: Histogram showing strong acceleration with volume
-• Key level breaks: Price breaking SuperTrend, EMA, or VWAP with conviction
+🔥 HIGH PRIORITY SIGNALS (require 2+ conditions):
+• Extreme price moves: >1.2% in any timeframe with volume ratio >1.5x
+• RSI extremes with confirmation: RSI <20 or >80 AND price momentum in same direction
+• MACD strong momentum: Histogram acceleration >2 periods AND volume >1.4x
+• Major level breaks: Price breaking key levels with >1.0% move AND volume >1.5x
 
-⚡ MEDIUM PRIORITY SIGNALS (any 1 condition):
-• Moderate moves: >0.4% price change with volume ratio >1.15x
-• Technical alignment: RSI and MACD pointing same direction
-• Level tests: Price within 1% of key levels with increasing volume
-• Volatility expansion: BB width increasing or ATR rising
-• Funding divergence: Rate >0.0002 or unusual funding patterns
+⚡ MEDIUM PRIORITY SIGNALS (require 2+ conditions):
+• Strong moves: >0.8% price change AND volume ratio >1.3x
+• Technical convergence: RSI, MACD, and price all aligned with volume >1.2x
+• Key level interaction: Price within 0.5% of levels AND volume spike >1.4x
+• Volatility breakout: BB width expanding >20% AND price move >0.6%
+• Funding extremes: Rate >0.0004 AND price movement confirming direction
 
-📈 LOW PRIORITY SIGNALS (any 1 condition):
-• Developing momentum: ROC acceleration or Stochastic crossovers
-• Volume increases: Sustained volume ratio >1.1x for 3+ periods
-• Multi-timeframe setup: Similar patterns across 2+ timeframes
-• Ichimoku signals: Cloud breaks or component alignments
+📈 LOW PRIORITY SIGNALS (require ALL 3 conditions):
+• Momentum building: ROC acceleration AND Stochastic signal AND volume >1.15x
+• Multi-timeframe alignment: Same signal across 3+ timeframes AND volume confirmation
+• Ichimoku convergence: Multiple component signals AND price momentum AND volume
 
-NOISE REDUCTION - SKIP when ANY of these are present:
-• Choppy market: Price reversing direction within 3-5 periods repeatedly
-• Low conviction moves: Price changes >0.5% but volume ratio <1.1x
-• Low volume environment: Average volume ratio <1.08x across multiple timeframes
-• Conflicting signals: RSI and MACD pointing opposite directions with weak momentum
-• Range-bound action: Price oscillating within 0.5% range for 5+ periods
-• Dead market: ALL volume ratios <1.05x AND ALL price changes <0.2%
+STRICT NOISE FILTERS - SKIP when ANY are present:
+• Micro moves: ALL price changes <0.3% across all timeframes
+• Volume drought: Average volume ratio <1.1x across ALL timeframes
+• Choppy action: Price reversals >3 times in 10 periods
+• Weak conviction: Price change >0.8% but volume <1.2x (fake moves)
+• Range prison: Price within 0.3% range for 8+ periods
+• Signal conflict: RSI overbought but MACD bullish (or vice versa) without strong volume
+• Dead zone: ALL indicators flat (change <5% in 10 periods) AND volume <1.1x
 
 ANALYSIS DECISION LOGIC:
-• ANALYZE: High priority (1+ condition) OR Medium priority (1+ condition) OR Low priority (2+ conditions)
-• SKIP: Any noise filter triggered AND no high priority signals present
-• Always analyze if funding rate >0.0003 or price change >1.0% with volume >1.2x
+• ANALYZE: High priority (2+ conditions) OR Medium priority (2+ conditions) OR Low priority (ALL 3 conditions)
+• SKIP: Any noise filter triggered (no exceptions for weak signals)
+• Force analyze ONLY if: funding rate >0.0005 AND price change >1.5% AND volume >1.8x
 
 Confidence: Based on signal strength and confirmation quality
 
@@ -223,9 +284,9 @@ Response must be pure JSON - no markdown, no explanations:
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
             
-            if confidence < 0.8:
+            if confidence < 0.85:
                 should_analyze = False
-                reason = f"Insufficient confidence for analysis. {reason}"
+                reason = f"Insufficient confidence ({confidence:.0%}) for analysis. {reason}"
             
             return should_analyze, reason, confidence
             
