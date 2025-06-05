@@ -48,15 +48,27 @@ class LLMPromptGenerator:
         prompt_parts.extend(self._generate_candle_data_section(dataframes))
         prompt_parts.extend(self._generate_funding_rates_section(funding_rates))
         prompt_parts.extend(self._generate_market_sentiment_section(funding_rates))
-        prompt_parts.extend(self._generate_funding_thresholds_section(funding_rates))
-          # High probability trading requirements with strict filters
+        prompt_parts.extend(self._generate_funding_thresholds_section(funding_rates))          # High probability trading requirements with strict filters
         prompt_parts.extend([
             "=== HIGH PROBABILITY TRADING ANALYSIS ===",
             "",
             "CRITICAL MANDATE: Only recommend trades with 70%+ win probability. Default to HOLD unless exceptional setup exists.",
+            "",            "=== ADAPTIVE TIMEFRAME ANALYSIS ===",
+            "MOMENTUM-RESPONSIVE WEIGHTING:",
+            "- 4H: 25% weight - Overall trend context and major levels",
+            "- 1H: 35% weight - Primary trend direction and momentum",
+            "- 30m: 25% weight - Immediate trend shifts and entry setups",
+            "- 15m: 15% weight - Precise entry timing and micro-momentum",
+            "",
+            "FLEXIBLE ALIGNMENT RULES:",
+            "1. STRONG SIGNALS: 1H and 30m aligned in same direction = Valid signal",
+            "2. MOMENTUM OVERRIDE: If 30m+15m show strong momentum with volume, can override 4H if 1H neutral",
+            "3. FAST MARKET MODE: In high volatility (ATR >3%), lower timeframes get 60% combined weight",
+            "4. TREND CONTINUATION: Existing 1H trend + 30m/15m confirmation = Signal even if 4H neutral",
+            "5. REVERSAL SETUPS: Strong divergence on 30m+15m can signal against 4H trend if 1H confirms",
             "",
             "TIER 1 SIGNALS (Required for LONG/SHORT recommendation):",
-            "1. MULTI-TIMEFRAME ALIGNMENT: 4H and 1H trends must align with 15m/30m entry signals",
+            "1. MULTI-TIMEFRAME ALIGNMENT: 1H and 30m must align OR strong momentum on 30m+15m with 1H neutral",
             "2. VOLUME CONFIRMATION: Recent volume >150% of 20-period average during setup formation",
             "3. KEY LEVEL CONFLUENCE: Price at major S/R (Pivot, Fibonacci, psychological levels) +/- 0.5%",
             "4. MOMENTUM CONFIRMATION: RSI 45-65 range with positive divergence OR breaking from oversold/overbought",

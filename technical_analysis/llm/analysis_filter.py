@@ -220,43 +220,51 @@ class AnalysisFilter:
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
-SIGNAL DETECTION CRITERIA (require MULTIPLE confirmations):
+TIMEFRAME BALANCE APPROACH:
+• Higher timeframes (4h, 1d): Provide trend context and filter direction - prevent counter-trend trades
+• Medium timeframes (1h, 15m): Primary signal detection - catch momentum shifts early
+• Lower timeframes (5m, 1m): Entry timing and momentum confirmation - validate breakouts
 
-🔥 HIGH PRIORITY SIGNALS (require 2+ conditions):
-• Extreme price moves: >1.2% in any timeframe with volume ratio >1.5x
-• RSI extremes with confirmation: RSI <20 or >80 AND price momentum in same direction
-• MACD strong momentum: Histogram acceleration >2 periods AND volume >1.4x
-• Major level breaks: Price breaking key levels with >1.0% move AND volume >1.5x
+SIGNAL DETECTION CRITERIA (balanced approach for early but quality signals):
 
-⚡ MEDIUM PRIORITY SIGNALS (require 2+ conditions):
-• Strong moves: >0.8% price change AND volume ratio >1.3x
-• Technical convergence: RSI, MACD, and price all aligned with volume >1.2x
-• Key level interaction: Price within 0.5% of levels AND volume spike >1.4x
-• Volatility breakout: BB width expanding >20% AND price move >0.6%
-• Funding extremes: Rate >0.0004 AND price movement confirming direction
+🔥 HIGH PRIORITY SIGNALS (require 2+ conditions, early momentum focus):
+• Strong momentum: >1.5% in 15m/1h OR >0.8% in 4h with volume ratio >1.5x
+• RSI extremes with momentum: RSI <25 or >75 in any timeframe AND price momentum alignment
+• MACD acceleration: Histogram growing >2 periods in 15m+ AND volume >1.4x
+• Level breaks with volume: Price breaking key levels >0.8% in any timeframe AND volume >1.5x
+• Volatility expansion: BB width expanding >15% in 15m+ AND price move >0.5%
 
-📈 LOW PRIORITY SIGNALS (require ALL 3 conditions):
-• Momentum building: ROC acceleration AND Stochastic signal AND volume >1.15x
-• Multi-timeframe alignment: Same signal across 3+ timeframes AND volume confirmation
-• Ichimoku convergence: Multiple component signals AND price momentum AND volume
+⚡ MEDIUM PRIORITY SIGNALS (require 2+ conditions, momentum + confirmation):
+• Decent moves: >1.0% in 15m/1h OR >0.6% in 4h with volume ratio >1.3x
+• Technical alignment: RSI and MACD aligned in same direction in 15m+ with volume >1.2x
+• Key level approach: Price within 0.8% of levels in any timeframe AND volume spike >1.3x
+• Trend acceleration: ROC increasing in 15m+ AND Stochastic signal AND volume >1.2x
+• Funding pressure: Rate >0.0003 AND price movement confirming direction
+
+📈 LOW PRIORITY SIGNALS (require ALL 3 conditions, early detection):
+• Building momentum: ROC acceleration AND Stochastic cross in 15m+ AND volume >1.15x
+• Multi-timeframe sync: Same signal across 2+ timeframes (don't require 4h+ signal)
+• Ichimoku setup: Multiple component alignment in 15m+ AND price momentum AND volume
 
 STRICT NOISE FILTERS - SKIP when ANY are present:
-• Micro moves: ALL price changes <0.3% across all timeframes
-• Volume drought: Average volume ratio <1.1x across ALL timeframes
-• Choppy action: Price reversals >3 times in 10 periods
-• Weak conviction: Price change >0.8% but volume <1.2x (fake moves)
-• Range prison: Price within 0.3% range for 8+ periods
-• Signal conflict: RSI overbought but MACD bullish (or vice versa) without strong volume
-• Dead zone: ALL indicators flat (change <5% in 10 periods) AND volume <1.1x
+• Micro moves: Price changes <0.3% in ALL 4h+ timeframes (ignore lower timeframe noise)
+• Volume drought: Average volume ratio <1.1x across 1h+ timeframes
+• Choppy action: Price reversals >3 times in 10 periods in main timeframes (1h+)
+• Weak conviction: Price change >0.8% in 4h+ but volume <1.2x (fake moves)
+• Range prison: Price within 0.3% range for 8+ periods in 4h+ timeframes
+• Signal conflict: RSI overbought but MACD bullish in same timeframe without strong volume
+• Dead zone: ALL indicators flat in 1h+ timeframes AND volume <1.1x
 
 ANALYSIS DECISION LOGIC:
 • ANALYZE: High priority (2+ conditions) OR Medium priority (2+ conditions) OR Low priority (ALL 3 conditions)
 • SKIP: Any noise filter triggered (no exceptions for weak signals)
-• Force analyze ONLY if: funding rate >0.0005 AND price change >1.5% AND volume >1.8x
+• Force analyze ONLY if: funding rate >0.0005 AND price change >1.5% in 4h+ AND volume >1.8x
+• Early signals: Allow 15m/1h signals to trigger analysis if volume and momentum are strong
+• Trend filter: Use 4h/1d only to avoid obvious counter-trend trades, not to block all signals
 
-Confidence: Based on signal strength and confirmation quality
+Confidence: Based on signal strength, momentum quality, and volume confirmation
 
-Prefer quality signals with multiple confirmations over weak single indicators.
+Balance early signal detection with trend awareness - catch moves early but avoid fighting major trends.
 
 Response must be pure JSON - no markdown, no explanations:
 {{
