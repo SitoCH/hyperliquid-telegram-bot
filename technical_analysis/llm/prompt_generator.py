@@ -114,7 +114,7 @@ class LLMPromptGenerator:
             "- Extended time horizon (4-6 hours)",
             "",
             "=== RESPONSE FORMAT ===",
-            "Provide analysis in JSON format. CRITICAL: Default to HOLD unless exceptional setup exists.",
+            "Provide analysis in JSON format. CRITICAL: Default to HOLD unless exceptional setup exists. ALL fields below are MANDATORY - never leave stop_loss or take_profit empty.",
             "",
             "{",
             '  "recap_heading": "Brief market state - focus on why trading or waiting",',
@@ -147,6 +147,8 @@ class LLMPromptGenerator:
             "- CONFLUENCE OVER COMPLEXITY: Simple setups with multiple confirmations beat complex analysis",
             "- MARKET BIAS: In trending markets, only trade WITH the trend unless extreme reversal setup",
             "- NEWS IMPACT: Avoid trading 2 hours before/after major economic releases",
+            "- STOP LOSS: ALWAYS required - logical technical level (S/R, Fibonacci, pivot, ATR-based), minimum 1.5% away from current price"
+            "- TAKE PROFIT: ALWAYS required - next key level or measured move target, minimum 1.5% away from current price", 
         ])
         
         return "\n".join(prompt_parts)
