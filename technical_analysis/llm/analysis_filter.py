@@ -40,6 +40,7 @@ class AnalysisFilter:
         except Exception as e:
             logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
             return False, "Fallback: LLM filter failed", 0.0
+
     def _passes_pre_filter(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> Tuple[bool, str]:
         """Quick pre-filter to catch obvious noise before LLM analysis."""
         
@@ -64,29 +65,28 @@ class AnalysisFilter:
             if 'v_ratio' in df.columns and not df['v_ratio'].empty:
                 volume_ratios.append(df['v_ratio'].iloc[-1])
 
-        # Noise filters - fail if ANY are triggered        if price_changes:
-        max_price_change = max(price_changes)
-        avg_price_change = sum(price_changes) / len(price_changes)
-
-        # Dead market: all price changes are tiny (increased threshold)
-        if max_price_change < 0.35:
-            return False, f"Dead market - max price change {max_price_change:.2f}% < 0.35%"
-        
-        # Low activity: average price change is minimal (increased threshold)
-        if avg_price_change < 0.25:
-            return False, f"Low activity - avg price change {avg_price_change:.2f}% < 0.25%"
+        # Noise filters - fail if ANY are triggered
+        if price_changes:
+            max_price_change = max(price_changes)
+            avg_price_change = sum(price_changes) / len(price_changes)
+            
+            # Dead market: all price changes are tiny (increased threshold)
+            if max_price_change < 0.35:
+                return False, f"Dead market - max price change {max_price_change:.2f}% < 0.35%"
+            
+            # Low activity: average price change is minimal (increased threshold)
+            if avg_price_change < 0.25:
+                return False, f"Low activity - avg price change {avg_price_change:.2f}% < 0.25%"
 
         if volume_ratios:
             max_volume = max(volume_ratios)
-            avg_volume = sum(volume_ratios) / len(volume_ratios)
-
-            # Volume drought: no timeframe has decent volume (increased threshold)
-            if max_volume < 1.15:
-                return False, f"Volume drought - max volume {max_volume:.2f} < 1.15"
+            avg_volume = sum(volume_ratios) / len(volume_ratios)            # Volume drought: no timeframe has decent volume (very lenient threshold)
+            if max_volume < 0.75:
+                return False, f"Volume drought - max volume {max_volume:.2f} < 0.75"
             
-            # Weak volume across the board (increased threshold)
-            if avg_volume < 1.05:
-                return False, f"Weak volume - avg volume {avg_volume:.2f} < 1.08"
+            # Weak volume across the board (very lenient threshold) 
+            if avg_volume < 0.60:
+                return False, f"Weak volume - avg volume {avg_volume:.2f} < 0.60"
         
         return True, "Pre-filter passed"
 
