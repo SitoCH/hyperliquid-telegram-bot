@@ -85,7 +85,7 @@ class AnalysisFilter:
                 return False, f"Volume drought - max volume {max_volume:.2f} < 1.15"
             
             # Weak volume across the board (increased threshold)
-            if avg_volume < 1.08:
+            if avg_volume < 1.05:
                 return False, f"Weak volume - avg volume {avg_volume:.2f} < 1.08"
         
         return True, "Pre-filter passed"
