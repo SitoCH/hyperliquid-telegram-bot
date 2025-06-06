@@ -21,7 +21,9 @@ class AnalysisFilter:
         
         passes_filter, filter_reason = self._passes_pre_filter(dataframes)
         if not passes_filter:
-            return False, f"Pre-filter rejected {coin}: {filter_reason}", 0.0
+            pre_filter_message = f"Pre-filter rejected {coin}: {filter_reason}"
+            logger.info(pre_filter_message)
+            return False, pre_filter_message, 0.0
 
         market_summary = self._create_market_summary(dataframes, funding_rates)
         filter_prompt = self._create_filter_prompt(coin, market_summary)
@@ -281,7 +283,7 @@ Response must be pure JSON - no markdown, no explanations:
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
             
-            if confidence < 0.80:
+            if confidence < 0.75:
                 should_analyze = False
                 reason = f"Insufficient confidence ({confidence:.0%}) for analysis. {reason}"
             
