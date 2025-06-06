@@ -283,7 +283,8 @@ Response must be pure JSON - no markdown, no explanations:
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
             
-            if confidence < 0.75:
+            min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
+            if confidence < min_confidence:
                 should_analyze = False
                 reason = f"Insufficient confidence ({confidence:.0%}) for analysis. {reason}"
             
