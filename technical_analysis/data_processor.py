@@ -115,7 +115,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
 
 def _add_bollinger_bands(df: pd.DataFrame) -> None:
     """Add Bollinger Bands indicators."""
-    bb_period = min(20, len(df) // 3)  # Adaptive period
+    bb_period = max(5, len(df) // 3)
     bb_std = 2.0
     
     bb = ta.bbands(df["c"], length=bb_period, std=bb_std)
@@ -126,14 +126,31 @@ def _add_bollinger_bands(df: pd.DataFrame) -> None:
 
 
 def _add_volume_indicators(df: pd.DataFrame) -> None:
-    """Add volume-based indicators."""
-    v_sma = ta.sma(df['v'], length=20)
-    df['v_sma'] = v_sma
-    df['v_ratio'] = df['v'] / df['v_sma']
+    """Add volume-based indicators with adaptive periods."""
+    v_sma_period = max(10, len(df) // 3)
+    v_short_period = max(5, len(df) // 8)
+    v_long_period = max(v_short_period + 5, len(df) // 3)
     
-    v_short = ta.sma(df['v'], length=5)
-    v_long = ta.sma(df['v'], length=20)
-    df['v_trend'] = v_short / v_long
+    # Ensure we have enough data for calculations
+    if len(df) < v_short_period + 1:
+        # Not enough data - set default values
+        df['v_sma'] = df['v'].mean() if not df['v'].empty else 0
+        df['v_ratio'] = 1.0
+        df['v_trend'] = 1.0
+        return
+    
+    # Volume SMA and ratio
+    v_sma = ta.sma(df['v'], length=v_sma_period)
+    df['v_sma'] = v_sma
+    
+    # Handle division by zero and null values
+    df['v_ratio'] = df['v'] / v_sma.replace(0, df['v'].mean())
+    df['v_ratio'] = df['v_ratio'].fillna(1.0)
+    
+    # Volume trend (short vs long SMA)
+    v_short = ta.sma(df['v'], length=v_short_period)
+    v_long = ta.sma(df['v'], length=v_long_period)
+    df['v_trend'] = (v_short / v_long.replace(0, v_short.mean())).fillna(1.0)
 
 
 def _add_atr_indicator(df: pd.DataFrame, atr_length: int) -> None:
@@ -184,7 +201,7 @@ def _add_vwap_indicator(df: pd.DataFrame) -> None:
 
 def _add_rsi_indicator(df: pd.DataFrame) -> None:
     """Add RSI (Relative Strength Index) indicator."""
-    rsi_period = min(14, len(df) // 2)
+    rsi_period = max(7, len(df) // 4)
     rsi = ta.rsi(df["c"], length=rsi_period)
     if rsi is not None:
         df["RSI"] = rsi
@@ -192,8 +209,8 @@ def _add_rsi_indicator(df: pd.DataFrame) -> None:
 
 def _add_stochastic_indicator(df: pd.DataFrame) -> None:
     """Add Stochastic oscillator."""
-    stoch_period = min(14, max(5, len(df) // 3))  # Ensure minimum period
-    if len(df) < stoch_period + 3:  # Need enough data for smoothing
+    stoch_period = max(5, len(df) // 3)
+    if len(df) < stoch_period + 3:
         return
         
     stoch = ta.stoch(df["h"], df["l"], df["c"], k=stoch_period, d=3, smooth_k=3)
@@ -204,13 +221,14 @@ def _add_stochastic_indicator(df: pd.DataFrame) -> None:
 
 def _add_fibonacci_levels(df: pd.DataFrame) -> None:
     """Add Fibonacci retracement levels."""
-    if len(df) < 20:
+    lookback_period = max(20, len(df) // 4)
+    if len(df) < lookback_period:
         df["FIB_23"] = df["FIB_38"] = df["FIB_50"] = df["FIB_61"] = df["FIB_78"] = df["c"]
         return
     
-    # Calculate swing high and low for last 20 periods
-    swing_high = df["h"].rolling(window=20).max()
-    swing_low = df["l"].rolling(window=20).min()
+    # Calculate swing high and low for adaptive period
+    swing_high = df["h"].rolling(window=lookback_period).max()
+    swing_low = df["l"].rolling(window=lookback_period).min()
     
     # Determine trend direction for proper Fibonacci calculation
     recent_close = df["c"].iloc[-1]
@@ -280,17 +298,17 @@ def _add_ichimoku_cloud(df: pd.DataFrame) -> None:
 def _add_momentum_indicators(df: pd.DataFrame) -> None:
     """Add momentum-based indicators."""
     # Rate of Change
-    roc_period = min(12, max(5, len(df) // 5))
+    roc_period = max(5, len(df) // 5)
     roc_calc = ta.roc(df["c"], length=roc_period)
     df["ROC"] = roc_calc
     
     # Williams %R
-    willr_period = min(14, max(7, len(df) // 4))
+    willr_period = max(7, len(df) // 4)
     willr_calc = ta.willr(df["h"], df["l"], df["c"], length=willr_period)
     df["WILLR"] = willr_calc
     
     # Commodity Channel Index
-    cci_period = min(20, max(10, len(df) // 3))
+    cci_period = max(10, len(df) // 3)
     cci_calc = ta.cci(df["h"], df["l"], df["c"], length=cci_period)
     df["CCI"] = cci_calc
-    
+
