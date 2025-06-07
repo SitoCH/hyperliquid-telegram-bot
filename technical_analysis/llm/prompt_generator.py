@@ -327,9 +327,8 @@ class LLMPromptGenerator:
             max_days = MAX_DAYS_CUTOFF.get(timeframe, 3.0)
 
             configured_days = self.timeframe_lookback_days.get(timeframe, 3.0)
-            effective_days = min(configured_days, max_days)
             
-            prompt_parts.extend(self._format_timeframe_data(df, timeframe, effective_days))
+            prompt_parts.extend(self._format_timeframe_data(df, timeframe, configured_days))
         
         return prompt_parts
     
