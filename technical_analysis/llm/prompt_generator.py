@@ -310,10 +310,10 @@ class LLMPromptGenerator:
         prompt_parts = ["=== CANDLE DATA ==="]
 
         MAX_DAYS_CUTOFF = {
-            Timeframe.MINUTES_15: 5,
-            Timeframe.MINUTES_30: 5,
-            Timeframe.HOUR_1: 14,
-            Timeframe.HOURS_4: 21 
+            Timeframe.MINUTES_15: 3,
+            Timeframe.MINUTES_30: 3,
+            Timeframe.HOUR_1: 7,
+            Timeframe.HOURS_4: 14 
         }
         
         for timeframe in [Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4]:
