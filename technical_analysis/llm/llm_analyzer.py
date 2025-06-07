@@ -68,18 +68,16 @@ class LLMAnalyzer:
             tf: prepare_dataframe(candles, local_tz) 
             for tf, candles in candles_data.items()
         }
-          # Apply basic indicators for AI analysis
+
+        # Apply basic indicators for AI analysis
         for tf, df in dataframes.items():
             if not df.empty:
                 apply_indicators(df, tf)
+
         funding_rates = get_funding_with_cache(coin, now, 5)
         should_analyze, reason, confidence = await self.analysis_filter.should_run_llm_analysis(dataframes, coin, interactive_analysis, funding_rates)
-        
-        if should_analyze:
-            if not interactive_analysis:
-                await self.send_llm_analysis_filter_message(coin, reason, confidence)
-                return
-        else:
+
+        if not should_analyze:
             if interactive_analysis:
                 await self.send_llm_analysis_filter_message(coin, reason, confidence)
             return
