@@ -22,6 +22,7 @@ def get_fill_description(initial_message: str, coin: str, size: str, fee: float,
     fill_description.append(f"Size: {size}")
     fill_description.append(f"Fee: {fee:,.02f} {fee_token}")
 
+    logger.info(' '.join(fill_description))
     return '\n'.join(fill_description)
 
 def process_fill(fill: Fill) -> None:
@@ -53,7 +54,6 @@ def process_fill(fill: Fill) -> None:
     else:
         fill_message = json.dumps(fill)
 
-    logger.info(fill_message)
     telegram_utils.queue_send(fill_message)
 
 def on_user_events(user_events: UserEventsMsg) -> None:
