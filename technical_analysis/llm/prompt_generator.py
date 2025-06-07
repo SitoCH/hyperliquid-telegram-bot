@@ -44,11 +44,13 @@ class LLMPromptGenerator:
             f"24h price change: {self._calculate_24h_change(dataframes.get(Timeframe.HOUR_1), mid):.2f}%",
             "",
         ]
-        
+
         prompt_parts.extend(self._generate_candle_data_section(dataframes))
         prompt_parts.extend(self._generate_funding_rates_section(funding_rates))
         prompt_parts.extend(self._generate_market_sentiment_section(funding_rates))
-        prompt_parts.extend(self._generate_funding_thresholds_section(funding_rates))          # High probability trading requirements with strict filters
+        prompt_parts.extend(self._generate_funding_thresholds_section(funding_rates))
+
+        # High probability trading requirements with strict filters
         prompt_parts.extend([
             "=== HIGH PROBABILITY TRADING ANALYSIS ===",
             "",
@@ -76,32 +78,129 @@ class LLMPromptGenerator:
             "",
             "TIER 2 CONFIRMATIONS (Need 2+ for signal validation):",
             "- MACD histogram turning positive (bullish) or negative (bearish)",
-            "- Bollinger Band squeeze release with directional momentum",
+            "- Bollinger Band squeeze release with directional momentum (BB_width expanding)",
             "- SuperTrend flip with volume confirmation",
-            "- Stochastic crossing in favorable territory (not extreme zones)",
+            "- Stochastic oscillator crossing in favorable territory (%K crossing %D)",
+            "- Williams %R reversal from extreme levels (-80 to -20 range)",
+            "- CCI breaking above +100 (bullish) or below -100 (bearish)",
+            "- ROC momentum acceleration (positive for bullish, negative for bearish)",
+            "- Fibonacci level confluence (price within 0.5% of key levels)",
+            "- Pivot point bounce/rejection with volume confirmation",
+            "- Ichimoku cloud breakout (price above/below Senkou Span A/B)",
+            "- Volume ratio >1.5 during setup formation (above average volume)",
             "- Funding rate showing mean reversion setup (extreme readings reversing)",
             "- EMA/VWAP reclaim with sustained follow-through",
             "",
             "AUTOMATIC DISQUALIFIERS (Force HOLD signal):",
-            "- RSI >80 or <20 (extreme overbought/oversold)",
-            "- Conflicting signals across timeframes",
-            "- Low volume (<80% of average) during setup",
+            "- RSI >80 or <20 (extreme overbought/oversold without clear divergence)",
+            "- Stochastic >90 or <10 in extreme territory without reversal setup",
+            "- Williams %R >-10 or <-90 in extreme zones without momentum confirmation",
+            "- CCI >+200 or <-200 extreme readings without volume confirmation",
+            "- Conflicting signals across timeframes (3+ timeframes disagree)",
+            "- Low volume (<80% of average) during setup formation",
+            "- BB_width contracting (squeeze) without clear breakout direction",
+            "- MACD and RSI showing opposing signals",
             "- Recent major news or event within 2 hours",
             "- Funding rate in neutral zone (-0.0001 to +0.0001) with no clear bias",
             "- Price action choppy (multiple false breakouts in last 6 hours)",
+            "- Ichimoku cloud providing resistance in bullish setup or support in bearish setup",
+            "",           
+            "=== ENHANCED INDICATOR ANALYSIS FRAMEWORK ===",
+            "",
+            "OSCILLATOR ANALYSIS (All indicators must be evaluated):",
+            "1. RSI (45-65 optimal range):",
+            "   - Bullish: RSI 50-65 with positive divergence or breaking above 45 from oversold",
+            "   - Bearish: RSI 35-50 with negative divergence or breaking below 55 from overbought",
+            "   - Extreme caution: RSI >80 or <20 without clear reversal patterns",
+            "",
+            "2. Stochastic (%K and %D lines):",
+            "   - Bullish signal: %K crossing above %D in 20-80 range with upward momentum",
+            "   - Bearish signal: %K crossing below %D in 20-80 range with downward momentum",
+            "   - Avoid: Stochastic >90 or <10 without confirmed reversal setup",
+            "",
+            "3. Williams %R:",
+            "   - Bullish reversal: Williams %R rising from -80 to -20 range with volume",
+            "   - Bearish reversal: Williams %R falling from -20 to -80 range with volume",
+            "   - Extreme zones: >-10 (overbought) or <-90 (oversold) require caution",
+            "",
+            "4. CCI (Commodity Channel Index):",
+            "   - Bullish breakout: CCI breaking above +100 with volume confirmation",
+            "   - Bearish breakdown: CCI breaking below -100 with volume confirmation",
+            "   - Extreme readings: CCI >+200 or <-200 often signal reversal without momentum",
+            "",
+            "5. ROC (Rate of Change):",
+            "   - Bullish momentum: ROC positive and accelerating (increasing positive values)",
+            "   - Bearish momentum: ROC negative and accelerating (decreasing negative values)",
+            "   - Divergence signals: ROC direction opposing price movement",
+            "",
+            "TREND AND MOMENTUM INDICATORS:",
+            "1. MACD System:",
+            "   - Primary signal: MACD line crossing above/below Signal line",
+            "   - Momentum confirmation: MACD Histogram turning positive (bullish) or negative (bearish)",
+            "   - Strength indicator: Distance between MACD and Signal line",
+            "",
+            "2. SuperTrend:",
+            "   - Trend direction: Price above SuperTrend = bullish, below = bearish",
+            "   - Signal strength: Distance between price and SuperTrend line",
+            "   - Flip signals: SuperTrend color change with volume confirmation",
+            "",
+            "3. Bollinger Bands:",
+            "   - Squeeze setup: BB_width contracting (values decreasing) = potential breakout",
+            "   - Breakout signal: BB_width expanding with directional price movement",
+            "   - Reversal zones: Price touching BB_upper (resistance) or BB_lower (support)",
+            "",
+            "FIBONACCI AND PIVOT ANALYSIS:",
+            "1. Fibonacci Retracements (FIB_78, FIB_61, FIB_38, FIB_23):",
+            "   - Support levels: Price bouncing from Fib levels in uptrend",
+            "   - Resistance levels: Price rejected at Fib levels in downtrend",
+            "   - Confluence: Multiple Fib levels within 0.5% create strong zones",
+            "",
+            "2. Pivot Points (R2, R1, PIVOT, S1, S2):",
+            "   - Breakout signals: Price breaking above R1/R2 or below S1/S2 with volume",
+            "   - Reversal zones: Price bouncing from Pivot, S1, S2 (support) or R1, R2 (resistance)",
+            "   - Target levels: Use next pivot level as profit target",
+            "",
+            "ICHIMOKU CLOUD SYSTEM:",
+            "1. Cloud Analysis (SENKOU_A, SENKOU_B):",
+            "   - Bullish setup: Price above cloud (above both Senkou Span A and B)",
+            "   - Bearish setup: Price below cloud (below both Senkou Span A and B)",
+            "   - Neutral zone: Price inside cloud = avoid trading",
+            "",
+            "2. Ichimoku Lines:",
+            "   - TENKAN (Conversion): Fast signal line for short-term momentum",
+            "   - KIJUN (Base): Medium-term trend direction",
+            "   - CHIKOU (Lagging): Confirmation of trend strength",
+            "",
+            "VOLUME CONFIRMATION REQUIREMENTS:",
+            "1. Volume Ratio Analysis:",
+            "   - V_Ratio >1.5: Above average volume confirms breakout/breakdown",
+            "   - V_Ratio 0.8-1.2: Normal volume, requires additional confirmation",
+            "   - V_Ratio <0.8: Low volume, weakens signal strength",
+            "",
+            "2. Volume Trend:",
+            "   - V_Trend >1.0: Increasing volume supports price direction",
+            "   - V_Trend <1.0: Decreasing volume suggests weakening momentum",
             "",
             "ENHANCED SIGNAL SCORING SYSTEM:",
-            "REQUIRED MINIMUM: 8 points for LONG/SHORT signal",
+            "REQUIRED MINIMUM: 18 points for LONG/SHORT signal",
             "",
             "TIER 1 FACTORS (3 points each - need ALL 5):",
             "+ Multi-timeframe alignment (15 points total)",
             "",
             "TIER 2 FACTORS (2 points each):",
-            "+ Clear momentum shift with volume",
-            "+ Key level bounce/rejection with confirmation",
-            "+ Oscillator convergence (2+ indicators aligned)",
+            "+ Clear momentum shift with volume confirmation",
+            "+ Key level bounce/rejection with confirmation (Support/Resistance, Fibonacci, Pivot Points)",
+            "+ Oscillator convergence (MACD histogram + RSI alignment)",
+            "+ Bollinger Band squeeze release with directional momentum (BB_width expanding)", 
+            "+ SuperTrend flip with volume confirmation",
+            "+ Stochastic oscillator bullish/bearish crossover (%K crossing %D in favorable territory)",
+            "+ Williams %R reversal from extreme levels (-80 to -20 bullish, -20 to -80 bearish)",
+            "+ CCI momentum breakout (above +100 bullish, below -100 bearish)",
+            "+ ROC momentum acceleration (positive for bullish, negative for bearish)",
+            "+ Ichimoku cloud breakout with price above/below Senkou Span A/B",
+            "+ Volume ratio confirmation (>1.5 during setup formation)",
             "+ Funding rate mean reversion setup",
-            "+ Strong volume pattern (accumulation/distribution)",
+            "+ EMA/VWAP reclaim with sustained follow-through",
             "",
             "PENALTY FACTORS:",
             "- Conflicting timeframe signals (-5 points)",
@@ -233,8 +332,7 @@ class LLMPromptGenerator:
             prompt_parts.extend(self._format_timeframe_data(df, timeframe, effective_days))
         
         return prompt_parts
-
-
+    
     def _format_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, effective_days: float) -> List[str]:
         """Format individual timeframe data."""
         # Calculate number of candles to show using effective days (already limited by cutoff)
@@ -245,7 +343,7 @@ class LLMPromptGenerator:
             "Time | O | H | L | C | Vol | ATR | MACD | MACD_Sig | MACD_Hist | ST | RSI | BB_Up | BB_Mid | BB_Low | BB_Width | EMA | VWAP"
         ]
         
-        # Add candle data with more indicators
+        # Add candle data with all indicators
         for idx, row in recent_candles.iterrows():
             timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
             sections.append(
@@ -258,7 +356,7 @@ class LLMPromptGenerator:
                 f"{row.get('EMA', 0):.4f} | {row.get('VWAP', 0):.4f}"
             )
         
-        # Add additional indicators table for last 5 candles
+        # Add additional indicators table for last 15 candles
         if len(recent_candles) >= 15:
             sections.extend(self._generate_additional_indicators_table(recent_candles.tail(15), timeframe))
         
@@ -279,7 +377,6 @@ class LLMPromptGenerator:
         ])
         
         return sections
-
 
     def _generate_additional_indicators_table(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
         """Generate additional indicators table for recent candles."""
@@ -313,7 +410,6 @@ class LLMPromptGenerator:
                 )
         
         return sections
-
 
     def _generate_technical_indicators_section(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
         """Generate comprehensive technical indicators section for the prompt."""
@@ -387,6 +483,7 @@ class LLMPromptGenerator:
             f"Senkou Span B: {latest.get('SENKOU_B', 0):.4f}",
             f"Chikou Span: {latest.get('CHIKOU', 0):.4f}",
         ])
+        
         # Volume Analysis
         prompt_parts.extend([
             "\n--- Volume Analysis ---",
@@ -446,7 +543,7 @@ class LLMPromptGenerator:
         wyckoff_phase = self._analyze_wyckoff_phase(df)
         
         return [
-            "\n--- Price Action & Early Signal Analysis ---",
+            "\n--- Price Action & Wyckoff Analysis ---",
             f"5-period change: {last_5_change:+.2f}%",
             f"10-period change: {last_10_change:+.2f}%",
             f"Volume change: {volume_change:+.2f}%",
