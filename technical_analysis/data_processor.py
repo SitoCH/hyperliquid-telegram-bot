@@ -169,9 +169,6 @@ def _add_supertrend_indicator(df: pd.DataFrame, timeframe: Timeframe, st_length:
     
     if (supertrend is not None) and (len(df) > st_length):
         df["SuperTrend"] = supertrend[f"SUPERT_{st_length}_{st_multiplier}"]
-        df["SuperTrend_Flip_Detected"] = (
-            supertrend[f"SUPERTd_{st_length}_{st_multiplier}"].diff().abs() == 1
-        )
 
 
 def _add_macd_indicator(df: pd.DataFrame, macd_fast: int, macd_slow: int, macd_signal: int) -> None:

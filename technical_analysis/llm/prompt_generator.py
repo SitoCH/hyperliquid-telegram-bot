@@ -240,10 +240,9 @@ class LLMPromptGenerator:
         # Calculate number of candles to show using effective days (already limited by cutoff)
         candle_count = min(len(df), int((effective_days * 24 * 60) / timeframe.minutes))
         recent_candles = df.tail(candle_count)
-        
         sections = [
             f"\n{timeframe.name} Timeframe (last {len(recent_candles)} candles):",
-            "Time | O | H | L | C | Vol | ATR | MACD | ST | RSI | BB_Up | BB_Low | EMA | VWAP"
+            "Time | O | H | L | C | Vol | ATR | MACD | MACD_Sig | MACD_Hist | ST | RSI | BB_Up | BB_Mid | BB_Low | BB_Width | EMA | VWAP"
         ]
         
         # Add candle data with more indicators
@@ -252,8 +251,10 @@ class LLMPromptGenerator:
             sections.append(
                 f"{timestamp} | {row.get('o', 0):.4f} | {row.get('h', 0):.4f} | "
                 f"{row.get('l', 0):.4f} | {row.get('c', 0):.4f} | {row.get('v', 0):.0f} | "
-                f"{row.get('ATR', 0):.4f} | {row.get('MACD', 0):.4f} | {row.get('SuperTrend', 0):.4f} | "
-                f"{row.get('RSI', 50):.1f} | {row.get('BB_upper', 0):.4f} | {row.get('BB_lower', 0):.4f} | "
+                f"{row.get('ATR', 0):.4f} | {row.get('MACD', 0):.4f} | {row.get('MACD_Signal', 0):.4f} | "
+                f"{row.get('MACD_Hist', 0):.4f} | {row.get('SuperTrend', 0):.4f} | "
+                f"{row.get('RSI', 50):.1f} | {row.get('BB_upper', 0):.4f} | {row.get('BB_middle', 0):.4f} | "
+                f"{row.get('BB_lower', 0):.4f} | {row.get('BB_width', 0):.4f} | "
                 f"{row.get('EMA', 0):.4f} | {row.get('VWAP', 0):.4f}"
             )
         
@@ -279,21 +280,37 @@ class LLMPromptGenerator:
         
         return sections
 
+
     def _generate_additional_indicators_table(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
         """Generate additional indicators table for recent candles."""
         sections = [
             f"\nAdditional Indicators (last {len(df)} {timeframe.name} candles):",
-            "Time | RSI | STOCH_K | STOCH_D | WILLR | CCI | ROC | BB_Mid | FIB_50 | PIVOT"
+            "Time | STOCH_K | STOCH_D | WILLR | CCI | ROC | V_Ratio | V_Trend | FIB_78 | FIB_61 | FIB_38 | FIB_23 | R2 | R1 | S1 | S2"
         ]
         
         for idx, row in df.iterrows():
             timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
             sections.append(
-                f"{timestamp} | {row.get('RSI', 50):.1f} | {row.get('STOCH_K', 50):.1f} | "
-                f"{row.get('STOCH_D', 50):.1f} | {row.get('WILLR', -50):.1f} | {row.get('CCI', 0):.1f} | "
-                f"{row.get('ROC', 0):.2f} | {row.get('BB_middle', 0):.4f} | {row.get('FIB_50', 0):.4f} | "
-                f"{row.get('PIVOT', 0):.4f}"
+                f"{timestamp} | {row.get('STOCH_K', 50):.1f} | {row.get('STOCH_D', 50):.1f} | "
+                f"{row.get('WILLR', -50):.1f} | {row.get('CCI', 0):.1f} | {row.get('ROC', 0):.2f} | "
+                f"{row.get('v_ratio', 1):.2f} | {row.get('v_trend', 1):.2f} | "
+                f"{row.get('FIB_78', 0):.4f} | {row.get('FIB_61', 0):.4f} | {row.get('FIB_38', 0):.4f} | {row.get('FIB_23', 0):.4f} | "
+                f"{row.get('R2', 0):.4f} | {row.get('R1', 0):.4f} | {row.get('S1', 0):.4f} | {row.get('S2', 0):.4f}"
             )
+        
+        # Add Ichimoku Cloud table for last 10 candles
+        if len(df) >= 10:
+            sections.extend([
+                f"\nIchimoku Cloud (last 10 {timeframe.name} candles):",
+                "Time | TENKAN | KIJUN | SENKOU_A | SENKOU_B | CHIKOU"
+            ])
+            
+            for idx, row in df.tail(10).iterrows():
+                timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
+                sections.append(
+                    f"{timestamp} | {row.get('TENKAN', 0):.4f} | {row.get('KIJUN', 0):.4f} | "
+                    f"{row.get('SENKOU_A', 0):.4f} | {row.get('SENKOU_B', 0):.4f} | {row.get('CHIKOU', 0):.4f}"
+                )
         
         return sections
 
@@ -370,14 +387,12 @@ class LLMPromptGenerator:
             f"Senkou Span B: {latest.get('SENKOU_B', 0):.4f}",
             f"Chikou Span: {latest.get('CHIKOU', 0):.4f}",
         ])
-        
         # Volume Analysis
         prompt_parts.extend([
             "\n--- Volume Analysis ---",
             f"Volume: {latest.get('v', 0):.0f}",
             f"Volume SMA: {latest.get('v_sma', 0):.0f}",
             f"Volume Ratio: {latest.get('v_ratio', 1):.2f}",
-            f"Volume Normalized: {latest.get('v_normalized', 0):.2f}",
             f"Volume Trend: {latest.get('v_trend', 1):.2f}",
         ])
         
