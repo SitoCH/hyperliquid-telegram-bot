@@ -53,6 +53,7 @@ def process_fill(fill: Fill) -> None:
     else:
         fill_message = json.dumps(fill)
 
+    logger.info(fill_message)
     telegram_utils.queue_send(fill_message)
 
 def on_user_events(user_events: UserEventsMsg) -> None:
@@ -61,4 +62,3 @@ def on_user_events(user_events: UserEventsMsg) -> None:
         fill_events: List[Fill] = user_events_data["fills"]
         for fill in fill_events:
             process_fill(fill)
-            logger.info(fill)
