@@ -75,7 +75,8 @@ class AnalysisFilter:
             # Dead market: all price changes are tiny (increased threshold)
             if max_price_change < 0.35:
                 return False, f"Dead market - max price change {max_price_change:.2f}% < 0.35%"
-              # Low activity: average price change is minimal (increased threshold)
+
+            # Low activity: average price change is minimal (increased threshold)
             if avg_price_change < 0.25:
                 return False, f"Low activity - avg price change {avg_price_change:.2f}% < 0.25%"
         
@@ -89,8 +90,8 @@ class AnalysisFilter:
             # For significant moves (>1%), allow lower volume (bearish moves can happen on low volume)
             if significant_move:
                 # Very lenient volume check for significant price moves
-                if max_volume < 0.5:
-                    return False, f"Extreme volume drought during significant move - max volume {max_volume:.2f} < 0.5"
+                if max_volume < 0.55:
+                    return False, f"Extreme volume drought during significant move - max volume {max_volume:.2f} < 0.55"
             else:
                 # For smaller moves, require decent volume to avoid noise
                 if max_volume < 0.75:
