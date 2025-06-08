@@ -1,6 +1,7 @@
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 import time
+import os
 from datetime import datetime, timedelta
 
 from hyperliquid_utils.utils import hyperliquid_utils
@@ -57,6 +58,9 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
         
         current_time = time.time()
         stale_from = (current_time - (6 * 60 * 60)) * 1000
+
+        min_pnl_threshold = float(os.getenv('HTB_STALE_POSITION_MIN_PNL', '0.25'))
+        auto_close_stale = os.getenv('HTB_AUTO_CLOSE_STALE_POSITIONS', 'False').lower() == 'true'
         
         positions_to_close = []
         
@@ -75,7 +79,7 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
                 oldest_trade = position_trades[0]
                 trade_time = int(oldest_trade["timestamp"])
                 
-                if trade_time < stale_from and pnl > 0.25:
+                if trade_time < stale_from and pnl > min_pnl_threshold:
                     positions_to_close.append({
                         "coin": coin,
                         "size": position["szi"],
@@ -90,6 +94,14 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
                     f"Current PnL: {fmt(pos['pnl'])} USDC"
                 ]
                 await telegram_utils.send('\n'.join(message), parse_mode=ParseMode.HTML)
+                if auto_close_stale:
+                    try:
+                        exchange = hyperliquid_utils.get_exchange()
+                        if exchange:
+                            exchange.market_close(coin)
+                    except Exception as e:
+                        logger.critical(e, exc_info=True)
+                        await telegram_utils.send(f"Failed to exit {coin}: {str(e)}")
                 
     except Exception as e:
         logger.critical(e, exc_info=True)
