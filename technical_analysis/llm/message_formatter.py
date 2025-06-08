@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from utils import fmt_price, exchange_enabled
 from telegram_utils import telegram_utils
-from .llm_analysis_result import LLMAnalysisResult, LLMAnalysisTradingSetup, Signal, Prediction
+from .llm_analysis_result import LLMAnalysisResult, LLMAnalysisTradingSetup, Signal
 
 
 class LLMMessageFormatter:
@@ -15,21 +15,22 @@ class LLMMessageFormatter:
         context: ContextTypes.DEFAULT_TYPE, 
         coin: str,
         current_price: float,
-        llm_result: LLMAnalysisResult
+        llm_result: LLMAnalysisResult,
+        short_analysis: bool
     ) -> None:
         """Send AI analysis results to Telegram."""
         
         # Build analysis message
-        message = self._build_analysis_message(coin, current_price, llm_result)
+        message = self._build_analysis_message(coin, current_price, llm_result, short_analysis)
         await telegram_utils.send(message, parse_mode=ParseMode.HTML)
 
-    def _build_analysis_message(self, coin: str, current_price: float, llm_result: LLMAnalysisResult) -> str:
+    def _build_analysis_message(self, coin: str, current_price: float, llm_result: LLMAnalysisResult, short_analysis: bool) -> str:
         """Build the analysis message text."""
 
-        # Get emoji based on signal/prediction
-        if llm_result.signal == Signal.LONG or llm_result.prediction == Prediction.BULLISH:
+        # Get emoji based on signal
+        if llm_result.signal == Signal.LONG:
             direction_emoji = "📈"
-        elif llm_result.signal == Signal.SHORT or llm_result.prediction == Prediction.BEARISH:
+        elif llm_result.signal == Signal.SHORT:
             direction_emoji = "📉"
         else:
             direction_emoji = "📊"
@@ -41,7 +42,12 @@ class LLMMessageFormatter:
         message += (
             f"📊 <b>Signal:</b> {llm_result.signal.value}\n"
             f"🎯 <b>Confidence:</b> {llm_result.confidence:.0%}\n"
-            f"📈 <b>Prediction:</b> {llm_result.prediction.value}\n"
+        )
+
+        if short_analysis:
+            return message
+
+        message += (
             f"⚠️ <b>Risk Level:</b> {llm_result.risk_level.value}\n"
             f"⏰ <b>Time Horizon:</b> {llm_result.time_horizon_hours}h"
         )

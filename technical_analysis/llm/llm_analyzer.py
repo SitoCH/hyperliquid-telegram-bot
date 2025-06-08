@@ -20,7 +20,7 @@ from .prompt_generator import LLMPromptGenerator
 from .analysis_filter import AnalysisFilter
 from .litellm_client import LiteLLMClient
 from .message_formatter import LLMMessageFormatter
-from .llm_analysis_result import LLMAnalysisResult, LLMAnalysisTradingSetup, Signal, Prediction, RiskLevel
+from .llm_analysis_result import LLMAnalysisResult, LLMAnalysisTradingSetup, Signal, RiskLevel
 from html import escape as escape_html
 
 
@@ -88,7 +88,7 @@ class LLMAnalyzer:
         should_notify = interactive_analysis or llm_result.should_notify
         
         if should_notify:
-            await self.message_formatter.send_llm_analysis_message(context, coin, mid, llm_result)
+            await self.message_formatter.send_llm_analysis_message(context, coin, mid, llm_result, not interactive_analysis)
 
     async def _perform_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, mid: float, funding_rates: List[FundingRateEntry]) -> LLMAnalysisResult:
         """Core LLM analysis logic"""
@@ -107,7 +107,6 @@ class LLMAnalyzer:
         response_data = json.loads(llm_response)
         signal = Signal(response_data.get("signal", "hold").lower())
         confidence = float(response_data.get("confidence", 0.0))
-        prediction = Prediction(response_data.get("prediction", "sideways").lower())
         risk_level = RiskLevel(response_data.get("risk_level", "medium").lower())
         
         # Extract new fields
@@ -136,7 +135,6 @@ class LLMAnalyzer:
         return LLMAnalysisResult(
             signal=signal,
             confidence=confidence,
-            prediction=prediction,
             risk_level=risk_level,
             should_notify=should_notify,
             key_drivers=key_drivers,

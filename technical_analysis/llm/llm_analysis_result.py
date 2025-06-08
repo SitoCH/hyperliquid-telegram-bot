@@ -6,11 +6,6 @@ class Signal(Enum):
     SHORT = "short"
     HOLD = "hold"
 
-class Prediction(Enum):
-    BULLISH = "bullish"
-    BEARISH = "bearish"
-    SIDEWAYS = "sideways"
-
 class RiskLevel(Enum):
     LOW = "low"
     MEDIUM = "medium"
@@ -33,7 +28,6 @@ class LLMAnalysisResult:
         self,
         signal: Signal = Signal.HOLD,
         confidence: float = 0.5,
-        prediction: Prediction = Prediction.SIDEWAYS,
         risk_level: RiskLevel = RiskLevel.MEDIUM,
         should_notify: bool = False,
         key_drivers: List[str] | None = None,
@@ -44,7 +38,6 @@ class LLMAnalysisResult:
     ):
         self.signal = signal
         self.confidence = confidence
-        self.prediction = prediction
         self.risk_level = risk_level
         self.should_notify = should_notify
 

@@ -238,7 +238,6 @@ class LLMPromptGenerator:
             '  "trading_insight": "If HOLD: Explain what specific condition to wait for. If LONG/SHORT: Explain the high-probability setup with clear entry reasoning in 2-3 sentences.",',
             '  "signal": "long|short|hold",',
             '  "confidence": 0.8,',
-            '  "prediction": "bullish|bearish|sideways",',
             '  "risk_level": "low|medium|high",',
             '  "time_horizon_hours": 4,',
             '  "key_drivers": ["primary_high_probability_reason", "secondary_confirmation"],',
