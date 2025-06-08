@@ -98,10 +98,10 @@ class LLMAnalyzer:
         
         llm_response = await self.llm_client.call_api(model, prompt)
         
-        return self._parse_llm_response(llm_response)
+        return self._parse_llm_response(coin, llm_response)
 
 
-    def _parse_llm_response(self, llm_response: str) -> LLMAnalysisResult:
+    def _parse_llm_response(self, coin: str, llm_response: str) -> LLMAnalysisResult:
         """Parse AI response into structured analysis result."""
 
         response_data = json.loads(llm_response)
@@ -131,6 +131,7 @@ class LLMAnalyzer:
         # Determine if we should notify based on signal strength
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
         should_notify = signal in [Signal.LONG, Signal.SHORT] and confidence >= min_confidence
+        logger.info(f"LLM analysis for {coin}: {recap_heading} (confidence: {confidence:.0%}, should notify: {should_notify})")
         
         return LLMAnalysisResult(
             signal=signal,
