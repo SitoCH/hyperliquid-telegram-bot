@@ -96,17 +96,17 @@ async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
 async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Analyze candles for configured coins and categories."""
 
+    all_mids = hyperliquid_utils.info.all_mids()
+    coins_to_analyze = await get_coins_to_analyze(all_mids)
+    
+    if not coins_to_analyze:
+        return
+
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     available = float(user_state['withdrawable'])
     minimum_balance = 5.0
     if available < minimum_balance:
         logger.info(f"Account balance ({fmt(available)}$) is below {fmt(minimum_balance)}$, skipping analysis")
-        return
-
-    all_mids = hyperliquid_utils.info.all_mids()
-    coins_to_analyze = await get_coins_to_analyze(all_mids)
-    
-    if not coins_to_analyze:
         return
 
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
