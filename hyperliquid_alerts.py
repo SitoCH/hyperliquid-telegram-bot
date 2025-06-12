@@ -59,7 +59,7 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
         current_time = time.time()
         stale_from = (current_time - (6 * 60 * 60)) * 1000
 
-        min_pnl_threshold = float(os.getenv('HTB_STALE_POSITION_MIN_PNL', '0.25'))
+        min_pnl_threshold = float(os.getenv('HTB_STALE_POSITION_MIN_PNL', '0.50'))
         auto_close_stale = os.getenv('HTB_AUTO_CLOSE_STALE_POSITIONS', 'False').lower() == 'true'
         
         positions_to_close = []
