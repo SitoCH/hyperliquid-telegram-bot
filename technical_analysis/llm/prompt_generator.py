@@ -30,18 +30,29 @@ class LLMPromptGenerator:
             
         Returns:
             Formatted prompt string for LLM
-        """
+        """        
+        
+        current_time = datetime.now()
         prompt_parts = [
             f"URGENT TRADING ANALYSIS for {coin} - IMMEDIATE ACTION REQUIRED",
             f"Current price: ${mid:.4f}",
-            f"Analysis timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"Analysis timestamp: {current_time.strftime('%Y-%m-%d %H:%M:%S UTC')}",
             "",
             "INSTRUCTION: Analyze current market state and provide actionable trading recommendations for 3-4 hour position holding.",
             "Focus on immediate opportunities based on current technical setup and market conditions.",
             "",
             "=== MARKET CONTEXT ===",
-            f"Analysis timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"Analysis timestamp: {current_time.strftime('%Y-%m-%d %H:%M:%S UTC')}",
             f"24h price change: {self._calculate_24h_change(dataframes.get(Timeframe.HOUR_1), mid):.2f}%",
+            "",
+            "🚨 CRITICAL DATA FRESHNESS NOTICE:",
+            "- 15m/30m candles: Last candle may be up to 14-29 minutes old",
+            "- 1H candles: Last candle may be up to 59 minutes old", 
+            "- 4H candles: Last candle may be up to 3 hours and 59 minutes old",
+            "- Market conditions may have changed since the last complete candle",
+            "- Weight more recent timeframes (15m/30m) for immediate entry decisions",
+            "- Use 4H data for context and major trend direction only",
+            "- Consider that price action after the last candle close is not visible in this data",
             "",
         ]
 
@@ -56,11 +67,11 @@ class LLMPromptGenerator:
             "",
             "CRITICAL MANDATE: Only recommend trades with 70%+ win probability. Default to HOLD unless exceptional setup exists.",
             "",            "=== ADAPTIVE TIMEFRAME ANALYSIS ===",
-            "MOMENTUM-RESPONSIVE WEIGHTING:",
-            "- 4H: 25% weight - Overall trend context and major levels",
-            "- 1H: 35% weight - Primary trend direction and momentum",
-            "- 30m: 25% weight - Immediate trend shifts and entry setups",
-            "- 15m: 15% weight - Precise entry timing and micro-momentum",
+            "⚠️ DATA FRESHNESS WEIGHTING (adjust based on staleness):",
+            "- 4H: 25% weight - Overall trend context (DATA MAY BE UP TO 4 HOURS OLD)",
+            "- 1H: 35% weight - Primary trend direction (DATA MAY BE UP TO 1 HOUR OLD)",
+            "- 30m: 25% weight - Recent trend shifts (DATA MAY BE UP TO 30 MIN OLD)",
+            "- 15m: 15% weight - Most current momentum (DATA MAY BE UP TO 15 MIN OLD)",
             "",
             "FLEXIBLE ALIGNMENT RULES:",
             "1. STRONG SIGNALS: 1H and 30m aligned in same direction = Valid signal",
