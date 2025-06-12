@@ -89,8 +89,9 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         if positions_to_close:
             for pos in positions_to_close:
+                coin = pos['coin']
                 message = [
-                    f"⏰ <b>Stale position on {pos['coin']}</b>",
+                    f"⏰ <b>Stale position on {coin}</b>",
                     f"Current PnL: {fmt(pos['pnl'])} USDC"
                 ]
                 await telegram_utils.send('\n'.join(message), parse_mode=ParseMode.HTML)
