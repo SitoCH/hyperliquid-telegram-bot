@@ -344,7 +344,7 @@ class LLMPromptGenerator:
         
         # Add candle data with all indicators
         for idx, row in recent_candles.iterrows():
-            timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
+            timestamp = idx.strftime("%m-%d %H:%M") if isinstance(idx, (pd.Timestamp, datetime)) else str(idx)
             sections.append(
                 f"{timestamp} | {row.get('o', 0):.4f} | {row.get('h', 0):.4f} | "
                 f"{row.get('l', 0):.4f} | {row.get('c', 0):.4f} | {row.get('v', 0):.0f} | "
@@ -385,7 +385,7 @@ class LLMPromptGenerator:
         ]
         
         for idx, row in df.iterrows():
-            timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
+            timestamp = idx.strftime("%m-%d %H:%M") if isinstance(idx, (pd.Timestamp, datetime)) else str(idx)
             sections.append(
                 f"{timestamp} | {row.get('STOCH_K', 50):.1f} | {row.get('STOCH_D', 50):.1f} | "
                 f"{row.get('WILLR', -50):.1f} | {row.get('CCI', 0):.1f} | {row.get('ROC', 0):.2f} | "
@@ -402,7 +402,7 @@ class LLMPromptGenerator:
             ])
             
             for idx, row in df.tail(10).iterrows():
-                timestamp = idx.strftime("%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
+                timestamp = idx.strftime("%m-%d %H:%M") if isinstance(idx, (pd.Timestamp, datetime)) else str(idx)
                 sections.append(
                     f"{timestamp} | {row.get('TENKAN', 0):.4f} | {row.get('KIJUN', 0):.4f} | "
                     f"{row.get('SENKOU_A', 0):.4f} | {row.get('SENKOU_B', 0):.4f} | {row.get('CHIKOU', 0):.4f}"
