@@ -9,7 +9,7 @@ from ..funding_rates_cache import FundingRateEntry
 class LLMPromptGenerator:
     """Handles generation of prompts for LLM analysis."""
     
-    def __init__(self, timeframe_lookback_days: Dict[Timeframe, float]):
+    def __init__(self, timeframe_lookback_days: Dict[Timeframe, int]):
         self.timeframe_lookback_days = timeframe_lookback_days
     
     def generate_prediction_prompt(
