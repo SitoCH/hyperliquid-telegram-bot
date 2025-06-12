@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+    import math
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from utils import log_execution_time
@@ -55,23 +56,13 @@ def trim_candles(candles: List[Dict[str, Any]], lookback_days: int) -> List[Dict
     return [c for c in candles if c['T'] >= min_ts]
 
 def merge_candles(old_candles: List[Dict[str, Any]], new_candles: List[Dict[str, Any]], lookback_days: int) -> List[Dict[str, Any]]:
-    """Merge old and new candles with improved gap handling"""
-    # Create dictionaries for faster lookups
+    """Merge old and new candles, always replacing old with new if timestamp matches"""
     merged = {c['T']: c for c in old_candles}
-    
-    # Update with new candles
     for candle in new_candles:
-        # Only update if the new candle is newer or has more data
-        if candle['T'] not in merged or merged[candle['T']]['v'] < candle['v']:
-            merged[candle['T']] = candle
-
-    # Convert back to list and sort
+        merged[candle['T']] = candle  # Always replace with new candle
     sorted_candles = sorted(merged.values(), key=lambda x: x['T'])
-    
-    # Apply lookback period
     if lookback_days > 0:
         sorted_candles = trim_candles(sorted_candles, lookback_days)
-    
     return sorted_candles
 
 def verify_candles(coin: str, candles: List[Dict[str, Any]], timeframe: Timeframe, is_initial_load: bool = False) -> Tuple[bool, str]:
@@ -118,18 +109,21 @@ def verify_candles(coin: str, candles: List[Dict[str, Any]], timeframe: Timefram
     # Check for valid numerical values
     for candle in sorted_candles:
         try:
-            if not (float(candle['o']) and float(candle['h']) and 
-                   float(candle['l']) and float(candle['c'])):
+            o = float(candle['o'])
+            h = float(candle['h'])
+            l = float(candle['l'])
+            c = float(candle['c'])
+            # Check for NaN
+            if any(math.isnan(x) for x in [o, h, l, c]):
                 _clear_all_timeframe_caches(coin)
-                return False, "Invalid numerical values found"
-            # Verify OHLC relationships
-            if not (float(candle['l']) <= float(candle['o']) <= float(candle['h']) and
-                   float(candle['l']) <= float(candle['c']) <= float(candle['h'])):
-                _clear_all_timeframe_caches(coin)
-                return False, f"Invalid OHLC relationships at timestamp {candle['T']}"
+                return False, "Invalid numerical values (NaN) found"
         except (ValueError, TypeError):
             _clear_all_timeframe_caches(coin)
             return False, "Non-numeric values found in OHLCV data"
+        # Verify OHLC relationships
+        if not (l <= o <= h and l <= c <= h):
+            _clear_all_timeframe_caches(coin)
+            return False, f"Invalid OHLC relationships at timestamp {candle['T']}"
     
     return True, ""
 
