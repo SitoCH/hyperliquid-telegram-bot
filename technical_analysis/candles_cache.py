@@ -190,25 +190,26 @@ async def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, look
             # Run sync fetch_fn in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             new_candles = await loop.run_in_executor(None, fetch_fn, coin, timeframe.name, last_cached_ts, end_ts)
-            
             # Merge all candles
             merged = merge_candles(cached, new_candles, lookback_days)
             
-            # Update cache but exclude the current incomplete candle
-            cache_update = [c for c in merged if c['T'] < current_candle_start]
-            if cache_update:
-                update_cache(coin, timeframe, cache_update, now)
+            # Filter out incomplete candles for both cache and return
+            complete_candles = [c for c in merged if c['T'] < current_candle_start]
+            if complete_candles:
+                update_cache(coin, timeframe, complete_candles, now)
             
-            return merged
+            return complete_candles
 
         # Run sync fetch_fn in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
         candles = await loop.run_in_executor(None, fetch_fn, coin, timeframe.name, start_ts, end_ts)
         if candles:
-            # Cache everything except the current incomplete candle
-            cache_update = [c for c in candles if c['T'] < current_candle_start]
-            if cache_update:
-                update_cache(coin, timeframe, cache_update, now)
+            # Filter out incomplete candles for both cache and return
+            complete_candles = [c for c in candles if c['T'] < current_candle_start]
+            if complete_candles:
+                update_cache(coin, timeframe, complete_candles, now)
+            return complete_candles
+
         return candles
         
     except Exception as e:
