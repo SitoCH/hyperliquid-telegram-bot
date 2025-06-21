@@ -238,7 +238,7 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 [
                     [
                         "(L)" if float(position['position']['szi']) > 0 else "(S)",
-                        position['position']['coin'],
+                        position['position']['coin'][:6] + "." if len(position['position']['coin']) > 6 else position['position']['coin'],
                         f"{fmt(float(position['position']['positionValue']))}$",
                         f"{fmt(float(position['position']['unrealizedPnl']))}$",
                         f"{fmt(float(position['position']['returnOnEquity']) * 100.0)}%"
