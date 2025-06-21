@@ -13,7 +13,8 @@ from logging_utils import logger
 @dataclass
 class PortfolioBalance:
     perp_total: float
-    perp_available: float 
+    perp_withdrawable: float 
+    perp_margin_available: float 
     spot_total: float
     stacked_total: float
     cross_margin_ratio: float
@@ -52,10 +53,13 @@ def _get_portfolio_balance() -> PortfolioBalance:
     cross_margin_account_value =float(perp_state['crossMarginSummary']['accountValue'])
     cross_margin_positions_value =float(perp_state['crossMarginSummary']['totalNtlPos'])
     maintenance_margin = float(perp_state['crossMaintenanceMarginUsed'])
+
+    total_margin_used = float(perp_state['crossMarginSummary']['totalMarginUsed'])
     
     return PortfolioBalance(
         perp_total=float(perp_state['marginSummary']['accountValue']),
-        perp_available=float(perp_state['withdrawable']),
+        perp_withdrawable = float(perp_state['withdrawable']),
+        perp_margin_available = cross_margin_account_value - total_margin_used if total_margin_used > 0.0 else 0.0,
         spot_total=_calculate_spot_balance(spot_state, token_prices),
         stacked_total=_calculate_stacked_balance(staking_summary, token_prices),
         cross_margin_ratio = maintenance_margin / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
@@ -84,8 +88,13 @@ def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
     message.extend([
         "<b>Perps positions:</b>",
         f"Total balance: {fmt(balance.perp_total)} USDC", 
-        f"Available balance: {fmt(balance.perp_available)} USDC",
+        f"Withdrawable balance: {fmt(balance.perp_withdrawable)} USDC",
     ])
+
+    if balance.perp_margin_available > 0.0:
+        message.extend([
+            f"Available to trade: {fmt(balance.perp_margin_available)} USDC"
+        ])
 
     if balance.cross_margin_ratio > 0:
         message.extend([
