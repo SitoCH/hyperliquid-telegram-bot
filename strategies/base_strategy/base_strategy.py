@@ -382,6 +382,9 @@ class BaseStrategy(ABC):
             await telegram_utils.reply(update, "Closing all current positions...")
             
             exchange = hyperliquid_utils.get_exchange()
+            if not exchange:
+                return
+
             await exit_all_positions(update, context)
             
             await telegram_utils.reply(update, "Opening new positions based on current market data...")
