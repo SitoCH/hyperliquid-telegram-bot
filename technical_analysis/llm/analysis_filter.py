@@ -9,15 +9,21 @@ from .litellm_client import LiteLLMClient
 
 class AnalysisFilter:
     """Filter logic to determine when expensive AI analysis should be triggered."""
-      # Lookback period for trend analysis
+    # Lookback period for trend analysis
     TREND_LOOKBACK_PERIODS = 20
-    
+
     async def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool, funding_rates: List) -> Tuple[bool, str, float]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
         always_run_filter = os.getenv("HTB_ALWAYS_RUN_LLM_FILTER", "False").lower() == "true"
         if interactive and not always_run_filter:
             return True, f"LLM filter triggered analysis for {coin}: interactive mode", 1.0
+        
+        # Check for extreme funding conditions that warrant immediate analysis
+        if funding_rates:
+            latest_funding = funding_rates[-1] if funding_rates else None
+            if latest_funding and abs(latest_funding.funding_rate) > 0.0008:  # 0.08% threshold
+                return True, f"Emergency bypass - extreme funding rate detected: {latest_funding.funding_rate:.6f}", 1.0
         
         passes_filter, filter_reason = self._passes_pre_filter(dataframes)
         if not passes_filter:
@@ -32,7 +38,6 @@ class AnalysisFilter:
             filter_client = LiteLLMClient()
             model = os.getenv("HTB_LLM_FAST_MODEL", "unknown")
             response = await filter_client.call_api(model, filter_prompt)
-            
             should_analyze, reason, confidence = self._parse_filter_response(response)
 
             action = "triggered" if should_analyze else "skipped"
@@ -67,18 +72,22 @@ class AnalysisFilter:
             if 'v_ratio' in df.columns and not df['v_ratio'].empty:
                 volume_ratios.append(df['v_ratio'].iloc[-1])
 
+        # Emergency bypass for extreme price movements (likely liquidation events)
+        if price_changes and max(price_changes) > 3.0:
+            return True, f"Emergency bypass - extreme price movement detected: {max(price_changes):.2f}%"
+
         # Noise filters - fail if ANY are triggered
         if price_changes:
             max_price_change = max(price_changes)
             avg_price_change = sum(price_changes) / len(price_changes)
             
-            # Dead market: all price changes are tiny (increased threshold)
-            if max_price_change < 0.35:
-                return False, f"Dead market - max price change {max_price_change:.2f}% < 0.35%"
+            # Dead market: all price changes are tiny - more lenient for catching early moves
+            if max_price_change < 0.25:
+                return False, f"Dead market - max price change {max_price_change:.2f}% < 0.25%"
 
-            # Low activity: average price change is minimal (increased threshold)
-            if avg_price_change < 0.25:
-                return False, f"Low activity - avg price change {avg_price_change:.2f}% < 0.25%"
+            # Low activity: average price change is minimal - reduced for early signal detection
+            if avg_price_change < 0.15:
+                return False, f"Low activity - avg price change {avg_price_change:.2f}% < 0.15%"
         
         if volume_ratios:
             max_volume = max(volume_ratios)
@@ -86,20 +95,25 @@ class AnalysisFilter:
             
             # Check if we have significant price movement to determine volume requirements
             significant_move = price_changes and max(price_changes) > 1.0
+            moderate_move = price_changes and max(price_changes) > 0.5
             
-            # For significant moves (>1%), allow lower volume (bearish moves can happen on low volume)
+            # Dynamic volume requirements based on price movement
             if significant_move:
-                # Very lenient volume check for significant price moves
-                if max_volume < 0.55:
-                    return False, f"Extreme volume drought during significant move - max volume {max_volume:.2f} < 0.55"
+                # Allow lower volume for significant moves (breakouts can happen on lower volume initially)
+                if max_volume < 0.45:
+                    return False, f"Extreme volume drought during significant move - max volume {max_volume:.2f} < 0.45"
+            elif moderate_move:
+                # Moderate volume requirement for moderate moves
+                if max_volume < 0.65:
+                    return False, f"Low volume during moderate move - max volume {max_volume:.2f} < 0.65"
             else:
-                # For smaller moves, require decent volume to avoid noise
-                if max_volume < 0.75:
-                    return False, f"Volume drought - max volume {max_volume:.2f} < 0.75"
+                # Higher volume requirement for small moves to filter noise
+                if max_volume < 0.85:
+                    return False, f"Volume drought - max volume {max_volume:.2f} < 0.85"
                 
-                # Weak volume across the board for small moves
-                if avg_volume < 0.60:
-                    return False, f"Weak volume - avg volume {avg_volume:.2f} < 0.60"
+                # Consistent weak volume filter
+                if avg_volume < 0.70:
+                    return False, f"Weak volume - avg volume {avg_volume:.2f} < 0.70"
         
         return True, "Pre-filter passed"
 
