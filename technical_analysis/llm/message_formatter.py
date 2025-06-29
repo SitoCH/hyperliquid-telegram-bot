@@ -74,7 +74,7 @@ class LLMMessageFormatter:
 
         trading_setup = llm_result.trading_setup
 
-        if not trading_setup or not (current_price > 0 and (trading_setup.stop_loss > 0 or trading_setup.take_profit > 0)):
+        if llm_result.signal == Signal.HOLD or not trading_setup or not (current_price > 0 and (trading_setup.stop_loss > 0 or trading_setup.take_profit > 0)):
             return ""
 
         enc_side = "L" if llm_result.signal == Signal.LONG else "S"
