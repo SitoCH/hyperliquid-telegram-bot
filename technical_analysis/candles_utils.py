@@ -12,7 +12,10 @@ async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
     # Get top N coins by open interest if configured
     top_coins = os.environ.get("HTB_TOP_COINS_TO_ANALYZE")
     if top_coins:
-        coins_to_analyze.update(hyperliquid_utils.get_coins_by_open_interest()[:int(top_coins)])
+        offset = int(os.environ.get("HTB_TOP_COINS_OFFSET", "0"))
+        top_coins_count = int(top_coins)
+        all_top_coins = hyperliquid_utils.get_coins_by_open_interest()
+        coins_to_analyze.update(all_top_coins[offset:offset + top_coins_count])
 
     # Add explicitly configured coins
     configured_coins = os.getenv("HTB_COINS_TO_ANALYZE", "").split(",")

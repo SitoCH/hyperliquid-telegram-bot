@@ -55,6 +55,7 @@ docker-compose up -d
 |----------|-------------|---------|---------|
 | HTB_COINS_TO_ANALYZE | Coins to analyze hourly | "BTC,ETH" | None |
 | HTB_TOP_COINS_TO_ANALYZE | Number of top coins by open interest to analyze | "10" | None |
+| HTB_TOP_COINS_OFFSET | Number of top coins to skip before selecting coins for analysis | "0" | 0 |
 | HTB_ANALYZE_COINS_WITH_OPEN_ORDERS | Include coins with open orders in analysis | "True" or "False" | "False" |
 | HTB_COINS_ANALYSIS_MIN_CONFIDENCE | Minimum confidence level for coin analysis notifications | "0.75" | 0.75 |
 | HTB_MONITOR_STALE_POSITIONS | Monitor positions older than 1 day with positive PnL | "True" or "False" | "False" |
