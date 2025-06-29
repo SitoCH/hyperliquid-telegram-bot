@@ -117,7 +117,7 @@ class HyperliquidUtils:
         return [asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])]
 
 
-    def get_coins_by_open_interest(self) -> List[str]:
+    def get_coins_by_traded_volume(self) -> List[str]:
         response_data = self.info.meta_and_asset_ctxs()
         universe, coin_data = response_data[0]['universe'], response_data[1]
 
@@ -127,7 +127,7 @@ class HyperliquidUtils:
 
 
     def get_coins_reply_markup(self):
-        coins = self.get_coins_by_open_interest()
+        coins = self.get_coins_by_traded_volume()
         keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
         keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
         return InlineKeyboardMarkup(keyboard)

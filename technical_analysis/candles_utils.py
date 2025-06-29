@@ -14,7 +14,7 @@ async def get_coins_to_analyze(all_mids: Dict[str, Any]) -> Set[str]:
     if top_coins:
         offset = int(os.environ.get("HTB_TOP_COINS_OFFSET", "0"))
         top_coins_count = int(top_coins)
-        all_top_coins = hyperliquid_utils.get_coins_by_open_interest()
+        all_top_coins = hyperliquid_utils.get_coins_by_traded_volume()
         coins_to_analyze.update(all_top_coins[offset:offset + top_coins_count])
 
     # Add explicitly configured coins
