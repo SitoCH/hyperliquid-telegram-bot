@@ -72,6 +72,16 @@ async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
     return ConversationHandler.END
 
 
+def has_minimum_balance() -> bool:
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+    available = float(user_state['withdrawable'])
+    minimum_balance = 5.0
+    if available < minimum_balance:
+        logger.info(f"Account balance ({fmt(available)}$) is below {fmt(minimum_balance)}$, skipping analysis")
+        return False
+    return True
+
+
 async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
     """Process coins one at a time with rate limiting."""
 
@@ -82,6 +92,9 @@ async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
  
     # Schedule next coin if any remain
     if coins_to_analyze:
+        if not has_minimum_balance():
+            return
+
         weight_per_analysis = 145
         next_available = hyperliquid_rate_limiter.get_next_available_time(weight_per_analysis)
         delay = max(3, next_available)
@@ -102,11 +115,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not coins_to_analyze:
         return
 
-    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-    available = float(user_state['withdrawable'])
-    minimum_balance = 5.0
-    if available < minimum_balance:
-        logger.info(f"Account balance ({fmt(available)}$) is below {fmt(minimum_balance)}$, skipping analysis")
+    if not has_minimum_balance():
         return
 
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
