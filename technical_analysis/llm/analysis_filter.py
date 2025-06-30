@@ -306,7 +306,7 @@ class AnalysisFilter:
     
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
-        return f"""You are a balanced signal filter for {coin}. Detect developing opportunities while avoiding noise and false signals.
+        return f"""You are a balanced but highly selective signal filter for {coin}. Detect developing opportunities while avoiding noise and false signals.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
@@ -348,7 +348,7 @@ STRICT NOISE FILTERS - SKIP when ANY are present:
 
 ANALYSIS DECISION LOGIC:
 • ANALYZE: High priority (2+ conditions) OR Medium priority (2+ conditions) OR Low priority (ALL 3 conditions)
-• SKIP: Any noise filter triggered (no exceptions for weak signals)
+• SKIP: Any noise filter triggered (no exceptions for weak signals). It is better to SKIP than to approve a low-probability or ambiguous setup.
 • Force analyze ONLY if: funding rate >0.0005 AND price change >1.5% in 4h+ AND volume >1.8x
 • Early signals: Allow 15m/1h signals to trigger analysis if volume and momentum are strong
 • Trend filter: Use 4h/1d only to avoid obvious counter-trend trades, not to block all signals
