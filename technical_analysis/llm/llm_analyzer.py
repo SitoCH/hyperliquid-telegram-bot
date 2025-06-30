@@ -122,10 +122,16 @@ class LLMAnalyzer:
             raw_stop_loss = trading_setup_data.get("stop_loss", None)
             raw_take_profit = trading_setup_data.get("take_profit", None)
             if raw_stop_loss is not None and raw_take_profit is not None:
-                trading_setup = LLMAnalysisTradingSetup(
-                    stop_loss=float(raw_stop_loss),
-                    take_profit=float(raw_take_profit)
-                )
+                try:
+                    stop_loss = float(raw_stop_loss)
+                    take_profit = float(raw_take_profit)
+                    trading_setup = LLMAnalysisTradingSetup(
+                        stop_loss=stop_loss,
+                        take_profit=take_profit
+                    )
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Invalid trading setup values for {coin} - stop_loss: {raw_stop_loss}, take_profit: {raw_take_profit}. Error: {e}")
+                    trading_setup = None
 
         # Determine if we should notify based on signal strength
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
