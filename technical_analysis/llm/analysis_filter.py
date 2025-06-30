@@ -17,19 +17,13 @@ class AnalysisFilter:
 
         always_run_filter = os.getenv("HTB_ALWAYS_RUN_LLM_FILTER", "False").lower() == "true"
         if interactive and not always_run_filter:
-            return True, f"LLM filter triggered analysis for {coin}: interactive mode", 1.0
+            return True, f"Pre-filter approved analysis for {coin}: interactive mode", 1.0
         
-        # Check for extreme funding conditions that warrant immediate analysis
-        if funding_rates:
-            latest_funding = funding_rates[-1] if funding_rates else None
-            if latest_funding and abs(latest_funding.funding_rate) > 0.0008:  # 0.08% threshold
-                return True, f"Emergency bypass - extreme funding rate detected: {latest_funding.funding_rate:.6f}", 1.0
-        
-        passes_filter, filter_reason = self._passes_pre_filter(dataframes)
+        passes_filter, filter_reason, filter_confidence = self._passes_pre_filter(dataframes, funding_rates)
         if not passes_filter:
-            pre_filter_message = f"Pre-filter rejected {coin}: {filter_reason}"
+            pre_filter_message = f"Pre-filter rejected analysis for {coin}: {filter_reason}"
             logger.info(pre_filter_message)
-            return False, pre_filter_message, 0.0
+            return False, pre_filter_message, filter_confidence
 
         market_summary = self._create_market_summary(dataframes, funding_rates)
         filter_prompt = self._create_filter_prompt(coin, market_summary)
@@ -40,7 +34,7 @@ class AnalysisFilter:
             response = await filter_client.call_api(model, filter_prompt)
             should_analyze, reason, confidence = self._parse_filter_response(response)
 
-            action = "triggered" if should_analyze else "skipped"
+            action = "approved" if should_analyze else "rejected"
             logger.info(f"LLM filter {action} analysis for {coin}: {reason} (confidence: {confidence:.0%})")
             return should_analyze, reason, confidence
             
@@ -48,12 +42,17 @@ class AnalysisFilter:
             logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
             return False, "Fallback: LLM filter failed", 0.0
 
-    def _passes_pre_filter(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> Tuple[bool, str]:
-        """Quick pre-filter to catch obvious noise before LLM analysis."""
-        
+    def _passes_pre_filter(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Tuple[bool, str, float]:
+        """Quick pre-filter to catch obvious noise before LLM analysis, including market change and funding checks."""
         # Check if we have any meaningful data
         if not dataframes or all(df.empty or len(df) < 10 for df in dataframes.values()):
-            return False, "Insufficient data - no meaningful dataframes available"
+            return False, "Insufficient data - no meaningful dataframes available", 0.0
+
+        # Check for extreme funding conditions that warrant immediate analysis
+        if funding_rates:
+            latest_funding = funding_rates[-1] if funding_rates else None
+            if latest_funding and abs(latest_funding.funding_rate) > 0.0008:  # 0.08% threshold
+                return True, f"Emergency bypass - extreme funding rate detected: {latest_funding.funding_rate:.6f}", 1.0
 
         price_changes = []
         volume_ratios = []
@@ -61,61 +60,126 @@ class AnalysisFilter:
         for tf, df in dataframes.items():
             if df.empty or len(df) < 5:
                 continue
-            
             # Calculate recent price changes
             current_price = df['c'].iloc[-1]
             price_5p = df['o'].iloc[-5] if len(df) >= 5 else df['o'].iloc[0]
             price_change = abs((current_price - price_5p) / price_5p * 100)
             price_changes.append(price_change)
-            
             # Volume ratio check
             if 'v_ratio' in df.columns and not df['v_ratio'].empty:
                 volume_ratios.append(df['v_ratio'].iloc[-1])
 
         # Emergency bypass for extreme price movements (likely liquidation events)
         if price_changes and max(price_changes) > 3.0:
-            return True, f"Emergency bypass - extreme price movement detected: {max(price_changes):.2f}%"
+            return True, f"Emergency bypass - extreme price movement detected: {max(price_changes):.2f}%", 1.0
 
         # Noise filters - fail if ANY are triggered
         if price_changes:
             max_price_change = max(price_changes)
             avg_price_change = sum(price_changes) / len(price_changes)
-            
             # Dead market: all price changes are tiny - more lenient for catching early moves
             if max_price_change < 0.25:
-                return False, f"Dead market - max price change {max_price_change:.2f}% < 0.25%"
-
+                return False, f"Dead market - max price change {max_price_change:.2f}% < 0.25%", 0.0
             # Low activity: average price change is minimal - reduced for early signal detection
             if avg_price_change < 0.15:
-                return False, f"Low activity - avg price change {avg_price_change:.2f}% < 0.15%"
-        
+                return False, f"Low activity - avg price change {avg_price_change:.2f}% < 0.15%", 0.0
         if volume_ratios:
             max_volume = max(volume_ratios)
             avg_volume = sum(volume_ratios) / len(volume_ratios)
-            
-            # Check if we have significant price movement to determine volume requirements
             significant_move = price_changes and max(price_changes) > 1.0
             moderate_move = price_changes and max(price_changes) > 0.5
-            
-            # Dynamic volume requirements based on price movement
             if significant_move:
-                # Allow lower volume for significant moves (breakouts can happen on lower volume initially)
                 if max_volume < 0.45:
-                    return False, f"Extreme volume drought during significant move - max volume {max_volume:.2f} < 0.45"
+                    return False, f"Extreme volume drought during significant move - max volume {max_volume:.2f} < 0.45", 0.0
             elif moderate_move:
-                # Moderate volume requirement for moderate moves
                 if max_volume < 0.65:
-                    return False, f"Low volume during moderate move - max volume {max_volume:.2f} < 0.65"
+                    return False, f"Low volume during moderate move - max volume {max_volume:.2f} < 0.65", 0.0
             else:
-                # Higher volume requirement for small moves to filter noise
                 if max_volume < 0.85:
-                    return False, f"Volume drought - max volume {max_volume:.2f} < 0.85"
-                
-                # Consistent weak volume filter
+                    return False, f"Volume drought - max volume {max_volume:.2f} < 0.85", 0.0
                 if avg_volume < 0.70:
-                    return False, f"Weak volume - avg volume {avg_volume:.2f} < 0.70"
+                    return False, f"Weak volume - avg volume {avg_volume:.2f} < 0.70", 0.0
+
+        # Check if market conditions have changed significantly since last few periods
+        if not self._has_significant_market_change(dataframes):
+            return False, "No significant market change detected", 0.0
+
+        return True, "Pre-filter passed", 1.0
+
+    def _has_significant_market_change(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> bool:
+        """Check if market conditions have changed significantly using dataframe history."""
         
-        return True, "Pre-filter passed"
+        for tf, df in dataframes.items():
+            if df.empty or len(df) < 10:
+                continue
+            
+            # Compare current state with 5 periods ago to detect meaningful changes
+            current_idx = -1
+            previous_idx = -6 if len(df) >= 6 else -len(df)
+            
+            # Price change analysis
+            current_price = df['c'].iloc[current_idx]
+            previous_price = df['c'].iloc[previous_idx]
+            price_change = abs((current_price - previous_price) / previous_price * 100)
+            
+            # Volume change analysis
+            if 'v_ratio' in df.columns and not df['v_ratio'].empty:
+                current_volume = df['v_ratio'].iloc[current_idx]
+                previous_volume = df['v_ratio'].iloc[previous_idx]
+                volume_change = abs(current_volume - previous_volume)
+                
+                # Significant change if volume ratio changed by >0.5 AND price moved >0.5%
+                if volume_change > 0.5 and price_change > 0.5:
+                    return True
+            
+            # RSI momentum shift detection
+            if 'RSI' in df.columns and not df['RSI'].empty and len(df) >= 6:
+                current_rsi = df['RSI'].iloc[current_idx]
+                previous_rsi = df['RSI'].iloc[previous_idx]
+                if not (pd.isna(current_rsi) or pd.isna(previous_rsi)):
+                    rsi_change = abs(current_rsi - previous_rsi)
+                    
+                    # Significant RSI shift (>10 points) suggests regime change
+                    if rsi_change > 10:
+                        return True
+                    
+                    # RSI crossing key levels (30/70) with price movement
+                    rsi_crossing_oversold = previous_rsi < 30 and current_rsi > 30
+                    rsi_crossing_overbought = previous_rsi > 70 and current_rsi < 70
+                    if (rsi_crossing_oversold or rsi_crossing_overbought) and price_change > 0.8:
+                        return True
+            
+            # MACD momentum change detection
+            if 'MACD_Hist' in df.columns and not df['MACD_Hist'].empty and len(df) >= 6:
+                current_hist = df['MACD_Hist'].iloc[current_idx]
+                previous_hist = df['MACD_Hist'].iloc[previous_idx]
+                if not (pd.isna(current_hist) or pd.isna(previous_hist)):
+                    # MACD histogram sign change (momentum reversal)
+                    if (current_hist > 0 and previous_hist < 0) or (current_hist < 0 and previous_hist > 0):
+                        return True
+            
+            # SuperTrend change (trend direction shift)
+            if 'SuperTrend' in df.columns and not df['SuperTrend'].empty and len(df) >= 6:
+                current_st = df['SuperTrend'].iloc[current_idx]
+                previous_st = df['SuperTrend'].iloc[previous_idx]
+                if not (pd.isna(current_st) or pd.isna(previous_st)):
+                    # Price relationship to SuperTrend changed
+                    was_above = df['c'].iloc[previous_idx] > previous_st
+                    is_above = current_price > current_st
+                    if was_above != is_above:  # Trend direction changed
+                        return True
+            
+            # Volatility expansion detection
+            current_volatility = (df['h'].iloc[current_idx] - df['l'].iloc[current_idx]) / current_price
+            previous_volatility = (df['h'].iloc[previous_idx] - df['l'].iloc[previous_idx]) / df['c'].iloc[previous_idx]
+            volatility_expansion = current_volatility / previous_volatility if previous_volatility > 0 else 1
+            
+            # Significant volatility expansion (>50% increase) suggests new market activity
+            if volatility_expansion > 1.5 and price_change > 0.5:
+                return True
+        
+        # No significant changes detected across any timeframe
+        return False
 
     def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Dict[str, Any]:
         """Create a comprehensive market summary for cheap LLM filtering."""

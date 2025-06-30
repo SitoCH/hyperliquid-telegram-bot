@@ -136,7 +136,8 @@ class LLMAnalyzer:
         # Determine if we should notify based on signal strength
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
         should_notify = signal in [Signal.LONG, Signal.SHORT] and confidence >= min_confidence
-        logger.info(f"LLM analysis for {coin}: {recap_heading} (confidence: {confidence:.0%}, should notify: {should_notify})")
+        action = "approved" if should_notify else "rejected"
+        logger.info(f"LLM {action} analysis for {coin}: {recap_heading} (confidence: {confidence:.0%}, should notify: {should_notify})")
         
         return LLMAnalysisResult(
             signal=signal,
