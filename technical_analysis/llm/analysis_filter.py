@@ -56,7 +56,12 @@ class AnalysisFilter:
 
         price_changes = []
         volume_ratios = []
-
+        high_tf_price_moves = []
+        high_tf_volume_ratios = []
+        choppy_reversals = {}
+        range_prison_detected = False
+        range_prison_tf = None
+        bb_expansion_info = None
         for tf, df in dataframes.items():
             if df.empty or len(df) < 5:
                 continue
@@ -66,8 +71,84 @@ class AnalysisFilter:
             price_change = abs((current_price - price_5p) / price_5p * 100)
             price_changes.append(price_change)
             # Volume ratio check
-            if 'v_ratio' in df.columns and not df['v_ratio'].empty:
-                volume_ratios.append(df['v_ratio'].iloc[-1])
+            v_ratio = df['v_ratio'].iloc[-1] if 'v_ratio' in df.columns and not df['v_ratio'].empty else None
+            if v_ratio is not None:
+                volume_ratios.append(v_ratio)
+            tf_str = str(tf).lower()
+            # High timeframes for micro moves and range prison
+            if '4h' in tf_str or '1d' in tf_str:
+                high_tf_price_moves.append(price_change)
+                if v_ratio is not None:
+                    high_tf_volume_ratios.append(v_ratio)
+                # Choppy reversals: price reversals >3 in last 10 periods
+                if len(df) >= 11:
+                    reversals = 0
+                    last_dir = None
+                    for i in range(-10, 0):
+                        diff = df['c'].iloc[i] - df['c'].iloc[i-1]
+                        dir = 1 if diff > 0 else -1 if diff < 0 else 0
+                        if last_dir is not None and dir != 0 and dir != last_dir:
+                            reversals += 1
+                        if dir != 0:
+                            last_dir = dir
+                    choppy_reversals[tf_str] = reversals
+                # Range prison: price within 0.3% range for 8+ periods
+                if len(df) >= 8:
+                    min_p = df['c'].iloc[-8:].min()
+                    max_p = df['c'].iloc[-8:].max()
+                    if (max_p - min_p) / min_p * 100 < 0.3:
+                        range_prison_detected = True
+                        range_prison_tf = tf_str
+            # 1h+ for volume drought and choppy action
+            if '1h' in tf_str or '4h' in tf_str or '1d' in tf_str:
+                if v_ratio is not None:
+                    high_tf_volume_ratios.append(v_ratio)
+                # Choppy reversals: price reversals >3 in last 10 periods
+                if len(df) >= 11:
+                    reversals = 0
+                    last_dir = None
+                    for i in range(-10, 0):
+                        diff = df['c'].iloc[i] - df['c'].iloc[i-1]
+                        dir = 1 if diff > 0 else -1 if diff < 0 else 0
+                        if last_dir is not None and dir != 0 and dir != last_dir:
+                            reversals += 1
+                        if dir != 0:
+                            last_dir = dir
+                    choppy_reversals[tf_str] = max(choppy_reversals.get(tf_str, 0), reversals)
+            # BB width expansion (for context-rich rejection)
+            if 'BB_width' in df.columns and len(df) >= 3:
+                bb_width_now = df['BB_width'].iloc[-1]
+                bb_width_prev = df['BB_width'].iloc[-3]
+                if bb_width_prev > 0 and (bb_width_now - bb_width_prev) / bb_width_prev > 0.15 and price_change > 0.5:
+                    bb_expansion_info = {
+                        'tf': tf_str,
+                        'bb_width_now': bb_width_now,
+                        'bb_width_prev': bb_width_prev,
+                        'price_move': price_change,
+                        'v_ratio': v_ratio
+                    }
+        # Micro moves: all 4h+ price moves <0.3%
+        if high_tf_price_moves and all(x < 0.3 for x in high_tf_price_moves):
+            return False, f"Micro moves: Price changes <0.3% in ALL 4h+ timeframes. High risk of false signal.", 0.4
+        # Volume drought: all 1h+ volume ratios <1.1
+        high_tf_vols = [v for v in high_tf_volume_ratios if v is not None]
+        if high_tf_vols and all(x < 1.1 for x in high_tf_vols):
+            return False, f"Volume drought: Average volume ratio <1.1x across 1h+ timeframes. Weak volume alignment, high risk of noise.", 0.4
+        # Choppy action: price reversals >3 times in 10 periods in main timeframes (1h+)
+        choppy_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 3]
+        if choppy_tfs:
+            return False, f"Choppy action: Price reversals >3 times in 10 periods in timeframes: {', '.join(choppy_tfs)}. Indicates high risk of noise and false signals.", 0.4
+        # Range prison: price within 0.3% range for 8+ periods in 4h+ timeframes
+        if range_prison_detected:
+            return False, f"Range prison: Price within 0.3% range for 8+ periods in {range_prison_tf}. Indicates high risk of false signal.", 0.4
+        # Volatility expansion with volume drought (context-rich rejection)
+        if bb_expansion_info and bb_expansion_info['v_ratio'] is not None and bb_expansion_info['v_ratio'] < 1.1:
+            msg = (
+                f"Volatility expansion with BB width {bb_expansion_info['bb_width_now']:.2f} (>15% from {bb_expansion_info['bb_width_prev']:.2f}), "
+                f"price move {bb_expansion_info['price_move']:.2f}%, and volume drought (v_ratio {bb_expansion_info['v_ratio']:.2f}) detected in {bb_expansion_info['tf']} timeframe. "
+                f"Noise filter triggered due to weak volume alignment, indicating high risk of false signal."
+            )
+            return False, msg, 0.4
 
         # Emergency bypass for extreme price movements (likely liquidation events)
         if price_changes and max(price_changes) > 3.0:
@@ -104,6 +185,19 @@ class AnalysisFilter:
         if not self._has_significant_market_change(dataframes):
             return False, "No significant market change detected", 0.0
 
+        # Fallback: No actionable signals or noise filters triggered
+        strong_momentum = any(
+            (('15m' in str(tf).lower() or '1h' in str(tf).lower()) and abs((df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100) > 1.5)
+            or (('4h' in str(tf).lower() or '1d' in str(tf).lower()) and abs((df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100) > 0.8 and 'v_ratio' in df.columns and df['v_ratio'].iloc[-1] > 1.5)
+            for tf, df in dataframes.items() if not df.empty and len(df) >= 5
+        )
+        # Could add more checks for medium/low priority signals if needed
+        if not strong_momentum:
+            return False, (
+                "Any high priority signals require at least 2 conditions; "
+                "current data shows no strong momentum (>1.5% in 15m/1h or >0.8% in 4h) nor level breakthroughs with volume >1.5x. "
+                "Medium and low priority signals are also not present. No critical noise filters triggered. (confidence: 20%)"
+            ), 0.2
         return True, "Pre-filter passed", 1.0
 
     def _has_significant_market_change(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> bool:
