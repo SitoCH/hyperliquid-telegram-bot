@@ -400,7 +400,7 @@ class AnalysisFilter:
     
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
-        return f"""You are a balanced but highly selective signal filter for {coin}. Detect developing opportunities while avoiding noise and false signals.
+        return f"""You are a balanced but selective signal filter for {coin}. Detect developing opportunities while avoiding noise and false signals.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
