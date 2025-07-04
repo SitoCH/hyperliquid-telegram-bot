@@ -56,12 +56,16 @@ class AnalysisFilter:
 
         price_changes = []
         volume_ratios = []
-        high_tf_price_moves = []
-        high_tf_volume_ratios = []
+        # Available timeframe categorization (15m, 30m, 1h, 4h only)
+        medium_tf_price_moves = []  # 1h, 4h - for trend direction and major levels
+        medium_tf_volume_ratios = []
+        signal_tf_moves = []  # 15m, 30m - primary signal detection
+        signal_tf_volume_ratios = []
         choppy_reversals = {}
         range_prison_detected = False
         range_prison_tf = None
         bb_expansion_info = None
+        
         for tf, df in dataframes.items():
             if df.empty or len(df) < 5:
                 continue
@@ -75,12 +79,17 @@ class AnalysisFilter:
             if v_ratio is not None:
                 volume_ratios.append(v_ratio)
             tf_str = str(tf).lower()
-            # High timeframes for micro moves and range prison
-            if '4h' in tf_str or '1d' in tf_str:
-                high_tf_price_moves.append(price_change)
+            
+            # Timeframe classification with available timeframes only
+            is_medium_tf = '1h' in tf_str or '4h' in tf_str  # Medium timeframes for direction
+            is_signal_tf = '15m' in tf_str or '30m' in tf_str  # Primary signal timeframes
+            
+            # Medium timeframes (1h, 4h) - for trend direction and volume context
+            if is_medium_tf:
+                medium_tf_price_moves.append(price_change)
                 if v_ratio is not None:
-                    high_tf_volume_ratios.append(v_ratio)
-                # Choppy reversals: price reversals >3 in last 10 periods
+                    medium_tf_volume_ratios.append(v_ratio)
+                # Choppy reversals in medium timeframes
                 if len(df) >= 11:
                     reversals = 0
                     last_dir = None
@@ -92,18 +101,20 @@ class AnalysisFilter:
                         if dir != 0:
                             last_dir = dir
                     choppy_reversals[tf_str] = reversals
-                # Range prison: price within 0.3% range for 8+ periods
-                if len(df) >= 8:
+                # Range prison: check 4h for consolidation (since no 1d available)
+                if '4h' in tf_str and len(df) >= 8:
                     min_p = df['c'].iloc[-8:].min()
                     max_p = df['c'].iloc[-8:].max()
-                    if (max_p - min_p) / min_p * 100 < 0.3:
+                    if (max_p - min_p) / min_p * 100 < 0.4:  # 4h consolidation threshold
                         range_prison_detected = True
                         range_prison_tf = tf_str
-            # 1h+ for volume drought and choppy action
-            if '1h' in tf_str or '4h' in tf_str or '1d' in tf_str:
+            
+            # Signal timeframes (15m, 30m) - primary signal detection
+            if is_signal_tf:
+                signal_tf_moves.append(price_change)
                 if v_ratio is not None:
-                    high_tf_volume_ratios.append(v_ratio)
-                # Choppy reversals: price reversals >3 in last 10 periods
+                    signal_tf_volume_ratios.append(v_ratio)
+                # Choppy reversals in signal timeframes (more sensitive)
                 if len(df) >= 11:
                     reversals = 0
                     last_dir = None
@@ -115,7 +126,8 @@ class AnalysisFilter:
                         if dir != 0:
                             last_dir = dir
                     choppy_reversals[tf_str] = max(choppy_reversals.get(tf_str, 0), reversals)
-            # BB width expansion (for context-rich rejection)
+            
+            # BB width expansion (for context-rich rejection) - check all timeframes
             if 'BB_width' in df.columns and len(df) >= 3:
                 bb_width_now = df['BB_width'].iloc[-1]
                 bb_width_prev = df['BB_width'].iloc[-3]
@@ -127,20 +139,35 @@ class AnalysisFilter:
                         'price_move': price_change,
                         'v_ratio': v_ratio
                     }
-        # Micro moves: all 4h+ price moves <0.3%
-        if high_tf_price_moves and all(x < 0.3 for x in high_tf_price_moves):
-            return False, f"Micro moves: Price changes <0.3% in ALL 4h+ timeframes. High risk of false signal.", 0.4
-        # Volume drought: all 1h+ volume ratios <1.1
-        high_tf_vols = [v for v in high_tf_volume_ratios if v is not None]
-        if high_tf_vols and all(x < 1.1 for x in high_tf_vols):
-            return False, f"Volume drought: Average volume ratio <1.1x across 1h+ timeframes. Weak volume alignment, high risk of noise.", 0.4
-        # Choppy action: price reversals >3 times in 10 periods in main timeframes (1h+)
-        choppy_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 3]
-        if choppy_tfs:
-            return False, f"Choppy action: Price reversals >3 times in 10 periods in timeframes: {', '.join(choppy_tfs)}. Indicates high risk of noise and false signals.", 0.4
-        # Range prison: price within 0.3% range for 8+ periods in 4h+ timeframes
+        # Noise filters adapted to available timeframes (15m, 30m, 1h, 4h)
+        
+        # 4h consolidation: check for major range-bound conditions
         if range_prison_detected:
-            return False, f"Range prison: Price within 0.3% range for 8+ periods in {range_prison_tf}. Indicates high risk of false signal.", 0.4
+            return False, f"4h timeframe consolidation: Price within 0.4% range for 8+ periods in {range_prison_tf}. Major consolidation detected.", 0.3
+        
+        # Signal timeframe micro moves: if signal timeframes (15m, 30m) show no movement, likely noise
+        if signal_tf_moves and all(x < 0.2 for x in signal_tf_moves):
+            return False, f"Signal timeframe micro moves: Price changes <0.2% in ALL signal timeframes (15m, 30m). High risk of false intraday signal.", 0.3
+        
+        # Medium timeframe volume drought: 1h+ volume ratios too low
+        medium_tf_vols = [v for v in medium_tf_volume_ratios if v is not None]
+        if medium_tf_vols and all(x < 1.0 for x in medium_tf_vols):
+            return False, f"Medium timeframe volume drought: Volume ratio <1.0x across 1h/4h timeframes. Insufficient momentum for sustained moves.", 0.3
+        
+        # Signal timeframe volume drought: 15m/30m need decent volume for reliable signals
+        signal_tf_vols = [v for v in signal_tf_volume_ratios if v is not None]
+        if signal_tf_vols and all(x < 0.8 for x in signal_tf_vols):
+            return False, f"Signal timeframe volume drought: Volume ratio <0.8x in signal timeframes (15m, 30m). Insufficient volume for reliable signals.", 0.3
+        
+        # Choppy action: price reversals in key timeframes
+        choppy_medium_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 4 and ('1h' in tf or '4h' in tf)]
+        choppy_signal_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 3 and ('15m' in tf or '30m' in tf)]
+        
+        if choppy_medium_tfs:
+            return False, f"Medium timeframe chop: Price reversals >4 times in 10 periods in timeframes: {', '.join(choppy_medium_tfs)}. Trend direction unclear.", 0.3
+        
+        if choppy_signal_tfs:
+            return False, f"Signal timeframe chop: Price reversals >3 times in 10 periods in timeframes: {', '.join(choppy_signal_tfs)}. High noise in signal detection timeframes.", 0.4
         # Volatility expansion with volume drought (context-rich rejection)
         if bb_expansion_info and bb_expansion_info['v_ratio'] is not None and bb_expansion_info['v_ratio'] < 1.1:
             msg = (
@@ -185,18 +212,28 @@ class AnalysisFilter:
         if not self._has_significant_market_change(dataframes):
             return False, "No significant market change detected", 0.0
 
-        # Fallback: No actionable signals or noise filters triggered
-        strong_momentum = any(
-            (('15m' in str(tf).lower() or '1h' in str(tf).lower()) and abs((df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100) > 1.5)
-            or (('4h' in str(tf).lower() or '1d' in str(tf).lower()) and abs((df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100) > 0.8 and 'v_ratio' in df.columns and df['v_ratio'].iloc[-1] > 1.5)
+        # Momentum detection adapted to available timeframes (15m, 30m, 1h, 4h)
+        available_tf_momentum = any(
+            # Signal timeframe momentum (15m, 30m) - primary for intraday trading
+            (('15m' in str(tf).lower() or '30m' in str(tf).lower()) and 
+             abs((df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100) > 1.0 and
+             'v_ratio' in df.columns and df['v_ratio'].iloc[-1] > 1.2)
+            # Medium timeframe confirmation (1h, 4h) - for trend alignment
+            or (('1h' in str(tf).lower()) and 
+                abs((df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100) > 0.8 and
+                'v_ratio' in df.columns and df['v_ratio'].iloc[-1] > 1.3)
+            # 4h timeframe for stronger moves (less frequent but more reliable)
+            or (('4h' in str(tf).lower()) and 
+                abs((df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100) > 0.6 and
+                'v_ratio' in df.columns and df['v_ratio'].iloc[-1] > 1.4)
             for tf, df in dataframes.items() if not df.empty and len(df) >= 5
         )
-        # Could add more checks for medium/low priority signals if needed
-        if not strong_momentum:
+        
+        if not available_tf_momentum:
             return False, (
-                "Any high priority signals require at least 2 conditions; "
-                "current data shows no strong momentum (>1.5% in 15m/1h or >0.8% in 4h) nor level breakthroughs with volume >1.5x. "
-                "Medium and low priority signals are also not present. No critical noise filters triggered. (confidence: 20%)"
+                "No momentum detected in available timeframes. Signals require: "
+                ">1.0% move in 15m/30m with volume >1.2x OR >0.8% in 1h with volume >1.3x OR "
+                ">0.6% in 4h with volume >1.4x. Current data shows insufficient momentum for reliable opportunities."
             ), 0.2
         return True, "Pre-filter passed", 1.0
 
@@ -405,51 +442,51 @@ class AnalysisFilter:
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
-TIMEFRAME BALANCE APPROACH:
-• Higher timeframes (4h, 1d): Provide trend context and filter direction - prevent counter-trend trades
-• Medium timeframes (1h, 15m): Primary signal detection - catch momentum shifts early
-• Lower timeframes (5m, 1m): Entry timing and momentum confirmation - validate breakouts
+AVAILABLE TIMEFRAME APPROACH:
+• Higher timeframes (4h): Trend direction and major support/resistance levels
+• Medium timeframe (1h): Trend confirmation and momentum validation
+• Signal timeframes (15m, 30m): PRIMARY signal detection and opportunity identification
 
 SIGNAL DETECTION CRITERIA (balanced approach for early but quality signals):
 
-🔥 HIGH PRIORITY SIGNALS (require 2+ conditions, early momentum focus):
-• Strong momentum: >1.5% in 15m/1h OR >0.8% in 4h with volume ratio >1.5x
-• RSI extremes with momentum: RSI <25 or >75 in any timeframe AND price momentum alignment
-• MACD acceleration: Histogram growing >2 periods in 15m+ AND volume >1.4x
-• Level breaks with volume: Price breaking key levels >0.8% in any timeframe AND volume >1.5x
-• Volatility expansion: BB width expanding >15% in 15m+ AND price move >0.5%
+🔥 HIGH PRIORITY SIGNALS (require 2+ conditions):
+• Strong momentum: >1.0% in 15m/30m with volume >1.2x OR >0.8% in 1h with volume >1.3x OR >0.6% in 4h with volume >1.4x
+• RSI extremes with momentum: RSI <30 or >70 in any timeframe AND price momentum alignment
+• MACD acceleration: Histogram growing >2 periods in any timeframe AND volume >1.3x
+• Level breaks: Price breaking key levels >0.6% in signal timeframes AND volume >1.4x
+• Volatility expansion: BB width expanding >12% in any timeframe AND price move >0.4%
 
-⚡ MEDIUM PRIORITY SIGNALS (require 2+ conditions, momentum + confirmation):
-• Decent moves: >1.0% in 15m/1h OR >0.6% in 4h with volume ratio >1.3x
-• Technical alignment: RSI and MACD aligned in same direction in 15m+ with volume >1.2x
-• Key level approach: Price within 0.8% of levels in any timeframe AND volume spike >1.3x
-• Trend acceleration: ROC increasing in 15m+ AND Stochastic signal AND volume >1.2x
-• Funding pressure: Rate >0.0003 AND price movement confirming direction
+⚡ MEDIUM PRIORITY SIGNALS (require 2+ conditions):
+• Decent moves: >0.8% in 15m/30m OR >0.6% in 1h OR >0.5% in 4h with volume >1.1x
+• Technical alignment: RSI and MACD aligned in same direction with volume >1.1x
+• Level approach: Price within 0.6% of key levels in any timeframe AND volume >1.2x
+• Momentum build: ROC acceleration in 15m/30m/1h AND Stochastic signal AND volume >1.1x
+• Funding + price: Rate >0.0002 AND price movement confirming direction
 
-📈 LOW PRIORITY SIGNALS (require ALL 3 conditions, early detection):
-• Building momentum: ROC acceleration AND Stochastic cross in 15m+ AND volume >1.15x
-• Multi-timeframe sync: Same signal across 2+ timeframes (don't require 4h+ signal)
-• Ichimoku setup: Multiple component alignment in 15m+ AND price momentum AND volume
+📈 LOW PRIORITY SIGNALS (require ALL 3 conditions):
+• Building momentum: ROC acceleration AND Stochastic cross in 15m/30m AND volume >1.0x
+• Multi-timeframe sync: Same signal across 2+ timeframes (15m, 30m, 1h)
+• Technical setup: Multiple indicator alignment AND price momentum
 
-STRICT NOISE FILTERS - SKIP when ANY are present:
-• Micro moves: Price changes <0.3% in ALL 4h+ timeframes (ignore lower timeframe noise)
-• Volume drought: Average volume ratio <1.1x across 1h+ timeframes
-• Choppy action: Price reversals >3 times in 10 periods in main timeframes (1h+)
-• Weak conviction: Price change >0.8% in 4h+ but volume <1.2x (fake moves)
-• Range prison: Price within 0.3% range for 8+ periods in 4h+ timeframes
-• Signal conflict: RSI overbought but MACD bullish in same timeframe without strong volume
-• Dead zone: ALL indicators flat in 1h+ timeframes AND volume <1.1x
+NOISE FILTERS - SKIP when ANY present:
+• Signal timeframe micro moves: Price changes <0.2% in ALL 15m/30m timeframes
+• Medium timeframe volume drought: Volume ratio <1.0x in 1h/4h timeframes
+• Signal timeframe volume drought: Volume ratio <0.8x in 15m/30m timeframes  
+• Signal timeframe chop: Price reversals >3 times in 10 periods in 15m/30m
+• Medium timeframe chop: Price reversals >4 times in 10 periods in 1h/4h
+• 4h consolidation: Price within 0.4% range for 8+ periods in 4h timeframe
+• Weak conviction: Price move without adequate volume for the timeframe
 
 ANALYSIS DECISION LOGIC:
-• ANALYZE: High priority (2+ conditions) OR Medium priority (2+ conditions) OR Low priority (ALL 3 conditions)
-• SKIP: Any noise filter triggered (no exceptions for weak signals). It is better to SKIP than to approve a low-probability or ambiguous setup.
-• Force analyze ONLY if: funding rate >0.0005 AND price change >1.5% in 4h+ AND volume >1.8x
-• Early signals: Allow 15m/1h signals to trigger analysis if volume and momentum are strong
-• Trend filter: Use 4h/1d only to avoid obvious counter-trend trades, not to block all signals
+• ANALYZE: High priority (2+ conditions) OR Medium priority (2+ conditions) OR Low priority (ALL 3)
+• SKIP: Any noise filter triggered. Better to miss than take low-probability setups
+• Force analyze: Funding rate >0.0004 AND >1.2% price change in signal timeframes AND volume >1.6x
+• Primary focus: 15m/30m signals with 1h confirmation - use 4h for trend context only
+• Trend awareness: Use 4h for major trend direction but don't let it block good shorter-term signals
 
-Confidence: Based on signal strength, momentum quality, and volume confirmation
+Confidence: Based on signal strength, volume confirmation, and timeframe alignment
 
-Balance early signal detection with trend awareness - catch moves early but avoid fighting major trends.
+Focus on capturing moves efficiently - catch momentum early with proper confirmation.
 
 Response must be pure JSON - no markdown, no explanations:
 {{
