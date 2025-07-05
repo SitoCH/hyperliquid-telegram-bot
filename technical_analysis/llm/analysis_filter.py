@@ -160,14 +160,14 @@ class AnalysisFilter:
             return False, f"Signal timeframe volume drought: Volume ratio <0.8x in signal timeframes (15m, 30m). Insufficient volume for reliable signals.", 0.3
         
         # Choppy action: price reversals in key timeframes
-        choppy_medium_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 4 and ('1h' in tf or '4h' in tf)]
-        choppy_signal_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 3 and ('15m' in tf or '30m' in tf)]
-        
+        choppy_medium_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 5 and ('1h' in tf or '4h' in tf)]
         if choppy_medium_tfs:
-            return False, f"Medium timeframe chop: Price reversals >4 times in 10 periods in timeframes: {', '.join(choppy_medium_tfs)}. Trend direction unclear.", 0.3
-        
+            return False, f"Medium timeframe chop: Price reversals >5 times in 10 periods in timeframes: {', '.join(choppy_medium_tfs)}. Trend direction unclear.", 0.3
+
+        choppy_signal_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 4 and ('15m' in tf or '30m' in tf)]
         if choppy_signal_tfs:
-            return False, f"Signal timeframe chop: Price reversals >3 times in 10 periods in timeframes: {', '.join(choppy_signal_tfs)}. High noise in signal detection timeframes.", 0.4
+            return False, f"Signal timeframe chop: Price reversals >4 times in 10 periods in timeframes: {', '.join(choppy_signal_tfs)}. High noise in signal detection timeframes.", 0.4
+
         # Volatility expansion with volume drought (context-rich rejection)
         if bb_expansion_info and bb_expansion_info['v_ratio'] is not None and bb_expansion_info['v_ratio'] < 1.1:
             msg = (
