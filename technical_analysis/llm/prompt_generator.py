@@ -255,7 +255,7 @@ class LLMPromptGenerator:
             "- For HOLD signals: trading_setup can contain conditional levels for future reference",
             "",
             "{",
-            '  "recap_heading": "Single sentence market state summary focusing on immediate trading opportunity or reason to wait",',
+            '  "recap_heading": "Single sentence market state summary focusing on immediate trading opportunity or reason to wait, don''t start with the hold / long / short signal, just a plain sentence",',
             '  "trading_insight": "If HOLD: Explain what specific condition to wait for. If LONG/SHORT: Explain the high-probability setup with clear entry reasoning in 2-3 sentences.",',
             '  "signal": "long|short|hold",',
             '  "confidence": 0.8,',
