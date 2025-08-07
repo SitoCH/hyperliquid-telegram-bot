@@ -30,7 +30,7 @@ class LiteLLMClient:
                     {"role": "user", "content": prompt}
                 ],
                 response_format={"type": "json_object"},
-                max_tokens=17500,
+                max_completion_tokens=17500,
                 timeout=60
             )
             
