@@ -36,7 +36,9 @@ class LLMMessageFormatter:
             direction_emoji = "📊"
 
         message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
-        message += f"<b>{direction_emoji} Market Analysis:</b> {llm_result.recap_heading}\n\n"
+        # Escape HTML characters in recap heading to prevent parsing errors
+        escaped_recap = self._escape_html_text(llm_result.recap_heading)
+        message += f"<b>{direction_emoji} Market Analysis:</b> {escaped_recap}\n\n"
         
         # Add signal information
         message += (
@@ -55,13 +57,17 @@ class LLMMessageFormatter:
         # Add trading insight if available
         trading_insight = getattr(llm_result, 'trading_insight', '')
         if trading_insight:
-            message += f"\n\n💡 <b>Trading Insight:</b>\n{trading_insight}"
+            # Escape HTML characters in trading insight to prevent parsing errors
+            escaped_insight = self._escape_html_text(trading_insight)
+            message += f"\n\n💡 <b>Trading Insight:</b>\n{escaped_insight}"
 
         # Add key drivers if available
         if llm_result.key_drivers:
             message += "\n\n🔑 <b>Key Drivers:</b>"
             for driver in llm_result.key_drivers:
-                message += f"\n• {driver}"
+                # Escape HTML characters in key drivers to prevent parsing errors
+                escaped_driver = self._escape_html_text(driver)
+                message += f"\n• {escaped_driver}"
         
         trade_setup = self._build_trade_setup_format(coin, current_price, llm_result)
         if trade_setup:
@@ -105,3 +111,16 @@ class LLMMessageFormatter:
             setup += f"\nTake Profit: {fmt_price(trading_setup.take_profit)} USDC ({tp_percentage:+.1f}%)"
         
         return setup
+
+    def _escape_html_text(self, text: str) -> str:
+        """Escape HTML characters in text to prevent parsing errors."""
+        if not text:
+            return text
+        
+        # Replace problematic characters with HTML entities
+        return (text
+                .replace("&", "&amp;")  # Must be first to avoid double-escaping
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace('"', "&quot;")
+                .replace("'", "&#x27;"))
