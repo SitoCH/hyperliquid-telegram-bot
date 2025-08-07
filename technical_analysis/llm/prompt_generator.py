@@ -261,7 +261,7 @@ class LLMPromptGenerator:
             '  "confidence": 0.8,',
             '  "risk_level": "low|medium|high",',
             '  "time_horizon_hours": 4,',
-            '  "key_drivers": ["Clear bullish momentum with volume confirmation", "Multiple timeframe alignment at key support level"],',
+            '  "key_drivers": ["Clear bullish momentum with volume confirmation", "Multiple timeframe alignment at key support level"], // mininum 1, maximum 3 key drivers',
             '  "signal_score": 12,',
             '  "tier1_checklist": {',
             '    "timeframe_alignment": true,',
