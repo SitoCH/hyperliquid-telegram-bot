@@ -234,20 +234,25 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 reverse=True
             )
 
+            def format_position(position):
+                direction = "L" if float(position['szi']) > 0 else "S"
+                coin = position['coin'][:4] + "." if len(position['coin']) > 4 else position['coin']
+                return f"{direction} {coin}"
+
+
             table = tabulate(
                 [
                     [
-                        "L" if float(position['position']['szi']) > 0 else "S",
-                        position['position']['coin'][:4] + "." if len(position['position']['coin']) > 4 else position['position']['coin'],
-                        f"{fmt(float(position['position']['positionValue']))}$",
-                        f"{fmt(float(position['position']['unrealizedPnl']))}$",
+                        format_position(position['position']),
+                        f"{fmt(float(position['position']['positionValue']))}",
+                        f"{fmt(float(position['position']['unrealizedPnl']))}",
                         f"{fmt(float(position['position']['returnOnEquity']) * 100.0)}%"
                     ]
                     for position in sorted_positions
                 ],
-                headers=["", "Coin", "Balance", "PnL $", "PnL %"],
+                headers=["  Coin", "Balance", "PnL ($)", "PnL (%)"],
                 tablefmt=tablefmt,
-                colalign=("left", "left", "right", "right", "right")
+                colalign=("left", "right", "right", "right")
             )
 
             message_lines.append(f"<pre>{table}</pre>")
