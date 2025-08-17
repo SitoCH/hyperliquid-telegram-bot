@@ -32,7 +32,7 @@ def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
         df["t"] = pd.to_datetime(df["t"], unit="ms", utc=True).dt.tz_convert(local_tz)
         df[["c", "h", "l", "o", "v"]] = df[["c", "h", "l", "o", "v"]].astype(float)
         df["n"] = df["n"].astype(int)
-        return df
+        return remove_partial_candle(df, local_tz)
     except Exception as e:
         logger.warning(f"Error preparing DataFrame: {str(e)}")
         return pd.DataFrame(columns=["T", "t", "c", "h", "l", "o", "v", "n"])
@@ -61,7 +61,7 @@ def remove_partial_candle(df: pd.DataFrame, local_tz: Any) -> pd.DataFrame:
     Remove the last candle if it's partial (incomplete).
     
     Args:
-        df: DataFrame containing candle data
+        df: DataFrame containing candle data with "T" column as timestamp
         local_tz: Local timezone for timestamp comparison
     
     Returns:
@@ -72,17 +72,22 @@ def remove_partial_candle(df: pd.DataFrame, local_tz: Any) -> pd.DataFrame:
         
     try:
         now = pd.Timestamp.now(tz=local_tz)
-        last_candle_time = df.index[-1]
+        last_candle_time = df["T"].iloc[-1]
         
-        # Calculate expected duration
+        # Calculate expected duration based on candle interval
         if len(df) >= 2:
-            previous_time = df.index[-2]
+            previous_time = df["T"].iloc[-2]
             candle_duration = last_candle_time - previous_time
         else:
-            candle_duration = pd.Timedelta(minutes=1)
+            # For single candle, try to infer duration from timestamp patterns
+            # Default to 15 minutes if unable to determine
+            candle_duration = pd.Timedelta(minutes=15)
         
+        # Check if the last candle is still "open" (partial)
+        # If current time is less than the expected end time of the last candle, it's partial
         if last_candle_time + candle_duration > now:
             df = df.iloc[:-1]
+            logger.debug(f"Removed partial candle with timestamp {last_candle_time}")
         
         return df
     except Exception as e:
@@ -119,10 +124,10 @@ def _add_bollinger_bands(df: pd.DataFrame) -> None:
     bb_std = 2.0
     
     bb = ta.bbands(df["c"], length=bb_period, std=bb_std)
-    df['BB_lower'] = bb[f'BBL_{bb_period}_{bb_std}']
-    df['BB_middle'] = bb[f'BBM_{bb_period}_{bb_std}']
-    df['BB_upper'] = bb[f'BBU_{bb_period}_{bb_std}']
-    df['BB_width'] = bb[f'BBB_{bb_period}_{bb_std}']
+    df['BB_lower'] = bb[f'BBL_{bb_period}_{bb_std}'] # type: ignore[assignment]
+    df['BB_middle'] = bb[f'BBM_{bb_period}_{bb_std}'] # type: ignore[assignment]
+    df['BB_upper'] = bb[f'BBU_{bb_period}_{bb_std}'] # type: ignore[assignment]
+    df['BB_width'] = bb[f'BBB_{bb_period}_{bb_std}'] # type: ignore[assignment]
 
 
 def _add_volume_indicators(df: pd.DataFrame) -> None:
@@ -144,13 +149,13 @@ def _add_volume_indicators(df: pd.DataFrame) -> None:
     df['v_sma'] = v_sma
     
     # Handle division by zero and null values
-    df['v_ratio'] = df['v'] / v_sma.replace(0, df['v'].mean())
+    df['v_ratio'] = df['v'] / v_sma.replace(0, df['v'].mean()) # type: ignore[assignment]
     df['v_ratio'] = df['v_ratio'].fillna(1.0)
     
     # Volume trend (short vs long SMA)
     v_short = ta.sma(df['v'], length=v_short_period)
     v_long = ta.sma(df['v'], length=v_long_period)
-    df['v_trend'] = (v_short / v_long.replace(0, v_short.mean())).fillna(1.0)
+    df['v_trend'] = (v_short / v_long.replace(0, v_short.mean())).fillna(1.0) # type: ignore[assignment]
 
 
 def _add_atr_indicator(df: pd.DataFrame, atr_length: int) -> None:
@@ -285,11 +290,11 @@ def _add_ichimoku_cloud(df: pd.DataFrame) -> None:
         ichimoku_df = ichimoku_result[0]  # Main ichimoku DataFrame
         
         # Extract individual components from the DataFrame
-        df["TENKAN"] = ichimoku_df[f"ITS_{period_9}"]  # Tenkan-sen (Conversion Line)
-        df["KIJUN"] = ichimoku_df[f"IKS_{period_26}"]   # Kijun-sen (Base Line)
-        df["SENKOU_A"] = ichimoku_df[f"ISA_{period_9}"].shift(period_26)  # Senkou Span A
-        df["SENKOU_B"] = ichimoku_df[f"ISB_{period_26}"].shift(period_26)  # Senkou Span B
-        df["CHIKOU"] = ichimoku_df[f"ICS_{period_26}"].shift(-period_26)  # Chikou Span (shifted backward)
+        df["TENKAN"] = ichimoku_df[f"ITS_{period_9}"]  # Tenkan-sen (Conversion Line)  # type: ignore[assignment]
+        df["KIJUN"] = ichimoku_df[f"IKS_{period_26}"]   # Kijun-sen (Base Line)  # type: ignore[assignment]
+        df["SENKOU_A"] = ichimoku_df[f"ISA_{period_9}"].shift(period_26)  # Senkou Span A  # type: ignore[assignment]
+        df["SENKOU_B"] = ichimoku_df[f"ISB_{period_26}"].shift(period_26)  # Senkou Span B  # type: ignore[assignment]
+        df["CHIKOU"] = ichimoku_df[f"ICS_{period_26}"].shift(-period_26)  # Chikou Span (shifted backward)  # type: ignore[assignment]
 
 
 def _add_momentum_indicators(df: pd.DataFrame) -> None:

@@ -14,8 +14,8 @@ from ..candles_cache import get_candles_with_cache
 from .wyckoff_types import Timeframe, WyckoffState, SignificantLevelsData
 from ..funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from .wykcoff_chart import generate_chart
-from .mtf.wyckoff_multi_timeframe import MultiTimeframeContext, analyze_multi_timeframe
-from ..data_processor import prepare_dataframe, apply_indicators, remove_partial_candle
+from .mtf.wyckoff_multi_timeframe import analyze_multi_timeframe
+from ..data_processor import prepare_dataframe, apply_indicators
 from .significant_levels import find_significant_levels
 from .wyckoff import detect_wyckoff_phase
 
@@ -85,7 +85,7 @@ class WyckoffAnalyzer:
             return WyckoffState.unknown()
         
         apply_indicators(df, timeframe)
-        return detect_wyckoff_phase(remove_partial_candle(df, local_tz), timeframe, funding_rates)
+        return detect_wyckoff_phase(df, timeframe, funding_rates)
     
     def _calculate_significant_levels(
         self, 
@@ -144,7 +144,7 @@ class WyckoffAnalyzer:
                             if len(caption) >= 1024:
                                 # Send chart and caption separately if caption is too long
                                 await context.bot.send_photo(
-                                    chat_id=telegram_utils.telegram_chat_id,
+                                    chat_id=telegram_utils.telegram_chat_id, # type: ignore
                                     photo=chart_copy,
                                     caption=f"<b>{period} chart</b>",
                                     parse_mode=ParseMode.HTML
@@ -153,7 +153,7 @@ class WyckoffAnalyzer:
                             else:
                                 # Send together if caption is within limits
                                 await context.bot.send_photo(
-                                    chat_id=telegram_utils.telegram_chat_id,
+                                    chat_id=telegram_utils.telegram_chat_id, # type: ignore
                                     photo=chart_copy,
                                     caption=caption,
                                     parse_mode=ParseMode.HTML
