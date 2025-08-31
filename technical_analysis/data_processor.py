@@ -120,7 +120,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
 
 def _add_bollinger_bands(df: pd.DataFrame) -> None:
     """Add Bollinger Bands indicators."""
-    bb_period = max(5, len(df) // 3)
+    bb_period = max(5, len(df) // 6)  # More sensitive for short-term
     bb_std = 2.0
     
     bb = ta.bbands(df["c"], length=bb_period, std=bb_std)
@@ -132,9 +132,9 @@ def _add_bollinger_bands(df: pd.DataFrame) -> None:
 
 def _add_volume_indicators(df: pd.DataFrame) -> None:
     """Add volume-based indicators with adaptive periods."""
-    v_sma_period = max(10, len(df) // 3)
-    v_short_period = max(5, len(df) // 8)
-    v_long_period = max(v_short_period + 5, len(df) // 3)
+    v_sma_period = max(5, len(df) // 6)  # Shorter for fast moves
+    v_short_period = max(3, len(df) // 12)
+    v_long_period = max(v_short_period + 3, len(df) // 6)
     
     # Ensure we have enough data for calculations
     if len(df) < v_short_period + 1:
@@ -203,7 +203,7 @@ def _add_vwap_indicator(df: pd.DataFrame) -> None:
 
 def _add_rsi_indicator(df: pd.DataFrame) -> None:
     """Add RSI (Relative Strength Index) indicator."""
-    rsi_period = max(7, len(df) // 4)
+    rsi_period = max(5, len(df) // 8)  # Shorter for fast moves
     rsi = ta.rsi(df["c"], length=rsi_period)
     if rsi is not None:
         df["RSI"] = rsi
@@ -211,7 +211,7 @@ def _add_rsi_indicator(df: pd.DataFrame) -> None:
 
 def _add_stochastic_indicator(df: pd.DataFrame) -> None:
     """Add Stochastic oscillator."""
-    stoch_period = max(5, len(df) // 3)
+    stoch_period = max(3, len(df) // 6)  # Shorter for fast moves
     if len(df) < stoch_period + 3:
         return
         
@@ -223,7 +223,7 @@ def _add_stochastic_indicator(df: pd.DataFrame) -> None:
 
 def _add_fibonacci_levels(df: pd.DataFrame) -> None:
     """Add Fibonacci retracement levels."""
-    lookback_period = max(20, len(df) // 4)
+    lookback_period = max(10, len(df) // 8)  # Shorter for fast moves
     if len(df) < lookback_period:
         df["FIB_23"] = df["FIB_38"] = df["FIB_50"] = df["FIB_61"] = df["FIB_78"] = df["c"]
         return
@@ -300,17 +300,17 @@ def _add_ichimoku_cloud(df: pd.DataFrame) -> None:
 def _add_momentum_indicators(df: pd.DataFrame) -> None:
     """Add momentum-based indicators."""
     # Rate of Change
-    roc_period = max(5, len(df) // 5)
+    roc_period = max(3, len(df) // 10)  # Shorter for fast moves
     roc_calc = ta.roc(df["c"], length=roc_period)
     df["ROC"] = roc_calc
-    
+
     # Williams %R
-    willr_period = max(7, len(df) // 4)
+    willr_period = max(5, len(df) // 8)  # Shorter for fast moves
     willr_calc = ta.willr(df["h"], df["l"], df["c"], length=willr_period)
     df["WILLR"] = willr_calc
-    
+
     # Commodity Channel Index
-    cci_period = max(10, len(df) // 3)
+    cci_period = max(5, len(df) // 6)  # Shorter for fast moves
     cci_calc = ta.cci(df["h"], df["l"], df["c"], length=cci_period)
     df["CCI"] = cci_calc
 
