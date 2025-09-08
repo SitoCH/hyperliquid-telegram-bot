@@ -17,6 +17,10 @@ EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELEC
 async def enter_position(update: Update, context: CallbackContext, enter_mode: str) -> int:
     context.user_data.clear() # type: ignore
     context.user_data["enter_mode"] = enter_mode # type: ignore
+    if skip_sl_tp_prompt():
+        context.user_data["stop_loss_price"] = "skip" # type: ignore
+        context.user_data["take_profit_price"] = "skip" # type: ignore
+
     if context.args and len(context.args) > 2:
         context.user_data["selected_coin"] = context.args[0] # type: ignore
         context.user_data["stop_loss_price"] = float(context.args[1].replace(",", "")) # type: ignore
@@ -39,6 +43,8 @@ async def enter_short(update: Update, context: CallbackContext) -> int:
 def ger_price_estimate(mid: float, decrease: bool, percentage: float) -> str:
     return fmt_price(mid * (1.0 - percentage / 100.0) if decrease else mid * (1.0 + percentage / 100.0))
 
+def skip_sl_tp_prompt() -> bool:
+    return os.getenv('HTB_SKIP_SL_TP_PROMPT', 'False') == 'True'
 
 async def selected_amount(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     query: CallbackQuery = update.callback_query # type: ignore
@@ -62,7 +68,7 @@ async def selected_amount(update: Update, context: Union[CallbackContext, Contex
     current_leverage = hyperliquid_utils.get_leverage(user_state, coin)
     if current_leverage is not None:
         context.user_data["leverage"] = int(current_leverage) # type: ignore
-        
+
         if 'stop_loss_price' in context.user_data and 'take_profit_price' in context.user_data: # type: ignore
             await query.delete_message()
             return await open_order(context, user_state, float(hyperliquid_utils.info.all_mids()[coin]))
@@ -340,7 +346,8 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE],
             open_result = exchange.market_open(selected_coin, is_long, sz)
             logger.info(open_result)
 
-            await place_stop_loss_and_take_profit_orders(exchange, user_state, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
+            if not skip_sl_tp_prompt():
+                await place_stop_loss_and_take_profit_orders(exchange, user_state, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
             await message.delete() # type: ignore
         else:
             await telegram_utils.send("Exchange is not enabled")

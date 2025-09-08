@@ -64,6 +64,7 @@ docker-compose up -d
 | HTB_USE_ISOLATED_LEVERAGE | Use isolated leverage instead of cross | "True" or "False" | "True" |
 | HTB_ALPHAVANTAGE_API_KEY | API key for Alpha Vantage (required for performance comparison against S&P500) | "XXXXXXXXXXXXXXXX" | None |
 | HTB_ANALYSIS_MODE | Analysis mode for technical analysis | "wyckoff" or "llm" | "wyckoff" |
+| HTB_SKIP_SL_TP_PROMPT | Skip asking for stop loss and take profit when opening a position | "True" or "False" | "False" |
 | HTB_LLM_MAIN_MODEL | Main model for LLM analysis | "gpt-4" | "gpt-4" |
 | HTB_LLM_FAST_MODEL | Fast model for filtering analysis | "gpt-3.5-turbo" | "gpt-3.5-turbo" |
 | HTB_ALWAYS_RUN_LLM_FILTER | Always run LLM filter (use filter before analysis) | "True" or "False" | "False" |
