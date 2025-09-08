@@ -259,7 +259,7 @@ async def get_amount_suggestions(context: Union[CallbackContext, ContextTypes.DE
     perp_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     cross_margin_account_value =float(perp_state['crossMarginSummary']['accountValue'])
     total_margin_used = float(perp_state['crossMarginSummary']['totalMarginUsed'])
-    perp_margin_available = cross_margin_account_value - total_margin_used if total_margin_used >= 0.0 else 0.0
+    perp_margin_available = max(cross_margin_account_value - total_margin_used, 0.0)
 
     keyboard = [
         [InlineKeyboardButton(f"{amount}% (~{fmt(perp_margin_available * amount / 100.0)} USDC)", callback_data=str(amount))]
