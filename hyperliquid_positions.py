@@ -59,7 +59,7 @@ def _get_portfolio_balance() -> PortfolioBalance:
     return PortfolioBalance(
         perp_total=float(perp_state['marginSummary']['accountValue']),
         perp_withdrawable = float(perp_state['withdrawable']),
-        perp_margin_available = cross_margin_account_value - total_margin_used if total_margin_used > 0.0 else 0.0,
+        perp_margin_available = cross_margin_account_value - total_margin_used if total_margin_used >= 0.0 else 0.0,
         spot_total=_calculate_spot_balance(spot_state, token_prices),
         stacked_total=_calculate_stacked_balance(staking_summary, token_prices),
         cross_margin_ratio = maintenance_margin / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
