@@ -250,11 +250,13 @@ async def selected_coin(update: Update, context: Union[CallbackContext, ContextT
 
 
 async def get_amount_suggestions(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> Tuple[str, InlineKeyboardMarkup]:
-    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-    withdrawable = float(user_state['withdrawable'])
+    perp_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+    cross_margin_account_value =float(perp_state['crossMarginSummary']['accountValue'])
+    total_margin_used = float(perp_state['crossMarginSummary']['totalMarginUsed'])
+    perp_margin_available = cross_margin_account_value - total_margin_used if total_margin_used > 0.0 else 0.0
 
     keyboard = [
-        [InlineKeyboardButton(f"{amount}% (~{fmt(withdrawable * amount / 100.0)} USDC)", callback_data=str(amount))]
+        [InlineKeyboardButton(f"{amount}% (~{fmt(perp_margin_available * amount / 100.0)} USDC)", callback_data=str(amount))]
         for amount in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     ]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
