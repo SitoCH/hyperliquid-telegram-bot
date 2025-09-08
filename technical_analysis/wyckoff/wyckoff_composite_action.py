@@ -1,16 +1,9 @@
 import pandas as pd  # type: ignore[import]
-import pandas_ta as ta  # type: ignore[import]
-import numpy as np  # type: ignore[import]
-from typing import Final, Dict, List, Optional, Any, Tuple
+from typing import Final
 from .wyckoff_types import (
-    MarketPattern, VolatilityState, WyckoffState, WyckoffPhase, EffortResult, 
-    CompositeAction, WyckoffSign, FundingState, VolumeState, Timeframe, VolumeMetrics
+    CompositeAction, VolumeMetrics
 )
-from ..funding_rates_cache import FundingRateEntry
-from .wyckoff_description import generate_wyckoff_description
-from dataclasses import dataclass
 from logging_utils import logger
-from .adaptive_thresholds import AdaptiveThresholdManager
 
 EFFORT_THRESHOLD: Final[float] = 0.75  # Increased from 0.7 for cleaner effort signals
 

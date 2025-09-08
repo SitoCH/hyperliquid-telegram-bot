@@ -1,14 +1,9 @@
-import io
 import os
 import time
-from tzlocal import get_localzone
-from typing import List, Dict, Any, cast, Tuple, TypedDict
-import pandas as pd  # type: ignore[import]
-import pandas_ta as ta  # type: ignore[import]
+from typing import cast
 
 from telegram import Update
 from telegram.ext import CallbackContext, ContextTypes, ConversationHandler
-from telegram.constants import ParseMode
 
 # Add analysis mode enum
 from enum import Enum

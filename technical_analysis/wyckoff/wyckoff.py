@@ -1,15 +1,13 @@
 import pandas as pd  # type: ignore[import]
-import pandas_ta as ta  # type: ignore[import]
 import numpy as np  # type: ignore[import]
-from typing import Final, Dict, List, Optional, Any, Tuple
+from typing import Final, List, Tuple
 from .wyckoff_types import (
     MarketPattern, VolatilityState, WyckoffState, WyckoffPhase, EffortResult, 
-    CompositeAction, WyckoffSign, FundingState, VolumeState, Timeframe, VolumeMetrics,
-    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES
+    FundingState, VolumeState, Timeframe, VolumeMetrics,
+    SHORT_TERM_TIMEFRAMES
 )
 from ..funding_rates_cache import FundingRateEntry
 from .wyckoff_description import generate_wyckoff_description
-from dataclasses import dataclass
 from logging_utils import logger
 from .adaptive_thresholds import AdaptiveThresholdManager
 from .wyckoff_composite_action import detect_composite_action

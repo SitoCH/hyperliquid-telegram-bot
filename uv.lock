@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = "==3.10.*"
 
 [[package]]
@@ -587,18 +587,14 @@ wheels = [
 
 [[package]]
 name = "hyperliquid-python-sdk"
-version = "0.14.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.18.0"
+source = { git = "https://github.com/hyperliquid-dex/hyperliquid-python-sdk.git#a35bb3c8e49ad1a8da8ccc9b9e30b00540ba16c5" }
 dependencies = [
     { name = "eth-account" },
     { name = "eth-utils" },
     { name = "msgpack" },
     { name = "requests" },
     { name = "websocket-client" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/3b/b33a4284c0a5fc94dcd1cf5b072b247364298b87e3bd2484ca69b66ed18b/hyperliquid_python_sdk-0.14.0.tar.gz", hash = "sha256:e0e2f8094e74e2d75f1e5f329313bea80022521ca921d3bc05bb03ac92898a25", size = 22885, upload-time = "2025-05-01T17:35:56.747Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f9/c4/bdb5779643d581f5ab26e327ba3d63c69f791ee45eaf8ffb8715c80d7529/hyperliquid_python_sdk-0.14.0-py3-none-any.whl", hash = "sha256:74ad7d75e3f91ff22c8a76d17a74fd96a5743fe79cd06cb1487edcd3e7877bb6", size = 22253, upload-time = "2025-05-01T17:35:55.76Z" },
 ]
 
 [[package]]
@@ -613,7 +609,7 @@ dependencies = [
     { name = "mplfinance" },
     { name = "numpy" },
     { name = "pandas-stubs" },
-    { name = "pandas-ta" },
+    { name = "pandas-ta-classic" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -630,13 +626,13 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "dacite", specifier = ">=1.8.1" },
-    { name = "hyperliquid-python-sdk", specifier = ">=0.10.1" },
+    { name = "hyperliquid-python-sdk", git = "https://github.com/hyperliquid-dex/hyperliquid-python-sdk.git" },
     { name = "litellm", specifier = ">=1.72.0" },
     { name = "matplotlib", specifier = ">=3.9.2" },
     { name = "mplfinance", specifier = ">=0.12.10b0" },
     { name = "numpy", specifier = "<2.0.0" },
     { name = "pandas-stubs", specifier = ">=2.2.3.241126" },
-    { name = "pandas-ta" },
+    { name = "pandas-ta-classic" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.5" },
     { name = "pytest-cov", specifier = ">=4.0.0" },
@@ -976,13 +972,16 @@ wheels = [
 ]
 
 [[package]]
-name = "pandas-ta"
-version = "0.3.14b0"
+name = "pandas-ta-classic"
+version = "0.3.14b1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "numpy" },
     { name = "pandas" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f7/0b/1666f0a185d4f08215f53cc088122a73c92421447b04028f0464fabe1ce6/pandas_ta-0.3.14b.tar.gz", hash = "sha256:0fa35aec831d2815ea30b871688a8d20a76b288a7be2d26cc00c35cd8c09a993", size = 115089, upload-time = "2021-07-28T20:51:17.456Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/f3/4887059e35c12450bf104930d254aaa24143f72d32848d7e4460260bb7d4/pandas_ta_classic-0.3.14b1-py3-none-any.whl", hash = "sha256:69637ffb903a32fbb51afceef0e6f4b7d17ade31b2a07e9d9f405ce689f02f60", size = 223543, upload-time = "2025-08-01T14:12:06.524Z" },
+]
 
 [[package]]
 name = "parsimonious"

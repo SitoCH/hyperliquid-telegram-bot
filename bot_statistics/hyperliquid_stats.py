@@ -151,7 +151,7 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         one_week_ago = current_time - (7 * 24 * 60 * 60 * 1000)
         one_day_ago = current_time - (24 * 60 * 60 * 1000)
 
-        user_fills = hyperliquid_utils.info.user_fills_by_time(hyperliquid_utils.address, three_months_ago)
+        user_fills = hyperliquid_utils.info.user_fills_by_time(hyperliquid_utils.address, three_months_ago, None, True)
         
         stats_1d = calculate_trading_stats(user_fills, one_day_ago)
         stats_7d = calculate_trading_stats(user_fills, one_week_ago)

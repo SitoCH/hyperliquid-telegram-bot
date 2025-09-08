@@ -6,8 +6,7 @@ Extracted from hyperliquid_candles.py for better modularity.
 import time
 from typing import List, Dict, Any, Tuple
 import pandas as pd
-import pandas_ta as ta # type: ignore[import]
-from tzlocal import get_localzone
+import pandas_ta_classic as ta # type: ignore[import]
 
 from logging_utils import logger
 from .wyckoff.wyckoff_types import Timeframe
