@@ -254,21 +254,23 @@ async def selected_coin(update: Update, context: Union[CallbackContext, ContextT
 
     return SELECTING_AMOUNT
 
-
-async def get_amount_suggestions(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> Tuple[str, InlineKeyboardMarkup]:
+def calculate_available_margin():
     perp_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     cross_margin_account_value =float(perp_state['crossMarginSummary']['accountValue'])
     total_margin_used = float(perp_state['crossMarginSummary']['totalMarginUsed'])
     perp_margin_available = max(cross_margin_account_value - total_margin_used, 0.0)
+    return perp_margin_available
+
+async def get_amount_suggestions(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> Tuple[str, InlineKeyboardMarkup]:
+    available_margin = calculate_available_margin()
 
     keyboard = [
-        [InlineKeyboardButton(f"{amount}% (~{fmt(perp_margin_available * amount / 100.0)} USDC)", callback_data=str(amount))]
+        [InlineKeyboardButton(f"{amount}% (~{fmt(available_margin * amount / 100.0)} USDC)", callback_data=str(amount))]
         for amount in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     ]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
     return f"You selected {context.user_data['selected_coin']}. Please enter the amount to {context.user_data['enter_mode']}:", reply_markup # type: ignore
-
 
 async def selected_take_profit(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     if not update.message:
@@ -330,8 +332,8 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE],
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
-            available_balance = float(user_state['withdrawable'])
-            balance_to_use = available_balance * amount / 100.0
+            available_margin = calculate_available_margin()
+            balance_to_use = available_margin * amount / 100.0
             leverage = context.user_data.get('leverage', 1) # type: ignore
             use_isolated_leverage = os.getenv('HTB_USE_ISOLATED_LEVERAGE', 'True') == 'True'
             update_leverage_result = exchange.update_leverage(leverage, selected_coin, not use_isolated_leverage)
