@@ -111,10 +111,16 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
     _add_ema_indicator(df, timeframe)
     _add_rsi_indicator(df)
     _add_stochastic_indicator(df)
+    _add_stochrsi_indicator(df)
     _add_fibonacci_levels(df)
     _add_pivot_points(df)
     _add_ichimoku_cloud(df)
     _add_momentum_indicators(df)
+    _add_adx_indicator(df)
+    _add_parabolic_sar(df)
+    _add_donchian_channels(df)
+    _add_keltner_channels(df)
+    _add_obv_indicator(df)
 
 
 def _add_bollinger_bands(df: pd.DataFrame) -> None:
@@ -312,4 +318,57 @@ def _add_momentum_indicators(df: pd.DataFrame) -> None:
     cci_period = max(5, len(df) // 6)  # Shorter for fast moves
     cci_calc = ta.cci(df["h"], df["l"], df["c"], length=cci_period)
     df["CCI"] = cci_calc
+
+
+def _add_adx_indicator(df: pd.DataFrame) -> None:
+    """Add ADX (Average Directional Index) indicator."""
+    adx_period = max(14, len(df) // 10)
+    adx = ta.adx(df["h"], df["l"], df["c"], length=adx_period)
+    if adx is not None:
+        df["ADX"] = adx[f"ADX_{adx_period}"]
+        df["DI+_ADX"] = adx[f"DMP_{adx_period}"]
+        df["DI-_ADX"] = adx[f"DMN_{adx_period}"]
+
+
+def _add_parabolic_sar(df: pd.DataFrame) -> None:
+    """Add Parabolic SAR indicator."""
+    psar = ta.psar(df["h"], df["l"], df["c"])
+    if psar is not None:
+        df["PSAR"] = psar["PSARl_0.02_0.2"] if "PSARl_0.02_0.2" in psar else psar.iloc[:, 0]
+
+
+def _add_donchian_channels(df: pd.DataFrame) -> None:
+    """Add Donchian Channels indicator."""
+    dc_period = max(20, len(df) // 6)
+    dc = ta.donchian(df["h"], df["l"], lower_length=dc_period, upper_length=dc_period)
+    if dc is not None:
+        df["DC_upper"] = dc[f"DCU_{dc_period}_{dc_period}"]
+        df["DC_lower"] = dc[f"DCL_{dc_period}_{dc_period}"]
+        df["DC_middle"] = dc[f"DCM_{dc_period}_{dc_period}"]
+
+
+def _add_keltner_channels(df: pd.DataFrame) -> None:
+    """Add Keltner Channels indicator."""
+    kc_period = max(20, len(df) // 6)
+    kc = ta.kc(df["h"], df["l"], df["c"], length=kc_period)
+    if kc is not None:
+        df["KC_upper"] = kc[f"KCUe_{kc_period}_2"]
+        df["KC_middle"] = kc[f"KCBe_{kc_period}_2"]
+        df["KC_lower"] = kc[f"KCLe_{kc_period}_2"]
+
+
+def _add_obv_indicator(df: pd.DataFrame) -> None:
+    """Add On-Balance Volume (OBV) indicator."""
+    obv = ta.obv(df["c"], df["v"])
+    if obv is not None:
+        df["OBV"] = obv
+
+
+def _add_stochrsi_indicator(df: pd.DataFrame) -> None:
+    """Add Stochastic RSI indicator."""
+    stochrsi_period = max(14, len(df) // 8)
+    stochrsi = ta.stochrsi(df["c"], length=stochrsi_period, rsi_length=14, k=3, d=3)
+    if stochrsi is not None:
+        df["STOCHRSI"] = stochrsi[f"STOCHRSIk_{stochrsi_period}_14_3_3"]
+        df["STOCHRSI_D"] = stochrsi[f"STOCHRSId_{stochrsi_period}_14_3_3"]
 

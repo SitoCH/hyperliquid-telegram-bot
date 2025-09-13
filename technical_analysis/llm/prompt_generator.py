@@ -110,6 +110,12 @@ class LLMPromptGenerator:
             "- Volume ratio >1.5 during setup formation (above average volume)",
             "- Funding rate showing mean reversion setup (extreme readings reversing toward opposite direction)",
             "- EMA/VWAP reclaim (above for LONG) or breakdown (below for SHORT) with sustained follow-through",
+            "- ADX trend strength confirmation (ADX rising, DI+ > DI- for LONG, DI- > DI+ for SHORT)",
+            "- Parabolic SAR flip (PSAR below price for LONG, above for SHORT)",
+            "- Donchian Channel breakout (price above upper band for LONG, below lower band for SHORT)",
+            "- Keltner Channel breakout (price above upper band for LONG, below lower band for SHORT)",
+            "- OBV (On-Balance Volume) confirming price direction",
+            "- Stochastic RSI crossover (K crossing D up for LONG, down for SHORT)",
             "",
             "AUTOMATIC DISQUALIFIERS (Force HOLD signal):",
             "- RSI >80 or <20 (extreme overbought/oversold without clear reversal patterns)",
@@ -136,20 +142,45 @@ class LLMPromptGenerator:
             "   - SHORT signal: %K crossing below %D in 20-80 range with downward momentum",
             "   - Avoid: Stochastic >90 or <10 without confirmed reversal setup",
             "",
-            "3. Williams %R:",
+            "3. Stochastic RSI:",
+            "   - LONG signal: StochRSI K crossing above D in 20-80 range",
+            "   - SHORT signal: StochRSI K crossing below D in 20-80 range",
+            "   - Avoid: StochRSI >90 or <10 without reversal",
+            "",
+            "4. Williams %R:",
             "   - LONG reversal: Williams %R rising from -80 to -20 range with volume",
             "   - SHORT reversal: Williams %R falling from -20 to -80 range with volume",
             "   - Extreme zones: >-10 (overbought) or <-90 (oversold) require caution",
             "",
-            "4. CCI (Commodity Channel Index):",
+            "5. CCI (Commodity Channel Index):",
             "   - LONG breakout: CCI breaking above +100 with volume confirmation",
             "   - SHORT breakdown: CCI breaking below -100 with volume confirmation",
             "   - Extreme readings: CCI >+200 or <-200 often signal reversal without momentum",
             "",
-            "5. ROC (Rate of Change):",
+            "6. ROC (Rate of Change):",
             "   - LONG momentum: ROC positive and accelerating (increasing positive values)",
             "   - SHORT momentum: ROC negative and accelerating (decreasing negative values)",
             "   - Divergence signals: ROC direction opposing price movement (reversal setup)",
+            "",
+            "7. ADX (Average Directional Index):",
+            "   - Trend strength: ADX rising confirms strong trend",
+            "   - DI+ > DI-: Bullish trend, DI- > DI+: Bearish trend",
+            "",
+            "8. OBV (On-Balance Volume):",
+            "   - OBV rising with price: Confirms bullish move",
+            "   - OBV falling with price: Confirms bearish move",
+            "",
+            "9. Parabolic SAR:",
+            "   - LONG: PSAR below price, SHORT: PSAR above price",
+            "   - PSAR flip signals possible trend reversal",
+            "",
+            "10. Donchian Channels:",
+            "   - LONG: Price breaking above upper band, SHORT: Price breaking below lower band",
+            "   - Middle band as dynamic support/resistance",
+            "",
+            "11. Keltner Channels:",
+            "   - LONG: Price breaking above upper band, SHORT: Price breaking below lower band",
+            "   - Middle band as dynamic support/resistance",
             "",
             "TREND AND MOMENTUM INDICATORS:",
             "1. MACD System:",
@@ -221,6 +252,12 @@ class LLMPromptGenerator:
             "+ Volume ratio confirmation (>1.5 during setup formation)",
             "+ Funding rate mean reversion setup",
             "+ EMA/VWAP reclaim (above for LONG) or breakdown (below for SHORT) with sustained follow-through",
+            "+ ADX trend strength confirmation (ADX rising, DI+ > DI- for LONG, DI- > DI+ for SHORT)",
+            "+ Parabolic SAR flip (PSAR below price for LONG, above for SHORT)",
+            "+ Donchian Channel breakout (price above upper band for LONG, below lower band for SHORT)",
+            "+ Keltner Channel breakout (price above upper band for LONG, below lower band for SHORT)",
+            "+ OBV (On-Balance Volume) confirming price direction",
+            "+ Stochastic RSI crossover (K crossing D up for LONG, down for SHORT)",
             "",
             "PENALTY FACTORS:",
             "- Conflicting timeframe signals (-5 points)",
@@ -297,6 +334,7 @@ class LLMPromptGenerator:
             "  * Support/Resistance levels from pivot points, previous highs/lows",
             "  * Fibonacci retracement levels (23.6%, 38.2%, 50%, 61.8%)",
             "  * EMA/VWAP levels, Bollinger Band levels",
+            "  * ADX/DI+/- crossovers, Parabolic SAR, Donchian/Keltner Channel levels",
             f"  * ATR-based stops: LONG = ${mid:.4f} - (2 * ATR), SHORT = ${mid:.4f} + (2 * ATR)",
             f"  * Distance validation: minimum 1.5% from ${mid:.4f}, maximum 4% from ${mid:.4f}",
             "  * Choose the nearest valid technical level within these constraints",
@@ -307,6 +345,7 @@ class LLMPromptGenerator:
             "    - Previous swing highs (for LONG) / Previous swing lows (for SHORT)",
             "    - Psychological levels: round numbers ending in 00, 50",
             "    - Key resistance levels (LONG) / Key support levels (SHORT) from pivot analysis",
+            "    - Donchian/Keltner/Parabolic SAR/ADX/OBV/DI+/-/StochRSI breakouts",
             "  * SECONDARY TARGETS:",
             "    - Bollinger Band outer bands (upper for LONG, lower for SHORT)",
             "    - Major EMA levels (50, 100, 200) acting as dynamic resistance/support",
@@ -374,16 +413,14 @@ class LLMPromptGenerator:
         return prompt_parts
     
     def _format_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, effective_days: float) -> List[str]:
-        """Format individual timeframe data."""
-        # Calculate number of candles to show using effective days (already limited by cutoff)
+        """Format individual timeframe data, including new indicators."""
         candle_count = min(len(df), int((effective_days * 24 * 60) / timeframe.minutes))
         recent_candles = df.tail(candle_count)
         sections = [
             f"\n{timeframe.name} Timeframe (last {len(recent_candles)} candles):",
-            "Time | O | H | L | C | Vol | ATR | MACD | MACD_Sig | MACD_Hist | ST | RSI | BB_Up | BB_Mid | BB_Low | BB_Width | EMA | VWAP"
+            "Time | O | H | L | C | Vol | ATR | MACD | MACD_Sig | MACD_Hist | ST | RSI | STOCH_K | STOCH_D | STOCHRSI | STOCHRSI_D | ADX | DI+ | DI- | PSAR | DC_Up | DC_Mid | DC_Low | KC_Up | KC_Mid | KC_Low | OBV | BB_Up | BB_Mid | BB_Low | BB_Width | EMA | VWAP"
         ]
-        
-        # Add candle data with all indicators
+
         for idx, row in recent_candles.iterrows():
             timestamp = idx.strftime("%m-%d %H:%M") if isinstance(idx, (pd.Timestamp, datetime)) else str(idx)
             sections.append(
@@ -391,22 +428,24 @@ class LLMPromptGenerator:
                 f"{row.get('l', 0):.4f} | {row.get('c', 0):.4f} | {row.get('v', 0):.0f} | "
                 f"{row.get('ATR', 0):.4f} | {row.get('MACD', 0):.4f} | {row.get('MACD_Signal', 0):.4f} | "
                 f"{row.get('MACD_Hist', 0):.4f} | {row.get('SuperTrend', 0):.4f} | "
-                f"{row.get('RSI', 50):.1f} | {row.get('BB_upper', 0):.4f} | {row.get('BB_middle', 0):.4f} | "
+                f"{row.get('RSI', 50):.1f} | {row.get('STOCH_K', 50):.1f} | {row.get('STOCH_D', 50):.1f} | "
+                f"{row.get('STOCHRSI', 50):.1f} | {row.get('STOCHRSI_D', 50):.1f} | "
+                f"{row.get('ADX', 0):.1f} | {row.get('DI+_ADX', 0):.1f} | {row.get('DI-_ADX', 0):.1f} | "
+                f"{row.get('PSAR', 0):.4f} | {row.get('DC_upper', 0):.4f} | {row.get('DC_middle', 0):.4f} | {row.get('DC_lower', 0):.4f} | "
+                f"{row.get('KC_upper', 0):.4f} | {row.get('KC_middle', 0):.4f} | {row.get('KC_lower', 0):.4f} | "
+                f"{row.get('OBV', 0):.0f} | {row.get('BB_upper', 0):.4f} | {row.get('BB_middle', 0):.4f} | "
                 f"{row.get('BB_lower', 0):.4f} | {row.get('BB_width', 0):.4f} | "
                 f"{row.get('EMA', 0):.4f} | {row.get('VWAP', 0):.4f}"
             )
-        
-        # Add additional indicators table for last 15 candles
+
         if len(recent_candles) >= 15:
             sections.extend(self._generate_additional_indicators_table(recent_candles.tail(15), timeframe))
-        
-        # Add comprehensive technical indicators section
+
         sections.extend(self._generate_technical_indicators_section(recent_candles, timeframe))
-        
-        # Add timeframe summary
+
         trend = "Bullish" if recent_candles['c'].iloc[-1] > recent_candles['SuperTrend'].iloc[-1] else "Bearish"
         atr_value = recent_candles.get('ATR', pd.Series([0])).iloc[-1]
-        
+
         sections.extend([
             f"Summary for {timeframe.name}:",
             f"- Price range: ${recent_candles['l'].min():.4f} - ${recent_candles['h'].max():.4f}",
@@ -415,7 +454,7 @@ class LLMPromptGenerator:
             f"- Volatility (ATR): {atr_value:.4f}",
             ""
         ])
-        
+
         return sections
 
     def _generate_additional_indicators_table(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
@@ -452,16 +491,14 @@ class LLMPromptGenerator:
         return sections
 
     def _generate_technical_indicators_section(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
-        """Generate comprehensive technical indicators section for the prompt."""
+        """Generate comprehensive technical indicators section for the prompt, including new indicators."""
         prompt_parts = [f"\n=== TECHNICAL INDICATORS - {timeframe.name} ==="]
-        
         if df.empty:
             prompt_parts.append("No indicator data available")
             return prompt_parts
-        
-        # Get latest values for all indicators
+
         latest = df.iloc[-1]
-        
+
         # Core Technical Indicators
         prompt_parts.extend([
             "\n--- Core Indicators ---",
@@ -472,19 +509,37 @@ class LLMPromptGenerator:
             f"MACD: {latest.get('MACD', 0):.4f}",
             f"MACD Signal: {latest.get('MACD_Signal', 0):.4f}",
             f"MACD Histogram: {latest.get('MACD_Hist', 0):.4f}",
+            f"Parabolic SAR: {latest.get('PSAR', 0):.4f}",
         ])
-        
+
+        # Trend Channels
+        prompt_parts.extend([
+            "\n--- Trend Channels ---",
+            f"Donchian Upper: {latest.get('DC_upper', 0):.4f}",
+            f"Donchian Middle: {latest.get('DC_middle', 0):.4f}",
+            f"Donchian Lower: {latest.get('DC_lower', 0):.4f}",
+            f"Keltner Upper: {latest.get('KC_upper', 0):.4f}",
+            f"Keltner Middle: {latest.get('KC_middle', 0):.4f}",
+            f"Keltner Lower: {latest.get('KC_lower', 0):.4f}",
+        ])
+
         # Oscillators
         prompt_parts.extend([
             "\n--- Oscillators ---",
             f"RSI: {latest.get('RSI', 50):.2f}",
             f"Stochastic %K: {latest.get('STOCH_K', 50):.2f}",
             f"Stochastic %D: {latest.get('STOCH_D', 50):.2f}",
+            f"Stochastic RSI: {latest.get('STOCHRSI', 50):.2f}",
+            f"Stochastic RSI D: {latest.get('STOCHRSI_D', 50):.2f}",
             f"Williams %R: {latest.get('WILLR', -50):.2f}",
             f"CCI: {latest.get('CCI', 0):.2f}",
             f"ROC: {latest.get('ROC', 0):.2f}%",
+            f"ADX: {latest.get('ADX', 0):.2f}",
+            f"DI+ (ADX): {latest.get('DI+_ADX', 0):.2f}",
+            f"DI- (ADX): {latest.get('DI-_ADX', 0):.2f}",
+            f"OBV: {latest.get('OBV', 0):.0f}",
         ])
-        
+
         # Bollinger Bands
         prompt_parts.extend([
             "\n--- Bollinger Bands ---",
@@ -493,7 +548,7 @@ class LLMPromptGenerator:
             f"BB Lower: {latest.get('BB_lower', 0):.4f}",
             f"BB Width: {latest.get('BB_width', 0):.4f}",
         ])
-        
+
         # Fibonacci Levels
         prompt_parts.extend([
             "\n--- Fibonacci Retracements ---",
@@ -503,7 +558,7 @@ class LLMPromptGenerator:
             f"Fib 38.2%: {latest.get('FIB_38', 0):.4f}",
             f"Fib 23.6%: {latest.get('FIB_23', 0):.4f}",
         ])
-        
+
         # Pivot Points
         prompt_parts.extend([
             "\n--- Pivot Points ---",
@@ -513,7 +568,7 @@ class LLMPromptGenerator:
             f"Support 1: {latest.get('S1', 0):.4f}",
             f"Support 2: {latest.get('S2', 0):.4f}",
         ])
-        
+
         # Ichimoku Cloud
         prompt_parts.extend([
             "\n--- Ichimoku Cloud ---",
@@ -523,7 +578,7 @@ class LLMPromptGenerator:
             f"Senkou Span B: {latest.get('SENKOU_B', 0):.4f}",
             f"Chikou Span: {latest.get('CHIKOU', 0):.4f}",
         ])
-        
+
         # Volume Analysis
         prompt_parts.extend([
             "\n--- Volume Analysis ---",
@@ -532,13 +587,13 @@ class LLMPromptGenerator:
             f"Volume Ratio: {latest.get('v_ratio', 1):.2f}",
             f"Volume Trend: {latest.get('v_trend', 1):.2f}",
         ])
-        
+
         # Support and Resistance Analysis
         prompt_parts.extend(self._generate_support_resistance_analysis(df))
-        
+
         # Price Action Analysis
         prompt_parts.extend(self._generate_price_action_analysis(df))
-        
+
         return prompt_parts
     
     def _generate_support_resistance_analysis(self, df: pd.DataFrame) -> List[str]:
