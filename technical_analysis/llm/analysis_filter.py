@@ -382,19 +382,23 @@ class AnalysisFilter:
         return volume_data
     
     def _analyze_all_indicators(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Pass through all available technical indicators with trend analysis values."""
+        """Pass through all available technical indicators with trend analysis values, including advanced indicators."""
         indicators = {}
         lookback = min(self.TREND_LOOKBACK_PERIODS, len(df))
-        
-        # Create list of all indicators to extract
+
+        # Expanded list of all indicators to extract
         indicator_names = [
             'SuperTrend', 'EMA', 'VWAP',
             'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist', 'ROC',
-            'STOCH_K', 'STOCH_D',
+            'STOCH_K', 'STOCH_D', 'STOCHRSI', 'STOCHRSI_D',
             'BB_upper', 'BB_middle', 'BB_lower', 'BB_width', 'ATR',
+            'ADX', 'DI+_ADX', 'DI-_ADX', 'PSAR',
+            'DC_upper', 'DC_middle', 'DC_lower',
+            'KC_upper', 'KC_middle', 'KC_lower',
+            'OBV',
             'TENKAN', 'KIJUN', 'SENKOU_A', 'SENKOU_B', 'CHIKOU'
         ]
-        
+
         # Extract recent values for each indicator to show trends
         for indicator in indicator_names:
             if indicator in df.columns:
@@ -408,8 +412,8 @@ class AnalysisFilter:
                     'current': None,
                     'values': []
                 }
-        
-        return indicators    
+
+        return indicators
     
     def _analyze_support_resistance(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Pass through support and resistance levels with recent values for trend analysis."""
@@ -436,63 +440,75 @@ class AnalysisFilter:
         return levels
     
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
-        """Create prompt for cheap LLM model to determine if expensive analysis is needed."""
-        return f"""You are a balanced but selective signal filter for {coin}. Detect developing opportunities while avoiding noise and false signals.
+        """Create prompt for cheap LLM model to determine if expensive analysis is needed, referencing all advanced indicators."""
+        return f"""You are a balanced but selective signal filter for {coin}. Detect developing opportunities while avoiding noise and false signals. Use all available technical indicators for robust filtering.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
 AVAILABLE TIMEFRAME APPROACH:
-• Higher timeframes (4h): Trend direction and major support/resistance levels
-• Medium timeframe (1h): Trend confirmation and momentum validation
-• Signal timeframes (15m, 30m): PRIMARY signal detection and opportunity identification
+• Higher timeframes (4h): Trend direction and major support/resistance levels (including ADX, DI+/DI-, Donchian, Keltner, PSAR)
+• Medium timeframe (1h): Trend confirmation and momentum validation (MACD, RSI, StochRSI, OBV, ATR, SuperTrend)
+• Signal timeframes (15m, 30m): PRIMARY signal detection and opportunity identification (Stochastic, StochRSI, MACD, BB, OBV, PSAR, ADX, DI+/DI-, Donchian, Keltner)
 
 SIGNAL DETECTION CRITERIA (balanced approach for early but quality signals):
 
-🔥 HIGH PRIORITY SIGNALS (require 2+ conditions):
+🔥 HIGH PRIORITY SIGNALS (require 4+ conditions):
 • Strong momentum: >1.0% in 15m/30m with volume >1.2x OR >0.8% in 1h with volume >1.3x OR >0.6% in 4h with volume >1.4x
 • RSI extremes with momentum: RSI <30 or >70 in any timeframe AND price momentum alignment
 • MACD acceleration: Histogram growing >2 periods in any timeframe AND volume >1.3x
+• ADX trend: ADX rising with DI+ > DI- (bullish) or DI- > DI+ (bearish) in any timeframe
+• Parabolic SAR flip: PSAR below price for LONG, above for SHORT, with volume confirmation
+• Donchian/Keltner Channel breakout: Price above upper band (LONG) or below lower band (SHORT) with volume >1.3x
+• OBV confirmation: OBV rising with price (bullish) or falling with price (bearish)
+• StochRSI or Stochastic cross: K crossing D up (LONG) or down (SHORT) in 15m/30m/1h
 • Level breaks: Price breaking key levels >0.6% in signal timeframes AND volume >1.4x
 • Volatility expansion: BB width expanding >12% in any timeframe AND price move >0.4%
+• ATR expansion: ATR rising >15% over last 5 periods
 
-⚡ MEDIUM PRIORITY SIGNALS (require 2+ conditions):
+⚡ MEDIUM PRIORITY SIGNALS (require 3+ conditions):
 • Decent moves: >0.8% in 15m/30m OR >0.6% in 1h OR >0.5% in 4h with volume >1.1x
-• Technical alignment: RSI and MACD aligned in same direction with volume >1.1x
+• Technical alignment: RSI, MACD, and ADX/DI+/DI- aligned in same direction with volume >1.1x
+• Parabolic SAR, Donchian, or Keltner confirmation with price momentum
+• OBV, StochRSI, or Stochastic supporting price move
 • Level approach: Price within 0.6% of key levels in any timeframe AND volume >1.2x
-• Momentum build: ROC acceleration in 15m/30m/1h AND Stochastic signal AND volume >1.1x
+• Momentum build: ROC acceleration in 15m/30m/1h AND Stochastic or StochRSI signal AND volume >1.1x
 • Funding + price: Rate >0.0002 AND price movement confirming direction
 
 📈 LOW PRIORITY SIGNALS (require ALL 3 conditions):
-• Building momentum: ROC acceleration AND Stochastic cross in 15m/30m AND volume >1.0x
-• Multi-timeframe sync: Same signal across 2+ timeframes (15m, 30m, 1h)
-• Technical setup: Multiple indicator alignment AND price momentum
+• Building momentum: ROC acceleration AND Stochastic or StochRSI cross in 15m/30m AND volume >1.0x
+• Multi-timeframe sync: Same signal (any indicator) across 2+ timeframes (15m, 30m, 1h)
+• Technical setup: Multiple indicator alignment (including ADX, PSAR, Donchian, Keltner, OBV, StochRSI, ATR) AND price momentum
 
 NOISE FILTERS - SKIP when ANY present:
 • Signal timeframe micro moves: Price changes <0.2% in ALL 15m/30m timeframes
 • Medium timeframe volume drought: Volume ratio <1.0x in 1h/4h timeframes
-• Signal timeframe volume drought: Volume ratio <0.8x in 15m/30m timeframes  
+• Signal timeframe volume drought: Volume ratio <0.8x in 15m/30m timeframes
 • Signal timeframe chop: Price reversals >3 times in 10 periods in 15m/30m
 • Medium timeframe chop: Price reversals >4 times in 10 periods in 1h/4h
 • 4h consolidation: Price within 0.4% range for 8+ periods in 4h timeframe
 • Weak conviction: Price move without adequate volume for the timeframe
+• ADX flat (<15) or conflicting DI+/DI- in all timeframes
+• OBV flat or diverging from price in all timeframes
+• PSAR, Donchian, or Keltner showing no clear trend or frequent flips
 
 ANALYSIS DECISION LOGIC:
 • ANALYZE: High priority (2+ conditions) OR Medium priority (2+ conditions) OR Low priority (ALL 3)
 • SKIP: Any noise filter triggered. Better to miss than take low-probability setups
 • Force analyze: Funding rate >0.0004 AND >1.2% price change in signal timeframes AND volume >1.6x
-• Primary focus: 15m/30m signals with 1h confirmation - use 4h for trend context only
+• Primary focus: 15m/30m signals with 1h confirmation (using all indicators) - use 4h for trend context only
 • Trend awareness: Use 4h for major trend direction but don't let it block good shorter-term signals
+• Multi-timeframe logic: Alignment of signals across timeframes and indicators (especially ADX, DI+/DI-, PSAR, Donchian, Keltner, OBV, StochRSI, ATR) increases confidence
 
-Confidence: Based on signal strength, volume confirmation, and timeframe alignment
+Confidence: Based on signal strength, volume confirmation, and multi-timeframe/indicator alignment
 
-Focus on capturing moves efficiently - catch momentum early with proper confirmation.
+Focus on capturing moves efficiently - catch momentum early with proper confirmation from multiple indicators.
 
-Response must be pure JSON - no markdown, no explanations:
+Response must be pure JSON - no markdown, no explanations. Example:
 {{
-  "should_analyze": true/false,
-  "reason": "Specific conditions met with concrete data points",
-  "confidence": 0.0-1.0
+    "should_analyze": true,
+    "reason": "ADX rising, DI+ > DI-, PSAR flip, and OBV rising with price in 15m/30m. Volume >1.3x. Multi-timeframe alignment.",
+    "confidence": 0.87
 }}"""
 
     def _parse_filter_response(self, response: str) -> Tuple[bool, str, float]:
