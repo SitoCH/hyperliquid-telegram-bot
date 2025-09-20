@@ -2,11 +2,8 @@ import time
 import os
 import json
 import pandas as pd
-from typing import Dict, Any, List
-import re
+from typing import Dict, List
 from tzlocal import get_localzone
-import requests
-from datetime import datetime
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from logging_utils import logger
@@ -92,11 +89,11 @@ class LLMAnalyzer:
 
     async def _perform_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, mid: float, funding_rates: List[FundingRateEntry]) -> LLMAnalysisResult:
         """Core LLM analysis logic"""
-        
+
         model = os.getenv("HTB_LLM_MAIN_MODEL", "unknown")
         prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid)
         
-        llm_response = await self.llm_client.call_api(model, prompt)
+        llm_response = await self.llm_client.call_api(model, prompt, 'low')
         
         return self._parse_llm_response(coin, llm_response)
 

@@ -2,7 +2,6 @@ import pandas as pd
 import json
 import os
 from typing import Dict, Any, List, Tuple
-from datetime import datetime
 from logging_utils import logger
 from ..wyckoff.wyckoff_types import Timeframe
 from .litellm_client import LiteLLMClient          
@@ -31,7 +30,7 @@ class AnalysisFilter:
         try:
             filter_client = LiteLLMClient()
             model = os.getenv("HTB_LLM_FAST_MODEL", "unknown")
-            response = await filter_client.call_api(model, filter_prompt)
+            response = await filter_client.call_api(model, filter_prompt, 'minimal')
             should_analyze, reason, confidence = self._parse_filter_response(response)
 
             action = "approved" if should_analyze else "rejected"

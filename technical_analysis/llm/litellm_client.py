@@ -1,6 +1,5 @@
-import os
 import litellm
-from typing import Tuple
+from typing import Literal
 from logging_utils import logger, logging
 
 
@@ -19,7 +18,7 @@ class LiteLLMClient:
         litellm.use_litellm_proxy = True
         logging.getLogger("LiteLLM").setLevel(logging.WARNING)
     
-    async def call_api(self, model: str, prompt: str) -> str:
+    async def call_api(self, model: str, prompt: str, reasoning_effort: Literal["none", "minimal", "low", "medium", "high", "default"]='low') -> str:
         """Call LiteLLM API for AI analysis and return response."""
         
         try:
@@ -31,10 +30,11 @@ class LiteLLMClient:
                 ],
                 response_format={"type": "json_object"},
                 max_completion_tokens=17500,
+                reasoning_effort=reasoning_effort,
                 timeout=60
             )
             
-            content = response.choices[0].message.content
+            content: str = response.choices[0].message.content # type: ignore
             return content.strip().removeprefix("```json").removesuffix("```").strip()
             
         except Exception as e:
