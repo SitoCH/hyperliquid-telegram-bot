@@ -11,7 +11,7 @@ COPY --from=uv /uv /bin/uv
 COPY pyproject.toml uv.lock ./
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
+    apt-get install -y --no-install-recommends git build-essential && \
     uv venv /app/.venv && \
     . /app/.venv/bin/activate && \
     uv sync --frozen && \
