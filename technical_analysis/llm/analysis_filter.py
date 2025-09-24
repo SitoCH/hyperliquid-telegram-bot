@@ -1,7 +1,7 @@
 import pandas as pd
 import json
 import os
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from logging_utils import logger
 from ..wyckoff.wyckoff_types import Timeframe
 from .litellm_client import LiteLLMClient          
@@ -65,6 +65,7 @@ class AnalysisFilter:
         signal_tf_moves: List[float] = []
         signal_tf_volume_ratios: List[float] = []
         choppy_reversals: Dict[str, int] = {}
+        chop_allowance: Dict[str, int] = {}
         range_prison_detected = False
         range_prison_tf = None
         bb_expansion_info = None
@@ -99,6 +100,8 @@ class AnalysisFilter:
                         if ddir != 0:
                             last_dir = ddir
                     choppy_reversals[tf_str] = rev
+                    # Dynamic chop allowance for medium TFs (base 5)
+                    chop_allowance[tf_str] = self._dynamic_chop_allowance(df, base_allowable=5)
                 if '4h' in tf_str and len(df) >= 8:
                     min_p = df['c'].iloc[-8:].min()
                     max_p = df['c'].iloc[-8:].max()
@@ -122,6 +125,8 @@ class AnalysisFilter:
                             last_dir = ddir
                     prior = choppy_reversals.get(tf_str, 0)
                     choppy_reversals[tf_str] = max(prior, rev)
+                    # Dynamic chop allowance for signal TFs (base 4)
+                    chop_allowance[tf_str] = self._dynamic_chop_allowance(df, base_allowable=4)
 
             if 'BB_width' in df.columns and len(df) >= 3:
                 bb_now = df['BB_width'].iloc[-1]
@@ -167,13 +172,15 @@ class AnalysisFilter:
                     f"Signal timeframe volume drought: Volume ratio <{signal_drought_threshold:.2f}x in 15m/30m. Insufficient volume for reliable signals."
                 ), 0.3
         
-        choppy_medium_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 5 and ('1h' in tf or '4h' in tf)]
+        choppy_medium_tfs = [tf for tf, rev in choppy_reversals.items() if ('1h' in tf or '4h' in tf) and rev > chop_allowance.get(tf, 5)]
         if choppy_medium_tfs:
-            return False, f"Medium timeframe chop: Price reversals >5 times in 10 periods in timeframes: {', '.join(choppy_medium_tfs)}. Trend direction unclear.", 0.3
+            details = ", ".join([f"{tf} (> {chop_allowance.get(tf, 5)})" for tf in choppy_medium_tfs])
+            return False, f"Medium timeframe chop: Price reversals exceed dynamic allowance in: {details}. Trend direction unclear.", 0.3
 
-        choppy_signal_tfs = [tf for tf, rev in choppy_reversals.items() if rev > 4 and ('15m' in tf or '30m' in tf)]
+        choppy_signal_tfs = [tf for tf, rev in choppy_reversals.items() if ('15m' in tf or '30m' in tf) and rev > chop_allowance.get(tf, 4)]
         if choppy_signal_tfs:
-            return False, f"Signal timeframe chop: Price reversals >4 times in 10 periods in timeframes: {', '.join(choppy_signal_tfs)}. High noise in signal detection timeframes.", 0.4
+            details = ", ".join([f"{tf} (> {chop_allowance.get(tf, 4)})" for tf in choppy_signal_tfs])
+            return False, f"Signal timeframe chop: Price reversals exceed dynamic allowance in: {details}. High noise in signal detection timeframes.", 0.4
 
         if bb_expansion_info and bb_expansion_info['v_ratio'] is not None and bb_expansion_info['v_ratio'] < 1.1:
             return False, (
@@ -212,8 +219,14 @@ class AnalysisFilter:
                 base_threshold = 0.70 if (bearish_fast or bearish_moderate) else 0.85
                 if max_volume < base_threshold:
                     return False, f"Volume drought - max volume {max_volume:.2f} < {base_threshold:.2f}", 0.0
-                if avg_volume < (0.60 if (bearish_fast or bearish_moderate) else 0.70):
-                    return False, f"Weak volume - avg volume {avg_volume:.2f} below minimum", 0.0
+                avg_min = 0.60 if (bearish_fast or bearish_moderate) else 0.70
+                if avg_volume < avg_min:
+                    return False, f"Weak volume - avg volume {avg_volume:.2f} below minimum {avg_min:.2f}", 0.0
+
+        # Mean-reversion carve-out: allow oversold/overbought with low volume near BB bands when higher TF trend is weak
+        mean_rev_reason = self._detect_mean_reversion_opportunity(dataframes)
+        if mean_rev_reason:
+            return True, mean_rev_reason, 0.8
 
         if not self._has_significant_market_change(dataframes):
             return False, "No significant market change detected", 0.0
@@ -240,7 +253,7 @@ class AnalysisFilter:
             if (is_signal and move_pct < -1.0 and v_val > 0.85) or \
                (is_1h and move_pct < -0.8 and v_val > 0.95) or \
                (is_4h and move_pct < -0.6 and v_val > 1.05) or \
-               (is_signal and move_pct < -0.9 and v_val > 0.55):  # vacuum style fast drop allowance
+               (is_signal and move_pct < -0.9 and v_val > 0.55):
                 available_tf_momentum = True
                 break
         
@@ -325,6 +338,78 @@ class AnalysisFilter:
         
         # No significant changes detected across any timeframe
         return False
+
+    def _dynamic_chop_allowance(self, df: pd.DataFrame, base_allowable: int = 5) -> int:
+        """Adapt chop reversal allowance using recent realized volatility.
+
+        - Lower vol -> lower allowance (tighter filter)
+        - Higher vol -> higher allowance (more forgiveness)
+        """
+        n = min(20, len(df))
+        if n < 5:
+            return base_allowable
+        tail = df.iloc[-n:]
+        c = tail['c']
+        h = tail['h']
+        l = tail['l']
+        vol_pct = (((h - l) / c) * 100).mean()
+        allowance = base_allowable
+        if vol_pct < 0.4:
+            allowance -= 1
+        elif vol_pct > 1.2:
+            allowance += 1
+        return max(2, min(8, allowance))
+
+    def _detect_mean_reversion_opportunity(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> Optional[str]:
+        """Detect mean-reversion setups on signal TFs when trend is weak and volume is light.
+
+        Long MR: RSI <= 22, close near/below BB_lower (<= +0.2%), v_ratio <= 0.9, and 1h ADX < 15 if available.
+        Short MR: RSI >= 78, close near/above BB_upper (>= -0.2%), v_ratio <= 0.9, and 1h ADX < 15 if available.
+        """
+        # Fetch 1h trend strength via ADX if present
+        adx_1h: Optional[float] = None
+        for tf, df in dataframes.items():
+            if '1h' in str(tf).lower() and 'ADX' in df.columns and not df.empty:
+                try:
+                    adx_1h = float(df['ADX'].iloc[-1])
+                except Exception:
+                    adx_1h = None
+                break
+
+        weak_trend = (adx_1h is None) or (adx_1h < 15)
+        reasons: List[str] = []
+        for tf, df in dataframes.items():
+            tf_str = str(tf).lower()
+            if not (('15m' in tf_str) or ('30m' in tf_str)):
+                continue
+            if df.empty or len(df) < 5:
+                continue
+
+            cols = df.columns
+            close = float(df['c'].iloc[-1])
+            v_ratio = float(df['v_ratio'].iloc[-1]) if 'v_ratio' in cols and not df['v_ratio'].empty else 1.0
+            rsi = float(df['RSI'].iloc[-1]) if 'RSI' in cols and not df['RSI'].empty else None
+
+            bb_lower = float(df['BB_lower'].iloc[-1]) if 'BB_lower' in cols and not df['BB_lower'].empty else None
+            bb_upper = float(df['BB_upper'].iloc[-1]) if 'BB_upper' in cols and not df['BB_upper'].empty else None
+
+            if rsi is None or (bb_lower is None and bb_upper is None):
+                continue
+
+            near = 0.002  # 0.2%
+            # Long mean-reversion
+            if weak_trend and rsi is not None and bb_lower is not None:
+                if rsi <= 22 and v_ratio <= 0.9 and close <= bb_lower * (1 + near):
+                    reasons.append(f"Mean-reversion LONG candidate on {tf_str}: RSI {rsi:.1f}, close near/below BB_lower, v_ratio {v_ratio:.2f}, ADX1h {adx_1h if adx_1h is not None else 'n/a'}")
+
+            # Short mean-reversion
+            if weak_trend and rsi is not None and bb_upper is not None:
+                if rsi >= 78 and v_ratio <= 0.9 and close >= bb_upper * (1 - near):
+                    reasons.append(f"Mean-reversion SHORT candidate on {tf_str}: RSI {rsi:.1f}, close near/above BB_upper, v_ratio {v_ratio:.2f}, ADX1h {adx_1h if adx_1h is not None else 'n/a'}")
+
+        if reasons:
+            return "; ".join(reasons)
+        return None
 
     def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Dict[str, Any]:
         """Create a comprehensive market summary for cheap LLM filtering."""
