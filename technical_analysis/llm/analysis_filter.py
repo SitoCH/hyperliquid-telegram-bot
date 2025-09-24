@@ -42,142 +42,152 @@ class AnalysisFilter:
             return False, "Fallback: LLM filter failed", 0.0
 
     def _passes_pre_filter(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Tuple[bool, str, float]:
-        """Quick pre-filter to catch obvious noise before LLM analysis, including market change and funding checks.
+        """Quick pre-filter to catch obvious noise before LLM analysis.
 
-        Enhancements: Direction-aware (bearish) allowances so low-volume liquidation/vacuum style drops are not
-        over-filtered simply because volume ratios are muted compared to standard bullish continuation moves.
+        Simplified structure: early guards, metric collection, then a linear set of
+        well-named checks. Thresholds and messages preserved, but code paths are
+        easier to follow and duplicate logic is reduced.
         """
-        # 1. Basic data sufficiency
+
+        # -----------------------------
+        # Tiny local helpers
+        # -----------------------------
+        def tf_str(tf: Any) -> str:
+            return str(tf).lower()
+
+        def is_medium(tf_s: str) -> bool:
+            return ('1h' in tf_s) or ('4h' in tf_s)
+
+        def is_signal(tf_s: str) -> bool:
+            return ('15m' in tf_s) or ('30m' in tf_s)
+
+        def last_v_ratio(df: pd.DataFrame) -> Optional[float]:
+            return float(df['v_ratio'].iloc[-1]) if 'v_ratio' in df.columns and not df['v_ratio'].empty else None
+
+        def count_reversals(df: pd.DataFrame, lookback: int = 10) -> int:
+            if len(df) < lookback + 1:
+                return 0
+            rev = 0
+            last_dir = None
+            for i in range(-lookback, 0):
+                diff = df['c'].iloc[i] - df['c'].iloc[i - 1]
+                ddir = 1 if diff > 0 else -1 if diff < 0 else 0
+                if last_dir is not None and ddir != 0 and ddir != last_dir:
+                    rev += 1
+                if ddir != 0:
+                    last_dir = ddir
+            return rev
+
+        # 1) Basic data sufficiency
         if not dataframes or all(df.empty or len(df) < 10 for df in dataframes.values()):
             return False, "Insufficient data - no meaningful dataframes available", 0.0
 
-        # 2. Extreme funding emergency bypass
-        if funding_rates:
-            latest_funding = funding_rates[-1] if funding_rates else None
-            if latest_funding and abs(latest_funding.funding_rate) > 0.0008:  # 0.08%
-                return True, f"Emergency bypass - extreme funding rate detected: {latest_funding.funding_rate:.6f}", 1.0
+        # 2) Extreme funding emergency bypass
+        latest_funding = funding_rates[-1] if funding_rates else None
+        if latest_funding and abs(latest_funding.funding_rate) > 0.0008:  # 0.08%
+            return True, f"Emergency bypass - extreme funding rate detected: {latest_funding.funding_rate:.6f}", 1.0
 
-        # 3. Collect metrics per timeframe
-        price_changes: List[float] = []          # absolute
-        signed_price_changes: List[float] = []   # signed for direction
-        volume_ratios: List[float] = []
-        medium_tf_volume_ratios: List[float] = []
-        signal_tf_moves: List[float] = []
-        signal_tf_volume_ratios: List[float] = []
+        # 3) Collect per-timeframe metrics
+        price_changes: List[float] = []            # absolute
+        signed_price_changes: List[float] = []     # signed
+        all_v_ratios: List[float] = []
+        medium_v_ratios: List[float] = []
+        signal_abs_moves: List[float] = []
+        signal_v_ratios: List[float] = []
         choppy_reversals: Dict[str, int] = {}
         chop_allowance: Dict[str, int] = {}
         range_prison_detected = False
-        range_prison_tf = None
-        bb_expansion_info = None
+        range_prison_tf: Optional[str] = None
+        bb_expansion_info: Optional[Dict[str, Any]] = None
 
         for tf, df in dataframes.items():
             if df.empty or len(df) < 5:
                 continue
-            current_price = df['c'].iloc[-1]
-            open_5p = df['o'].iloc[-5] if len(df) >= 5 else df['o'].iloc[0]
-            signed_move = (current_price - open_5p) / open_5p * 100
+            tf_s = tf_str(tf)
+
+            # Price move over 5 periods
+            o_5 = df['o'].iloc[-5] if len(df) >= 5 else df['o'].iloc[0]
+            c_now = df['c'].iloc[-1]
+            signed_move = (c_now - o_5) / o_5 * 100
             abs_move = abs(signed_move)
             price_changes.append(abs_move)
             signed_price_changes.append(signed_move)
-            v_ratio = df['v_ratio'].iloc[-1] if 'v_ratio' in df.columns and not df['v_ratio'].empty else None
+
+            # Volume ratio
+            v_ratio = last_v_ratio(df)
             if v_ratio is not None:
-                volume_ratios.append(v_ratio)
-            tf_str = str(tf).lower()
-            is_medium = ('1h' in tf_str) or ('4h' in tf_str)
-            is_signal = ('15m' in tf_str) or ('30m' in tf_str)
+                all_v_ratios.append(v_ratio)
 
-            if is_medium:
+            # Medium TF specifics
+            if is_medium(tf_s):
                 if v_ratio is not None:
-                    medium_tf_volume_ratios.append(v_ratio)
-                if len(df) >= 11:
-                    rev = 0
-                    last_dir = None
-                    for i in range(-10, 0):
-                        diff = df['c'].iloc[i] - df['c'].iloc[i - 1]
-                        ddir = 1 if diff > 0 else -1 if diff < 0 else 0
-                        if last_dir is not None and ddir != 0 and ddir != last_dir:
-                            rev += 1
-                        if ddir != 0:
-                            last_dir = ddir
-                    choppy_reversals[tf_str] = rev
-                    # Dynamic chop allowance for medium TFs (base 5)
-                    chop_allowance[tf_str] = self._dynamic_chop_allowance(df, base_allowable=5)
-                if '4h' in tf_str and len(df) >= 8:
-                    min_p = df['c'].iloc[-8:].min()
-                    max_p = df['c'].iloc[-8:].max()
-                    if (max_p - min_p) / min_p * 100 < 0.4:
+                    medium_v_ratios.append(v_ratio)
+                choppy_reversals[tf_s] = count_reversals(df, 10)
+                chop_allowance[tf_s] = self._dynamic_chop_allowance(df, base_allowable=5)
+                if '4h' in tf_s and len(df) >= 8:
+                    seg = df['c'].iloc[-8:]
+                    if (seg.max() - seg.min()) / seg.min() * 100 < 0.4:
                         range_prison_detected = True
-                        range_prison_tf = tf_str
+                        range_prison_tf = tf_s
 
-            if is_signal:
-                signal_tf_moves.append(abs_move)
+            # Signal TF specifics
+            if is_signal(tf_s):
+                signal_abs_moves.append(abs_move)
                 if v_ratio is not None:
-                    signal_tf_volume_ratios.append(v_ratio)
-                if len(df) >= 11:
-                    rev = 0
-                    last_dir = None
-                    for i in range(-10, 0):
-                        diff = df['c'].iloc[i] - df['c'].iloc[i - 1]
-                        ddir = 1 if diff > 0 else -1 if diff < 0 else 0
-                        if last_dir is not None and ddir != 0 and ddir != last_dir:
-                            rev += 1
-                        if ddir != 0:
-                            last_dir = ddir
-                    prior = choppy_reversals.get(tf_str, 0)
-                    choppy_reversals[tf_str] = max(prior, rev)
-                    # Dynamic chop allowance for signal TFs (base 4)
-                    chop_allowance[tf_str] = self._dynamic_chop_allowance(df, base_allowable=4)
+                    signal_v_ratios.append(v_ratio)
+                # Merge with any prior (if also counted above)
+                choppy_reversals[tf_s] = max(choppy_reversals.get(tf_s, 0), count_reversals(df, 10))
+                chop_allowance[tf_s] = self._dynamic_chop_allowance(df, base_allowable=4)
 
+            # BB width expansion
             if 'BB_width' in df.columns and len(df) >= 3:
                 bb_now = df['BB_width'].iloc[-1]
                 bb_prev = df['BB_width'].iloc[-3]
                 if bb_prev > 0 and (bb_now - bb_prev) / bb_prev > 0.15 and abs_move > 0.5:
                     bb_expansion_info = {
-                        'tf': tf_str,
+                        'tf': tf_s,
                         'bb_width_now': bb_now,
                         'bb_width_prev': bb_prev,
                         'price_move': abs_move,
-                        'v_ratio': v_ratio
+                        'v_ratio': v_ratio,
                     }
 
-        # 4. Derived directional context
+        # 4) Directional context
         largest_down = min(signed_price_changes) if signed_price_changes else 0.0
-        bearish_fast = largest_down <= -0.9   # strong liquidation style
+        bearish_fast = largest_down <= -0.9
         bearish_moderate = largest_down <= -0.6
 
-        # 5. Structural / noise filters
+        # 5) Structural / noise filters
         if range_prison_detected:
             return False, (
                 f"4h timeframe consolidation: Price within 0.4% range for 8+ periods in {range_prison_tf}. Major consolidation detected."
             ), 0.3
 
-        if signal_tf_moves and all(x < 0.2 for x in signal_tf_moves):
+        if signal_abs_moves and all(x < 0.2 for x in signal_abs_moves):
             return False, (
                 "Signal timeframe micro moves: Price changes <0.2% in ALL signal timeframes (15m, 30m). High risk of false intraday signal."
             ), 0.3
 
-        medium_tf_vols = medium_tf_volume_ratios
-        if medium_tf_vols:
-            medium_drought_threshold = 0.85 if (bearish_fast or bearish_moderate) else 1.0
-            if all(x < medium_drought_threshold for x in medium_tf_vols):
+        if medium_v_ratios:
+            medium_drought_th = 0.85 if (bearish_fast or bearish_moderate) else 1.0
+            if all(x < medium_drought_th for x in medium_v_ratios):
                 return False, (
-                    f"Medium timeframe volume drought: Volume ratio <{medium_drought_threshold:.2f}x across 1h/4h timeframes. Insufficient momentum for sustained moves."
+                    f"Medium timeframe volume drought: Volume ratio <{medium_drought_th:.2f}x across 1h/4h timeframes. Insufficient momentum for sustained moves."
                 ), 0.3
 
-        signal_tf_vols = signal_tf_volume_ratios
-        if signal_tf_vols:
-            signal_drought_threshold = 0.65 if (bearish_fast or bearish_moderate) else 0.80
-            if all(x < signal_drought_threshold for x in signal_tf_vols):
+        if signal_v_ratios:
+            signal_drought_th = 0.65 if (bearish_fast or bearish_moderate) else 0.80
+            if all(x < signal_drought_th for x in signal_v_ratios):
                 return False, (
-                    f"Signal timeframe volume drought: Volume ratio <{signal_drought_threshold:.2f}x in 15m/30m. Insufficient volume for reliable signals."
+                    f"Signal timeframe volume drought: Volume ratio <{signal_drought_th:.2f}x in 15m/30m. Insufficient volume for reliable signals."
                 ), 0.3
-        
-        choppy_medium_tfs = [tf for tf, rev in choppy_reversals.items() if ('1h' in tf or '4h' in tf) and rev > chop_allowance.get(tf, 5)]
+
+        choppy_medium_tfs = [tf for tf, rev in choppy_reversals.items() if (('1h' in tf) or ('4h' in tf)) and rev > chop_allowance.get(tf, 5)]
         if choppy_medium_tfs:
             details = ", ".join([f"{tf} (> {chop_allowance.get(tf, 5)})" for tf in choppy_medium_tfs])
             return False, f"Medium timeframe chop: Price reversals exceed dynamic allowance in: {details}. Trend direction unclear.", 0.3
 
-        choppy_signal_tfs = [tf for tf, rev in choppy_reversals.items() if ('15m' in tf or '30m' in tf) and rev > chop_allowance.get(tf, 4)]
+        choppy_signal_tfs = [tf for tf, rev in choppy_reversals.items() if (('15m' in tf) or ('30m' in tf)) and rev > chop_allowance.get(tf, 4)]
         if choppy_signal_tfs:
             details = ", ".join([f"{tf} (> {chop_allowance.get(tf, 4)})" for tf in choppy_signal_tfs])
             return False, f"Signal timeframe chop: Price reversals exceed dynamic allowance in: {details}. High noise in signal detection timeframes.", 0.4
@@ -188,9 +198,11 @@ class AnalysisFilter:
                 f"price move {bb_expansion_info['price_move']:.2f}%, and volume drought (v_ratio {bb_expansion_info['v_ratio']:.2f}) in {bb_expansion_info['tf']} timeframe. High false-signal risk."
             ), 0.4
 
+        # Extreme price move bypass
         if price_changes and max(price_changes) > 3.0:
             return True, f"Emergency bypass - extreme price movement detected: {max(price_changes):.2f}%", 1.0
 
+        # Activity checks
         if price_changes:
             max_move = max(price_changes)
             avg_move = sum(price_changes) / len(price_changes)
@@ -199,31 +211,32 @@ class AnalysisFilter:
             if avg_move < 0.15:
                 return False, f"Low activity - avg price change {avg_move:.2f}% < 0.15%", 0.0
 
-        if volume_ratios:
-            max_volume = max(volume_ratios)
-            avg_volume = sum(volume_ratios) / len(volume_ratios)
+        # Volume quality relative to move magnitude and direction
+        if all_v_ratios:
+            max_volume = max(all_v_ratios)
+            avg_volume = sum(all_v_ratios) / len(all_v_ratios)
             significant_abs = price_changes and max(price_changes) > 1.0
             moderate_abs = price_changes and max(price_changes) > 0.5
             significant_bearish = largest_down <= -1.0
             moderate_bearish = largest_down <= -0.5
 
             if significant_abs:
-                drought_threshold = 0.35 if significant_bearish else 0.45
-                if max_volume < drought_threshold:
-                    return False, f"Extreme volume drought during significant move - max volume {max_volume:.2f} < {drought_threshold:.2f}", 0.0
+                drought_th = 0.35 if significant_bearish else 0.45
+                if max_volume < drought_th:
+                    return False, f"Extreme volume drought during significant move - max volume {max_volume:.2f} < {drought_th:.2f}", 0.0
             elif moderate_abs:
-                drought_threshold = 0.50 if moderate_bearish else 0.65
-                if max_volume < drought_threshold:
-                    return False, f"Low volume during moderate move - max volume {max_volume:.2f} < {drought_threshold:.2f}", 0.0
+                drought_th = 0.50 if moderate_bearish else 0.65
+                if max_volume < drought_th:
+                    return False, f"Low volume during moderate move - max volume {max_volume:.2f} < {drought_th:.2f}", 0.0
             else:
-                base_threshold = 0.70 if (bearish_fast or bearish_moderate) else 0.85
-                if max_volume < base_threshold:
-                    return False, f"Volume drought - max volume {max_volume:.2f} < {base_threshold:.2f}", 0.0
+                base_th = 0.70 if (bearish_fast or bearish_moderate) else 0.85
+                if max_volume < base_th:
+                    return False, f"Volume drought - max volume {max_volume:.2f} < {base_th:.2f}", 0.0
                 avg_min = 0.60 if (bearish_fast or bearish_moderate) else 0.70
                 if avg_volume < avg_min:
                     return False, f"Weak volume - avg volume {avg_volume:.2f} below minimum {avg_min:.2f}", 0.0
 
-        # Mean-reversion carve-out: allow oversold/overbought with low volume near BB bands when higher TF trend is weak
+        # Mean-reversion carve-out
         mean_rev_reason = self._detect_mean_reversion_opportunity(dataframes)
         if mean_rev_reason:
             return True, mean_rev_reason, 0.8
@@ -231,37 +244,39 @@ class AnalysisFilter:
         if not self._has_significant_market_change(dataframes):
             return False, "No significant market change detected", 0.0
 
+        # Momentum availability across TFs
         available_tf_momentum = False
         for tf, df in dataframes.items():
             if df.empty or len(df) < 5:
                 continue
-            tf_label = str(tf).lower()
-            move_pct = (df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100 if len(df) >= 5 else 0.0
-            v_val = df['v_ratio'].iloc[-1] if 'v_ratio' in df.columns and not df['v_ratio'].empty else 0.0
-            is_signal = ('15m' in tf_label) or ('30m' in tf_label)
-            is_1h = '1h' in tf_label
-            is_4h = '4h' in tf_label
+            label = tf_str(tf)
+            move_pct = (df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100
+            v_val = last_v_ratio(df) or 0.0
+            sig = is_signal(label)
+            on1h = '1h' in label
+            on4h = '4h' in label
 
-            # Bullish thresholds
-            if (is_signal and move_pct > 1.0 and v_val > 1.2) or \
-               (is_1h and move_pct > 0.8 and v_val > 1.3) or \
-               (is_4h and move_pct > 0.6 and v_val > 1.4):
+            # Bullish
+            if (sig and move_pct > 1.0 and v_val > 1.2) or \
+               (on1h and move_pct > 0.8 and v_val > 1.3) or \
+               (on4h and move_pct > 0.6 and v_val > 1.4):
                 available_tf_momentum = True
                 break
 
-            # Bearish thresholds (direction-aware, lower volume requirements)
-            if (is_signal and move_pct < -1.0 and v_val > 0.85) or \
-               (is_1h and move_pct < -0.8 and v_val > 0.95) or \
-               (is_4h and move_pct < -0.6 and v_val > 1.05) or \
-               (is_signal and move_pct < -0.9 and v_val > 0.55):
+            # Bearish (direction-aware)
+            if (sig and move_pct < -1.0 and v_val > 0.85) or \
+               (on1h and move_pct < -0.8 and v_val > 0.95) or \
+               (on4h and move_pct < -0.6 and v_val > 1.05) or \
+               (sig and move_pct < -0.9 and v_val > 0.55):
                 available_tf_momentum = True
                 break
-        
+
         if not available_tf_momentum:
             return False, (
                 "No momentum detected. Long: >1.0% (15m/30m)+vol>1.2x | >0.8% (1h)+vol>1.3x | >0.6% (4h)+vol>1.4x. "
                 "Short (adjusted): >1.0% drop (15m/30m)+vol>0.85x | >0.8% drop (1h)+vol>0.95x | >0.6% drop (4h)+vol>1.05x | vacuum short if drop >0.9% & vol>0.55x."
             ), 0.2
+
         return True, "Pre-filter passed", 1.0
 
     def _has_significant_market_change(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> bool:
