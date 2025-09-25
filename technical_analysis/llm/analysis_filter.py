@@ -19,9 +19,11 @@ class AnalysisFilter:
             return True, f"Pre-filter approved analysis for {coin}: interactive mode", 1.0
         
         passes_filter, filter_reason, filter_confidence = self._passes_pre_filter(dataframes, funding_rates)
+        action = "approved" if passes_filter else "rejected"
+        pre_filter_message = f"Pre-filter {action} analysis for {coin}: {filter_reason}"
+        logger.info(pre_filter_message)
+
         if not passes_filter:
-            pre_filter_message = f"Pre-filter rejected analysis for {coin}: {filter_reason}"
-            logger.info(pre_filter_message)
             return False, pre_filter_message, filter_confidence
 
         market_summary = self._create_market_summary(dataframes, funding_rates)
