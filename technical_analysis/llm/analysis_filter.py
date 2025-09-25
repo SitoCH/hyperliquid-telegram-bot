@@ -188,7 +188,7 @@ class AnalysisFilter:
                 ), 0.3
 
         if signal_v_ratios:
-            signal_drought_th = 0.60 if (bearish_fast or bearish_moderate) else 0.75
+            signal_drought_th = 0.70 if (bearish_fast or bearish_moderate) else 0.85
             if all(x < signal_drought_th for x in signal_v_ratios):
                 svals = ", ".join([f"{x:.2f}x" for x in signal_v_ratios])
                 return False, (
