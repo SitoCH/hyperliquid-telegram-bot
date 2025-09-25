@@ -169,14 +169,14 @@ class AnalysisFilter:
             ), 0.3
 
         if medium_v_ratios:
-            medium_drought_th = 0.85 if (bearish_fast or bearish_moderate) else 1.0
+            medium_drought_th = 0.80 if (bearish_fast or bearish_moderate) else 0.95
             if all(x < medium_drought_th for x in medium_v_ratios):
                 return False, (
                     f"Medium timeframe volume drought: Volume ratio <{medium_drought_th:.2f}x across 1h/4h timeframes. Insufficient momentum for sustained moves."
                 ), 0.3
 
         if signal_v_ratios:
-            signal_drought_th = 0.65 if (bearish_fast or bearish_moderate) else 0.80
+            signal_drought_th = 0.60 if (bearish_fast or bearish_moderate) else 0.75
             if all(x < signal_drought_th for x in signal_v_ratios):
                 return False, (
                     f"Signal timeframe volume drought: Volume ratio <{signal_drought_th:.2f}x in 15m/30m. Insufficient volume for reliable signals."
