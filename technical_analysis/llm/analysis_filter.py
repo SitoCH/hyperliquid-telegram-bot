@@ -157,6 +157,15 @@ class AnalysisFilter:
         bearish_fast = largest_down <= -0.9
         bearish_moderate = largest_down <= -0.6
 
+        # Mean-reversion carve-out
+        mean_rev_reason = self._detect_mean_reversion_opportunity(dataframes)
+        if mean_rev_reason:
+            return True, mean_rev_reason, 0.8
+
+        # Extreme price move bypass
+        if price_changes and max(price_changes) > 3.0:
+            return True, f"Emergency bypass - extreme price movement detected: {max(price_changes):.2f}%", 1.0
+
         # 5) Structural / noise filters
         if range_prison_detected:
             return False, (
@@ -200,10 +209,6 @@ class AnalysisFilter:
                 f"price move {bb_expansion_info['price_move']:.2f}%, and volume drought (v_ratio {bb_expansion_info['v_ratio']:.2f}) in {bb_expansion_info['tf']} timeframe. High false-signal risk."
             ), 0.4
 
-        # Extreme price move bypass
-        if price_changes and max(price_changes) > 3.0:
-            return True, f"Emergency bypass - extreme price movement detected: {max(price_changes):.2f}%", 1.0
-
         # Activity checks
         if price_changes:
             max_move = max(price_changes)
@@ -237,11 +242,6 @@ class AnalysisFilter:
                 avg_min = 0.60 if (bearish_fast or bearish_moderate) else 0.70
                 if avg_volume < avg_min:
                     return False, f"Weak volume - avg volume {avg_volume:.2f} below minimum {avg_min:.2f}", 0.0
-
-        # Mean-reversion carve-out
-        mean_rev_reason = self._detect_mean_reversion_opportunity(dataframes)
-        if mean_rev_reason:
-            return True, mean_rev_reason, 0.8
 
         if not self._has_significant_market_change(dataframes):
             return False, "No significant market change detected", 0.0
