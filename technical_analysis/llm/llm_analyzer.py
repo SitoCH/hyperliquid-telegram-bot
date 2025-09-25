@@ -56,7 +56,7 @@ class LLMAnalyzer:
             candles_data[tf] = await get_candles_with_cache(coin, tf, now, lookback_days, hyperliquid_utils.info.candles_snapshot)
 
         # Check if we have enough data for basic analysis
-        if len(candles_data[Timeframe.MINUTES_15]) < 10:
+        if len(candles_data[Timeframe.MINUTES_15]) < 10 or len(candles_data[Timeframe.HOURS_4]) < 10:
             logger.warning(f"Insufficient candles for AI analysis on {coin}")
             return
 
