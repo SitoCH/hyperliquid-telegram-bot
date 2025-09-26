@@ -164,10 +164,6 @@ class AnalysisFilter:
         if mean_rev_reason:
             return True, mean_rev_reason, 0.8
 
-        # Extreme price move bypass
-        if price_changes and max(price_changes) > 3.0:
-            return True, f"Emergency bypass - extreme price movement detected: {max(price_changes):.2f}%", 1.0
-
         # 5) Structural / noise filters
         if range_prison_detected:
             return False, (
