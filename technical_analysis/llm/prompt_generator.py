@@ -7,7 +7,16 @@ from ..funding_rates_cache import FundingRateEntry
 
 
 class LLMPromptGenerator:
-    """Handles generation of prompts for LLM analysis."""
+    """
+    Handles generation of prompts for LLM analysis.
+    
+    IMPROVED VERSION - Fixed Indicator Overload:
+    - Reduced from 20+ indicators to 6 core crypto-specific indicators
+    - Eliminated redundant oscillators (Stochastic, Williams %R, CCI, ROC, ADX, etc.)
+    - Focus on: Price/Volume, ATR, MACD, RSI, SuperTrend, Bollinger Bands
+    - Simplified scoring from 18 to 12 points minimum
+    - Streamlined data tables for better LLM processing
+    """
     
     def __init__(self, timeframe_lookback_days: Dict[Timeframe, int]):
         self.timeframe_lookback_days = timeframe_lookback_days
@@ -96,178 +105,80 @@ class LLMPromptGenerator:
             "5. RISK/REWARD: Minimum 1:2 ratio with clear technical stop loss and target levels",
             "NOTE: 4H timeframe is for context only - do NOT require 4H alignment for signals",
             "",
-            "TIER 2 CONFIRMATIONS (Need 2+ for signal validation):",
-            "- MACD histogram turning positive (LONG) or negative (SHORT)",
-            "- Bollinger Band squeeze release with directional momentum (BB_width expanding)",
-            "- SuperTrend flip with volume confirmation (price above for LONG, below for SHORT)",
-            "- Stochastic oscillator crossing in favorable territory (%K crossing %D up for LONG, down for SHORT)",
-            "- Williams %R reversal from extreme levels (-80 to -20 for LONG, -20 to -80 for SHORT)",
-            "- CCI breaking above +100 (LONG) or below -100 (SHORT)",
-            "- ROC momentum acceleration (positive for LONG, negative for SHORT)",
-            "- Fibonacci level confluence (price within 0.5% of key levels with directional bias)",
-            "- Pivot point bounce/rejection with volume confirmation (support bounce for LONG, resistance rejection for SHORT)",
-            "- Ichimoku cloud breakout (price above cloud for LONG, below cloud for SHORT)",
-            "- Volume ratio >1.5 during setup formation (above average volume)",
-            "- Funding rate showing mean reversion setup (extreme readings reversing toward opposite direction)",
-            "- EMA/VWAP reclaim (above for LONG) or breakdown (below for SHORT) with sustained follow-through",
-            "- ADX trend strength confirmation (ADX rising, DI+ > DI- for LONG, DI- > DI+ for SHORT)",
-            "- Parabolic SAR flip (PSAR below price for LONG, above for SHORT)",
-            "- Donchian Channel breakout (price above upper band for LONG, below lower band for SHORT)",
-            "- Keltner Channel breakout (price above upper band for LONG, below lower band for SHORT)",
-            "- OBV (On-Balance Volume) confirming price direction",
-            "- Stochastic RSI crossover (K crossing D up for LONG, down for SHORT)",
+            "TIER 2 CONFIRMATIONS (Need 2+ for signal validation - SIMPLIFIED):",
+            "- MACD histogram momentum shift (positive for LONG, negative for SHORT)",
+            "- Bollinger Band squeeze release with volume (BB_width expanding + V_Ratio >1.5)",
+            "- SuperTrend alignment with price direction (LONG: price > SuperTrend, SHORT: price < SuperTrend)",
+            "- Key level confluence at pivot points or psychological levels (within 0.5% tolerance)",
+            "- EMA/VWAP reclaim or breakdown with sustained follow-through and volume",
+            "- Funding rate mean reversion setup (extreme readings showing reversal tendency)",
             "",
-            "AUTOMATIC DISQUALIFIERS (Force HOLD signal):",
-            "- RSI >80 or <20 (extreme overbought/oversold without clear reversal patterns)",
-            "- Stochastic >90 or <10 in extreme territory without reversal setup",
-            "- Williams %R >-10 or <-90 in extreme zones without momentum confirmation",
-            "- CCI >+200 or <-200 extreme readings without volume confirmation",
-            "- Conflicting signals across key timeframes (1H vs 30m vs 15m disagree)",
-            "- Low volume (<80% of average) during setup formation",
-            "- BB_width contracting (squeeze) without clear breakout direction",
-            "- MACD and RSI showing opposing signals",
-            "- Price action choppy (multiple false breakouts in last 6 hours)",
-            "- Ichimoku cloud providing resistance in bullish setup or support in bearish setup",
+            "AUTOMATIC DISQUALIFIERS (Force HOLD signal - STREAMLINED):",
+            "- RSI extreme without reversal: RSI >75 or <25 without clear reversal patterns",
+            "- Conflicting timeframe signals: 1H vs 30m disagree on direction",
+            "- Low volume confirmation: V_Ratio <0.8 during setup formation", 
+            "- Bollinger squeeze without direction: BB_width contracting without clear bias",
+            "- MACD and RSI divergence: Indicators showing opposing momentum signals",
+            "- Choppy price action: Multiple false breakouts in recent 6-hour period",
             "",           
             "=== ENHANCED INDICATOR ANALYSIS FRAMEWORK ===",
             "",
-            "OSCILLATOR ANALYSIS (All indicators must be evaluated):",
-            "1. RSI (45-65 optimal range):",
-            "   - LONG bias: RSI 50-65 with positive divergence or breaking above 45 from oversold",
-            "   - SHORT bias: RSI 35-50 with negative divergence or breaking below 55 from overbought",
-            "   - Extreme caution: RSI >80 or <20 without clear reversal patterns",
+            "CORE CRYPTO INDICATOR ANALYSIS (Focus on 6 essential indicators):",
+            "1. RSI (Primary Momentum):",
+            "   - LONG bias: RSI 45-65 with positive divergence or breaking above 45 from oversold",
+            "   - SHORT bias: RSI 35-55 with negative divergence or breaking below 55 from overbought",
+            "   - Extreme caution: RSI >75 or <25 without clear reversal patterns",
             "",
-            "2. Stochastic (%K and %D lines):",
-            "   - LONG signal: %K crossing above %D in 20-80 range with upward momentum",
-            "   - SHORT signal: %K crossing below %D in 20-80 range with downward momentum",
-            "   - Avoid: Stochastic >90 or <10 without confirmed reversal setup",
+            "2. Volume Confirmation (Critical for crypto):",
+            "   - V_Ratio >1.5: Above average volume confirms breakout/breakdown",
+            "   - V_Ratio <0.8: Low volume, weakens signal strength",
+            "   - Volume must support price direction for valid signals",
             "",
-            "3. Stochastic RSI:",
-            "   - LONG signal: StochRSI K crossing above D in 20-80 range",
-            "   - SHORT signal: StochRSI K crossing below D in 20-80 range",
-            "   - Avoid: StochRSI >90 or <10 without reversal",
+            "3. ATR Volatility Context:",
+            "   - High ATR (>3% of price): Requires wider stops, shorter time horizon",
+            "   - Low ATR (<1.5% of price): Allows tighter stops, longer time horizon",
+            "   - ATR determines position sizing and risk parameters",
             "",
-            "4. Williams %R:",
-            "   - LONG reversal: Williams %R rising from -80 to -20 range with volume",
-            "   - SHORT reversal: Williams %R falling from -20 to -80 range with volume",
-            "   - Extreme zones: >-10 (overbought) or <-90 (oversold) require caution",
+            "4. MACD Histogram (Momentum Confirmation):",
+            "   - LONG signal: MACD histogram turning positive with volume",
+            "   - SHORT signal: MACD histogram turning negative with volume",
+            "   - Divergence: Histogram direction opposing price movement (reversal setup)",
             "",
-            "5. CCI (Commodity Channel Index):",
-            "   - LONG breakout: CCI breaking above +100 with volume confirmation",
-            "   - SHORT breakdown: CCI breaking below -100 with volume confirmation",
-            "   - Extreme readings: CCI >+200 or <-200 often signal reversal without momentum",
-            "",
-            "6. ROC (Rate of Change):",
-            "   - LONG momentum: ROC positive and accelerating (increasing positive values)",
-            "   - SHORT momentum: ROC negative and accelerating (decreasing negative values)",
-            "   - Divergence signals: ROC direction opposing price movement (reversal setup)",
-            "",
-            "7. ADX (Average Directional Index):",
-            "   - Trend strength: ADX rising confirms strong trend",
-            "   - DI+ > DI-: Bullish trend, DI- > DI+: Bearish trend",
-            "",
-            "8. OBV (On-Balance Volume):",
-            "   - OBV rising with price: Confirms bullish move",
-            "   - OBV falling with price: Confirms bearish move",
-            "",
-            "9. Parabolic SAR:",
-            "   - LONG: PSAR below price, SHORT: PSAR above price",
-            "   - PSAR flip signals possible trend reversal",
-            "",
-            "10. Donchian Channels:",
-            "   - LONG: Price breaking above upper band, SHORT: Price breaking below lower band",
-            "   - Middle band as dynamic support/resistance",
-            "",
-            "11. Keltner Channels:",
-            "   - LONG: Price breaking above upper band, SHORT: Price breaking below lower band",
-            "   - Middle band as dynamic support/resistance",
-            "",
-            "TREND AND MOMENTUM INDICATORS:",
-            "1. MACD System:",
-            "   - LONG signal: MACD line crossing above Signal line with positive histogram",
-            "   - SHORT signal: MACD line crossing below Signal line with negative histogram",
-            "   - Strength indicator: Distance between MACD and Signal line",
-            "",
-            "2. SuperTrend:",
-            "   - LONG trend: Price above SuperTrend line with increasing distance",
-            "   - SHORT trend: Price below SuperTrend line with increasing distance",
-            "   - Signal strength: Distance between price and SuperTrend line",
+            "5. SuperTrend (Primary Trend Filter):",
+            "   - LONG trend: Price above SuperTrend line (bullish bias)",
+            "   - SHORT trend: Price below SuperTrend line (bearish bias)",
             "   - Flip signals: SuperTrend color change with volume confirmation",
             "",
-            "3. Bollinger Bands:",
-            "   - Squeeze setup: BB_width contracting (values decreasing) = potential breakout",
-            "   - LONG breakout: BB_width expanding with price above BB_middle",
-            "   - SHORT breakdown: BB_width expanding with price below BB_middle",
-            "   - Reversal zones: Price touching BB_upper (potential SHORT) or BB_lower (potential LONG)",
+            "6. Bollinger Band Squeeze (Breakout Anticipation):",
+            "   - Squeeze setup: BB_width contracting = potential breakout imminent",
+            "   - LONG breakout: BB_width expanding with price above BB_middle + volume",
+            "   - SHORT breakdown: BB_width expanding with price below BB_middle + volume",
             "",
-            "FIBONACCI AND PIVOT ANALYSIS:",
-            "1. Fibonacci Retracements (FIB_78, FIB_61, FIB_38, FIB_23):",
-            "   - LONG support: Price bouncing from Fib levels in uptrend",
-            "   - SHORT resistance: Price rejected at Fib levels in downtrend",
-            "   - Confluence: Multiple Fib levels within 0.5% create strong zones",
+            "SIMPLIFIED SIGNAL SCORING SYSTEM:",
+            "REQUIRED MINIMUM: 12 points for LONG/SHORT signal (reduced from 18)",
             "",
-            "2. Pivot Points (R2, R1, PIVOT, S1, S2):",
-            "   - LONG breakout: Price breaking above R1/R2 or bouncing from PIVOT/S1/S2 with volume",
-            "   - SHORT breakdown: Price breaking below S1/S2 or rejecting from PIVOT/R1/R2 with volume",
-            "   - Target levels: Use next pivot level as profit target",
+            "TIER 1 FACTORS (4 points each):",
+            "+ Multi-timeframe alignment (1H and 30m agree)",
+            "+ Volume confirmation (V_Ratio >1.5)",
             "",
-            "ICHIMOKU CLOUD SYSTEM:",
-            "1. Cloud Analysis (SENKOU_A, SENKOU_B):",
-            "   - LONG setup: Price above cloud (above both Senkou Span A and B)",
-            "   - SHORT setup: Price below cloud (below both Senkou Span A and B)",
-            "   - Neutral zone: Price inside cloud = avoid trading",
-            "",
-            "2. Ichimoku Lines:",
-            "   - TENKAN (Conversion): Fast signal line for short-term momentum",
-            "   - KIJUN (Base): Medium-term trend direction",
-            "   - CHIKOU (Lagging): Confirmation of trend strength",
-            "",
-            "VOLUME CONFIRMATION REQUIREMENTS:",
-            "1. Volume Ratio Analysis:",
-            "   - V_Ratio >1.5: Above average volume confirms breakout/breakdown",
-            "   - V_Ratio 0.8-1.2: Normal volume, requires additional confirmation",
-            "   - V_Ratio <0.8: Low volume, weakens signal strength",
-            "",
-            "2. Volume Trend:",
-            "   - V_Trend >1.0: Increasing volume supports price direction",
-            "   - V_Trend <1.0: Decreasing volume suggests weakening momentum",
-            "",
-            "ENHANCED SIGNAL SCORING SYSTEM:",
-            "REQUIRED MINIMUM: 18 points for LONG/SHORT signal",
-            "",
-            "TIER 1 FACTORS (3 points each):",
-            "+ Multi-timeframe alignment",
-            "",
-            "TIER 2 FACTORS (2 points each):",
-            "+ Clear momentum shift with volume confirmation",
-            "+ Key level bounce/rejection with confirmation (Support/Resistance, Fibonacci, Pivot Points)",
-            "+ Oscillator convergence (MACD histogram + RSI alignment)",
-            "+ Bollinger Band squeeze release with directional momentum (BB_width expanding)", 
-            "+ SuperTrend flip with volume confirmation (price above for LONG, below for SHORT)",
-            "+ Stochastic oscillator directional crossover (%K crossing %D up for LONG, down for SHORT)",
-            "+ Williams %R reversal from extreme levels (-80 to -20 for LONG, -20 to -80 for SHORT)",
-            "+ CCI momentum breakout (above +100 for LONG, below -100 for SHORT)",
-            "+ ROC momentum acceleration (positive for LONG, negative for SHORT)",
-            "+ Ichimoku cloud breakout (price above cloud for LONG, below cloud for SHORT)",
-            "+ Volume ratio confirmation (>1.5 during setup formation)",
+            "TIER 2 FACTORS (2 points each - CORE CRYPTO INDICATORS):",
+            "+ MACD histogram momentum alignment",
+            "+ RSI in favorable range (45-65) with direction support",
+            "+ SuperTrend alignment with price direction",
+            "+ Bollinger Band context (squeeze release or directional bias)",
+            "+ Key level confluence (EMA/VWAP/Pivot levels within 0.5%)",
             "+ Funding rate mean reversion setup",
-            "+ EMA/VWAP reclaim (above for LONG) or breakdown (below for SHORT) with sustained follow-through",
-            "+ ADX trend strength confirmation (ADX rising, DI+ > DI- for LONG, DI- > DI+ for SHORT)",
-            "+ Parabolic SAR flip (PSAR below price for LONG, above for SHORT)",
-            "+ Donchian Channel breakout (price above upper band for LONG, below lower band for SHORT)",
-            "+ Keltner Channel breakout (price above upper band for LONG, below lower band for SHORT)",
-            "+ OBV (On-Balance Volume) confirming price direction",
-            "+ Stochastic RSI crossover (K crossing D up for LONG, down for SHORT)",
+            "+ ATR volatility supports trade setup and risk management",
             "",
             "PENALTY FACTORS:",
-            "- Conflicting timeframe signals (-5 points)",
-            "- Extreme RSI without divergence (-3 points)",
-            "- Low confidence setup (-2 points)",
-            "- Poor risk/reward <1:1.5 (-3 points)",
+            "- Conflicting timeframe signals (-4 points)",
+            "- Extreme RSI without reversal (-3 points)",
+            "- Low volume during setup (-2 points)",
+            "- Poor risk/reward <1:1.5 (-2 points)",
             "",
             "SIGNAL CONFIDENCE REQUIREMENTS:",
-            "- confidence ≥0.8: Only for setups with 10+ points and perfect Tier 1 alignment",
-            "- confidence 0.7-0.79: Setups with 8-9 points and strong confluence",
+            "- confidence ≥0.8: Setups with 12+ points and both Tier 1 factors",
+            "- confidence 0.7-0.79: Setups with 10-11 points and at least 1 Tier 1 factor",
             "- confidence <0.7: Automatic HOLD signal",
             "",
             "MARKET STATE FILTERS:",
@@ -332,25 +243,23 @@ class LLMPromptGenerator:
             "",
             "- stop_loss: MANDATORY exact price level (not percentage):",
             "  * Support/Resistance levels from pivot points, previous highs/lows",
-            "  * Fibonacci retracement levels (23.6%, 38.2%, 50%, 61.8%)",
+            "  * Key Fibonacci levels (38.2%, 50%, 61.8%)",
             "  * EMA/VWAP levels, Bollinger Band levels",
-            "  * ADX/DI+/- crossovers, Parabolic SAR, Donchian/Keltner Channel levels",
+            "  * Previous swing highs/lows, psychological round numbers",
             f"  * ATR-based stops: LONG = ${mid:.4f} - (2 * ATR), SHORT = ${mid:.4f} + (2 * ATR)",
             f"  * Distance validation: minimum 1.5% from ${mid:.4f}, maximum 4% from ${mid:.4f}",
             "  * Choose the nearest valid technical level within these constraints",
             "",
             "- take_profit: MANDATORY exact price level:",
             "  * PRIMARY TARGETS (use these first):",
-            "    - Fibonacci extension levels: 127.2%, 161.8%, 200%, 261.8%",
+            "    - Key Fibonacci extensions: 127.2%, 161.8%",
             "    - Previous swing highs (for LONG) / Previous swing lows (for SHORT)",
             "    - Psychological levels: round numbers ending in 00, 50",
-            "    - Key resistance levels (LONG) / Key support levels (SHORT) from pivot analysis",
-            "    - Donchian/Keltner/Parabolic SAR/ADX/OBV/DI+/-/StochRSI breakouts",
+            "    - Key resistance/support levels from pivot analysis",
             "  * SECONDARY TARGETS:",
             "    - Bollinger Band outer bands (upper for LONG, lower for SHORT)",
-            "    - Major EMA levels (50, 100, 200) acting as dynamic resistance/support",
+            "    - Major EMA levels acting as dynamic resistance/support",
             "    - VWAP extensions and standard deviation bands",
-            "    - Ichimoku cloud boundaries (Senkou Span A/B levels)",
             "  * MEASURED MOVE TARGETS:",
             "    - Pattern-based targets: flag poles, triangles, channel projections",
             f"    - ATR-based targets: LONG = ${mid:.4f} + (2-3 * ATR), SHORT = ${mid:.4f} - (2-3 * ATR)",
@@ -413,12 +322,14 @@ class LLMPromptGenerator:
         return prompt_parts
     
     def _format_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, effective_days: float) -> List[str]:
-        """Format individual timeframe data, including new indicators."""
+        """Format individual timeframe data with focused crypto-specific indicators."""
         candle_count = min(len(df), int((effective_days * 24 * 60) / timeframe.minutes))
         recent_candles = df.tail(candle_count)
+        
+        # Simplified header with core crypto indicators only
         sections = [
             f"\n{timeframe.name} Timeframe (last {len(recent_candles)} candles):",
-            "Time | O | H | L | C | Vol | ATR | MACD | MACD_Sig | MACD_Hist | ST | RSI | STOCH_K | STOCH_D | STOCHRSI | STOCHRSI_D | ADX | DI+ | DI- | PSAR | DC_Up | DC_Mid | DC_Low | KC_Up | KC_Mid | KC_Low | OBV | BB_Up | BB_Mid | BB_Low | BB_Width | EMA | VWAP"
+            "Time | O | H | L | C | Vol | V_Ratio | ATR | MACD_Hist | SuperTrend | RSI | BB_Width | EMA | VWAP"
         ]
 
         for idx, row in recent_candles.iterrows():
@@ -426,22 +337,14 @@ class LLMPromptGenerator:
             sections.append(
                 f"{timestamp} | {row.get('o', 0):.4f} | {row.get('h', 0):.4f} | "
                 f"{row.get('l', 0):.4f} | {row.get('c', 0):.4f} | {row.get('v', 0):.0f} | "
-                f"{row.get('ATR', 0):.4f} | {row.get('MACD', 0):.4f} | {row.get('MACD_Signal', 0):.4f} | "
+                f"{row.get('v_ratio', 1):.2f} | {row.get('ATR', 0):.4f} | "
                 f"{row.get('MACD_Hist', 0):.4f} | {row.get('SuperTrend', 0):.4f} | "
-                f"{row.get('RSI', 50):.1f} | {row.get('STOCH_K', 50):.1f} | {row.get('STOCH_D', 50):.1f} | "
-                f"{row.get('STOCHRSI', 50):.1f} | {row.get('STOCHRSI_D', 50):.1f} | "
-                f"{row.get('ADX', 0):.1f} | {row.get('DI+_ADX', 0):.1f} | {row.get('DI-_ADX', 0):.1f} | "
-                f"{row.get('PSAR', 0):.4f} | {row.get('DC_upper', 0):.4f} | {row.get('DC_middle', 0):.4f} | {row.get('DC_lower', 0):.4f} | "
-                f"{row.get('KC_upper', 0):.4f} | {row.get('KC_middle', 0):.4f} | {row.get('KC_lower', 0):.4f} | "
-                f"{row.get('OBV', 0):.0f} | {row.get('BB_upper', 0):.4f} | {row.get('BB_middle', 0):.4f} | "
-                f"{row.get('BB_lower', 0):.4f} | {row.get('BB_width', 0):.4f} | "
+                f"{row.get('RSI', 50):.1f} | {row.get('BB_width', 0):.4f} | "
                 f"{row.get('EMA', 0):.4f} | {row.get('VWAP', 0):.4f}"
             )
 
-        if len(recent_candles) >= 15:
-            sections.extend(self._generate_additional_indicators_table(recent_candles.tail(15), timeframe))
-
-        sections.extend(self._generate_technical_indicators_section(recent_candles, timeframe))
+        # Only include core indicators summary for crypto trading
+        sections.extend(self._generate_core_indicators_summary(recent_candles, timeframe))
 
         trend = "Bullish" if recent_candles['c'].iloc[-1] > recent_candles['SuperTrend'].iloc[-1] else "Bearish"
         atr_value = recent_candles.get('ATR', pd.Series([0])).iloc[-1]
@@ -457,144 +360,34 @@ class LLMPromptGenerator:
 
         return sections
 
-    def _generate_additional_indicators_table(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
-        """Generate additional indicators table for recent candles."""
+    def _generate_core_indicators_summary(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
+        """Generate focused crypto-specific indicators summary."""
+        if df.empty:
+            return [f"\n=== {timeframe.name} CORE INDICATORS ===", "No data available"]
+            
+        latest = df.iloc[-1]
+        
+        # Focus on 6 core crypto indicators that provide unique insights
         sections = [
-            f"\nAdditional Indicators (last {len(df)} {timeframe.name} candles):",
-            "Time | STOCH_K | STOCH_D | WILLR | CCI | ROC | V_Ratio | V_Trend | FIB_78 | FIB_61 | FIB_38 | FIB_23 | R2 | R1 | S1 | S2"
+            f"\n=== {timeframe.name} CORE INDICATORS ===",
+            f"Price Action: ${latest.get('c', 0):.4f} (Range: ${df['l'].min():.4f}-${df['h'].max():.4f})",
+            f"Volume: {latest.get('v', 0):.0f} (Ratio: {latest.get('v_ratio', 1):.2f}x avg)",
+            f"Volatility: ATR {latest.get('ATR', 0):.4f} ({(latest.get('ATR', 0) / latest.get('c', 1) * 100):.2f}%)",
+            f"Trend: SuperTrend {latest.get('SuperTrend', 0):.4f} ({'Bullish' if latest.get('c', 0) > latest.get('SuperTrend', 0) else 'Bearish'})",
+            f"Momentum: RSI {latest.get('RSI', 50):.1f}, MACD Hist {latest.get('MACD_Hist', 0):.4f}",
+            f"Volatility Squeeze: BB Width {latest.get('BB_width', 0):.4f} ({'Expanding' if latest.get('BB_width', 0) > df['BB_width'].iloc[-5:-1].mean() else 'Contracting'})",
+            f"Key Levels: EMA {latest.get('EMA', 0):.4f}, VWAP {latest.get('VWAP', 0):.4f}",
+            ""
         ]
         
-        for idx, row in df.iterrows():
-            timestamp = idx.strftime("%m-%d %H:%M") if isinstance(idx, (pd.Timestamp, datetime)) else str(idx)
-            sections.append(
-                f"{timestamp} | {row.get('STOCH_K', 50):.1f} | {row.get('STOCH_D', 50):.1f} | "
-                f"{row.get('WILLR', -50):.1f} | {row.get('CCI', 0):.1f} | {row.get('ROC', 0):.2f} | "
-                f"{row.get('v_ratio', 1):.2f} | {row.get('v_trend', 1):.2f} | "
-                f"{row.get('FIB_78', 0):.4f} | {row.get('FIB_61', 0):.4f} | {row.get('FIB_38', 0):.4f} | {row.get('FIB_23', 0):.4f} | "
-                f"{row.get('R2', 0):.4f} | {row.get('R1', 0):.4f} | {row.get('S1', 0):.4f} | {row.get('S2', 0):.4f}"
-            )
-        
-        # Add Ichimoku Cloud table for last 10 candles
-        if len(df) >= 10:
+        # Add recent pivot points if available
+        if 'R1' in latest and 'S1' in latest:
             sections.extend([
-                f"\nIchimoku Cloud (last 10 {timeframe.name} candles):",
-                "Time | TENKAN | KIJUN | SENKOU_A | SENKOU_B | CHIKOU"
+                f"Pivot Levels: R1 {latest.get('R1', 0):.4f}, S1 {latest.get('S1', 0):.4f}",
+                ""
             ])
-            
-            for idx, row in df.tail(10).iterrows():
-                timestamp = idx.strftime("%m-%d %H:%M") if isinstance(idx, (pd.Timestamp, datetime)) else str(idx)
-                sections.append(
-                    f"{timestamp} | {row.get('TENKAN', 0):.4f} | {row.get('KIJUN', 0):.4f} | "
-                    f"{row.get('SENKOU_A', 0):.4f} | {row.get('SENKOU_B', 0):.4f} | {row.get('CHIKOU', 0):.4f}"
-                )
         
         return sections
-
-    def _generate_technical_indicators_section(self, df: pd.DataFrame, timeframe: Timeframe) -> List[str]:
-        """Generate comprehensive technical indicators section for the prompt, including new indicators."""
-        prompt_parts = [f"\n=== TECHNICAL INDICATORS - {timeframe.name} ==="]
-        if df.empty:
-            prompt_parts.append("No indicator data available")
-            return prompt_parts
-
-        latest = df.iloc[-1]
-
-        # Core Technical Indicators
-        prompt_parts.extend([
-            "\n--- Core Indicators ---",
-            f"EMA: {latest.get('EMA', 0):.4f}",
-            f"VWAP: {latest.get('VWAP', 0):.4f}",
-            f"ATR: {latest.get('ATR', 0):.4f}",
-            f"SuperTrend: {latest.get('SuperTrend', 0):.4f}",
-            f"MACD: {latest.get('MACD', 0):.4f}",
-            f"MACD Signal: {latest.get('MACD_Signal', 0):.4f}",
-            f"MACD Histogram: {latest.get('MACD_Hist', 0):.4f}",
-            f"Parabolic SAR: {latest.get('PSAR', 0):.4f}",
-        ])
-
-        # Trend Channels
-        prompt_parts.extend([
-            "\n--- Trend Channels ---",
-            f"Donchian Upper: {latest.get('DC_upper', 0):.4f}",
-            f"Donchian Middle: {latest.get('DC_middle', 0):.4f}",
-            f"Donchian Lower: {latest.get('DC_lower', 0):.4f}",
-            f"Keltner Upper: {latest.get('KC_upper', 0):.4f}",
-            f"Keltner Middle: {latest.get('KC_middle', 0):.4f}",
-            f"Keltner Lower: {latest.get('KC_lower', 0):.4f}",
-        ])
-
-        # Oscillators
-        prompt_parts.extend([
-            "\n--- Oscillators ---",
-            f"RSI: {latest.get('RSI', 50):.2f}",
-            f"Stochastic %K: {latest.get('STOCH_K', 50):.2f}",
-            f"Stochastic %D: {latest.get('STOCH_D', 50):.2f}",
-            f"Stochastic RSI: {latest.get('STOCHRSI', 50):.2f}",
-            f"Stochastic RSI D: {latest.get('STOCHRSI_D', 50):.2f}",
-            f"Williams %R: {latest.get('WILLR', -50):.2f}",
-            f"CCI: {latest.get('CCI', 0):.2f}",
-            f"ROC: {latest.get('ROC', 0):.2f}%",
-            f"ADX: {latest.get('ADX', 0):.2f}",
-            f"DI+ (ADX): {latest.get('DI+_ADX', 0):.2f}",
-            f"DI- (ADX): {latest.get('DI-_ADX', 0):.2f}",
-            f"OBV: {latest.get('OBV', 0):.0f}",
-        ])
-
-        # Bollinger Bands
-        prompt_parts.extend([
-            "\n--- Bollinger Bands ---",
-            f"BB Upper: {latest.get('BB_upper', 0):.4f}",
-            f"BB Middle: {latest.get('BB_middle', 0):.4f}",
-            f"BB Lower: {latest.get('BB_lower', 0):.4f}",
-            f"BB Width: {latest.get('BB_width', 0):.4f}",
-        ])
-
-        # Fibonacci Levels
-        prompt_parts.extend([
-            "\n--- Fibonacci Retracements ---",
-            f"Fib 78.6%: {latest.get('FIB_78', 0):.4f}",
-            f"Fib 61.8%: {latest.get('FIB_61', 0):.4f}",
-            f"Fib 50.0%: {latest.get('FIB_50', 0):.4f}",
-            f"Fib 38.2%: {latest.get('FIB_38', 0):.4f}",
-            f"Fib 23.6%: {latest.get('FIB_23', 0):.4f}",
-        ])
-
-        # Pivot Points
-        prompt_parts.extend([
-            "\n--- Pivot Points ---",
-            f"Pivot Point: {latest.get('PIVOT', 0):.4f}",
-            f"Resistance 2: {latest.get('R2', 0):.4f}",
-            f"Resistance 1: {latest.get('R1', 0):.4f}",
-            f"Support 1: {latest.get('S1', 0):.4f}",
-            f"Support 2: {latest.get('S2', 0):.4f}",
-        ])
-
-        # Ichimoku Cloud
-        prompt_parts.extend([
-            "\n--- Ichimoku Cloud ---",
-            f"Tenkan-sen: {latest.get('TENKAN', 0):.4f}",
-            f"Kijun-sen: {latest.get('KIJUN', 0):.4f}",
-            f"Senkou Span A: {latest.get('SENKOU_A', 0):.4f}",
-            f"Senkou Span B: {latest.get('SENKOU_B', 0):.4f}",
-            f"Chikou Span: {latest.get('CHIKOU', 0):.4f}",
-        ])
-
-        # Volume Analysis
-        prompt_parts.extend([
-            "\n--- Volume Analysis ---",
-            f"Volume: {latest.get('v', 0):.0f}",
-            f"Volume SMA: {latest.get('v_sma', 0):.0f}",
-            f"Volume Ratio: {latest.get('v_ratio', 1):.2f}",
-            f"Volume Trend: {latest.get('v_trend', 1):.2f}",
-        ])
-
-        # Support and Resistance Analysis
-        prompt_parts.extend(self._generate_support_resistance_analysis(df))
-
-        # Price Action Analysis
-        prompt_parts.extend(self._generate_price_action_analysis(df))
-
-        return prompt_parts
     
     def _generate_support_resistance_analysis(self, df: pd.DataFrame) -> List[str]:
         """Generate support and resistance analysis."""
