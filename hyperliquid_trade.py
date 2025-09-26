@@ -46,6 +46,32 @@ def ger_price_estimate(mid: float, decrease: bool, percentage: float) -> str:
 def skip_sl_tp_prompt() -> bool:
     return os.getenv('HTB_SKIP_SL_TP_PROMPT', 'False') == 'True'
 
+def has_order_error(result: Any) -> bool:
+    """Check if order result contains an error."""
+    if not result or not isinstance(result, dict):
+        return True
+    if result.get('status') != 'ok':
+        return True
+    response = result.get('response', {})
+    if response.get('type') == 'order':
+        statuses = response.get('data', {}).get('statuses', [])
+        return any('error' in status for status in statuses)
+    return False
+
+def get_order_error_message(result: Any) -> str:
+    """Extract error message from order result."""
+    if not result or not isinstance(result, dict):
+        return "Unknown error"
+    if result.get('status') != 'ok':
+        return str(result)
+    response = result.get('response', {})
+    if response.get('type') == 'order':
+        statuses = response.get('data', {}).get('statuses', [])
+        for status in statuses:
+            if 'error' in status:
+                return status['error']
+    return "Unknown order error"
+
 async def selected_amount(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
     query: CallbackQuery = update.callback_query # type: ignore
     if not query:
@@ -348,8 +374,13 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE],
             open_result = exchange.market_open(selected_coin, is_long, sz)
             logger.info(open_result)
 
-            if not skip_sl_tp_prompt():
+            # Check for errors in the order result
+            if has_order_error(open_result):
+                error_msg = get_order_error_message(open_result)
+                await telegram_utils.send(f"Failed to open position: {error_msg}")
+            elif not skip_sl_tp_prompt():
                 await place_stop_loss_and_take_profit_orders(exchange, user_state, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
+            
             await message.delete() # type: ignore
         else:
             await telegram_utils.send("Exchange is not enabled")
