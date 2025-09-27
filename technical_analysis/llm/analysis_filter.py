@@ -244,8 +244,8 @@ class AnalysisFilter:
         if not self._has_significant_market_change(dataframes):
             return False, "No significant market change detected", 0.0
 
-        # Momentum availability across TFs
-        available_tf_momentum = False
+        # Core momentum check aligned with main framework
+        has_tier1_momentum = False
         for tf, df in dataframes.items():
             if df.empty or len(df) < 5:
                 continue
@@ -256,25 +256,24 @@ class AnalysisFilter:
             on1h = '1h' in label
             on4h = '4h' in label
 
-            # Bullish
-            if (sig and move_pct > 1.0 and v_val > 1.2) or \
-               (on1h and move_pct > 0.8 and v_val > 1.3) or \
-               (on4h and move_pct > 0.6 and v_val > 1.4):
-                available_tf_momentum = True
+            # Tier 1 momentum requirements (aligned with main framework)
+            # Primary timeframes: 1H (40%) and 30m (35%) priority
+            if on1h and abs(move_pct) > 0.8 and v_val > 1.3:
+                has_tier1_momentum = True
+                break
+            elif '30m' in label and abs(move_pct) > 1.0 and v_val > 1.2:
+                has_tier1_momentum = True  
+                break
+            elif sig and abs(move_pct) > 1.2 and v_val > 1.5:  # Higher bar for 15m
+                has_tier1_momentum = True
+                break
+            elif on4h and abs(move_pct) > 0.6 and v_val > 1.4:  # Context only
+                has_tier1_momentum = True
                 break
 
-            # Bearish (direction-aware)
-            if (sig and move_pct < -1.0 and v_val > 0.85) or \
-               (on1h and move_pct < -0.8 and v_val > 0.95) or \
-               (on4h and move_pct < -0.6 and v_val > 1.05) or \
-               (sig and move_pct < -0.9 and v_val > 0.55):
-                available_tf_momentum = True
-                break
-
-        if not available_tf_momentum:
+        if not has_tier1_momentum:
             return False, (
-                "No momentum detected. Long: >1.0% (15m/30m)+vol>1.2x | >0.8% (1h)+vol>1.3x | >0.6% (4h)+vol>1.4x. "
-                "Short (adjusted): >1.0% drop (15m/30m)+vol>0.85x | >0.8% drop (1h)+vol>0.95x | >0.6% drop (4h)+vol>1.05x | vacuum short if drop >0.9% & vol>0.55x."
+                "No Tier 1 momentum detected. Required: 1H >0.8%+vol>1.3x | 30m >1.0%+vol>1.2x | 15m >1.2%+vol>1.5x | 4H >0.6%+vol>1.4x (context only)."
             ), 0.2
 
         return True, "Pre-filter passed", 1.0
@@ -376,23 +375,14 @@ class AnalysisFilter:
         return max(2, min(8, allowance))
 
     def _detect_mean_reversion_opportunity(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> Optional[str]:
-        """Detect mean-reversion setups on signal TFs when trend is weak and volume is light.
+        """Detect mean-reversion setups using core indicators (RSI, BB, volume) when trend is weak.
 
-        Long MR: RSI <= 22, close near/below BB_lower (<= +0.2%), v_ratio <= 0.9, and 1h ADX < 15 if available.
-        Short MR: RSI >= 78, close near/above BB_upper (>= -0.2%), v_ratio <= 0.9, and 1h ADX < 15 if available.
+        Long MR: RSI <= 25, close near/below BB_lower (<= +0.2%), v_ratio <= 0.9
+        Short MR: RSI >= 75, close near/above BB_upper (>= -0.2%), v_ratio <= 0.9
         """
-        # Fetch 1h trend strength via ADX if present
-        adx_1h: Optional[float] = None
-        for tf, df in dataframes.items():
-            if '1h' in str(tf).lower() and 'ADX' in df.columns and not df.empty:
-                try:
-                    adx_1h = float(df['ADX'].iloc[-1])
-                except Exception:
-                    adx_1h = None
-                break
-
-        weak_trend = (adx_1h is None) or (adx_1h < 15)
         reasons: List[str] = []
+        
+        # Check for mean reversion on primary signal timeframes (15m, 30m)
         for tf, df in dataframes.items():
             tf_str = str(tf).lower()
             if not (('15m' in tf_str) or ('30m' in tf_str)):
@@ -412,15 +402,16 @@ class AnalysisFilter:
                 continue
 
             near = 0.002  # 0.2%
-            # Long mean-reversion
-            if weak_trend and rsi is not None and bb_lower is not None:
-                if rsi <= 22 and v_ratio <= 0.9 and close <= bb_lower * (1 + near):
-                    reasons.append(f"Mean-reversion LONG candidate on {tf_str}: RSI {rsi:.1f}, close near/below BB_lower, v_ratio {v_ratio:.2f}, ADX1h {adx_1h if adx_1h is not None else 'n/a'}")
+            
+            # Long mean-reversion (aligned with core framework - RSI extremes)
+            if rsi is not None and bb_lower is not None:
+                if rsi <= 25 and v_ratio <= 0.9 and close <= bb_lower * (1 + near):
+                    reasons.append(f"Mean-reversion LONG candidate on {tf_str}: RSI {rsi:.1f} (extreme oversold), close near BB_lower, light volume {v_ratio:.2f}x")
 
-            # Short mean-reversion
-            if weak_trend and rsi is not None and bb_upper is not None:
-                if rsi >= 78 and v_ratio <= 0.9 and close >= bb_upper * (1 - near):
-                    reasons.append(f"Mean-reversion SHORT candidate on {tf_str}: RSI {rsi:.1f}, close near/above BB_upper, v_ratio {v_ratio:.2f}, ADX1h {adx_1h if adx_1h is not None else 'n/a'}")
+            # Short mean-reversion (aligned with core framework - RSI extremes) 
+            if rsi is not None and bb_upper is not None:
+                if rsi >= 75 and v_ratio <= 0.9 and close >= bb_upper * (1 - near):
+                    reasons.append(f"Mean-reversion SHORT candidate on {tf_str}: RSI {rsi:.1f} (extreme overbought), close near BB_upper, light volume {v_ratio:.2f}x")
 
         if reasons:
             return "; ".join(reasons)
@@ -496,25 +487,24 @@ class AnalysisFilter:
         return volume_data
     
     def _analyze_all_indicators(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Pass through all available technical indicators with trend analysis values, including advanced indicators."""
+        """Focus on 6 core crypto indicators aligned with main LLMPromptGenerator approach."""
         indicators = {}
         lookback = min(self.TREND_LOOKBACK_PERIODS, len(df))
 
-        # Expanded list of all indicators to extract
-        indicator_names = [
-            'SuperTrend', 'EMA', 'VWAP',
-            'RSI', 'MACD', 'MACD_Signal', 'MACD_Hist', 'ROC',
-            'STOCH_K', 'STOCH_D', 'STOCHRSI', 'STOCHRSI_D',
-            'BB_upper', 'BB_middle', 'BB_lower', 'BB_width', 'ATR',
-            'ADX', 'DI+_ADX', 'DI-_ADX', 'PSAR',
-            'DC_upper', 'DC_middle', 'DC_lower',
-            'KC_upper', 'KC_middle', 'KC_lower',
-            'OBV',
-            'TENKAN', 'KIJUN', 'SENKOU_A', 'SENKOU_B', 'CHIKOU'
+        # Core 6 crypto indicators (aligned with main analysis framework)
+        core_indicators = [
+            'RSI',           # Primary momentum
+            'v_ratio',       # Volume confirmation (critical for crypto) 
+            'ATR',           # Volatility context
+            'MACD_Hist',     # Momentum confirmation
+            'SuperTrend',    # Primary trend filter
+            'BB_width',      # Bollinger Band squeeze/breakout
+            'BB_upper', 'BB_middle', 'BB_lower',  # BB levels
+            'EMA', 'VWAP'    # Key levels for confluence
         ]
 
-        # Extract recent values for each indicator to show trends
-        for indicator in indicator_names:
+        # Extract recent values for core indicators
+        for indicator in core_indicators:
             if indicator in df.columns:
                 values = df[indicator].iloc[-lookback:].tolist()
                 indicators[indicator] = {
@@ -527,18 +517,65 @@ class AnalysisFilter:
                     'values': []
                 }
 
+        # Add derived indicator insights for better filtering
+        if 'RSI' in df.columns and len(df) >= 5:
+            rsi_current = indicators.get('RSI', {}).get('current')
+            if rsi_current is not None and isinstance(rsi_current, (int, float)):
+                if 45 <= rsi_current <= 65:
+                    rsi_signal = 'bullish'
+                elif 35 <= rsi_current <= 55:
+                    rsi_signal = 'bearish'
+                else:
+                    rsi_signal = 'extreme'
+                indicators['RSI_signal'] = {
+                    'current': rsi_signal,
+                    'values': []
+                }
+
+        if 'MACD_Hist' in df.columns and len(df) >= 3:
+            hist_values = indicators.get('MACD_Hist', {}).get('values', [])
+            if isinstance(hist_values, list) and len(hist_values) >= 3:
+                try:
+                    hist_trend = 'positive' if hist_values[-1] > hist_values[-3] else 'negative'
+                    indicators['MACD_momentum'] = {
+                        'current': hist_trend,
+                        'values': []
+                    }
+                except (IndexError, TypeError):
+                    pass
+
+        if 'SuperTrend' in df.columns and 'c' in df.columns:
+            st_current = indicators.get('SuperTrend', {}).get('current')
+            price_current = df['c'].iloc[-1] if not df.empty else None
+            if st_current is not None and price_current is not None and isinstance(st_current, (int, float)) and isinstance(price_current, (int, float)):
+                indicators['SuperTrend_signal'] = {
+                    'current': 'bullish' if price_current > st_current else 'bearish',
+                    'values': []
+                }
+
         return indicators
     
     def _analyze_support_resistance(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Pass through support and resistance levels with recent values for trend analysis."""
+        """Focus on core support/resistance levels aligned with main framework."""
         levels: Dict[str, Any] = {}
         lookback = min(self.TREND_LOOKBACK_PERIODS, len(df))
         
-        # Support/resistance levels
-        level_names = ['VWAP', 'PIVOT', 'R1', 'R2', 'S1', 'S2', 
-                      'FIB_23', 'FIB_38', 'FIB_50', 'FIB_61', 'FIB_78']
+        # Core key levels for confluence (aligned with main framework)
+        core_levels = [
+            'EMA',      # Dynamic support/resistance
+            'VWAP',     # Volume-weighted levels
+            'BB_upper', 'BB_middle', 'BB_lower',  # Bollinger Band levels
+        ]
         
-        for level in level_names:
+        # Add pivot levels if available (major S/R)
+        pivot_levels = ['PIVOT', 'R1', 'R2', 'S1', 'S2']
+        
+        # Add key Fibonacci levels if available
+        fib_levels = ['FIB_38', 'FIB_50', 'FIB_61']
+        
+        all_levels = core_levels + pivot_levels + fib_levels
+        
+        for level in all_levels:
             if level in df.columns:
                 values = df[level].iloc[-lookback:].tolist()
                 levels[level.lower()] = {
@@ -551,78 +588,109 @@ class AnalysisFilter:
                     'values': []
                 }
         
+        # Calculate key level confluence (within 0.5% of current price)
+        current_price = df['c'].iloc[-1] if 'c' in df.columns and not df.empty else None
+        if current_price:
+            confluence_levels = []
+            tolerance = 0.005  # 0.5%
+            
+            for level_name, level_data in levels.items():
+                level_value = level_data.get('current')
+                if level_value and abs(level_value - current_price) / current_price <= tolerance:
+                    confluence_levels.append(level_name)
+            
+            levels['confluence_count'] = {
+                'current': len(confluence_levels),
+                'levels': confluence_levels
+            }
+        
         return levels
     
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
-        """Create prompt for cheap LLM model to determine if expensive analysis is needed, referencing all advanced indicators."""
-        return f"""You are a balanced but selective signal filter for {coin}. Detect developing opportunities while avoiding noise and false signals. Use all available technical indicators for robust filtering.
+        """Create prompt for cheap LLM model to determine if expensive analysis is needed, aligned with main LLMPromptGenerator approach."""
+        return f"""You are a selective signal filter for {coin}. Focus on high-probability setups using 6 core crypto indicators. Aligned with main analysis framework.
 
 Current Market Data:
 {json.dumps(market_summary, indent=2)}
 
-AVAILABLE TIMEFRAME APPROACH:
-• Higher timeframes (4h): Trend direction and major support/resistance levels (including ADX, DI+/DI-, Donchian, Keltner, PSAR)
-• Medium timeframe (1h): Trend confirmation and momentum validation (MACD, RSI, StochRSI, OBV, ATR, SuperTrend)
-• Signal timeframes (15m, 30m): PRIMARY signal detection and opportunity identification (Stochastic, StochRSI, MACD, BB, OBV, PSAR, ADX, DI+/DI-, Donchian, Keltner)
+🚨 TIMEFRAME PRIORITY (aligned with main analysis):
+- PRIMARY: 1H (40%) and 30m (35%) timeframes are decision drivers
+- SUPPORT: 15m (15%) for entry timing confirmation  
+- CONTEXT ONLY: 4H (10%) for broad trend awareness - DO NOT base decisions on 4H data alone
+- IGNORE 4H conflicts: If 1H+30m align strongly, 4H opposition should NOT prevent signals
 
-SIGNAL DETECTION CRITERIA (balanced approach for early but quality signals):
+CORE CRYPTO INDICATOR FRAMEWORK (6 essential indicators only):
 
-🔥 HIGH PRIORITY SIGNALS (require 4+ conditions):
-• Strong momentum: >1.0% in 15m/30m with volume >1.2x OR >0.8% in 1h with volume >1.3x OR >0.6% in 4h with volume >1.4x
-• RSI extremes with momentum: RSI <30 or >70 in any timeframe AND price momentum alignment
-• MACD acceleration: Histogram growing >2 periods in any timeframe AND volume >1.3x
-• ADX trend: ADX rising with DI+ > DI- (bullish) or DI- > DI+ (bearish) in any timeframe
-• Parabolic SAR flip: PSAR below price for LONG, above for SHORT, with volume confirmation
-• Donchian/Keltner Channel breakout: Price above upper band (LONG) or below lower band (SHORT) with volume >1.3x
-• OBV confirmation: OBV rising with price (bullish) or falling with price (bearish)
-• StochRSI or Stochastic cross: K crossing D up (LONG) or down (SHORT) in 15m/30m/1h
-• Level breaks: Price breaking key levels >0.6% in signal timeframes AND volume >1.4x
-• Volatility expansion: BB width expanding >12% in any timeframe AND price move >0.4%
-• ATR expansion: ATR rising >15% over last 5 periods
+1. RSI (Primary Momentum):
+   - LONG bias: RSI 45-65 with positive divergence or breaking above 45 from oversold
+   - SHORT bias: RSI 35-55 with negative divergence or breaking below 55 from overbought
+   - Filter out: RSI >75 or <25 without clear reversal patterns
 
-⚡ MEDIUM PRIORITY SIGNALS (require 3+ conditions):
-• Decent moves: >0.8% in 15m/30m OR >0.6% in 1h OR >0.5% in 4h with volume >1.1x
-• Technical alignment: RSI, MACD, and ADX/DI+/DI- aligned in same direction with volume >1.1x
-• Parabolic SAR, Donchian, or Keltner confirmation with price momentum
-• OBV, StochRSI, or Stochastic supporting price move
-• Level approach: Price within 0.6% of key levels in any timeframe AND volume >1.2x
-• Momentum build: ROC acceleration in 15m/30m/1h AND Stochastic or StochRSI signal AND volume >1.1x
-• Funding + price: Rate >0.0002 AND price movement confirming direction
+2. Volume Confirmation (Critical for crypto):
+   - Strong: V_Ratio >1.5 confirms breakout/breakdown
+   - Weak: V_Ratio <0.8 weakens signal strength
+   - Volume must support price direction for valid signals
 
-📈 LOW PRIORITY SIGNALS (require ALL 3 conditions):
-• Building momentum: ROC acceleration AND Stochastic or StochRSI cross in 15m/30m AND volume >1.0x
-• Multi-timeframe sync: Same signal (any indicator) across 2+ timeframes (15m, 30m, 1h)
-• Technical setup: Multiple indicator alignment (including ADX, PSAR, Donchian, Keltner, OBV, StochRSI, ATR) AND price momentum
+3. ATR Volatility Context:
+   - High ATR (>3% of price): Requires wider stops, shorter time horizon
+   - Low ATR (<1.5% of price): Allows tighter stops, longer time horizon
 
-NOISE FILTERS - SKIP when ANY present:
+4. MACD Histogram (Momentum Confirmation):
+   - LONG signal: MACD histogram turning positive with volume
+   - SHORT signal: MACD histogram turning negative with volume
+   - Divergence: Histogram direction opposing price movement
+
+5. SuperTrend (Primary Trend Filter):
+   - LONG trend: Price above SuperTrend line (bullish bias)
+   - SHORT trend: Price below SuperTrend line (bearish bias)
+   - Flip signals: SuperTrend color change with volume confirmation
+
+6. Bollinger Band Squeeze (Breakout Anticipation):
+   - Squeeze setup: BB_width contracting = potential breakout imminent
+   - LONG breakout: BB_width expanding with price above BB_middle + volume
+   - SHORT breakdown: BB_width expanding with price below BB_middle + volume
+
+TIER 1 SIGNAL REQUIREMENTS (Need 2+ for analysis approval):
+• Multi-timeframe alignment: 1H and 30m agree OR strong momentum on 30m+15m with 1H neutral
+• Volume confirmation: V_Ratio >1.5 during setup formation
+• Key level confluence: Price at major S/R (EMA/VWAP/Pivot levels) +/- 0.5%
+• Momentum confirmation: RSI 45-65 range with positive divergence OR MACD histogram alignment
+• Trend alignment: SuperTrend supports direction OR Bollinger Band breakout setup
+
+TIER 2 CONFIRMATIONS (Need 1+ additional):
+• MACD histogram momentum shift (positive for LONG, negative for SHORT)
+• Bollinger Band squeeze release with volume (BB_width expanding + V_Ratio >1.5)
+• SuperTrend alignment with price direction
+• EMA/VWAP reclaim or breakdown with sustained follow-through
+• Funding rate mean reversion setup (extreme readings)
+
+AUTOMATIC DISQUALIFIERS (Force rejection):
+• RSI extreme without reversal: RSI >75 or <25 without clear reversal patterns
+• Conflicting primary timeframes: 1H vs 30m disagree on direction
+• Low volume confirmation: V_Ratio <0.8 during setup formation
+• Bollinger squeeze without direction: BB_width contracting without clear bias
+• MACD and RSI divergence: Indicators showing opposing momentum signals
 • Signal timeframe micro moves: Price changes <0.2% in ALL 15m/30m timeframes
-• Medium timeframe volume drought: Volume ratio <1.0x in 1h/4h timeframes
-• Signal timeframe volume drought: Volume ratio <0.8x in 15m/30m timeframes
-• Signal timeframe chop: Price reversals >3 times in 10 periods in 15m/30m
-• Medium timeframe chop: Price reversals >4 times in 10 periods in 1h/4h
-• 4h consolidation: Price within 0.4% range for 8+ periods in 4h timeframe
-• Weak conviction: Price move without adequate volume for the timeframe
-• ADX flat (<15) or conflicting DI+/DI- in all timeframes
-• OBV flat or diverging from price in all timeframes
-• PSAR, Donchian, or Keltner showing no clear trend or frequent flips
+• Volume drought: V_Ratio <0.8 in signal timeframes or <1.0x in 1h/4h
+• Choppy price action: Excessive reversals in recent periods
 
-ANALYSIS DECISION LOGIC:
-• ANALYZE: High priority (2+ conditions) OR Medium priority (2+ conditions) OR Low priority (ALL 3)
-• SKIP: Any noise filter triggered. Better to miss than take low-probability setups
-• Force analyze: Funding rate >0.0004 AND >1.2% price change in signal timeframes AND volume >1.6x
-• Primary focus: 15m/30m signals with 1h confirmation (using all indicators) - use 4h for trend context only
-• Trend awareness: Use 4h for major trend direction but don't let it block good shorter-term signals
-• Multi-timeframe logic: Alignment of signals across timeframes and indicators (especially ADX, DI+/DI-, PSAR, Donchian, Keltner, OBV, StochRSI, ATR) increases confidence
+SIMPLIFIED ANALYSIS DECISION:
+• ANALYZE: 2+ Tier 1 factors + 1+ Tier 2 confirmation
+• SKIP: Any disqualifier present OR insufficient signal strength
+• Emergency bypass: Funding rate >0.0008 AND >1.2% price change AND volume >1.6x
+• Focus: Quality over quantity - better to miss than analyze low-probability setups
 
-Confidence: Based on signal strength, volume confirmation, and multi-timeframe/indicator alignment
-
-Focus on capturing moves efficiently - catch momentum early with proper confirmation from multiple indicators.
+Confidence based on:
+- Signal strength (number of Tier 1/2 factors met)
+- Volume confirmation quality
+- Multi-timeframe alignment
+- Absence of disqualifiers
 
 Response must be pure JSON - no markdown, no explanations. Example:
 {{
     "should_analyze": true,
-    "reason": "ADX rising, DI+ > DI-, PSAR flip, and OBV rising with price in 15m/30m. Volume >1.3x. Multi-timeframe alignment.",
-    "confidence": 0.87
+    "reason": "1H+30m alignment, MACD histogram positive, SuperTrend bullish, volume >1.5x. Core crypto setup confirmed.",
+    "confidence": 0.82
 }}"""
 
     def _parse_filter_response(self, response: str) -> Tuple[bool, str, float]:
