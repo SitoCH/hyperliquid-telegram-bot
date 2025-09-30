@@ -7,6 +7,10 @@ on:
       - completed
     branches: ["main"]
 
+concurrency:
+  group: docker-publish
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
