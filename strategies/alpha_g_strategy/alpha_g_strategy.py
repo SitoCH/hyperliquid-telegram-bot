@@ -11,13 +11,13 @@ from typing import List, Dict, Set, Tuple
 
 
 @dataclass
-class GAlphaConfig:
-    """Configuration specific to GAlpha strategy."""
+class AlphaGConfig:
+    """Configuration specific to AlphaG strategy."""
     pass
 
 
-class GAlphaStrategy(BaseStrategy):
-    """GAlpha strategy stub - implementation to be added."""
+class AlphaGStrategy(BaseStrategy):
+    """AlphaG strategy stub - implementation to be added."""
 
     def __init__(self):
         self._config = BaseStrategyConfig(
@@ -25,7 +25,7 @@ class GAlphaStrategy(BaseStrategy):
             min_yearly_performance=20.0
         )
         
-        self._g_alpha_config = GAlphaConfig()
+        self._g_alpha_config = AlphaGConfig()
 
     def get_strategy_params(self) -> Tuple[List[Dict], Dict[str, str], Dict]:
         """Get strategy parameters including filtered crypto data and exchange info."""
@@ -158,4 +158,4 @@ class GAlphaStrategy(BaseStrategy):
         telegram_utils.add_buttons([f"/{analyze_button_text}"], 1)
         telegram_utils.add_handler(CommandHandler(analyze_button_text, self.analyze))
 
-        logger.info("GAlpha strategy initialized")
+        logger.info("AlphaG strategy initialized")
