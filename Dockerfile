@@ -2,7 +2,7 @@
 
 FROM python:3.10-slim-bullseye AS base
 
-FROM ghcr.io/astral-sh/uv:0.5.18 AS uv
+FROM ghcr.io/astral-sh/uv:0.8.22 AS uv
 
 FROM base AS builder
 WORKDIR /app
