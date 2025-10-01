@@ -113,28 +113,24 @@ class AlphaGStrategy(BaseStrategy):
             
             # Calculate balance metrics
             total_margin = total_long_margin + total_short_margin
-            total_position_value = total_long_position_value + total_short_position_value
             long_margin_percentage = (total_long_margin / total_margin * 100) if total_margin > 0 else 0
             short_margin_percentage = (total_short_margin / total_margin * 100) if total_margin > 0 else 0
-            margin_difference = total_long_margin - total_short_margin
 
             message_lines = [
                 "<b>📊 Portfolio Long/Short Analysis</b>",
                 "",
                 f"<b>Summary:</b>",
                 f"🟢 Long Positions: {long_positions} positions",
-                f"   • Margin Used: {fmt(total_long_margin)} USDC ({fmt(long_margin_percentage)}%)",
-                f"   • Position Value: {fmt(total_long_position_value)} USDC",
+                f" • Margin Used: {fmt(total_long_margin)} USDC ({fmt(long_margin_percentage)}%)",
+                f" • Position Value: {fmt(total_long_position_value)} USDC",
                 "",
                 f"🔴 Short Positions: {short_positions} positions",
-                f"   • Margin Used: {fmt(total_short_margin)} USDC ({fmt(short_margin_percentage)}%)",
-                f"   • Position Value: {fmt(total_short_position_value)} USDC",
+                f" • Margin Used: {fmt(total_short_margin)} USDC ({fmt(short_margin_percentage)}%)",
+                f" • Position Value: {fmt(total_short_position_value)} USDC",
                 "",
                 f"⚖️ <b>Totals:</b>",
-                f"   • Total Margin Used: {fmt(total_margin)} USDC",
-                f"   • Total Position Value: {fmt(total_position_value)} USDC",
-                f"   • Margin Difference (L-S): {fmt(margin_difference)} USDC",
-                f"   • Long/Short Margin Ratio: {fmt(total_long_margin / total_short_margin) if total_short_margin > 0 else '∞'}"
+                f" • Total Margin Used: {fmt(total_margin)} USDC",
+                f" • Long/Short Margin Ratio: {fmt(total_long_margin / total_short_margin) if total_short_margin > 0 else '∞'}"
             ]
             
             await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
