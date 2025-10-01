@@ -257,6 +257,7 @@ class Timeframe(Enum):
     HOURS_2 = ("2h", 120)
     HOURS_4 = ("4h", 240)
     HOURS_8 = ("8h", 480)
+    DAY_1 = ("1d", 1440)
     
     def __init__(self, name: str, minutes: int):
         self._name = name
