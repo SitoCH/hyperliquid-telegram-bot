@@ -15,15 +15,6 @@ from utils import fmt
 
 
 @dataclass
-class PriceMovement:
-    """Represents a detected price movement for a coin."""
-    symbol: str
-    name: str
-    price_change_pct: float
-    current_price: float
-
-
-@dataclass
 class ReversalSignal:
     """Represents a potential reversal signal in a partial candle."""
     symbol: str
@@ -32,18 +23,6 @@ class ReversalSignal:
     full_candles_change_pct: float  
     current_change_pct: float
     current_price: float
-
-
-@dataclass
-class MovementAnalysisResult:
-    """Container for all detected price movements."""
-    surges: List[PriceMovement]
-    crashes: List[PriceMovement]
-    reversals: List[ReversalSignal]
-    
-    def has_any_movements(self) -> bool:
-        """Check if any movements were detected."""
-        return bool(self.surges or self.crashes or self.reversals)
 
 class AlphaGStrategy():
     """AlphaG strategy stub - implementation to be added."""
@@ -90,9 +69,9 @@ class AlphaGStrategy():
         coins: List[Dict],
         lookback_days: int,
         threshold_pct: float
-    ) -> MovementAnalysisResult:
+    ) -> List[ReversalSignal]:
         """
-        Detect coins with price surges, crashes, and potential reversals.
+        Detect coins with potential reversal signals.
         
         Args:
             coins: List of coin dictionaries with 'symbol' and 'name' keys
@@ -100,13 +79,11 @@ class AlphaGStrategy():
             threshold_pct: Absolute price change percentage threshold
             
         Returns:
-            MovementAnalysisResult containing surges, crashes, and reversals
+            List of ReversalSignal objects
         """
         now = int(time.time() * 1000)
         current_candle_start = now - (now % (Timeframe.DAY_1.minutes * 60 * 1000))
         
-        surges: List[PriceMovement] = []
-        crashes: List[PriceMovement] = []
         reversals: List[ReversalSignal] = []
         
         for entry in coins:
@@ -133,15 +110,11 @@ class AlphaGStrategy():
                 # Classify the movement
                 movement = self._classify_movement(last_two_full, entry, threshold_pct)
                 if movement:
-                    movement_type, price_movement = movement
-                    if movement_type == 'surge':
-                        surges.append(price_movement)
-                    else:  # crash
-                        crashes.append(price_movement)
+                    movement_type, price_change_pct = movement
                     
                     # Check for reversal signal
                     reversal = self._detect_partial_reversal(
-                        movement_type, last_two_full[-1], partial_candle, entry, price_movement.price_change_pct
+                        movement_type, last_two_full[-1], partial_candle, entry, price_change_pct
                     )
                     if reversal:
                         reversals.append(reversal)
@@ -152,7 +125,7 @@ class AlphaGStrategy():
                 logger.error(f"Error analyzing {coin}: {str(e)}", exc_info=True)
                 continue
         
-        return MovementAnalysisResult(surges=surges, crashes=crashes, reversals=reversals)
+        return reversals
 
     @staticmethod
     def _extract_recent_candles(
@@ -181,7 +154,7 @@ class AlphaGStrategy():
         last_two_full: List[Dict],
         coin_entry: Dict,
         threshold_pct: float,
-    ) -> Optional[Tuple[str, PriceMovement]]:
+    ) -> Optional[Tuple[str, float]]:
         """Classify price movement as surge or crash if threshold is exceeded."""
         first_open = float(last_two_full[0]['o'])
         last_close = float(last_two_full[-1]['c'])
@@ -191,20 +164,13 @@ class AlphaGStrategy():
             
         price_change_pct = ((last_close - first_open) / first_open) * 100
 
-        movement = PriceMovement(
-            symbol=coin_entry['symbol'],
-            name=coin_entry['name'],
-            price_change_pct=price_change_pct,
-            current_price=last_close
-        )
-
         if price_change_pct > threshold_pct:
             logger.info(f"🚀 Surge detected in {coin_entry['symbol']}: {price_change_pct:.2f}%")
-            return 'surge', movement
+            return 'surge', price_change_pct
 
         if price_change_pct < -threshold_pct:
             logger.info(f"📉 Crash detected in {coin_entry['symbol']}: {price_change_pct:.2f}%")
-            return 'crash', movement
+            return 'crash', price_change_pct
 
         return None
 
@@ -320,42 +286,16 @@ class AlphaGStrategy():
             filtered_coins = self.filter_top_coins(coins, all_mids)
             
             coins_to_analyze = filtered_coins[2:80]
-            result = await self.detect_price_movements(coins_to_analyze, 2, 15.0)
+            reversals = await self.detect_price_movements(coins_to_analyze, 2, 15.0)
             
             await message.delete() # type: ignore
             
-            if result.surges:
-                surge_message_lines = [
-                    "<b>🚀 Price Surge Detection</b>",
-                    ""
-                ]
-                for surge in sorted(result.surges, key=lambda x: x.price_change_pct, reverse=True):
-                    surge_message_lines.append(
-                        f"<b>{surge.symbol}</b> ({surge.name})\n"
-                        f"  • Price Change: {fmt(surge.price_change_pct)}%\n"
-                    )
-                
-                await telegram_utils.reply(update, '\n'.join(surge_message_lines), parse_mode=ParseMode.HTML)
-            
-            if result.crashes:
-                crash_message_lines = [
-                    "<b>📉 Price Crash Detection</b>",
-                    ""
-                ]
-                for crash in sorted(result.crashes, key=lambda x: x.price_change_pct):
-                    crash_message_lines.append(
-                        f"<b>{crash.symbol}</b> ({crash.name})\n"
-                        f"  • Price change: {fmt(crash.price_change_pct)}%\n"
-                    )
-                
-                await telegram_utils.reply(update, '\n'.join(crash_message_lines), parse_mode=ParseMode.HTML)
-            
-            if result.reversals:
+            if reversals:
                 reversal_message_lines = [
                     "<b>🔄 Partial Candle Reversal Signals</b>",
                     ""
                 ]
-                for reversal in sorted(result.reversals, key=lambda x: abs(x.current_change_pct), reverse=True):
+                for reversal in sorted(reversals, key=lambda x: abs(x.current_change_pct), reverse=True):
                     initial_signal = "Surge" if reversal.movement_type == 'surge' else "Crash"
                     reversal_message_lines.append(
                         f"<b>{reversal.symbol}</b> ({reversal.name})\n"
@@ -364,9 +304,8 @@ class AlphaGStrategy():
                     )
 
                 await telegram_utils.reply(update, '\n'.join(reversal_message_lines), parse_mode=ParseMode.HTML)
-
-            if not result.has_any_movements():
-                await telegram_utils.reply(update, "No significant price movements detected in the analyzed coins.")
+            else:
+                await telegram_utils.reply(update, "No reversal signals detected in the analyzed coins.")
 
         except Exception as e:
             logger.error(f"Error executing strategy: {str(e)}", exc_info=True)
