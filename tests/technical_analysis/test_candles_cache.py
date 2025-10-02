@@ -96,3 +96,38 @@ async def test_partial_candle_updates(mock_fetch):
     assert abs(first_result[-1]['h'] - second_result[-1]['h']) > 0.01, "Last candle should be updated"
     assert abs(second_result[-1]['h'] - 999.99) < 0.01, "Last candle should have updated high value"
     assert abs(second_result[-1]['c'] - 998.88) < 0.01, "Last candle should have updated close value"
+
+
+@pytest.mark.asyncio
+async def test_include_incomplete_candles(mock_fetch):
+    timeframe = Timeframe.HOUR_1
+    interval_ms = timeframe.minutes * 60 * 1000
+    now = 1000000000000 + interval_ms // 2  # Halfway through the current candle
+
+    def fetch_with_incomplete(coin: str, timeframe_str: str, start_ts: int, end_ts: int):
+        candles = mock_fetch(coin, timeframe_str, start_ts, end_ts)
+        timeframe = next(tf for tf in Timeframe if tf.name == timeframe_str)
+        current_candle_start = _round_timestamp(end_ts, timeframe)
+        candles.append({
+            'T': current_candle_start,
+            'o': 200,
+            'h': 210,
+            'l': 190,
+            'c': 205,
+            'v': 1500
+        })
+        return candles
+
+    # Default behaviour excludes incomplete candles
+    complete_only = await get_candles_with_cache('BTC', timeframe, now, 1, fetch_with_incomplete)
+    current_candle_start = _round_timestamp(now, timeframe)
+    assert all(c['T'] < current_candle_start for c in complete_only)
+
+    # Optional flag returns the incomplete candle without caching it
+    with_incomplete = await get_candles_with_cache('BTC', timeframe, now, 1, fetch_with_incomplete, include_incomplete=True)
+    assert len(with_incomplete) == len(complete_only) + 1
+    assert with_incomplete[-1]['T'] == current_candle_start
+
+    # Cache should still only contain complete candles
+    final_complete = await get_candles_with_cache('BTC', timeframe, now, 1, fetch_with_incomplete)
+    assert all(c['T'] < current_candle_start for c in final_complete)

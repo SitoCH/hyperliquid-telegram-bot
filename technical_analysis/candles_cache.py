@@ -166,7 +166,14 @@ def _round_timestamp(ts: int, timeframe: Timeframe) -> int:
     ms_interval = timeframe.minutes * 60 * 1000
     return ts - (ts % ms_interval)
 
-async def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, lookback_days: int, fetch_fn) -> List[Dict[str, Any]]:
+async def get_candles_with_cache(
+    coin: str,
+    timeframe: Timeframe,
+    now: int,
+    lookback_days: int,
+    fetch_fn,
+    include_incomplete: bool = False,
+) -> List[Dict[str, Any]]:
     """
     Get candles using cache, handling the incomplete current candle appropriately.
     
@@ -176,6 +183,8 @@ async def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, look
         now: Current timestamp in milliseconds
         lookback_days: Number of days to look back
         fetch_fn: Sync function to fetch candles from the exchange (will be run in thread pool)
+        include_incomplete: When True, include the currently forming candle in the returned list.
+            Incomplete candles are never persisted in the cache.
     """
     try:
         end_ts = now
@@ -197,8 +206,8 @@ async def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, look
             complete_candles = [c for c in merged if c['T'] < current_candle_start]
             if complete_candles:
                 update_cache(coin, timeframe, complete_candles, now)
-            
-            return complete_candles
+
+            return merged if include_incomplete else complete_candles
 
         # Run sync fetch_fn in thread pool to avoid blocking
         loop = asyncio.get_event_loop()
@@ -208,7 +217,7 @@ async def get_candles_with_cache(coin: str, timeframe: Timeframe, now: int, look
             complete_candles = [c for c in candles if c['T'] < current_candle_start]
             if complete_candles:
                 update_cache(coin, timeframe, complete_candles, now)
-            return complete_candles
+            return candles if include_incomplete else complete_candles
 
         return candles
         
