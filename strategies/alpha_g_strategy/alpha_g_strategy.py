@@ -27,8 +27,11 @@ class ReversalSignal:
 class AlphaGStrategy():
     """AlphaG strategy stub - implementation to be added."""
 
-    def get_strategy_params(self) -> Tuple[List[Dict], Dict[str, str]]:
-        """Get strategy parameters including filtered crypto data and exchange info."""
+    def filter_top_coins(
+        self
+    ) -> List[Dict]:
+        """Filter and sort coins according to fixed token strategy criteria."""
+
         params = {
             "vs_currency": "usd",
             "order": "market_cap_desc",
@@ -38,22 +41,24 @@ class AlphaGStrategy():
         
         coins = hyperliquid_utils.fetch_cryptos(params, page_count=2)
         all_mids = hyperliquid_utils.info.all_mids()
-        
-        return coins, all_mids
 
-    def filter_top_coins(
-        self,
-        coins: List[Dict],
-        all_mids: Dict[str, str]
-    ) -> List[Dict]:
-        """Filter and sort coins according to fixed token strategy criteria."""
+        meta = hyperliquid_utils.info.meta_and_asset_ctxs()
+        universe, coin_data = meta[0]['universe'], meta[1]
+        coin_volume = {u["name"]: float(c["dayNtlVlm"]) for u, c in zip(universe, coin_data)}
+
         filtered_coins = []
-        
+
         for coin in coins:
             symbol = coin["symbol"]
                             
             if symbol not in all_mids:
                 logger.info(f"Excluding {symbol}: not available on Hyperliquid")
+                continue
+
+            volume = coin_volume.get(symbol, 0)
+            min_volume = 2_500_000
+            if volume <= min_volume:
+                logger.info(f"Excluding {symbol}: 24h volume {fmt(volume)} USDC <= {fmt(min_volume)} USDC")
                 continue
 
             filtered_coins.append({
@@ -282,8 +287,8 @@ class AlphaGStrategy():
             await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
             message = await telegram_utils.send(f"Analyzing coins...") # type: ignore
-            coins, all_mids = self.get_strategy_params()
-            filtered_coins = self.filter_top_coins(coins, all_mids)
+
+            filtered_coins = self.filter_top_coins()
             
             coins_to_analyze = filtered_coins[2:80]
             reversals = await self.detect_price_movements(coins_to_analyze, 2, 15.0)
