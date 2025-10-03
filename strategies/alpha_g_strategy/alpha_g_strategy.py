@@ -56,7 +56,7 @@ class AlphaGStrategy():
                 continue
 
             volume = coin_volume.get(symbol, 0)
-            min_volume = 2_500_000
+            min_volume = 3_000_000
             if volume <= min_volume:
                 logger.info(f"Excluding {symbol}: 24h volume {fmt(volume)} USDC <= {fmt(min_volume)} USDC")
                 continue
