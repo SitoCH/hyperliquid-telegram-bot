@@ -294,7 +294,7 @@ class AlphaGStrategy():
             
             if reversals:
                 reversal_message_lines = [
-                    "<b>🔄 Partial Candle Reversal Signals</b>",
+                    "<b>🔄 Reversal Signals</b>",
                     ""
                 ]
                 for reversal in sorted(reversals, key=lambda x: abs(x.current_change_pct), reverse=True):
