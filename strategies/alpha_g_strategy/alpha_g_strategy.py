@@ -107,7 +107,7 @@ class AlphaGStrategy():
                 )
                 
                 last_two_full, partial_candle = self._extract_recent_candles(
-                    candles, current_candle_start, coin
+                    candles, current_candle_start, coin, lookback_days
                 )
                 if last_two_full is None:
                     continue
@@ -136,23 +136,24 @@ class AlphaGStrategy():
     def _extract_recent_candles(
         candles: List[Dict],
         current_candle_start: int,
-        coin_symbol: str
+        coin_symbol: str,
+        lookback_days: int,
     ) -> Tuple[Optional[List[Dict]], Optional[Dict]]:
         if not candles:
             logger.warning(f"No candle data returned for {coin_symbol}")
             return None, None
 
-        candles = sorted(candles, key=lambda x: x['T'])[-3:]
+        candles = sorted(candles, key=lambda x: x['T'])
         complete = [c for c in candles if c['T'] < current_candle_start]
         partial = next((c for c in candles if c['T'] >= current_candle_start), None)
 
-        if len(complete) < 2:
+        if len(complete) < lookback_days:
             logger.warning(
-                f"Insufficient complete candles for {coin_symbol}: {len(complete)} full candles available"
+                f"Insufficient complete candles for {coin_symbol}: {len(complete)} full candles available, need {lookback_days}"
             )
             return None, partial
 
-        return complete[-2:], partial
+        return complete[-lookback_days:], partial
 
     @staticmethod
     def _classify_movement(
@@ -187,37 +188,34 @@ class AlphaGStrategy():
         coin_entry: Dict,
         full_candles_change_pct: float,
     ) -> Optional[ReversalSignal]:
-        """Detect if the partial candle shows a potential reversal signal."""
+        """Detect if the partial candle shows a potential reversal signal.
+
+        A reversal is defined as the current partial daily candle moving in the
+        opposite direction of the aggregate move across the last two full daily
+        candles (movement_type = 'surge' for up, 'crash' for down).
+        """
         if not partial_candle:
             return None
 
-        prev_open = float(last_full_candle['o'])
-        prev_close = float(last_full_candle['c'])
         current_open = float(partial_candle['o'])
         current_close = float(partial_candle['c'])
-
-        prev_direction = prev_close - prev_open
         current_direction = current_close - current_open
 
-        if prev_direction == 0 or current_direction == 0:
+        if current_direction == 0:
             return None
 
-        # Check if direction flipped
-        direction_flipped = (
-            (prev_direction > 0 and current_direction < 0) or
-            (prev_direction < 0 and current_direction > 0)
-        )
-        if not direction_flipped:
+        # Reversal relative to the two-candle trend
+        if movement_type == 'surge' and current_direction >= 0:
+            return None
+        if movement_type == 'crash' and current_direction <= 0:
             return None
 
-        prev_change_pct = ((prev_close - prev_open) / prev_open) * 100 if prev_open else 0.0
         current_change_pct = ((current_close - current_open) / current_open) * 100 if current_open else 0.0
 
         logger.info(
             f"🔄 Reversal signal in {coin_entry['symbol']}: "
             f"full candles {full_candles_change_pct:.2f}%, "
-            f"prev candle {prev_change_pct:.2f}%, "
-            f"current partial {current_change_pct:.2f}%"
+            f"current partial {current_change_pct:.2f}% (opposite to {movement_type})"
         )
 
         return ReversalSignal(
@@ -291,7 +289,7 @@ class AlphaGStrategy():
             filtered_coins = self.filter_top_coins()
             
             coins_to_analyze = filtered_coins[2:80]
-            reversals = await self.detect_price_movements(coins_to_analyze, 2, 15.0)
+            reversals = await self.detect_price_movements(coins_to_analyze, 3, 20.0)
             
             await message.delete() # type: ignore
             
@@ -304,8 +302,8 @@ class AlphaGStrategy():
                     initial_signal = "Surge" if reversal.movement_type == 'surge' else "Crash"
                     reversal_message_lines.append(
                         f"<b>{reversal.symbol}</b> ({reversal.name})\n"
-                        f"  • Initial signal: {initial_signal} ({fmt(reversal.full_candles_change_pct)}%)\n"
-                        f"  • Current candle: {fmt(reversal.current_change_pct)}%\n"
+                        f"  • {initial_signal} ({fmt(reversal.full_candles_change_pct)}%)\n"
+                        f"  • Daily change: {fmt(reversal.current_change_pct)}%\n"
                     )
 
                 await telegram_utils.reply(update, '\n'.join(reversal_message_lines), parse_mode=ParseMode.HTML)
