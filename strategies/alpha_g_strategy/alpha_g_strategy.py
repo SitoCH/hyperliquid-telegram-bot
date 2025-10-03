@@ -80,7 +80,7 @@ class AlphaGStrategy():
         
         Args:
             coins: List of coin dictionaries with 'symbol' and 'name' keys
-            lookback_days: Number of days to analyze
+            lookback_days: Number of full daily candles to analyze (N)
             threshold_pct: Absolute price change percentage threshold
             
         Returns:
@@ -106,20 +106,20 @@ class AlphaGStrategy():
                     True
                 )
                 
-                last_two_full, partial_candle = self._extract_recent_candles(
+                full_candles, partial_candle = self._extract_recent_candles(
                     candles, current_candle_start, coin, lookback_days
                 )
-                if last_two_full is None:
+                if full_candles is None:
                     continue
 
                 # Classify the movement
-                movement = self._classify_movement(last_two_full, entry, threshold_pct)
+                movement = self._classify_movement(full_candles, entry, threshold_pct)
                 if movement:
                     movement_type, price_change_pct = movement
                     
                     # Check for reversal signal
                     reversal = self._detect_partial_reversal(
-                        movement_type, last_two_full[-1], partial_candle, entry, price_change_pct
+                        movement_type, partial_candle, entry, price_change_pct
                     )
                     if reversal:
                         reversals.append(reversal)
@@ -157,13 +157,13 @@ class AlphaGStrategy():
 
     @staticmethod
     def _classify_movement(
-        last_two_full: List[Dict],
+        full_candles: List[Dict],
         coin_entry: Dict,
         threshold_pct: float,
     ) -> Optional[Tuple[str, float]]:
         """Classify price movement as surge or crash if threshold is exceeded."""
-        first_open = float(last_two_full[0]['o'])
-        last_close = float(last_two_full[-1]['c'])
+        first_open = float(full_candles[0]['o'])
+        last_close = float(full_candles[-1]['c'])
         
         if first_open == 0:
             return None
@@ -183,7 +183,6 @@ class AlphaGStrategy():
     @staticmethod
     def _detect_partial_reversal(
         movement_type: str,
-        last_full_candle: Dict,
         partial_candle: Optional[Dict],
         coin_entry: Dict,
         full_candles_change_pct: float,
@@ -191,7 +190,7 @@ class AlphaGStrategy():
         """Detect if the partial candle shows a potential reversal signal.
 
         A reversal is defined as the current partial daily candle moving in the
-        opposite direction of the aggregate move across the last two full daily
+        opposite direction of the aggregate move across the last N full daily
         candles (movement_type = 'surge' for up, 'crash' for down).
         """
         if not partial_candle:
@@ -204,7 +203,7 @@ class AlphaGStrategy():
         if current_direction == 0:
             return None
 
-        # Reversal relative to the two-candle trend
+        # Reversal relative to the multi-candle trend
         if movement_type == 'surge' and current_direction >= 0:
             return None
         if movement_type == 'crash' and current_direction <= 0:
