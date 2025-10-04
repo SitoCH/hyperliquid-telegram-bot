@@ -297,10 +297,16 @@ class AlphaGStrategy():
                     "<b>🔄 Reversal Signals</b>",
                     ""
                 ]
-                for reversal in sorted(reversals, key=lambda x: abs(x.current_change_pct), reverse=True):
+                # Sort by highest surge/crash magnitude first, then by current daily reversal magnitude
+                for reversal in sorted(
+                    reversals,
+                    key=lambda x: (abs(x.full_candles_change_pct), abs(x.current_change_pct)),
+                    reverse=True,
+                ):
                     initial_signal = "Surge" if reversal.movement_type == 'surge' else "Crash"
+                    icon = "🚀" if reversal.movement_type == 'surge' else "📉"
                     reversal_message_lines.append(
-                        f"<b>{reversal.symbol}</b> ({reversal.name})\n"
+                        f" {icon} <b>{reversal.symbol}</b> ({reversal.name})\n"
                         f"  • {initial_signal} ({fmt(reversal.full_candles_change_pct)}%)\n"
                         f"  • Daily change: {fmt(reversal.current_change_pct)}%\n"
                     )
