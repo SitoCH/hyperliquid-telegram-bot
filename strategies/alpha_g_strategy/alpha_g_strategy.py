@@ -1,3 +1,4 @@
+import os
 import time
 from dataclasses import dataclass
 from typing import List, Dict, Tuple, Optional
@@ -26,6 +27,12 @@ class ReversalSignal:
 
 class AlphaGStrategy():
     """AlphaG strategy stub - implementation to be added."""
+
+    def __init__(self) -> None:
+        # Configure via environment variables (pattern similar to ETF strategy)
+        # Defaults preserve previous behavior
+        self._lookback_days: int = int(os.getenv("HTB_ALPHA_G_STRATEGY_LOOKBACK_DAYS", "3"))
+        self._threshold_pct: float = float(os.getenv("HTB_ALPHA_G_STRATEGY_THRESHOLD_PCT", "20.0"))
 
     def filter_top_coins(
         self
@@ -288,7 +295,11 @@ class AlphaGStrategy():
             filtered_coins = self.filter_top_coins()
             
             coins_to_analyze = filtered_coins[2:80]
-            reversals = await self.detect_price_movements(coins_to_analyze, 3, 20.0)
+            reversals = await self.detect_price_movements(
+                coins_to_analyze,
+                self._lookback_days,
+                self._threshold_pct,
+            )
             
             await message.delete() # type: ignore
             

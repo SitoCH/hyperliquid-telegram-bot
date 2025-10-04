@@ -105,6 +105,7 @@ The bot supports custom trading strategies in the `strategies/` directory:
 - `default_strategy`: Basic trading strategy implementation
 - `etf_strategy`: Strategy focused on ETF-like trading behavior that automatically allocates funds across top cryptocurrencies based on market capitalization
 - `fixed_token_strategy`: Strategy that trades a fixed set of tokens with configurable parameters
+- `alpha_g_strategy`: Strategy that detects strong multi-day surges/crashes and flags potential daily reversal signals
 
 ### ETF Strategy Configuration
 
@@ -177,6 +178,31 @@ This configuration would:
 - Trade only BTC, ETH, and SOL
 - Use 3x leverage for positions
 - Only include tokens with >20% yearly performance
+
+### AlphaG Strategy Configuration
+
+The AlphaG strategy analyzes top market-cap coins to detect strong multi-day moves and highlights potential intraday reversals. You can configure its sensitivity with the following environment variables:
+
+| Variable | Description | Example | Default |
+|----------|-------------|---------|---------|
+| HTB_ALPHA_G_STRATEGY_LOOKBACK_DAYS | Number of full daily candles to consider when classifying a surge/crash | "3" | 3 |
+| HTB_ALPHA_G_STRATEGY_THRESHOLD_PCT | Absolute percentage threshold to qualify a surge/crash over the lookback window | "20.0" | 20.0 |
+
+Example configuration in docker-compose.yml:
+```yaml
+version: '3'
+services:
+  hyperliquid_bot:
+    image: sito/hyperliquid-telegram-bot:latest
+    container_name: hyperliquid_bot
+    environment:
+      HTB_TOKEN: "<TELEGRAM BOT TOKEN>"
+      HTB_CHAT_ID: "<TELEGRAM CHAT ID>"
+      HTB_USER_WALLET: "<ADDRESS TO WATCH>"
+      HTB_ALPHA_G_STRATEGY_LOOKBACK_DAYS: "3"        # Number of full candles (days)
+      HTB_ALPHA_G_STRATEGY_THRESHOLD_PCT: "20.0"     # Surge/Crash threshold in % over lookback
+    restart: unless-stopped
+```
 
 ## Contributing
 
