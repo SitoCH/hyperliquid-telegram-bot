@@ -24,6 +24,7 @@ class ReversalSignal:
     full_candles_change_pct: float  
     current_change_pct: float
     current_price: float
+    confirmed: bool = False
 
 class AlphaGStrategy():
     """AlphaG strategy."""
@@ -92,7 +93,7 @@ class AlphaGStrategy():
             vol = float(coin_volume_map.get(coin_symbol, 0.0))
             if vol < self.COIN_MIN_VOLUME:
                 lines.append(
-                    f" ⚠️ <b>{coin_symbol}</b>\n"
+                    f"<b>{coin_symbol}</b>\n"
                     f"  • 24h vol: {fmt(vol)} USDC\n"
                 )
         return lines
@@ -160,9 +161,10 @@ class AlphaGStrategy():
             initial_signal = "Surge" if reversal.movement_type == 'surge' else "Crash"
             icon = "🚀" if reversal.movement_type == 'surge' else "📉"
             lines.append(
-                f" {icon} <b>{reversal.symbol}</b> ({reversal.name})\n"
-                f"  • {initial_signal} ({fmt(reversal.full_candles_change_pct)}%)\n"
-                f"  • Daily change: {fmt(reversal.current_change_pct)}%\n"
+                f"{icon} <b>{reversal.symbol}</b> ({reversal.name})\n"
+                f" • {initial_signal} ({fmt(reversal.full_candles_change_pct)}%)\n"
+                f" • Daily change: {fmt(reversal.current_change_pct)}%\n"
+                f" • ✅ Confirmed reversal\n" if reversal.confirmed else ""
             )
         return lines
 
@@ -198,7 +200,7 @@ class AlphaGStrategy():
                     coin, 
                     Timeframe.DAY_1, 
                     now, 
-                    lookback_days, 
+                    lookback_days + 1, 
                     hyperliquid_utils.info.candles_snapshot,
                     True
                 )
@@ -207,6 +209,20 @@ class AlphaGStrategy():
                     candles, current_candle_start, coin, lookback_days
                 )
                 if full_candles is None:
+                    continue
+
+                # First, try to detect a confirmed reversal pattern:
+                # N candles trending, then 1 full candle reversing, and current partial confirming
+                confirmed = self._detect_confirmed_reversal(
+                    candles=candles,
+                    current_candle_start=current_candle_start,
+                    coin_entry=entry,
+                    lookback_days=lookback_days,
+                    threshold_pct=threshold_pct,
+                )
+                if confirmed:
+                    reversals.append(confirmed)
+                    logger.info(f"Analysis for {coin} done in {(time.time() - start_time):.2f}s")
                     continue
 
                 # Classify the movement
@@ -228,6 +244,88 @@ class AlphaGStrategy():
                 continue
         
         return reversals
+
+    @staticmethod
+    def _detect_confirmed_reversal(
+        candles: List[Dict],
+        current_candle_start: int,
+        coin_entry: Dict,
+        lookback_days: int,
+        threshold_pct: float,
+    ) -> Optional[ReversalSignal]:
+        """Detect a confirmed reversal pattern over N+1 full candles plus current partial.
+
+        Pattern definition:
+        - The oldest N of the last N+1 full daily candles exhibit a surge/crash exceeding threshold.
+        - The most recent full candle (yesterday) moves in the opposite direction (reversal).
+        - The current partial daily candle continues in the direction of the reversal (confirmation).
+        """
+        if not candles:
+            return None
+
+        candles_sorted = sorted(candles, key=lambda x: x['T'])
+        complete = [c for c in candles_sorted if c['T'] < current_candle_start]
+        partial = next((c for c in candles_sorted if c['T'] >= current_candle_start), None)
+
+        if len(complete) < lookback_days + 1 or not partial:
+            return None
+
+        # Trend on first N of the last N+1 full candles
+        trend_candles = complete[-(lookback_days + 1):-1]
+        reversal_full = complete[-1]
+
+        # Classify initial trend
+        first_open = float(trend_candles[0]['o'])
+        last_close = float(trend_candles[-1]['c'])
+        if first_open == 0:
+            return None
+        trend_change_pct = ((last_close - first_open) / first_open) * 100
+
+        movement_type: Optional[str] = None
+        if trend_change_pct > threshold_pct:
+            movement_type = 'surge'
+        elif trend_change_pct < -threshold_pct:
+            movement_type = 'crash'
+        else:
+            return None
+
+        # Reversal full candle must be opposite to the movement_type
+        rev_open = float(reversal_full['o'])
+        rev_close = float(reversal_full['c'])
+        rev_dir = rev_close - rev_open
+        if rev_dir == 0:
+            return None
+        if movement_type == 'surge' and rev_dir >= 0:
+            return None
+        if movement_type == 'crash' and rev_dir <= 0:
+            return None
+
+        # Current partial must confirm the reversal (same direction as reversal full candle)
+        cur_open = float(partial['o'])
+        cur_close = float(partial['c'])
+        cur_dir = cur_close - cur_open
+        if cur_dir == 0:
+            return None
+        if (rev_dir > 0 and cur_dir <= 0) or (rev_dir < 0 and cur_dir >= 0):
+            return None
+
+        current_change_pct = ((cur_close - cur_open) / cur_open) * 100 if cur_open else 0.0
+
+        logger.info(
+            f"✅ Confirmed reversal in {coin_entry['symbol']}: "
+            f"trend {trend_change_pct:.2f}% ({movement_type}), "
+            f"yesterday reversed, current confirms"
+        )
+
+        return ReversalSignal(
+            symbol=coin_entry['symbol'],
+            name=coin_entry['name'],
+            movement_type=movement_type,
+            full_candles_change_pct=trend_change_pct,
+            current_change_pct=current_change_pct,
+            current_price=cur_close,
+            confirmed=True,
+        )
 
     @staticmethod
     def _extract_recent_candles(
