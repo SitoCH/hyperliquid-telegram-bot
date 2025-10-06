@@ -478,7 +478,7 @@ class AlphaGStrategy():
         """Initialize strategy - implementation to be added."""
 
         analyze_button_text = "analyze"
-        telegram_utils.add_buttons([f"/{analyze_button_text}"], 1)
+        telegram_utils.add_buttons([f"/{analyze_button_text}"], 2)
         telegram_utils.add_handler(CommandHandler(analyze_button_text, self.analyze))
 
         logger.info("AlphaG strategy initialized")

@@ -53,12 +53,12 @@ class TelegramUtils:
                 KeyboardButton(f"/{overview_command}"),
             ],
             (
-                [KeyboardButton("/long"), KeyboardButton("/short")]
+                [KeyboardButton("/exit"), KeyboardButton("/long"), KeyboardButton("/short")]
                 if exchange_enabled
                 else []
             ),
             (
-                [KeyboardButton("/exit"), KeyboardButton(f"/{ta_command}"), KeyboardButton(f"/{stats_command}")]
+                [KeyboardButton(f"/{ta_command}"), KeyboardButton(f"/{stats_command}")]
                 if exchange_enabled
                 else []
             ),
