@@ -41,7 +41,6 @@ async def conversation_cancel(update: Update, context: CallbackContext) -> int:
 
 class TelegramUtils:
 
-    exit_all_command = "exit_all"
     overview_command = "overview"
     ta_command = "ta"
     stats_command = "stats"
@@ -50,7 +49,6 @@ class TelegramUtils:
         [
             [
                 KeyboardButton("/positions"),
-                KeyboardButton(f"/{ta_command}"),
                 KeyboardButton("/orders"),
                 KeyboardButton(f"/{overview_command}"),
             ],
@@ -60,7 +58,7 @@ class TelegramUtils:
                 else []
             ),
             (
-                [KeyboardButton(f"/{exit_all_command}"), KeyboardButton("/exit"), KeyboardButton(f"/{stats_command}")]
+                [KeyboardButton("/exit"), KeyboardButton(f"/{ta_command}"), KeyboardButton(f"/{stats_command}")]
                 if exchange_enabled
                 else []
             ),
