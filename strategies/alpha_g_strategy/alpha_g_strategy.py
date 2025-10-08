@@ -160,12 +160,14 @@ class AlphaGStrategy():
         ):
             initial_signal = "Surge" if reversal.movement_type == 'surge' else "Crash"
             icon = "🚀" if reversal.movement_type == 'surge' else "📉"
-            lines.append(
+            line = (
                 f"{icon} <b>{reversal.symbol}</b> ({reversal.name})\n"
                 f" • {initial_signal} ({fmt(reversal.full_candles_change_pct)}%)\n"
                 f" • Daily change: {fmt(reversal.current_change_pct)}%\n"
-                f" • ✅ Confirmed reversal\n" if reversal.confirmed else ""
             )
+            if reversal.confirmed:
+                line += " • ✅ Confirmed reversal\n"
+            lines.append(line)
         return lines
 
     async def detect_price_movements(
