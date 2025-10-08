@@ -166,7 +166,7 @@ class AlphaGStrategy():
                 f" • Daily change: {fmt(reversal.current_change_pct)}%\n"
             )
             if reversal.confirmed:
-                line += " • ✅ Confirmed reversal\n"
+                line += f" • ✅ Confirmed reversal\n"
             lines.append(line)
         return lines
 
