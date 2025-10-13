@@ -39,6 +39,6 @@ jobs:
         context: .
         platforms: linux/amd64,linux/arm64
         push: true
-        tags: sito/hyperliquid-telegram-bot:latest
+        tags: giodegio/hyperliquid-telegram-bot:latest
         cache-from: type=gha
         cache-to: type=gha
