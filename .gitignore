@@ -31,3 +31,5 @@ node_modules/
 
 scratch.py
 /cache/
+/key.txt
+/docker-compose.yml
