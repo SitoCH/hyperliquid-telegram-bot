@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import List, Set, Dict, Any, ClassVar
+from typing import List, Dict, Any, ClassVar
 
 import eth_account
 from eth_account.signers.local import LocalAccount
@@ -55,9 +55,10 @@ class HyperliquidUtils:
         if key_file is not None and os.path.isfile(key_file):
             with open(key_file, 'r') as file:
                 file_content = file.read()
-                account: LocalAccount = eth_account.Account.from_key(file_content)
+                ascii_only = file_content.encode("ascii", "ignore").decode("ascii").strip()
+                account: LocalAccount = eth_account.Account.from_key(ascii_only)
                 return Exchange(account, constants.MAINNET_API_URL, vault_address=os.environ.get("HTB_USER_VAULT"), account_address=os.environ["HTB_USER_WALLET"])
-
+        return None
 
     def get_sz_decimals(self):
         meta = self.info.meta()
