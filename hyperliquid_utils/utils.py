@@ -129,7 +129,12 @@ class HyperliquidUtils:
 
     def get_coins_reply_markup(self):
         coins = self.get_coins_by_traded_volume()
-        keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
+        open_position_coins = set(self.get_coins_with_open_positions())
+        prioritized = [c for c in coins if c in open_position_coins]
+        others = [c for c in coins if c not in open_position_coins]
+        ordered_coins = others + prioritized
+
+        keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in ordered_coins]
         keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
         return InlineKeyboardMarkup(keyboard)
 
