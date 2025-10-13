@@ -160,9 +160,9 @@ class PriceSuggestion(NamedTuple):
     price: float
     percentage: float
 
-def get_price_suggestions(coin: str, mid: float, is_stop_loss: bool, is_long: bool) -> List[PriceSuggestion]:
+async def get_price_suggestions(coin: str, mid: float, is_stop_loss: bool, is_long: bool) -> List[PriceSuggestion]:
     """Get price suggestions for either entry or exit points."""
-    resistance_levels, support_levels = get_significant_levels_from_timeframe(coin, mid, Timeframe.HOUR_1, 250)
+    resistance_levels, support_levels = await get_significant_levels_from_timeframe(coin, mid, Timeframe.HOUR_1, 250)
     suggestions: List[PriceSuggestion] = []
 
     # For take profit (exit), we reverse the direction compared to stop loss (entry)
@@ -197,7 +197,7 @@ async def get_price_suggestions_text(context: Union[CallbackContext, ContextType
     mid = float(hyperliquid_utils.info.all_mids()[coin])
     is_long = context.user_data["enter_mode"] == "long" # type: ignore
 
-    suggestions = get_price_suggestions(coin, mid, is_stop_loss, is_long)
+    suggestions = await get_price_suggestions(coin, mid, is_stop_loss, is_long)
     
     table_data = [
         [sugg.type, fmt_price(sugg.price), f"{fmt(sugg.percentage)}%"]
@@ -232,6 +232,8 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
     if stop_loss.lower() == 'cancel': # type: ignore
         await telegram_utils.reply(update, OPERATION_CANCELLED)
         return ConversationHandler.END
+    
+    coin = context.user_data["selected_coin"] # type: ignore
 
     try:
         stop_loss_price = float(stop_loss) # type: ignore
@@ -241,7 +243,6 @@ async def selected_stop_loss(update: Update, context: Union[CallbackContext, Con
 
         # Only validate stop loss price if it's not zero
         if stop_loss_price > 0:
-            coin = context.user_data["selected_coin"] # type: ignore
             mid = float(hyperliquid_utils.info.all_mids()[coin])
             is_long = context.user_data["enter_mode"] == "long" # type: ignore
             
@@ -436,14 +437,32 @@ async def place_stop_loss_and_take_profit_orders(
         logger.info(tp_order_result)
 
 
-async def exit_all_positions(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> None:
+def close_all_positions_core(exchange: Any) -> Tuple[List[str], List[Tuple[str, str]]]:
+    """Close all open positions without doing any messaging."""
+
+    closed: List[str] = []
+    errors: List[Tuple[str, str]] = []
+
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+
+    for asset_position in user_state.get("assetPositions", []):
+        coin = asset_position.get('position', {}).get('coin')
+        if not coin:
+            continue
+        try:
+            exchange.market_close(coin)
+            closed.append(coin)
+        except Exception as e:  # pragma: no cover - exchange errors depend on external service
+            logger.error(f"Failed to close {coin}: {e}", exc_info=True)
+            errors.append((coin, str(e)))
+
+    return closed, errors
+
+async def exit_all_positions(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> None:
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
-            for asset_position in user_state.get("assetPositions", []):
-                coin = asset_position['position']['coin']
-                exchange.market_close(coin)
+            close_all_positions_core(exchange)
         else:
             await telegram_utils.reply(update, "Exchange is not enabled")
     except Exception as e:
@@ -460,9 +479,10 @@ async def exit_position(update: Update, context: Union[CallbackContext, ContextT
         return ConversationHandler.END
 
     keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
+    keyboard += [[InlineKeyboardButton("All", callback_data='all')]]
     keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await telegram_utils.reply(update, 'Choose a coin to sell:', reply_markup=reply_markup)
+    await telegram_utils.reply(update, 'Choose a coin to close, or select All:', reply_markup=reply_markup)
     return EXIT_CHOOSING
 
 
@@ -471,8 +491,23 @@ async def exit_selected_coin(update: Update, context: Union[CallbackContext, Con
     await query.answer()
 
     coin = query.data
-    if coin == 'cancel':
+    if coin is None or coin == 'cancel':
         await query.edit_message_text('Operation cancelled')
+        return ConversationHandler.END
+
+    if coin == 'all':
+        await query.edit_message_text("Closing all positions...")
+        try:
+            exchange = hyperliquid_utils.get_exchange()
+            if exchange:
+                close_all_positions_core(exchange)
+                await query.delete_message()
+            else:
+                await query.edit_message_text("Exchange is not enabled")
+        except Exception as e:
+            logger.critical(e, exc_info=True)
+            await query.edit_message_text(f"Failed to exit all positions: {str(e)}")
+
         return ConversationHandler.END
 
     await query.edit_message_text(f"Closing {coin}...")
