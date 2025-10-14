@@ -1,15 +1,13 @@
-from enum import Enum
-from typing import Dict, List, Optional, Tuple, TypeVar, Any, Callable
-from dataclasses import dataclass
-import pandas as pd  # type: ignore[import]
+from typing import Dict, List, Optional, TypeVar
 from utils import fmt_price
 from telegram_utils import telegram_utils
 import base64
 from utils import exchange_enabled
+import os
 
 from ..wyckoff_types import (
-    WyckoffState, WyckoffPhase, WyckoffSign, MarketPattern, SignificantLevelsData,
-    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity
+    WyckoffPhase, WyckoffSign, SignificantLevelsData,
+    CompositeAction, Timeframe, VolatilityState
 )
 
 from .wyckoff_multi_timeframe_types import (
@@ -137,7 +135,7 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
         f"{insight}"
     )
 
-    trade_suggestion = _get_trade_suggestion(coin, analysis.overall_direction, mid, significant_levels)
+    trade_suggestion = _get_trade_suggestion(coin, analysis.overall_direction, mid, significant_levels, analysis.confidence_level)
     if trade_suggestion:
         full_description += f"\n\n{trade_suggestion}"
 
@@ -324,8 +322,13 @@ def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
         f"  └─ {volume_desc}{volatility}"
     )
 
-def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData]) -> Optional[str]:
+def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData], confidence: float) -> Optional[str]:
     """Generate trade suggestion with stop loss and take profit based on nearby levels."""
+
+    min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
+    if confidence < min_confidence:
+        return None
+
     def get_valid_levels(timeframe: Timeframe, min_dist_sl: float, max_dist_sl: float, 
                          min_dist_tp: float, max_dist_tp: float) -> tuple[List[float], List[float], List[float], List[float]]:
         """Get valid support and resistance levels for a specific timeframe with separate ranges for SL and TP."""
