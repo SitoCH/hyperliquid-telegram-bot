@@ -13,7 +13,7 @@ from hyperliquid_utils.utils import hyperliquid_utils
 from ..candles_cache import get_candles_with_cache
 from .wyckoff_types import Timeframe, WyckoffState, SignificantLevelsData
 from ..funding_rates_cache import get_funding_with_cache, FundingRateEntry
-from .wykcoff_chart import generate_chart
+from .wyckoff_chart import generate_chart
 from .mtf.wyckoff_multi_timeframe import analyze_multi_timeframe
 from ..data_processor import prepare_dataframe, apply_indicators
 from .significant_levels import find_significant_levels
@@ -115,7 +115,7 @@ class WyckoffAnalyzer:
         mtf_description: str
     ) -> None:
         """Send Wyckoff analysis results to Telegram."""
-        
+
         if send_charts:
             charts = []
             try:
@@ -178,8 +178,8 @@ class WyckoffAnalyzer:
     
     def _get_ta_results(self, df: pd.DataFrame, wyckoff: WyckoffState) -> Dict[str, Any]:
         """Get technical analysis results for a timeframe."""
-        # Check if we have enough data points
-        if len(df["SuperTrend"]) < 2:
+        # Check if SuperTrend exists and we have enough data points
+        if "SuperTrend" not in df.columns or len(df["SuperTrend"]) < 2:
             logger.warning("Insufficient data for technical analysis results")
             return {
                 "supertrend_prev": 0,
@@ -191,10 +191,17 @@ class WyckoffAnalyzer:
 
         supertrend_prev, supertrend = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
 
+        # Determine trend based on price versus SuperTrend level
+        prev_close, last_close = df["c"].iloc[-2], df["c"].iloc[-1]
+        prev_st, last_st = df["SuperTrend"].iloc[-2], df["SuperTrend"].iloc[-1]
+
+        supertrend_trend_prev = "uptrend" if prev_close > prev_st else "downtrend"
+        supertrend_trend = "uptrend" if last_close > last_st else "downtrend"
+
         return {
             "supertrend_prev": supertrend_prev,
             "supertrend": supertrend,
-            "supertrend_trend_prev": "uptrend" if df["SuperTrend"].shift().gt(0).iloc[-2] else "downtrend",
-            "supertrend_trend": "uptrend" if df["SuperTrend"].shift().gt(0).iloc[-1] else "downtrend",
+            "supertrend_trend_prev": supertrend_trend_prev,
+            "supertrend_trend": supertrend_trend,
             "wyckoff": wyckoff
         }

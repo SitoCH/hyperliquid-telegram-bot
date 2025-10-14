@@ -1,8 +1,7 @@
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict
 import pandas as pd
 import numpy as np
 import time
-from scipy.stats import norm # type: ignore[import]
 from scipy.special import expit # type: ignore[import]
 from tzlocal import get_localzone
 from .wyckoff_types import WyckoffState, WyckoffPhase, CompositeAction, FundingState, Timeframe
