@@ -94,7 +94,7 @@ class WyckoffAnalyzer:
         mid: float
     ) -> Dict[Timeframe, SignificantLevelsData]:
         """Calculate significant levels for specified timeframes."""
-        significant_timeframes = [Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4]
+        significant_timeframes = [Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4, Timeframe.HOURS_8]
         return {
             tf: {
                 'resistance': resistance,
