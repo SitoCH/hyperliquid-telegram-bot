@@ -351,22 +351,23 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         if ((direction == MultiTimeframeDirection.BULLISH and (not tp_resistances or not sl_supports)) or
             (direction == MultiTimeframeDirection.BEARISH and (not tp_supports or not sl_resistances))):
             return None, None, None
-            
-        buffer_pct = 0.0015
+
+        sl_buffer_pct = 0.0015
+        tp_buffer_pct = 0.0015
         
         if direction == MultiTimeframeDirection.BULLISH:
-            # For longs: TP slightly above resistance, SL slightly below support
-            closest_resistance = min(tp_resistances, key=lambda x: abs(x - mid))
-            closest_support = max(sl_supports, key=lambda x: abs(x - mid))
-            tp = closest_resistance
-            sl = closest_support * (1 - buffer_pct)     # SL slightly below support
+            # R:R-optimal: TP farthest resistance, SL nearest support
+            farthest_resistance = max(tp_resistances, key=lambda x: abs(x - mid))
+            nearest_support = min(sl_supports, key=lambda x: abs(x - mid))
+            tp = farthest_resistance * (1 - tp_buffer_pct)   # Slightly inside resistance
+            sl = nearest_support * (1 - sl_buffer_pct)       # Slightly below support
             return "Long", tp, sl
         
-        # For shorts: TP slightly below support, SL slightly above resistance
-        closest_support = max(tp_supports, key=lambda x: abs(x - mid))
-        closest_resistance = min(sl_resistances, key=lambda x: abs(x - mid))
-        tp = closest_support
-        sl = closest_resistance * (1 + buffer_pct)  # SL slightly above resistance
+        # For shorts: R:R-optimal - TP farthest support, SL nearest resistance
+        farthest_support = max(tp_supports, key=lambda x: abs(x - mid))
+        nearest_resistance = min(sl_resistances, key=lambda x: abs(x - mid))
+        tp = farthest_support * (1 + tp_buffer_pct)     # Slightly inside support
+        sl = nearest_resistance * (1 + sl_buffer_pct)   # Slightly above resistance
         return "Short", tp, sl
 
     def format_trade(coin: str, side: str, entry: float, tp: float, sl: float) -> Optional[str]:
@@ -381,6 +382,13 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
             
         tp_pct = abs((tp - entry) / entry) * 100
         sl_pct = abs((sl - entry) / entry) * 100
+        if sl_pct == 0:
+            return None
+
+        min_rr = 1.3
+        rr = tp_pct / sl_pct
+        if rr < min_rr:
+            return None
         
         enc_side = "L" if side == "Long" else "S"
         enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(sl)}_{fmt_price(tp)}".encode('utf-8')).decode('utf-8')
@@ -400,13 +408,15 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
     if mid <= 0:
         return None
 
-    min_distance_sl = mid * 0.02
-    max_distance_sl = mid * 0.045
+    # Distance bands tuned for healthier baseline R:R
+    # SL: 1.5%–3%, TP: 2%–4%
+    min_distance_sl = mid * 0.015
+    max_distance_sl = mid * 0.03
     
-    min_distance_tp = mid * 0.01
-    max_distance_tp = mid * 0.03
+    min_distance_tp = mid * 0.02
+    max_distance_tp = mid * 0.04
 
-    for timeframe in [Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15, Timeframe.HOURS_4]:
+    for timeframe in [Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15, Timeframe.HOURS_4, Timeframe.HOURS_8]:
         tp_resistances, tp_supports, sl_resistances, sl_supports = get_valid_levels(
             timeframe, min_distance_sl, max_distance_sl, min_distance_tp, max_distance_tp
         )
@@ -414,7 +424,7 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         if ((direction == MultiTimeframeDirection.BULLISH and tp_resistances and sl_supports) or
             (direction == MultiTimeframeDirection.BEARISH and tp_supports and sl_resistances)):
             side, tp, sl = get_trade_levels(direction, tp_resistances, tp_supports, sl_resistances, sl_supports)
-            if side and tp and sl:  # Add safety check for None values
+            if side and tp and sl:
                 formatted_trade = format_trade(coin, side, mid, tp, sl)
                 if formatted_trade:
                     return formatted_trade
