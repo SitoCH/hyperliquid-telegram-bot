@@ -99,7 +99,6 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
     df.set_index("T", inplace=True)
     df.sort_index(inplace=True)
 
-    # Get optimized settings based on timeframe and data length
     atr_length, macd_fast, macd_slow, macd_signal, st_length = get_indicator_settings(timeframe, len(df))
 
     _add_bollinger_bands(df)
@@ -110,17 +109,8 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
     _add_macd_indicator(df, macd_fast, macd_slow, macd_signal)
     _add_ema_indicator(df, timeframe)
     _add_rsi_indicator(df)
-    _add_stochastic_indicator(df)
-    _add_stochrsi_indicator(df)
     _add_fibonacci_levels(df)
     _add_pivot_points(df)
-    _add_ichimoku_cloud(df)
-    _add_momentum_indicators(df)
-    _add_adx_indicator(df)
-    _add_parabolic_sar(df)
-    _add_donchian_channels(df)
-    _add_keltner_channels(df)
-    _add_obv_indicator(df)
 
 
 def _add_bollinger_bands(df: pd.DataFrame) -> None:
@@ -214,18 +204,6 @@ def _add_rsi_indicator(df: pd.DataFrame) -> None:
         df["RSI"] = rsi
 
 
-def _add_stochastic_indicator(df: pd.DataFrame) -> None:
-    """Add Stochastic oscillator."""
-    stoch_period = max(3, len(df) // 6)  # Shorter for fast moves
-    if len(df) < stoch_period + 3:
-        return
-        
-    stoch = ta.stoch(df["h"], df["l"], df["c"], k=stoch_period, d=3, smooth_k=3)
-    if stoch is not None:
-        df["STOCH_K"] = stoch[f"STOCHk_{stoch_period}_3_3"]
-        df["STOCH_D"] = stoch[f"STOCHd_{stoch_period}_3_3"]
-
-
 def _add_fibonacci_levels(df: pd.DataFrame) -> None:
     """Add Fibonacci retracement levels."""
     lookback_period = max(10, len(df) // 8)  # Shorter for fast moves
@@ -271,104 +249,3 @@ def _add_pivot_points(df: pd.DataFrame) -> None:
     df["R2"] = pivot + (df["h"].shift(1) - df["l"].shift(1))
     df["S1"] = 2 * pivot - df["h"].shift(1)
     df["S2"] = pivot - (df["h"].shift(1) - df["l"].shift(1))
-
-
-def _add_ichimoku_cloud(df: pd.DataFrame) -> None:
-    """Add Ichimoku Cloud indicators."""
-    # Use standard Ichimoku periods or fallback for small datasets
-    if len(df) < 52:
-        # For small datasets, use proportional periods but maintain relationships
-        period_9 = max(9, len(df) // 6)  # Tenkan-sen period
-        period_26 = max(26, len(df) // 2)  # Kijun-sen period  
-        period_52 = len(df) - 1  # Senkou Span B period
-    else:
-        # Standard Ichimoku periods for proper cloud formation
-        period_9 = 9   # Tenkan-sen (Conversion Line)
-        period_26 = 26 # Kijun-sen (Base Line)
-        period_52 = 52 # Senkou Span B period
-    
-    # Calculate Ichimoku lines using pandas_ta for accuracy
-    ichimoku_result = ta.ichimoku(df["h"], df["l"], df["c"], 
-                                 tenkan=period_9, kijun=period_26, senkou=period_52)
-    
-    if ichimoku_result is not None and len(ichimoku_result) > 0:
-        ichimoku_df = ichimoku_result[0]  # Main ichimoku DataFrame
-        
-        # Extract individual components from the DataFrame
-        df["TENKAN"] = ichimoku_df[f"ITS_{period_9}"]  # Tenkan-sen (Conversion Line)  # type: ignore[assignment]
-        df["KIJUN"] = ichimoku_df[f"IKS_{period_26}"]   # Kijun-sen (Base Line)  # type: ignore[assignment]
-        df["SENKOU_A"] = ichimoku_df[f"ISA_{period_9}"].shift(period_26)  # Senkou Span A  # type: ignore[assignment]
-        df["SENKOU_B"] = ichimoku_df[f"ISB_{period_26}"].shift(period_26)  # Senkou Span B  # type: ignore[assignment]
-        df["CHIKOU"] = ichimoku_df[f"ICS_{period_26}"].shift(-period_26)  # Chikou Span (shifted backward)  # type: ignore[assignment]
-
-
-def _add_momentum_indicators(df: pd.DataFrame) -> None:
-    """Add momentum-based indicators."""
-    # Rate of Change
-    roc_period = max(3, len(df) // 10)  # Shorter for fast moves
-    roc_calc = ta.roc(df["c"], length=roc_period)
-    df["ROC"] = roc_calc
-
-    # Williams %R
-    willr_period = max(5, len(df) // 8)  # Shorter for fast moves
-    willr_calc = ta.willr(df["h"], df["l"], df["c"], length=willr_period)
-    df["WILLR"] = willr_calc
-
-    # Commodity Channel Index
-    cci_period = max(5, len(df) // 6)  # Shorter for fast moves
-    cci_calc = ta.cci(df["h"], df["l"], df["c"], length=cci_period)
-    df["CCI"] = cci_calc
-
-
-def _add_adx_indicator(df: pd.DataFrame) -> None:
-    """Add ADX (Average Directional Index) indicator."""
-    adx_period = max(14, len(df) // 10)
-    adx = ta.adx(df["h"], df["l"], df["c"], length=adx_period)
-    if adx is not None:
-        df["ADX"] = adx[f"ADX_{adx_period}"]
-        df["DI+_ADX"] = adx[f"DMP_{adx_period}"]
-        df["DI-_ADX"] = adx[f"DMN_{adx_period}"]
-
-
-def _add_parabolic_sar(df: pd.DataFrame) -> None:
-    """Add Parabolic SAR indicator."""
-    psar = ta.psar(df["h"], df["l"], df["c"])
-    if psar is not None:
-        df["PSAR"] = psar["PSARl_0.02_0.2"] if "PSARl_0.02_0.2" in psar else psar.iloc[:, 0]
-
-
-def _add_donchian_channels(df: pd.DataFrame) -> None:
-    """Add Donchian Channels indicator."""
-    dc_period = max(20, len(df) // 6)
-    dc = ta.donchian(df["h"], df["l"], lower_length=dc_period, upper_length=dc_period)
-    if dc is not None:
-        df["DC_upper"] = dc[f"DCU_{dc_period}_{dc_period}"]
-        df["DC_lower"] = dc[f"DCL_{dc_period}_{dc_period}"]
-        df["DC_middle"] = dc[f"DCM_{dc_period}_{dc_period}"]
-
-
-def _add_keltner_channels(df: pd.DataFrame) -> None:
-    """Add Keltner Channels indicator."""
-    kc_period = max(20, len(df) // 6)
-    kc = ta.kc(df["h"], df["l"], df["c"], length=kc_period)
-    if kc is not None:
-        df["KC_upper"] = kc[f"KCUe_{kc_period}_2"]
-        df["KC_middle"] = kc[f"KCBe_{kc_period}_2"]
-        df["KC_lower"] = kc[f"KCLe_{kc_period}_2"]
-
-
-def _add_obv_indicator(df: pd.DataFrame) -> None:
-    """Add On-Balance Volume (OBV) indicator."""
-    obv = ta.obv(df["c"], df["v"])
-    if obv is not None:
-        df["OBV"] = obv
-
-
-def _add_stochrsi_indicator(df: pd.DataFrame) -> None:
-    """Add Stochastic RSI indicator."""
-    stochrsi_period = max(14, len(df) // 8)
-    stochrsi = ta.stochrsi(df["c"], length=stochrsi_period, rsi_length=14, k=3, d=3)
-    if stochrsi is not None:
-        df["STOCHRSI"] = stochrsi[f"STOCHRSIk_{stochrsi_period}_14_3_3"]
-        df["STOCHRSI_D"] = stochrsi[f"STOCHRSId_{stochrsi_period}_14_3_3"]
-

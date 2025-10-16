@@ -9,13 +9,6 @@ from ..funding_rates_cache import FundingRateEntry
 class LLMPromptGenerator:
     """
     Handles generation of prompts for LLM analysis.
-    
-    IMPROVED VERSION - Fixed Indicator Overload:
-    - Reduced from 20+ indicators to 6 core crypto-specific indicators
-    - Eliminated redundant oscillators (Stochastic, Williams %R, CCI, ROC, ADX, etc.)
-    - Focus on: Price/Volume, ATR, MACD, RSI, SuperTrend, Bollinger Bands
-    - Simplified scoring from 18 to 12 points minimum
-    - Streamlined data tables for better LLM processing
     """
     
     def __init__(self, timeframe_lookback_days: Dict[Timeframe, int]):
