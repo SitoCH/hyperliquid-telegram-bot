@@ -6,6 +6,7 @@ from tzlocal import get_localzone
 
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
+from telegram import InputMediaPhoto
 
 from logging_utils import logger
 from telegram_utils import telegram_utils
@@ -121,47 +122,58 @@ class WyckoffAnalyzer:
             try:
                 charts = generate_chart(dataframes, states, coin, mid)
                 
+                # Build a single media group (album) with all available charts
+                media_group: List[InputMediaPhoto] = []
+
+                # Prepare per-timeframe captions as previously sent one-by-one
                 results_15m = self._get_ta_results(dataframes[Timeframe.MINUTES_15], states[Timeframe.MINUTES_15])
                 results_1h = self._get_ta_results(dataframes[Timeframe.HOUR_1], states[Timeframe.HOUR_1])
                 results_4h = self._get_ta_results(dataframes[Timeframe.HOURS_4], states[Timeframe.HOURS_4])
 
                 no_wyckoff_data_available = 'No Wyckoff data available'
 
-                # Send all charts in sequence, using copies of the buffers
-                for idx, (chart, period, results) in enumerate([
-                    (charts[2], "4h", results_4h),
-                    (charts[1], "1h", results_1h),
-                    (charts[0], "15m", results_15m)
-                ]):
+                def build_caption(period: str, results: Dict[str, Any]) -> str:
                     wyckoff_description = results['wyckoff'].description if results.get('wyckoff') else no_wyckoff_data_available
-                    caption = f"<b>{period} indicators:</b>\n{wyckoff_description}"
-                    
-                    if chart:
-                        # Create a copy of the buffer's contents
-                        chart_copy = io.BytesIO(chart.getvalue())
-                        
-                        try:
-                            if len(caption) >= 1024:
-                                # Send chart and caption separately if caption is too long
-                                await context.bot.send_photo(
-                                    chat_id=telegram_utils.telegram_chat_id, # type: ignore
-                                    photo=chart_copy,
-                                    caption=f"<b>{period} chart</b>",
-                                    parse_mode=ParseMode.HTML
-                                )
-                                await telegram_utils.send(caption, parse_mode=ParseMode.HTML)
-                            else:
-                                # Send together if caption is within limits
-                                await context.bot.send_photo(
-                                    chat_id=telegram_utils.telegram_chat_id, # type: ignore
-                                    photo=chart_copy,
-                                    caption=caption,
-                                    parse_mode=ParseMode.HTML
-                                )
-                        finally:
-                            chart_copy.close()
-                    else:
-                        await telegram_utils.send(caption, parse_mode=ParseMode.HTML)
+                    title = f"<b>{period} indicators:</b>\n"
+                    max_len = 1024
+                    remaining = max_len - len(title)
+                    desc = wyckoff_description
+                    if len(desc) > remaining:
+                        desc = desc[: max(0, remaining - 1) ] + '…'
+                    return title + desc
+
+                chart_entries = [
+                    (charts[1] if len(charts) > 1 else None, "1h"),
+                    (charts[2] if len(charts) > 2 else None, "4h"),
+                    (charts[0] if len(charts) > 0 else None, "15m"),
+                ]
+
+                for idx, (chart, period) in enumerate(chart_entries):
+                    if not chart:
+                        continue
+
+                    buf = chart
+                    buf.name = f"{coin}_{period}.png"  # type: ignore[attr-defined]
+                    buf.seek(0)
+
+                    caption = build_caption("4h", results_4h) if idx == 0 else None
+
+                    media_group.append(
+                        InputMediaPhoto(
+                            media=buf,
+                            caption=caption,
+                            parse_mode=ParseMode.HTML if caption else None,
+                        )
+                    )
+
+                if media_group:
+                    await context.bot.send_media_group(
+                        chat_id=telegram_utils.telegram_chat_id,  # type: ignore
+                        media=media_group,
+                    )
+
+                    await telegram_utils.send(build_caption("1h", results_1h), parse_mode=ParseMode.HTML)
+                    await telegram_utils.send(build_caption("15m", results_15m), parse_mode=ParseMode.HTML)
 
             finally:
                 # Clean up the original buffers
