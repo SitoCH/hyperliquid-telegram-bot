@@ -469,8 +469,8 @@ def _analyze_timeframe_group(
             funding_signals.append(-0.5)
         elif state.funding_state == FundingState.SLIGHTLY_NEGATIVE:
             funding_signals.append(-0.25)
-
     funding_sentiment = sum(funding_signals) / len(funding_signals) if funding_signals else 0
+    funding_state = next(iter(group.values())).funding_state if group else FundingState.UNKNOWN
 
     # Analyze market states
     liquidity_counts = {state.liquidity: 0 for state in group.values()}
@@ -597,7 +597,8 @@ def _analyze_timeframe_group(
         funding_sentiment=funding_sentiment,
         liquidity_state=liquidity_state,
         volatility_state=volatility_state,
-        dominant_sign=dominant_sign
+        dominant_sign=dominant_sign,
+        funding_state=funding_state
     )
 
 

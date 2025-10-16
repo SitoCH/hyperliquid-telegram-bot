@@ -107,8 +107,7 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
             f"{emoji} <b>Market Analysis:</b>\n"
             f"Confidence: {confidence_pct}\n"
             f"Intraday Trend (30m-1h): {interm_phase} ({interm_volume}{interm_sign}{interm_action})\n"
-            f"Immediate Signals (15m): {short_phase} ({short_volume}{short_sign}{short_action})\n"
-        )
+            f"Immediate Signals (15m): {short_phase} ({short_volume}{short_sign}{short_action})\n"      )
 
     short_term_desc = _get_timeframe_trend_description(analysis.short_term)
     intermediate_desc = _get_timeframe_trend_description(analysis.intermediate)
@@ -119,7 +118,8 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
 
     full_description = (
         f"{emoji} <b>Market Analysis:</b>\n"
-        f"Confidence: {confidence_pct}\n\n"
+        f"Confidence: {confidence_pct}\n"
+        f"Funding: {analysis.intermediate.funding_state.value}\n\n"
         f"<b>🔍 Timeframes:</b>\n"
         f"Timeframe alignment: {alignment_pct}\n"
         f"Market Context (4h-8h):\n{context_desc}\n"
