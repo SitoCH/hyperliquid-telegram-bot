@@ -385,7 +385,7 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         if sl_pct == 0:
             return None
 
-        min_rr = 1.2
+        min_rr = 1.25
         rr = tp_pct / sl_pct
         if rr < min_rr:
             return None
@@ -409,11 +409,11 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         return None
 
     # Distance bands tuned for healthier baseline R:R
-    # SL: 1.5%–3%, TP: 2%–4%
+    # SL: 1.5%–3.25%, TP: 1.75%–4%
     min_distance_sl = mid * 0.015
-    max_distance_sl = mid * 0.03
+    max_distance_sl = mid * 0.0325
     
-    min_distance_tp = mid * 0.02
+    min_distance_tp = mid * 0.0175
     max_distance_tp = mid * 0.04
 
     for timeframe in [Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15, Timeframe.HOURS_4, Timeframe.HOURS_8]:
