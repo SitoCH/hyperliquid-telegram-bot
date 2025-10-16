@@ -17,14 +17,8 @@ from .wyckoff_multi_timeframe_types import (
 )
 
 # Constants for common thresholds
-HIGH_CONFIDENCE_THRESHOLD = 0.7
 MODERATE_CONFIDENCE_THRESHOLD = 0.5
-
-HIGH_ALIGNMENT_THRESHOLD = 0.75
 MODERATE_ALIGNMENT_THRESHOLD = 0.6
-
-HIGH_FUNDING_THRESHOLD = 0.5
-EXTREME_FUNDING_THRESHOLD = 0.7
 
 T = TypeVar('T')
 

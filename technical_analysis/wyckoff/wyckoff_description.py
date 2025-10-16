@@ -11,8 +11,7 @@ def generate_wyckoff_description(
     is_upthrust: bool, 
     effort_result: EffortResult,
     composite_action: CompositeAction, 
-    wyckoff_sign: WyckoffSign,
-    funding_state: FundingState
+    wyckoff_sign: WyckoffSign
 ) -> str:
     """Generate a descriptive summary of the current Wyckoff state."""
     
@@ -74,10 +73,6 @@ def generate_wyckoff_description(
         # Only add to description if truly unknown (not just neutral)
         if phase not in [WyckoffPhase.RANGING, WyckoffPhase.ACCUMULATION, WyckoffPhase.DISTRIBUTION]:
             components.append("Neutral volume/price relationship")
-    
-    # Add funding rate info if available
-    if funding_state not in [FundingState.NEUTRAL, FundingState.UNKNOWN]:
-        components.append(f"Funding rates are {funding_state.value}")
-    
+
     # Combine all components
     return "\n".join(components)

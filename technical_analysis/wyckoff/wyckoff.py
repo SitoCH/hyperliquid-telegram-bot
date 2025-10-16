@@ -256,7 +256,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
             description=generate_wyckoff_description(
                 current_phase, uncertain_phase, vol_metrics.state, 
                 is_spring, is_upthrust, effort_result,
-                composite_action, wyckoff_sign, funding_state
+                composite_action, wyckoff_sign
             )
         )
 
