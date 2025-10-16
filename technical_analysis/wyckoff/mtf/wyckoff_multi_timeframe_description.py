@@ -385,7 +385,7 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         if sl_pct == 0:
             return None
 
-        min_rr = 1.3
+        min_rr = 1.2
         rr = tp_pct / sl_pct
         if rr < min_rr:
             return None
