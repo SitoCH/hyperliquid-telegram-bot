@@ -125,23 +125,6 @@ class WyckoffAnalyzer:
                 # Build a single media group (album) with all available charts
                 media_group: List[InputMediaPhoto] = []
 
-                # Prepare per-timeframe captions as previously sent one-by-one
-                results_15m = self._get_ta_results(dataframes[Timeframe.MINUTES_15], states[Timeframe.MINUTES_15])
-                results_1h = self._get_ta_results(dataframes[Timeframe.HOUR_1], states[Timeframe.HOUR_1])
-                results_4h = self._get_ta_results(dataframes[Timeframe.HOURS_4], states[Timeframe.HOURS_4])
-
-                no_wyckoff_data_available = 'No Wyckoff data available'
-
-                def build_caption(period: str, results: Dict[str, Any]) -> str:
-                    wyckoff_description = results['wyckoff'].description if results.get('wyckoff') else no_wyckoff_data_available
-                    title = f"<b>{period} indicators:</b>\n"
-                    max_len = 1024
-                    remaining = max_len - len(title)
-                    desc = wyckoff_description
-                    if len(desc) > remaining:
-                        desc = desc[: max(0, remaining - 1) ] + '…'
-                    return title + desc
-
                 chart_entries = [
                     (charts[1] if len(charts) > 1 else None, "1h"),
                     (charts[2] if len(charts) > 2 else None, "4h"),
@@ -156,13 +139,10 @@ class WyckoffAnalyzer:
                     buf.name = f"{coin}_{period}.png"  # type: ignore[attr-defined]
                     buf.seek(0)
 
-                    caption = build_caption("4h", results_4h) if idx == 0 else None
 
                     media_group.append(
                         InputMediaPhoto(
-                            media=buf,
-                            caption=caption,
-                            parse_mode=ParseMode.HTML if caption else None,
+                            media=buf
                         )
                     )
 
@@ -171,9 +151,6 @@ class WyckoffAnalyzer:
                         chat_id=telegram_utils.telegram_chat_id,  # type: ignore
                         media=media_group,
                     )
-
-                    await telegram_utils.send(build_caption("1h", results_1h), parse_mode=ParseMode.HTML)
-                    await telegram_utils.send(build_caption("15m", results_15m), parse_mode=ParseMode.HTML)
 
             finally:
                 # Clean up the original buffers
