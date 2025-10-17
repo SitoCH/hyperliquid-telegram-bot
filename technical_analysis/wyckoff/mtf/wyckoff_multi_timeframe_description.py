@@ -396,7 +396,7 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
 
         enc_side = "L" if side == "Long" else "S"
         enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(sl)}_{fmt_price(tp)}".encode('utf-8')).decode('utf-8')
-        trade_link = f"({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
+        trade_link = f" ({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
 
         return (
             f"<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>\n"
