@@ -360,7 +360,7 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         sl = nearest_resistance * (1 + sl_buffer_pct)   # Slightly above resistance
         return "Short", tp, sl
 
-    def _validate_and_format_trade(coin: str, side: str, entry: float, tp: float, sl: float, timeframe: Timeframe, min_rr: float = 1.2) -> Optional[str]:
+    def _validate_and_format_trade(coin: str, side: str, entry: float, tp: float, sl: float, timeframe: Timeframe) -> Optional[str]:
         """Validate a computed trade and return formatted message, logging all rejection reasons."""
 
         if side == "Long" and (tp <= entry or sl >= entry):
@@ -386,6 +386,7 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
             )
             return None
 
+        min_rr = 1.1
         rr = tp_pct / sl_pct
         if rr < min_rr:
             logger.info(
