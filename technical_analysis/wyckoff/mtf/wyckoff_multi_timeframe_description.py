@@ -153,9 +153,9 @@ def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     
     # Use simplified dictionary lookup for emoji selection
     emoji_map = {
-        (MultiTimeframeDirection.BULLISH, True): "📈",   # Strong bullish
+        (MultiTimeframeDirection.BULLISH, True): "⬆️",   # Strong bullish
         (MultiTimeframeDirection.BULLISH, False): "↗️" if analysis.momentum_intensity > WEAK_MOMENTUM else "➡️⬆️",
-        (MultiTimeframeDirection.BEARISH, True): "📉",   # Strong bearish
+        (MultiTimeframeDirection.BEARISH, True): "⬇️",   # Strong bearish
         (MultiTimeframeDirection.BEARISH, False): "↘️" if analysis.momentum_intensity > WEAK_MOMENTUM else "➡️⬇️",
     }
     
@@ -173,8 +173,17 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
     """
     Generate intraday-focused actionable insights focused on crypto trading timeframes.
     """
-    if analysis.confidence_level < 0.5:
-        return "<b>Analysis:</b>\nLow confidence signals across timeframes.\n<b>Recommendation:</b>\nReduce exposure and wait for clearer setups."
+    # Graded confidence messaging for clearer risk posture
+    if analysis.confidence_level < 0.4:
+        return (
+            "<b>Analysis:</b>\nVery low confidence across timeframes.\n"
+            "<b>Recommendation:</b>\nObserve only; avoid adding new risk until signals strengthen."
+        )
+    elif analysis.confidence_level < 0.5:
+        return (
+            "<b>Analysis:</b>\nLow confidence signals across timeframes.\n"
+            "<b>Recommendation:</b>\nBe cautious; use reduced size and wait for alignment and volume confirmation."
+        )
 
     def get_intraday_signal() -> str:
         """Get primary trading signal focused on intraday timeframes."""
@@ -189,6 +198,14 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
             analysis.short_term.volume_strength * 0.6 +  # Higher weight for short timeframe volume
             analysis.intermediate.volume_strength * 0.4  # Lower weight for intermediate timeframe
         )
+
+        # Alignment label to reflect how coherent the intraday picture is
+        if analysis.alignment_score > 0.75:
+            align_label = "strong"
+        elif analysis.alignment_score >= 0.6:
+            align_label = "moderate"
+        else:
+            align_label = "mixed"
 
         if analysis.momentum_intensity > STRONG_MOMENTUM:
             momentum_desc = "strong"
@@ -205,19 +222,28 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         else:
             momentum_desc = "weak"
             position_advice = "Consider range trading strategies or reduce exposure until clearer signals emerge."
+
+        # Volatility-aware adjustments to execution guidance
+        if analysis.intermediate.volatility_state == VolatilityState.HIGH:
+            position_advice += " Widen stops and stagger entries; take partial profits faster."
+        elif analysis.intermediate.volatility_state == VolatilityState.NORMAL:
+            position_advice += " Require breakout confirmation; avoid chasing early moves."
         
         # Volume qualifier for more precise signal description
         volume_qualifier = ""
         if avg_volume > STRONG_VOLUME_THRESHOLD:
-            volume_qualifier = "high-volume "
+            volume_qualifier = "high volume "
         elif avg_volume < MODERATE_VOLUME_THRESHOLD:
-            volume_qualifier = "thin-volume "
+            volume_qualifier = "light volume "
         
         # Check intraday alignment - focus on short and intermediate timeframes
-        intraday_aligned = immediate_bias == intraday_bias
+        # Soft alignment: treat immediate NEUTRAL as aligned with intraday bias
+        intraday_aligned = (
+            immediate_bias == intraday_bias or immediate_bias == MultiTimeframeDirection.NEUTRAL
+        )
         
         # Generate improved timeframe-specific momentum prefix
-        signal_prefix = f"{momentum_desc.capitalize()} {volume_qualifier}momentum "
+        signal_prefix = f"{align_label} alignment, {momentum_desc} {volume_qualifier}momentum "
         
         # Improved signal direction with more specific crypto trading language
         if intraday_aligned:
@@ -236,13 +262,13 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
                     f"Price structure shows {momentum_desc} selling"
                 )
                 if avg_volume > STRONG_VOLUME_THRESHOLD:
-                    signal_direction += " with significant volume"
+                    signal_direction += " with above-average volume"
                 signal_direction += ". "
                 
             else:
                 signal_direction = (
                     f"neutral price action across key timeframes suggesting range-bound conditions. "
-                    f"Watch for breakout triggers with increasing volume. "
+                    f"Trade range edges or wait for break of range high/low with rising volume. "
                 )
                 
         else:  # Timeframes not aligned
@@ -271,7 +297,7 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
                     # Short-term consolidation
                     signal_direction = (
                         f"15m consolidation within the {intraday_bias.value} intermediate trend. "
-                        f"Watch for breakout direction with increasing volume. "
+                        f"Trade range edges or wait for break of range high/low with rising volume. "
                     )
                 else:
                     # General timeframe conflict
@@ -280,8 +306,43 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
                         f"{'Consider quick scalps only until alignment improves.' if avg_volume > MODERATE_VOLUME_THRESHOLD else 'Avoid chasing moves until alignment improves.'} "
                     )
 
+        # Concise Wyckoff context tail (dominant sign/action)
+        context_tail = ""
+        short_sign = analysis.short_term.dominant_sign
+        interm_sign = analysis.intermediate.dominant_sign
+        chosen_sign = short_sign if short_sign != WyckoffSign.NONE else interm_sign
+        if chosen_sign != WyckoffSign.NONE:
+            sign_text = _get_sign_description(chosen_sign).replace(" | ", "")
+            if sign_text:
+                context_tail += f" after {sign_text}"
+
+        # Add dominant action note once if present
+        if not context_tail:
+            # If no sign tail, try action context; otherwise, append action after sign
+            pass
+        action_text = None
+        if analysis.short_term.dominant_action != CompositeAction.UNKNOWN:
+            action_text = analysis.short_term.dominant_action.value
+        elif analysis.intermediate.dominant_action != CompositeAction.UNKNOWN:
+            action_text = analysis.intermediate.dominant_action.value
+        if action_text:
+            if context_tail:
+                context_tail += f"; setup aligns with {action_text}"
+            else:
+                context_tail += f" setup aligns with {action_text}"
+
+        # Funding-aware cautioning
+        # Coerce enum or string funding_state into a normalized lowercase string
+        _funding_raw = getattr(analysis.intermediate.funding_state, "value", analysis.intermediate.funding_state)
+        funding_val = str(_funding_raw).lower()
+        if "positive" in funding_val:
+            position_advice += " Crowded longs; prefer pullback entries over breakouts."
+        elif "negative" in funding_val:
+            position_advice += " Short-cover squeeze risk; breakout entries acceptable with tight risk."
+
         return (
-            f"{signal_prefix}with {signal_direction}"
+            f"{signal_prefix}with {signal_direction.strip()}"  # ensure clean spacing
+            f"{context_tail}. "
             f"{position_advice}"
         )
 
