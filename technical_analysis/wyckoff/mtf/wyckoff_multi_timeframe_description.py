@@ -4,6 +4,7 @@ from telegram_utils import telegram_utils
 import base64
 from utils import exchange_enabled
 import os
+from logging_utils import logger
 
 from ..wyckoff_types import (
     WyckoffPhase, WyckoffSign, SignificantLevelsData,
@@ -339,13 +340,8 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
 
     def get_trade_levels(direction: MultiTimeframeDirection, tp_resistances: List[float], 
                          tp_supports: List[float], sl_resistances: List[float], 
-                         sl_supports: List[float]) -> tuple[Optional[str], Optional[float], Optional[float]]:
-        """Get trade type, take profit and stop loss levels based on direction."""
-        # Safety check for empty lists
-        if ((direction == MultiTimeframeDirection.BULLISH and (not tp_resistances or not sl_supports)) or
-            (direction == MultiTimeframeDirection.BEARISH and (not tp_supports or not sl_resistances))):
-            return None, None, None
-
+                         sl_supports: List[float]) -> tuple[str, float, float]:
+        """Compute trade side, TP and SL levels based on direction."""
         sl_buffer_pct = 0.0015
         tp_buffer_pct = 0.0015
         
@@ -364,26 +360,39 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         sl = nearest_resistance * (1 + sl_buffer_pct)   # Slightly above resistance
         return "Short", tp, sl
 
-    def format_trade(coin: str, side: str, entry: float, tp: float, sl: float) -> Optional[str]:
-        """Format trade suggestion with consistent calculations and layout."""
-        if (side == "Long" and (tp <= entry or sl >= entry)) or \
-           (side == "Short" and (tp >= entry or sl <= entry)):
+    def _validate_and_format_trade(coin: str, side: str, entry: float, tp: float, sl: float, timeframe: Timeframe, min_rr: float = 1.2) -> Optional[str]:
+        """Validate a computed trade and return formatted message, logging all rejection reasons."""
+
+        if side == "Long" and (tp <= entry or sl >= entry):
+            logger.info(
+                f"Skipping trade suggestion {coin} {timeframe.name}: Invalid long levels (entry={entry:.4f}, tp={tp:.4f}, sl={sl:.4f})"
+            )
             return None
-            
-        # Add safety checks to prevent division by zero
+        if side == "Short" and (tp >= entry or sl <= entry):
+            logger.info(
+                f"Skipping trade suggestion {coin} {timeframe.name}: Invalid short levels (entry={entry:.4f}, tp={tp:.4f}, sl={sl:.4f})"
+            )
+            return None
+
         if entry == 0:
+            logger.info(f"Skipping trade suggestion {coin} {timeframe.name}: Entry price is zero")
             return None
-            
+
         tp_pct = abs((tp - entry) / entry) * 100
         sl_pct = abs((sl - entry) / entry) * 100
         if sl_pct == 0:
+            logger.info(
+                f"Skipping trade suggestion {coin} {timeframe.name}: Stop loss distance is zero (entry={entry:.4f}, sl={sl:.4f})"
+            )
             return None
 
-        min_rr = 1.2
         rr = tp_pct / sl_pct
         if rr < min_rr:
+            logger.info(
+                f"Skipping trade suggestion {coin} {timeframe.name}: R:R too low (RR={rr:.2f} < {min_rr:.2f}, tp%={tp_pct:.2f}, sl%={sl_pct:.2f})"
+            )
             return None
-        
+
         enc_side = "L" if side == "Long" else "S"
         enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(sl)}_{fmt_price(tp)}".encode('utf-8')).decode('utf-8')
         trade_link = f"({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
@@ -418,9 +427,8 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         if ((direction == MultiTimeframeDirection.BULLISH and tp_resistances and sl_supports) or
             (direction == MultiTimeframeDirection.BEARISH and tp_supports and sl_resistances)):
             side, tp, sl = get_trade_levels(direction, tp_resistances, tp_supports, sl_resistances, sl_supports)
-            if side and tp and sl:
-                formatted_trade = format_trade(coin, side, mid, tp, sl)
-                if formatted_trade:
-                    return formatted_trade
+            formatted_trade = _validate_and_format_trade(coin, side, mid, tp, sl, timeframe)
+            if formatted_trade:
+                return formatted_trade
 
     return None
