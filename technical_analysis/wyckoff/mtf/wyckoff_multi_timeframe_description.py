@@ -21,6 +21,9 @@ from .wyckoff_multi_timeframe_types import (
 MODERATE_CONFIDENCE_THRESHOLD = 0.5
 MODERATE_ALIGNMENT_THRESHOLD = 0.6
 
+# Minimum acceptable Risk:Reward for proposed trades
+MIN_RR = 1.1
+
 T = TypeVar('T')
 
 def _weighted_average(values: List[float], weights: List[float]) -> float:
@@ -403,23 +406,70 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
                          tp_supports: List[float], sl_resistances: List[float], 
                          sl_supports: List[float]) -> tuple[str, float, float]:
         """Compute trade side, TP and SL levels based on direction."""
-        sl_buffer_pct = 0.0015
-        tp_buffer_pct = 0.0015
-        
+
+        def _buffers(distance_pct: float) -> tuple[float, float]:
+            """Dynamic buffers: tighter when distance is small, slightly wider if further away."""
+            # distance_pct is in [0, 1] fraction (e.g. 0.02 for 2%)
+            # Base buffers ~0.15%, tighten to 0.10% if close; allow up to 0.20% when far
+            if distance_pct <= 0.02:
+                adj = 0.0010
+            elif distance_pct >= 0.035:
+                adj = 0.0020
+            else:
+                # linear interpolate between 0.10% and 0.20%
+                # 0.02 -> 0.0010, 0.035 -> 0.0020
+                slope = (0.0020 - 0.0010) / (0.035 - 0.02)
+                adj = 0.0010 + slope * (distance_pct - 0.02)
+            # Use same buffer for SL/TP to keep simple and stable
+            return adj, adj
+
+        best = None  # (rr, side, tp, sl)
+
         if direction == MultiTimeframeDirection.BULLISH:
-            # R:R-optimal: TP farthest resistance, SL nearest support
-            farthest_resistance = max(tp_resistances, key=lambda x: abs(x - mid))
-            nearest_support = min(sl_supports, key=lambda x: abs(x - mid))
-            tp = farthest_resistance * (1 - tp_buffer_pct)   # Slightly inside resistance
-            sl = nearest_support * (1 - sl_buffer_pct)       # Slightly below support
-            return "Long", tp, sl
-        
-        # For shorts: R:R-optimal - TP farthest support, SL nearest resistance
-        farthest_support = max(tp_supports, key=lambda x: abs(x - mid))
-        nearest_resistance = min(sl_resistances, key=lambda x: abs(x - mid))
-        tp = farthest_support * (1 + tp_buffer_pct)     # Slightly inside support
-        sl = nearest_resistance * (1 + sl_buffer_pct)   # Slightly above resistance
-        return "Short", tp, sl
+            side = "Long"
+            raw_tp = [r for r in tp_resistances if r > mid]
+            raw_sl = [s for s in sl_supports if s < mid]
+            # Transformations to place orders inside the level
+            make_tp = lambda lvl, buf: lvl * (1 - buf)
+            make_sl = lambda lvl, buf: lvl * (1 - buf)
+            valid_pair = lambda tp, sl: tp > mid and sl < mid
+            # Distance and RR components
+            tp_dist_unbuffered = lambda lvl: abs((lvl - mid) / mid)
+            tp_pct = lambda tp: abs((tp - mid) / mid)
+            sl_pct = lambda sl: abs((mid - sl) / mid)
+        else:
+            side = "Short"
+            raw_tp = [s for s in tp_supports if s < mid]
+            raw_sl = [r for r in sl_resistances if r > mid]
+            make_tp = lambda lvl, buf: lvl * (1 + buf)
+            make_sl = lambda lvl, buf: lvl * (1 + buf)
+            valid_pair = lambda tp, sl: tp < mid and sl > mid
+            tp_dist_unbuffered = lambda lvl: abs((mid - lvl) / mid)
+            tp_pct = lambda tp: abs((mid - tp) / mid)
+            sl_pct = lambda sl: abs((sl - mid) / mid)
+
+        for tp_level in raw_tp:
+            dist_tp_pct = tp_dist_unbuffered(tp_level)
+            sl_buf, tp_buf = _buffers(dist_tp_pct)
+            tp = make_tp(tp_level, tp_buf)
+            for sl_level in raw_sl:
+                sl = make_sl(sl_level, sl_buf)
+                if not valid_pair(tp, sl):
+                    continue
+                tp_p = tp_pct(tp)
+                sl_p = sl_pct(sl)
+                if sl_p == 0:
+                    continue
+                rr = tp_p / sl_p
+                if best is None or rr > best[0]:
+                    best = (rr, side, tp, sl)
+
+        if best is None:
+            # No valid directional pair found
+            raise ValueError("no_valid_pair")
+
+        _, side, tp, sl = best
+        return side, tp, sl
 
     def _validate_and_format_trade(coin: str, side: str, entry: float, tp: float, sl: float, timeframe: Timeframe) -> Optional[str]:
         """Validate a computed trade and return formatted message, logging all rejection reasons."""
@@ -447,7 +497,8 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
             )
             return None
 
-        min_rr = 1.1
+        # Minimum R:R enforced via constant
+        min_rr = MIN_RR
         rr = tp_pct / sl_pct
         if rr < min_rr:
             logger.info(
@@ -481,16 +532,59 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
     min_distance_tp = mid * 0.0175
     max_distance_tp = mid * 0.04
 
-    for timeframe in [Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15, Timeframe.HOURS_4, Timeframe.HOURS_8]:
-        tp_resistances, tp_supports, sl_resistances, sl_supports = get_valid_levels(
-            timeframe, min_distance_sl, max_distance_sl, min_distance_tp, max_distance_tp
-        )
-        
-        if ((direction == MultiTimeframeDirection.BULLISH and tp_resistances and sl_supports) or
-            (direction == MultiTimeframeDirection.BEARISH and tp_supports and sl_resistances)):
-            side, tp, sl = get_trade_levels(direction, tp_resistances, tp_supports, sl_resistances, sl_supports)
-            formatted_trade = _validate_and_format_trade(coin, side, mid, tp, sl, timeframe)
-            if formatted_trade:
-                return formatted_trade
+    # Evaluate across all timeframes and pick the best R:R that passes validation
+    timeframes_order = [
+        Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15, Timeframe.HOURS_4, Timeframe.HOURS_8
+    ]
+
+    def _search_levels(sl_min: float, sl_max: float, tp_min: float, tp_max: float) -> Optional[str]:
+        best_msg = None
+        best_rr = -1.0
+        for timeframe in timeframes_order:
+            tp_resistances, tp_supports, sl_resistances, sl_supports = get_valid_levels(
+                timeframe, sl_min, sl_max, tp_min, tp_max
+            )
+
+            # Need at least one directional candidate on each side depending on direction
+            directional_possible = (
+                (direction == MultiTimeframeDirection.BULLISH and any(r > mid for r in tp_resistances) and any(s < mid for s in sl_supports)) or
+                (direction == MultiTimeframeDirection.BEARISH and any(s < mid for s in tp_supports) and any(r > mid for r in sl_resistances))
+            )
+            if not directional_possible:
+                continue
+            try:
+                side, tp, sl = get_trade_levels(direction, tp_resistances, tp_supports, sl_resistances, sl_supports)
+            except ValueError:
+                continue
+            # Use validator to enforce final constraints and format
+            message = _validate_and_format_trade(coin, side, mid, tp, sl, timeframe)
+            if not message:
+                continue
+
+            # Extract RR again for ranking
+            tp_pct = abs((tp - mid) / mid) * 100
+            sl_pct = abs((sl - mid) / mid) * 100
+            if sl_pct == 0:
+                continue
+            rr = tp_pct / sl_pct
+            if rr > best_rr:
+                best_rr = rr
+                best_msg = message
+        return best_msg
+
+    # First pass with conservative bands
+    best_trade = _search_levels(min_distance_sl, max_distance_sl, min_distance_tp, max_distance_tp)
+    if best_trade:
+        return best_trade
+
+    # Second pass: adaptive expansion when R:R is hard to satisfy
+    expanded_min_sl = mid * 0.0125   # 1.25%
+    expanded_max_sl = mid * 0.04     # 4.0%
+    expanded_min_tp = mid * 0.02     # 2.0%
+    expanded_max_tp = mid * 0.055    # 5.5%
+
+    best_trade = _search_levels(expanded_min_sl, expanded_max_sl, expanded_min_tp, expanded_max_tp)
+    if best_trade:
+        return best_trade
 
     return None
