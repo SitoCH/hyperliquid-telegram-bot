@@ -341,18 +341,33 @@ def _analyze_timeframe_group(
     else:
         dominant_action = CompositeAction.UNKNOWN
         
-    # Determine dominant Wyckoff sign
+    # Determine dominant Wyckoff sign (two-tier gating: evidence then dominance)
     dominant_sign = WyckoffSign.NONE
     if sign_weights:
-        # Get most heavily weighted sign
-        dominant_sign = max(sign_weights.items(), key=lambda x: x[1])[0]
-        
-        # Calculate sign confidence as a percentage of total weight
-        sign_weight = sign_weights[dominant_sign]
-        sign_confidence = sign_weight / total_weight if total_weight > 0 else 0
-        
-        # Only accept as dominant if it represents a significant portion of signals
-        if sign_confidence < 0.25:  # If the sign represents less than 25% of all signals
+        # Aggregate overall sign evidence
+        sum_sign_weight = sum(sign_weights.values())
+        top_sign, top_weight = max(sign_weights.items(), key=lambda x: x[1])
+
+        # Evidence: how much sign weight exists relative to total group weight
+        evidence_share = (top_weight + (sum_sign_weight - top_weight)) / total_weight if total_weight > 0 else 0.0
+        # Dominance: how much of the sign evidence is captured by the top sign
+        dominant_share = (top_weight / sum_sign_weight) if sum_sign_weight > 0 else 0.0
+
+        # Tunable thresholds
+        min_evidence_share = 0.20   # require at least 20% of group weight to be sign-related
+        min_dominant_share = 0.55   # require top sign to represent at least 55% of sign evidence
+
+        # Optional: tie handling to avoid overconfidence when top two are close
+        sorted_signs = sorted(sign_weights.items(), key=lambda x: x[1], reverse=True)
+        near_tie = False
+        if len(sorted_signs) > 1 and sum_sign_weight > 0:
+            second_weight = sorted_signs[1][1]
+            # Consider a tie if the margin is less than 10% of total sign weight
+            near_tie = ((top_weight - second_weight) / sum_sign_weight) < 0.10
+
+        if (evidence_share >= min_evidence_share) and (dominant_share >= min_dominant_share) and not near_tie:
+            dominant_sign = top_sign
+        else:
             dominant_sign = WyckoffSign.NONE
 
     # Calculate internal alignment
