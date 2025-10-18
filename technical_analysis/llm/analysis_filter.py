@@ -101,6 +101,7 @@ class AnalysisFilter:
         range_prison_detected = False
         range_prison_tf: Optional[str] = None
         bb_expansion_info: Optional[Dict[str, Any]] = None
+        signed_moves_by_tf: Dict[str, float] = {}
 
         for tf, df in dataframes.items():
             if df.empty or len(df) < 5:
@@ -114,6 +115,7 @@ class AnalysisFilter:
             abs_move = abs(signed_move)
             price_changes.append(abs_move)
             signed_price_changes.append(signed_move)
+            signed_moves_by_tf[tf_s] = signed_move
 
             # Volume ratio
             v_ratio = last_v_ratio(df)
@@ -156,8 +158,12 @@ class AnalysisFilter:
 
         # 4) Directional context
         largest_down = min(signed_price_changes) if signed_price_changes else 0.0
-        bearish_fast = largest_down <= -0.9
-        bearish_moderate = largest_down <= -0.6
+
+        # Primary timeframe bearish bias (30m / 1h) for threshold easing
+        p30 = signed_moves_by_tf.get('30m', 0.0)
+        p1h = signed_moves_by_tf.get('1h', 0.0)
+        bearish_primary_fast = (p30 <= -0.9) or (p1h <= -0.9)
+        bearish_primary_moderate = (p30 <= -0.6) or (p1h <= -0.6)
 
         # Mean-reversion carve-out
         mean_rev_reason = self._detect_mean_reversion_opportunity(dataframes)
@@ -166,9 +172,13 @@ class AnalysisFilter:
 
         # 5) Structural / noise filters
         if range_prison_detected:
-            return False, (
-                f"4h timeframe consolidation: Price within 0.4% range for 8+ periods in {range_prison_tf}. Major consolidation detected."
-            ), 0.3
+            # Only hard-reject if signal TFs also show weak momentum and low volume
+            weak_signal_moves = (signal_abs_moves and all(x < 0.4 for x in signal_abs_moves))
+            weak_signal_volume = (signal_v_ratios and all(x < 0.9 for x in signal_v_ratios))
+            if weak_signal_moves and weak_signal_volume:
+                return False, (
+                    f"4h consolidation + weak signals: Tight 4h range in {range_prison_tf} and muted 15m/30m momentum+volume."
+                ), 0.3
 
         if signal_abs_moves and all(x < 0.2 for x in signal_abs_moves):
             return False, (
@@ -176,7 +186,7 @@ class AnalysisFilter:
             ), 0.3
 
         if medium_v_ratios:
-            medium_drought_th = 0.80 if (bearish_fast or bearish_moderate) else 0.95
+            medium_drought_th = 0.80 if (bearish_primary_fast or bearish_primary_moderate) else 0.95
             if all(x < medium_drought_th for x in medium_v_ratios):
                 vals = ", ".join([f"{x:.2f}x" for x in medium_v_ratios])
                 return False, (
@@ -184,7 +194,7 @@ class AnalysisFilter:
                 ), 0.3
 
         if signal_v_ratios:
-            signal_drought_th = 0.70 if (bearish_fast or bearish_moderate) else 0.85
+            signal_drought_th = 0.70 if (bearish_primary_fast or bearish_primary_moderate) else 0.85
             if all(x < signal_drought_th for x in signal_v_ratios):
                 svals = ", ".join([f"{x:.2f}x" for x in signal_v_ratios])
                 return False, (
@@ -202,10 +212,12 @@ class AnalysisFilter:
             return False, f"Signal timeframe chop: Price reversals exceed dynamic allowance in: {details}. High noise in signal detection timeframes.", 0.4
 
         if bb_expansion_info and bb_expansion_info['v_ratio'] is not None and bb_expansion_info['v_ratio'] < 1.1:
-            return False, (
-                f"Volatility expansion with BB width {bb_expansion_info['bb_width_now']:.2f} (>15% from {bb_expansion_info['bb_width_prev']:.2f}), "
-                f"price move {bb_expansion_info['price_move']:.2f}%, and volume drought (v_ratio {bb_expansion_info['v_ratio']:.2f}) in {bb_expansion_info['tf']} timeframe. High false-signal risk."
-            ), 0.4
+            # Only block if signal momentum is weak; otherwise allow potential breakdowns to proceed
+            weak_signal = (signal_abs_moves and max(signal_abs_moves) < 0.5)
+            if weak_signal:
+                return False, (
+                    f"Volatility expansion with low volume and weak signal momentum (BB width {bb_expansion_info['bb_width_now']:.2f}, v_ratio {bb_expansion_info['v_ratio']:.2f})."
+                ), 0.4
 
         # Activity checks
         if price_changes:
@@ -234,10 +246,10 @@ class AnalysisFilter:
                 if max_volume < drought_th:
                     return False, f"Low volume during moderate move - max volume {max_volume:.2f} < {drought_th:.2f}", 0.0
             else:
-                base_th = 0.70 if (bearish_fast or bearish_moderate) else 0.85
+                base_th = 0.70 if (bearish_primary_fast or bearish_primary_moderate) else 0.85
                 if max_volume < base_th:
                     return False, f"Volume drought - max volume {max_volume:.2f} < {base_th:.2f}", 0.0
-                avg_min = 0.60 if (bearish_fast or bearish_moderate) else 0.70
+                avg_min = 0.60 if (bearish_primary_fast or bearish_primary_moderate) else 0.70
                 if avg_volume < avg_min:
                     return False, f"Weak volume - avg volume {avg_volume:.2f} below minimum {avg_min:.2f}", 0.0
 
@@ -251,7 +263,8 @@ class AnalysisFilter:
                 continue
             label = tf_str(tf)
             move_pct = (df['c'].iloc[-1] - df['o'].iloc[-5]) / df['o'].iloc[-5] * 100
-            v_val = last_v_ratio(df) or 0.0
+            v_opt = last_v_ratio(df)
+            v_val = v_opt if v_opt is not None else 1.0  # Treat missing volume as neutral instead of zero
             sig = is_signal(label)
             on1h = '1h' in label
             on4h = '4h' in label
@@ -349,6 +362,14 @@ class AnalysisFilter:
             # Significant volatility expansion (>50% increase) suggests new market activity
             if volatility_expansion > 1.5 and price_change > 0.5:
                 return True
+
+            tf_s = str(tf).lower()
+            if ('30m' in tf_s or '1h' in tf_s) and len(df) >= 10:
+                fast_prev_idx = -10 if len(df) >= 10 else -len(df)
+                fast_prev_price = df['c'].iloc[fast_prev_idx]
+                fast_change = (current_price - fast_prev_price) / fast_prev_price * 100
+                if fast_change <= -0.6:  # >= 0.6% decline over last ~10 bars
+                    return True
         
         # No significant changes detected across any timeframe
         return False
@@ -521,9 +542,11 @@ class AnalysisFilter:
         if 'RSI' in df.columns and len(df) >= 5:
             rsi_current = indicators.get('RSI', {}).get('current')
             if rsi_current is not None and isinstance(rsi_current, (int, float)):
-                if 45 <= rsi_current <= 65:
+                if 55 <= rsi_current <= 65:
                     rsi_signal = 'bullish'
-                elif 35 <= rsi_current <= 55:
+                elif 45 < rsi_current < 55:
+                    rsi_signal = 'neutral'
+                elif 35 <= rsi_current <= 45:
                     rsi_signal = 'bearish'
                 else:
                     rsi_signal = 'extreme'

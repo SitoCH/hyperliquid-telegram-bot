@@ -6,7 +6,7 @@ from ..wyckoff_types import (
     WyckoffPhase, CompositeAction, MarketLiquidity,
     VolatilityState, Timeframe, _TIMEFRAME_SETTINGS,
     SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
-    WyckoffSign
+    WyckoffSign, FundingState
 )
 
 # Recalculate group weights based on updated phase weights
@@ -46,6 +46,7 @@ class TimeframeGroupAnalysis:
     volatility_state: VolatilityState
     dominant_sign: WyckoffSign = WyckoffSign.NONE  # Add dominant Wyckoff sign
     uncertain_phase: bool = True  # Add this field with default value True
+    funding_state: FundingState = FundingState.UNKNOWN
 
 @dataclass
 class MultiTimeframeContext:
