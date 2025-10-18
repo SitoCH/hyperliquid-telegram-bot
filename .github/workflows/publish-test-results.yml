@@ -1,0 +1,62 @@
+name: Publish Test Results
+
+on:
+  workflow_run:
+    workflows: ["Test"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+  issues: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  publish:
+    if: >-
+      ${{ github.event.workflow_run.conclusion != 'cancelled' &&
+          github.event.workflow_run.conclusion != 'skipped' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          run_id: ${{ github.event.workflow_run.id }}
+          name: ""
+          path: artifacts
+
+      - name: Show downloaded files
+        run: |
+          echo "Artifacts tree:" && ls -R artifacts || true
+
+      - name: Extract GitHub event payload
+        id: event_json
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # The event file was uploaded as an artifact named 'github-event'
+          EVENT_FILE=$(find artifacts/github-event -type f -name "*" | head -n1 || true)
+          if [[ -z "${EVENT_FILE}" ]]; then
+            echo "::warning::No github event file found; PR commenting may be limited."
+          fi
+          echo "event_file=${EVENT_FILE}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: |
+            artifacts/test-results/*.xml
+          event_file: ${{ steps.event_json.outputs.event_file }}
+          check_name: "Test Results"
+          action_fail: true
+
+      - name: Report coverage
+        if: always()
+        uses: orgoro/coverage@v3.2
+        with:
+          coverageFile: artifacts/coverage/coverage.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
