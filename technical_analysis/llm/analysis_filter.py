@@ -80,16 +80,11 @@ class AnalysisFilter:
                     last_dir = ddir
             return rev
 
-        # 1) Basic data sufficiency
+        # Basic data sufficiency
         if not dataframes or all(df.empty or len(df) < 10 for df in dataframes.values()):
             return False, "Insufficient data - no meaningful dataframes available", 0.0
 
-        # 2) Extreme funding emergency bypass
-        latest_funding = funding_rates[-1] if funding_rates else None
-        if latest_funding and abs(latest_funding.funding_rate) > 0.0008:  # 0.08%
-            return True, f"Emergency bypass - extreme funding rate detected: {latest_funding.funding_rate:.6f}", 1.0
-
-        # 3) Collect per-timeframe metrics
+        # Collect per-timeframe metrics
         price_changes: List[float] = []            # absolute
         signed_price_changes: List[float] = []     # signed
         all_v_ratios: List[float] = []
@@ -156,7 +151,7 @@ class AnalysisFilter:
                         'v_ratio': v_ratio,
                     }
 
-        # 4) Directional context
+        # Directional context
         largest_down = min(signed_price_changes) if signed_price_changes else 0.0
 
         # Primary timeframe bearish bias (30m / 1h) for threshold easing
@@ -170,7 +165,7 @@ class AnalysisFilter:
         if mean_rev_reason:
             return True, mean_rev_reason, 0.8
 
-        # 5) Structural / noise filters
+        # Structural / noise filters
         if range_prison_detected:
             # Only hard-reject if signal TFs also show weak momentum and low volume
             weak_signal_moves = (signal_abs_moves and all(x < 0.4 for x in signal_abs_moves))
