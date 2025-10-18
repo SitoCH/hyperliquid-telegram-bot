@@ -30,15 +30,30 @@ jobs:
     - name: Run tests
       run: uv run pytest --cov --cov-report=xml --junitxml=test-results.xml
 
-    - name: Publish test results
-      uses: EnricoMi/publish-unit-test-result-action@v2
+    # Upload artifacts for a follow-up workflow to publish results (works for fork PRs)
+    - name: Upload test results artifact
       if: always()
+      uses: actions/upload-artifact@v4
       with:
-        files: test-results.xml
-        action_fail: true
+        name: test-results
+        path: test-results.xml
+        if-no-files-found: warn
+        retention-days: 7
 
-    - name: Report coverage
-      uses: orgoro/coverage@v3.2
+    - name: Upload coverage artifact
+      if: always()
+      uses: actions/upload-artifact@v4
       with:
-        coverageFile: coverage.xml
-        token: ${{ secrets.GITHUB_TOKEN }}
+        name: coverage
+        path: coverage.xml
+        if-no-files-found: warn
+        retention-days: 7
+
+    - name: Upload GitHub event payload
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: github-event
+        path: ${{ github.event_path }}
+        if-no-files-found: error
+        retention-days: 7
