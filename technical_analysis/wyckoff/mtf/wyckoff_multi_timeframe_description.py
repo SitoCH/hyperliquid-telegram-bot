@@ -201,11 +201,11 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
 
         # Alignment label to reflect how coherent the intraday picture is
         if analysis.alignment_score > 0.75:
-            align_label = "strong"
+            align_label = "Strong"
         elif analysis.alignment_score >= 0.6:
-            align_label = "moderate"
+            align_label = "Moderate"
         else:
-            align_label = "mixed"
+            align_label = "Mixed"
 
         if analysis.momentum_intensity > STRONG_MOMENTUM:
             momentum_desc = "strong"
