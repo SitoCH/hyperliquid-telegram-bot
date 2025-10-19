@@ -1,8 +1,8 @@
 import time
+from typing import Any, Dict, List, Optional, Tuple, TypedDict
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-from tabulate import simple_separated_format, tabulate
 
 from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
@@ -19,7 +19,23 @@ from bot_statistics.sp500_price_utils import (
     calculate_sp500_hold_performance
 )
 
-def calculate_trading_stats(user_fills, cutoff_timestamp):
+TradeFill = Dict[str, Any]
+
+
+class StatsResult(TypedDict):
+    winning_trades: int
+    total_trades: int
+    win_rate: float
+    pnl: float
+    adjusted_pnl: float
+    total_fees: float
+    pct_return: float
+
+
+HoldPerformance = Dict[str, float]
+
+
+def calculate_trading_stats(user_fills: List[TradeFill], cutoff_timestamp: int) -> StatsResult:
     """
     Calculate trading statistics for trades after the cutoff timestamp.
     
@@ -35,8 +51,8 @@ def calculate_trading_stats(user_fills, cutoff_timestamp):
     total_fees = sum(float(trade.get('fee', 0)) for trade in all_trades)
     
     # Calculate maximum capital employed based on trade sizes
-    max_notional_value = 0
-    total_notional_value = 0
+    max_notional_value: float = 0.0
+    total_notional_value: float = 0.0
     
     for trade in all_trades:
         # Only consider opening positions for capital calculation
@@ -79,10 +95,10 @@ def calculate_trading_stats(user_fills, cutoff_timestamp):
     adjusted_pnl = closed_pnl - total_fees
     
     # Calculate percentage return using actual capital employed
-    initial_capital = max_notional_value
+    initial_capital: float = max_notional_value
     if initial_capital <= 0:
         # Fallback if we can't determine capital from trades
-        initial_capital = total_notional_value / len(all_trades) if all_trades else 1000
+        initial_capital = float(total_notional_value / len(all_trades)) if all_trades else 1000.0
     
     if initial_capital > 0:
         pct_return = (adjusted_pnl / initial_capital) * 100
@@ -99,50 +115,52 @@ def calculate_trading_stats(user_fills, cutoff_timestamp):
         'pct_return': pct_return
     }
 
-def format_stats_table(stats, btc_hold, sp500_hold=None):
+def _fmt_signed_pct(value: float) -> str:
+    sign = "+" if value > 0 else ("" if value == 0 else "")
+    return f"{sign}{fmt(value)}%"
+
+
+def _format_kv_block(pairs: List[Tuple[str, str]]) -> str:
+    if not pairs:
+        return "<pre>-</pre>"
+    max_label = max(len(label) for label, _ in pairs)
+    max_value = max(len(value) for _, value in pairs)
+    lines = [f"{label.ljust(max_label)}  {value.rjust(max_value)}" for label, value in pairs]
+    return f"<pre>" + "\n".join(lines) + "</pre>"
+
+
+def format_stats_table(
+    stats: StatsResult,
+    btc_hold: Optional[HoldPerformance],
+    sp500_hold: Optional[HoldPerformance] = None,
+) -> str:
     """
-    Format trading statistics as a tabulated table.
-    
-    Args:
-        stats: Dictionary containing trading statistics
-        btc_hold: Dictionary containing BTC hold performance stats
-        sp500_hold: Dictionary containing S&P500 hold performance stats (optional)
-        
-    Returns:
-        Formatted table as a string
+    Format trading statistics as a clean, monospaced key-value block for Telegram.
     """
-    tablefmt = simple_separated_format('  ')
-    
-    table_data = [
-        ["Win rate", f"{stats['winning_trades']} / {stats['total_trades']} ({fmt(stats['win_rate'])}%)"],
-        ["PnL", f"{fmt(stats['pnl'])} USDC"],
-        ["Total fees", f"{fmt(stats['total_fees'])} USDC"],
-        ["Net PnL (ex fees)", f"{fmt(stats['adjusted_pnl'])} USDC"]
+    pairs: List[Tuple[str, str]] = [
+        ("Trades", f"{stats['winning_trades']} / {stats['total_trades']} ({fmt(stats['win_rate'])}%)"),
+        ("PnL", f"{fmt(stats['pnl'])} USDC"),
+        ("Fees", f"{fmt(stats['total_fees'])} USDC"),
+        ("Net PnL", f"{fmt(stats['adjusted_pnl'])} USDC"),
     ]
-    
-    if 'total_trades' in stats and stats['total_trades'] > 0:
-        table_data.append(["Bot return", f"{fmt(stats['pct_return'])}%"])
-        
-        if btc_hold:
-            table_data.append(["BTC:", ""])
-            table_data.append(["HODL return", f"{fmt(btc_hold['pct_change'])}%"])
-            relative_btc_performance = stats['pct_return'] - btc_hold['pct_change']
-            table_data.append(["Bot vs HODL perf.", f"{fmt(relative_btc_performance)}%"])
-        
-        if sp500_hold:
-            table_data.append(["S&P500:", ""])
-            table_data.append(["HODL return", f"{fmt(sp500_hold['pct_change'])}%"])
-            relative_sp500_performance = stats['pct_return'] - sp500_hold['pct_change']
-            table_data.append(["Bot vs HODL perf.", f"{fmt(relative_sp500_performance)}%"])
-    
-    table = tabulate(table_data, headers=["", ""], tablefmt=tablefmt, colalign=("left", "right"))
-    
-    return f"<pre>{table}</pre>"
+
+    if stats.get('total_trades', 0) > 0:
+        pairs.append(("Return", f"{fmt(stats['pct_return'])}%"))
+
+    if btc_hold:
+        pairs.append(("BTC HODL", f"{fmt(btc_hold['pct_change'])}%"))
+        pairs.append(("vs BTC", _fmt_signed_pct(stats.get('pct_return', 0) - btc_hold['pct_change'])))
+
+    if sp500_hold:
+        pairs.append(("S&P 500 HODL", f"{fmt(sp500_hold['pct_change'])}%"))
+        pairs.append(("vs S&P 500", _fmt_signed_pct(stats.get('pct_return', 0) - sp500_hold['pct_change'])))
+
+    return _format_kv_block(pairs)
 
 async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         message_lines = [
-            "<b>Trading Statistics:</b>"
+            "📊 <b>Trading statistics</b>"
         ]
 
         current_time = int(time.time() * 1000)
@@ -173,16 +191,16 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         sp500_hold_90d = calculate_sp500_hold_performance(three_months_ago, sp500_current_price, sp500_price_history)
         
         # Format tables using the helper function
-        message_lines.append("Last day:")
+        message_lines.append("\n📅 <b>Last day</b>")
         message_lines.append(format_stats_table(stats_1d, btc_hold_1d, sp500_hold_1d))
         message_lines.append("")
-        message_lines.append("Last 7 days:")
+        message_lines.append("📅 <b>Last 7 days</b>")
         message_lines.append(format_stats_table(stats_7d, btc_hold_7d, sp500_hold_7d))
         message_lines.append("")
-        message_lines.append("Last 30 days:")
+        message_lines.append("📅 <b>Last 30 days</b>")
         message_lines.append(format_stats_table(stats_30d, btc_hold_30d, sp500_hold_30d))
         message_lines.append("")
-        message_lines.append("Last 90 days:")
+        message_lines.append("📅 <b>Last 90 days</b>")
         message_lines.append(format_stats_table(stats_90d, btc_hold_90d, sp500_hold_90d))
         
         # Send the response
