@@ -193,13 +193,10 @@ async def get_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Format tables using the helper function
         message_lines.append("\n📅 <b>Last day</b>")
         message_lines.append(format_stats_table(stats_1d, btc_hold_1d, sp500_hold_1d))
-        message_lines.append("")
         message_lines.append("📅 <b>Last 7 days</b>")
         message_lines.append(format_stats_table(stats_7d, btc_hold_7d, sp500_hold_7d))
-        message_lines.append("")
         message_lines.append("📅 <b>Last 30 days</b>")
         message_lines.append(format_stats_table(stats_30d, btc_hold_30d, sp500_hold_30d))
-        message_lines.append("")
         message_lines.append("📅 <b>Last 90 days</b>")
         message_lines.append(format_stats_table(stats_90d, btc_hold_90d, sp500_hold_90d))
         

@@ -525,16 +525,16 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         return None
 
     # Distance bands tuned for healthier baseline R:R
-    # SL: 1.5%–3.25%, TP: 1.75%–4%
-    min_distance_sl = mid * 0.015
+    # SL: 1.6%–3.25%, TP: 1.75%–4.5%
+    min_distance_sl = mid * 0.016
     max_distance_sl = mid * 0.0325
     
     min_distance_tp = mid * 0.0175
-    max_distance_tp = mid * 0.04
+    max_distance_tp = mid * 0.045
 
     # Evaluate across all timeframes and pick the best R:R that passes validation
     timeframes_order = [
-        Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15, Timeframe.HOURS_4, Timeframe.HOURS_8
+        Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15, Timeframe.HOURS_4
     ]
 
     def _search_levels(sl_min: float, sl_max: float, tp_min: float, tp_max: float) -> Optional[str]:
