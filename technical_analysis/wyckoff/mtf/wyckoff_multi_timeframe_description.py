@@ -22,7 +22,7 @@ MODERATE_CONFIDENCE_THRESHOLD = 0.5
 MODERATE_ALIGNMENT_THRESHOLD = 0.6
 
 # Minimum acceptable Risk:Reward for proposed trades
-MIN_RR = 1.1
+MIN_RR = 1.4
 
 T = TypeVar('T')
 
@@ -511,10 +511,10 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         trade_link = f" ({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
 
         return (
-            f"<b>💰 {side} Trade Setup</b>{trade_link}<b>:</b>\n"
+            f"<b>💰 {side} trade for {coin}</b>{trade_link}<b>:</b>\n"
             f"Market price: {fmt_price(mid)} USDC\n"
-            f"Stop Loss: {fmt_price(sl)} USDC (-{sl_pct:.1f}%)\n"
-            f"Take Profit: {fmt_price(tp)} USDC (+{tp_pct:.1f}%)"
+            f"Stop loss: {fmt_price(sl)} USDC (-{sl_pct:.1f}%)\n"
+            f"Take profit: {fmt_price(tp)} USDC (+{tp_pct:.1f}%)"
         )
 
     if direction == MultiTimeframeDirection.NEUTRAL:
@@ -532,14 +532,12 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
     min_distance_tp = mid * 0.0175
     max_distance_tp = mid * 0.05
 
-    # Evaluate across all timeframes and pick the best R:R that passes validation
+    # Evaluate across timeframes starting from the shortest and return the first valid suggestion
     timeframes_order = [
-        Timeframe.HOUR_1, Timeframe.MINUTES_30, Timeframe.MINUTES_15, Timeframe.HOURS_4
+        Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4
     ]
 
     def _search_levels(sl_min: float, sl_max: float, tp_min: float, tp_max: float) -> Optional[str]:
-        best_msg = None
-        best_rr = -1.0
         for timeframe in timeframes_order:
             tp_resistances, tp_supports, sl_resistances, sl_supports = get_valid_levels(
                 timeframe, sl_min, sl_max, tp_min, tp_max
@@ -558,32 +556,11 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
                 continue
             # Use validator to enforce final constraints and format
             message = _validate_and_format_trade(coin, side, mid, tp, sl, timeframe)
-            if not message:
-                continue
+            if message:
+                return message
+        return None
 
-            # Extract RR again for ranking
-            tp_pct = abs((tp - mid) / mid) * 100
-            sl_pct = abs((sl - mid) / mid) * 100
-            if sl_pct == 0:
-                continue
-            rr = tp_pct / sl_pct
-            if rr > best_rr:
-                best_rr = rr
-                best_msg = message
-        return best_msg
-
-    # First pass with conservative bands
     best_trade = _search_levels(min_distance_sl, max_distance_sl, min_distance_tp, max_distance_tp)
-    if best_trade:
-        return best_trade
-
-    # Second pass: adaptive expansion when R:R is hard to satisfy
-    expanded_min_sl = mid * 0.0125   # 1.25%
-    expanded_max_sl = mid * 0.04     # 4.0%
-    expanded_min_tp = mid * 0.02     # 2.0%
-    expanded_max_tp = mid * 0.055    # 5.5%
-
-    best_trade = _search_levels(expanded_min_sl, expanded_max_sl, expanded_min_tp, expanded_max_tp)
     if best_trade:
         return best_trade
 
