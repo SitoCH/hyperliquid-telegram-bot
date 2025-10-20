@@ -525,12 +525,12 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         return None
 
     # Distance bands tuned for healthier baseline R:R
-    # SL: 1.6%–3.25%, TP: 1.75%–4.5%
-    min_distance_sl = mid * 0.016
-    max_distance_sl = mid * 0.0325
+    # SL: 1.75%–3.5%, TP: 1.75%–5%
+    min_distance_sl = mid * 0.0175
+    max_distance_sl = mid * 0.035
     
     min_distance_tp = mid * 0.0175
-    max_distance_tp = mid * 0.045
+    max_distance_tp = mid * 0.05
 
     # Evaluate across all timeframes and pick the best R:R that passes validation
     timeframes_order = [
