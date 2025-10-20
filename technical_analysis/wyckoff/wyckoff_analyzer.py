@@ -102,7 +102,7 @@ class WyckoffAnalyzer:
                 'support': support
             }
             for tf in significant_timeframes
-            for resistance, support in [find_significant_levels(dataframes[tf], states[tf], mid, tf)]
+            for resistance, support in [find_significant_levels(dataframes[tf], states[tf], mid, tf, 5)]
         }
     
     async def _send_wyckoff_analysis_message(
