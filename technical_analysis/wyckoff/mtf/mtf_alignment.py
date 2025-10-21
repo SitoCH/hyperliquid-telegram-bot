@@ -1,23 +1,14 @@
-import pandas as pd  # type: ignore[import]
-import numpy as np
-import os
-from enum import Enum
-from typing import Dict, List, Optional, Tuple, Any, Final
-from dataclasses import dataclass
-from logging_utils import logger
+from typing import Optional, Tuple, Final
 
 from ..wyckoff_types import (
-    WyckoffState, WyckoffPhase, MarketPattern, SignificantLevelsData, _TIMEFRAME_SETTINGS,
-    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
+    _TIMEFRAME_SETTINGS,
+    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, CONTEXT_TIMEFRAMES,
     is_bearish_action, is_bullish_action, is_bearish_phase, is_bullish_phase,
-    CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity
+    CompositeAction
 )
 
 from .wyckoff_multi_timeframe_types import (
-     AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext,
-    STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM,
-    MIXED_MOMENTUM, LOW_MOMENTUM,
-    SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT
+     MultiTimeframeDirection, TimeframeGroupAnalysis
 )
 
 # Thresholds for confidence calculation
@@ -29,7 +20,7 @@ VOLUME_WEIGHT: Final[float] = 0.35
 ALIGNMENT_WEIGHT: Final[float] = 0.10
 MOMENTUM_WEIGHT: Final[float] = 0.20
 
-def _calculate_timeframe_importance() -> Tuple[float, float, float, float]:
+def _calculate_timeframe_importance() -> Tuple[float, float, float]:
     """
     Calculate the importance of each timeframe group based on the phase_weight
     values from timeframe settings.
@@ -37,21 +28,18 @@ def _calculate_timeframe_importance() -> Tuple[float, float, float, float]:
     # Extract phase weights from timeframe settings
     short_term_weights = [_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES]
     intermediate_weights = [_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES]
-    long_term_weights = [_TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES]
     context_weights = [_TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES]
     
     # Sum weights by timeframe group
     st_weight = sum(short_term_weights)
     int_weight = sum(intermediate_weights)
-    lt_weight = sum(long_term_weights)
     ctx_weight = sum(context_weights)
     
-    total_weight = st_weight + int_weight + lt_weight + ctx_weight
+    total_weight = st_weight + int_weight + ctx_weight
     
     return (
         st_weight / total_weight,
         int_weight / total_weight,
-        lt_weight / total_weight,
         ctx_weight / total_weight
     )
 
@@ -109,16 +97,16 @@ def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, int
 
     return sum(alignment_scores)
 
-def calculate_overall_confidence(short_term: TimeframeGroupAnalysis, intermediate: TimeframeGroupAnalysis, long_term: TimeframeGroupAnalysis, context: TimeframeGroupAnalysis) -> float:
+def calculate_overall_confidence(short_term: TimeframeGroupAnalysis, intermediate: TimeframeGroupAnalysis, context: TimeframeGroupAnalysis) -> float:
     """
     Calculate overall confidence using a simplified algorithm optimized for crypto.
     """
     
     # Calculate directional agreement score directly
-    directional_score = _calculate_directional_score_direct(short_term, intermediate, long_term, context)
+    directional_score = _calculate_directional_score_direct(short_term, intermediate, context)
     
     # Calculate volume confirmation score with direct parameters
-    volume_score = _calculate_volume_score_direct(short_term, intermediate, long_term, context)
+    volume_score = _calculate_volume_score_direct(short_term, intermediate, context)
     
     # Calculate alignment between timeframes (if both exist)
     alignment_score = 0.0
@@ -165,7 +153,6 @@ def calculate_overall_confidence(short_term: TimeframeGroupAnalysis, intermediat
 
 def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnalysis],
                                        intermediate: Optional[TimeframeGroupAnalysis],
-                                       long_term: Optional[TimeframeGroupAnalysis],
                                        context: Optional[TimeframeGroupAnalysis]) -> float:
     """
     Calculate directional agreement score with emphasis on short and intermediate timeframes.
@@ -178,7 +165,7 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
     group_biases = {}
 
     # Calculate importance dynamically from phase weights
-    short_term_importance, intermediate_importance, long_term_importance, context_importance = _calculate_timeframe_importance()
+    short_term_importance, intermediate_importance, context_importance = _calculate_timeframe_importance()
     
     # Process short term
     if short_term is not None:
@@ -197,15 +184,6 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
         group_biases['intermediate'] = bias
         scores.append(abs(bias) * intermediate.internal_alignment)
         weights.append(intermediate_importance)
-    
-    # Process long term
-    if long_term is not None:
-        bias = 1 if long_term.momentum_bias == MultiTimeframeDirection.BULLISH else \
-              -1 if long_term.momentum_bias == MultiTimeframeDirection.BEARISH else 0
-        
-        group_biases['long'] = bias
-        scores.append(abs(bias) * long_term.internal_alignment)
-        weights.append(long_term_importance)
     
     # Process context
     if context is not None:
@@ -293,14 +271,13 @@ def _calculate_momentum_score_direct(short_term: Optional[TimeframeGroupAnalysis
 
 def _calculate_volume_score_direct(short_term: Optional[TimeframeGroupAnalysis], 
                                   intermediate: Optional[TimeframeGroupAnalysis],
-                                  long_term: Optional[TimeframeGroupAnalysis],
                                   context: Optional[TimeframeGroupAnalysis]) -> float:
     """
     Calculate volume confirmation score with improved early signal detection.
     """
     weighted_scores = []
     
-    for analysis in [short_term, intermediate, long_term, context]:
+    for analysis in [short_term, intermediate, context]:
         if analysis is None:
             continue
 

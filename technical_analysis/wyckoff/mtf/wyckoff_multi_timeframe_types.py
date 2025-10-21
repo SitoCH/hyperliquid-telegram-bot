@@ -4,15 +4,14 @@ from typing import Final
 
 from ..wyckoff_types import (
     WyckoffPhase, CompositeAction, MarketLiquidity,
-    VolatilityState, Timeframe, _TIMEFRAME_SETTINGS,
-    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
+    VolatilityState, _TIMEFRAME_SETTINGS,
+    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, CONTEXT_TIMEFRAMES,
     WyckoffSign, FundingState
 )
 
 # Recalculate group weights based on updated phase weights
 SHORT_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES)
 INTERMEDIATE_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES)
-LONG_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in LONG_TERM_TIMEFRAMES)
 CONTEXT_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES)
 
 # Adjusted for intraday crypto trading focus
@@ -57,7 +56,6 @@ class MultiTimeframeContext:
 class AllTimeframesAnalysis:
     short_term: TimeframeGroupAnalysis
     intermediate: TimeframeGroupAnalysis
-    long_term: TimeframeGroupAnalysis
     context: TimeframeGroupAnalysis
     overall_direction: MultiTimeframeDirection
     confidence_level: float

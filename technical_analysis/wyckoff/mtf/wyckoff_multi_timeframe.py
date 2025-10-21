@@ -1,9 +1,6 @@
-import pandas as pd  # type: ignore[import]
 import numpy as np
 import os
-from enum import Enum
-from typing import Dict, List, Optional, Tuple, Any, Final
-from dataclasses import dataclass
+from typing import Dict, List
 from .wyckoff_multi_timeframe_description import generate_all_timeframes_description
 from logging_utils import logger
 
@@ -13,16 +10,13 @@ from .mtf_alignment import calculate_overall_alignment, calculate_overall_confid
 from .wyckoff_multi_timeframe_types import AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis, MultiTimeframeContext
 
 from ..wyckoff_types import (
-    WyckoffState, WyckoffPhase, WyckoffSign, MarketPattern, _TIMEFRAME_SETTINGS,
-    SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, LONG_TERM_TIMEFRAMES, CONTEXT_TIMEFRAMES,
+    WyckoffState, WyckoffPhase, WyckoffSign, MarketPattern, SHORT_TERM_TIMEFRAMES, INTERMEDIATE_TIMEFRAMES, CONTEXT_TIMEFRAMES,
     is_bearish_action, is_bullish_action, is_bearish_phase, is_bullish_phase,
     CompositeAction, EffortResult, Timeframe, VolumeState, FundingState, VolatilityState, MarketLiquidity, SignificantLevelsData
 )
 
 from .wyckoff_multi_timeframe_types import (
-    STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM, MODERATE_VOLUME_THRESHOLD,
-    MIXED_MOMENTUM, LOW_MOMENTUM,
-    SHORT_TERM_WEIGHT, INTERMEDIATE_WEIGHT, LONG_TERM_WEIGHT
+    WEAK_MOMENTUM, MODERATE_VOLUME_THRESHOLD
 )
 
 
@@ -50,27 +44,23 @@ def analyze_multi_timeframe(
     # Group timeframes into four categories
     short_term = {tf: state for tf, state in states.items() if tf in SHORT_TERM_TIMEFRAMES}
     intermediate = {tf: state for tf, state in states.items() if tf in INTERMEDIATE_TIMEFRAMES}
-    long_term = {tf: state for tf, state in states.items() if tf in LONG_TERM_TIMEFRAMES}
     context = {tf: state for tf, state in states.items() if tf in CONTEXT_TIMEFRAMES}
 
     try:
         # Analyze all groups
         short_term_analysis = _analyze_timeframe_group(short_term)
         intermediate_analysis = _analyze_timeframe_group(intermediate)
-        long_term_analysis = _analyze_timeframe_group(long_term)
         context_analysis = _analyze_timeframe_group(context)
 
         # Update weights
         short_term_analysis.group_weight = _calculate_group_weight(short_term)
         intermediate_analysis.group_weight = _calculate_group_weight(intermediate)
-        long_term_analysis.group_weight = _calculate_group_weight(long_term)
         context_analysis.group_weight = _calculate_group_weight(context)
 
         # Calculate overall direction with all timeframes
         overall_direction = determine_overall_direction([
             short_term_analysis, 
-            intermediate_analysis, 
-            long_term_analysis,
+            intermediate_analysis,
             context_analysis
         ])
 
@@ -78,7 +68,6 @@ def analyze_multi_timeframe(
         momentum_intensity = _calculate_momentum_intensity([
             short_term_analysis,
             intermediate_analysis,
-            long_term_analysis,
             context_analysis
         ], overall_direction)
 
@@ -86,14 +75,12 @@ def analyze_multi_timeframe(
         all_analysis = AllTimeframesAnalysis(
             short_term=short_term_analysis,
             intermediate=intermediate_analysis,
-            long_term=long_term_analysis,
             context=context_analysis,
             overall_direction=overall_direction,
             momentum_intensity=momentum_intensity,
             confidence_level= calculate_overall_confidence(
                 short_term_analysis, 
-                intermediate_analysis, 
-                long_term_analysis,
+                intermediate_analysis,
                 context_analysis
             ),
             alignment_score= calculate_overall_alignment(short_term_analysis, intermediate_analysis)

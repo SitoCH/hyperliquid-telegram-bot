@@ -37,8 +37,7 @@ def _get_timeframe_weights(analysis: AllTimeframesAnalysis) -> List[float]:
     """Return standard timeframe weights for consistency."""
     return [
         analysis.short_term.group_weight,
-        analysis.intermediate.group_weight,
-        analysis.long_term.group_weight
+        analysis.intermediate.group_weight
     ]
 
 def _get_volume_description(volume_strength: float) -> str:
@@ -76,8 +75,7 @@ def _calculate_weighted_volume_strength(analysis: AllTimeframesAnalysis) -> floa
     weights = _get_timeframe_weights(analysis)
     values = [
         analysis.short_term.volume_strength,
-        analysis.intermediate.volume_strength,
-        analysis.long_term.volume_strength
+        analysis.intermediate.volume_strength
     ]
     return _weighted_average(values, weights)
 
@@ -115,7 +113,6 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
 
     short_term_desc = _get_timeframe_trend_description(analysis.short_term)
     intermediate_desc = _get_timeframe_trend_description(analysis.intermediate)
-    long_term_desc = _get_timeframe_trend_description(analysis.long_term)
     context_desc = _get_timeframe_trend_description(analysis.context)
 
     insight = _generate_actionable_insight_all_timeframes(analysis)
@@ -127,7 +124,6 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
         f"<b>🔍 Timeframes:</b>\n"
         f"Timeframe alignment: {alignment_pct}\n"
         f"Market Context (4h-8h):\n{context_desc}\n"
-        f"Daily Bias (2h):\n{long_term_desc}\n"
         f"Intraday Trend (30m-1h):\n{intermediate_desc}\n"
         f"Immediate Signals (15m):\n{short_term_desc}\n\n"
         f"{insight}"
@@ -286,13 +282,13 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
                 if immediate_bias == MultiTimeframeDirection.BULLISH:
                     signal_direction = (
                         f"potential bullish reversal forming on 15m against "
-                        f"{'bullish' if analysis.long_term.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} "
+                        f"{'bullish' if analysis.context.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} "
                         f"larger trend. Look for confirmation on the 30m-1h timeframes before adding size. "
                     )
                 else:  # BEARISH
                     signal_direction = (
                         f"potential bearish reversal forming on 15m against "
-                        f"{'bullish' if analysis.long_term.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} "
+                        f"{'bullish' if analysis.context.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} "
                         f"larger trend. Wait for confirmation on the 30m-1h timeframes before committing. "
                     )
             else:
