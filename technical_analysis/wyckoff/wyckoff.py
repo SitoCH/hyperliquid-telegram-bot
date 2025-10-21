@@ -342,8 +342,7 @@ def determine_phase_by_price_strength(
 ) -> Tuple[WyckoffPhase, bool]:
     """Enhanced phase determination with cleaner logic and improved certainty assessment."""
 
-    _, strong_dev_threshold, neutral_zone_threshold, \
-    momentum_threshold, _, _ = timeframe.settings.thresholds
+    _, strong_dev_threshold, neutral_zone_threshold, momentum_threshold = timeframe.settings.thresholds
 
     # Calculate trend consistency metrics
     vol_ratio = volatility.iloc[-1] / max(volatility.mean(), 1e-8)
