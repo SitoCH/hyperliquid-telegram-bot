@@ -29,7 +29,6 @@ class WyckoffAnalyzer:
             Timeframe.MINUTES_15: 28,
             Timeframe.MINUTES_30: 42,
             Timeframe.HOUR_1: 60,
-            Timeframe.HOURS_2: 75,
             Timeframe.HOURS_4: 90,
             Timeframe.HOURS_8: 120
         }

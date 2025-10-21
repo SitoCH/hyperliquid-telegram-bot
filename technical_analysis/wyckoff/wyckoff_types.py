@@ -277,7 +277,6 @@ class Timeframe(Enum):
     MINUTES_15 = ("15m", 15)
     MINUTES_30 = ("30m", 30)
     HOUR_1 = ("1h", 60)
-    HOURS_2 = ("2h", 120)
     HOURS_4 = ("4h", 240)
     HOURS_8 = ("8h", 480)
     DAY_1 = ("1d", 1440)
@@ -308,62 +307,62 @@ class Timeframe(Enum):
 # Optimized Timeframe Settings for Intraday Crypto Trading with Hourly Analysis
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.12,  # Slightly higher to capture timely scalps without dominating
+        phase_weight=0.18,
         description="15min scalping entries",
-        chart_image_time_delta=pd.Timedelta(hours=8),  # Shorter for faster reaction
-        ema_length=8,  # Faster response for scalping
-        atr_settings=(10, 6, 14, 4, 6),  # More responsive ATR
-        supertrend_multiplier=1.8,  # Tighter for scalping
-        base_multiplier=0.85,  # Raise thresholds to reduce noise-driven flips
-        momentum_multiplier=1.6,  # Higher for crypto volatility
-        volume_ma_window=16,  # Slightly longer to smooth noisy volume on 15m
-        spring_upthrust_window=3,  # Tighter window for scalping
-        support_resistance_lookback=24,  # Short lookback
-        swing_lookback=3,  # Slightly longer to improve reliability
+        chart_image_time_delta=pd.Timedelta(hours=8),
+        ema_length=8,
+        atr_settings=(10, 6, 14, 4, 6),
+        supertrend_multiplier=1.8,
+        base_multiplier=0.85,
+        momentum_multiplier=1.6,
+        volume_ma_window=16,
+        spring_upthrust_window=3,
+        support_resistance_lookback=24,
+        swing_lookback=3,
         effort_lookback=3,
-        min_move_multiplier=0.65,  # Trim micro-move noise
-        spring_factor=0.75,  # Slightly less sensitive
-        liquidation_factor=0.85,  # Reduce false liquidation cascades
+        min_move_multiplier=0.65,
+        spring_factor=0.75,
+        liquidation_factor=0.85,
         breakout_factor=0.85,
         significant_levels_factor=0.80,
         atr_multiplier=0.22,
-        volume_weighted_efficiency=0.35,  # Still high but less over-weighted
+        volume_weighted_efficiency=0.35,
         high_threshold=0.80,
         low_threshold=0.80,
-        wyckoff_volatility_factor=0.70,  # Slightly stricter in high noise
+        wyckoff_volatility_factor=0.70,
         wyckoff_trend_lookback=3,
-        wyckoff_lps_volume_threshold=0.18,  # Reduce LPS/LPSY false positives
+        wyckoff_lps_volume_threshold=0.18,
         wyckoff_lps_price_multiplier=0.55,
         wyckoff_sos_multiplier=1.05,
         wyckoff_ut_multiplier=0.30,
         wyckoff_sc_multiplier=1.05,
         wyckoff_ar_multiplier=0.95,
-        wyckoff_confirmation_threshold=0.25,  # Require a touch more confirmation
+        wyckoff_confirmation_threshold=0.25,
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.20,  # Balanced importance
+        phase_weight=0.28,
         description="30min intraday swings",
-        chart_image_time_delta=pd.Timedelta(hours=16),  # Better context
-        ema_length=10,  # Balanced responsiveness
-        atr_settings=(14, 8, 18, 6, 8),  # Optimized for 30min
+        chart_image_time_delta=pd.Timedelta(hours=16),
+        ema_length=10,
+        atr_settings=(14, 8, 18, 6, 8),
         supertrend_multiplier=2.0,
-        base_multiplier=0.85,  # Raise thresholds modestly to reduce churn
-        momentum_multiplier=1.4,  # Crypto-appropriate
-        volume_ma_window=16,  # Slightly smoother volume
-        spring_upthrust_window=4,  # Adequate window
-        support_resistance_lookback=36,  # Good lookback
-        swing_lookback=3,  # Balanced for swing detection
+        base_multiplier=0.85,
+        momentum_multiplier=1.4,
+        volume_ma_window=16,
+        spring_upthrust_window=4,
+        support_resistance_lookback=36,
+        swing_lookback=3,
         effort_lookback=4,
-        min_move_multiplier=0.80,  # Slightly stricter
-        spring_factor=0.82,  # Slightly less sensitive
+        min_move_multiplier=0.80,
+        spring_factor=0.82,
         liquidation_factor=0.90,
         breakout_factor=0.85,
         significant_levels_factor=0.90,
         atr_multiplier=0.24,
-        volume_weighted_efficiency=0.30,  # Balanced volume importance
+        volume_weighted_efficiency=0.30,
         high_threshold=0.85,
         low_threshold=0.80,
-        wyckoff_volatility_factor=0.80,  # Slightly stricter
+        wyckoff_volatility_factor=0.80,
         wyckoff_trend_lookback=3,
         wyckoff_lps_volume_threshold=0.24,
         wyckoff_lps_price_multiplier=0.62,
@@ -371,32 +370,32 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_ut_multiplier=0.34,
         wyckoff_sc_multiplier=1.10,
         wyckoff_ar_multiplier=0.98,
-        wyckoff_confirmation_threshold=0.28,  # Slightly higher confirmation
+        wyckoff_confirmation_threshold=0.28,
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.42,  # Primary timeframe for trend confirmation
+        phase_weight=0.42,
         description="1h primary trend analysis",
-        chart_image_time_delta=pd.Timedelta(hours=48),  # Good context window
-        ema_length=14,  # Standard for hourly
+        chart_image_time_delta=pd.Timedelta(hours=48),
+        ema_length=14,
         atr_settings=(18, 12, 24, 8, 10),
-        supertrend_multiplier=2.2,  # Slightly higher for crypto
-        base_multiplier=0.90,  # Slightly higher thresholds for stronger signals
+        supertrend_multiplier=2.2,
+        base_multiplier=0.90,
         momentum_multiplier=1.5,
-        volume_ma_window=20,  # Slightly smoother hourly volume patterns
+        volume_ma_window=20,
         spring_upthrust_window=5,
-        support_resistance_lookback=48,  # 2 days lookback
+        support_resistance_lookback=48,
         swing_lookback=5,
         effort_lookback=6,
-        min_move_multiplier=0.90,  # Higher threshold for meaningful moves
+        min_move_multiplier=0.90,
         spring_factor=0.90,
         liquidation_factor=0.88,
         breakout_factor=0.92,
         significant_levels_factor=1.0,
         atr_multiplier=0.26,
-        volume_weighted_efficiency=0.24,  # Balanced volume weighting
+        volume_weighted_efficiency=0.24,
         high_threshold=0.90,
         low_threshold=0.88,
-        wyckoff_volatility_factor=0.90,  # Slightly stricter
+        wyckoff_volatility_factor=0.90,
         wyckoff_trend_lookback=5,
         wyckoff_lps_volume_threshold=0.30,
         wyckoff_lps_price_multiplier=0.68,
@@ -406,112 +405,79 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_ar_multiplier=1.08,
         wyckoff_confirmation_threshold=0.32,
     ),
-    Timeframe.HOURS_2: TimeframeSettings(
-        phase_weight=0.16,  # Adjusted so total weights sum to 1.00
-        description="2h intermediate trend context",
-        chart_image_time_delta=pd.Timedelta(hours=96),  # Extended for better context
-        ema_length=16,
-        atr_settings=(20, 14, 26, 10, 12),  # Better balance for 2h
-        supertrend_multiplier=2.3,  # Higher for crypto volatility
-        base_multiplier=0.95,  # Stronger signal requirements
-        momentum_multiplier=1.3,  # Moderate for intermediate term
-        volume_ma_window=22,  # Longer for better volume smoothing
-        spring_upthrust_window=6,  # Extended for better pattern recognition
-        support_resistance_lookback=60,  # 5 days for 2h timeframe
-        swing_lookback=6,
-        effort_lookback=8,  # Extended for better effort analysis
-        min_move_multiplier=1.05,  # Higher threshold for significant moves
-        spring_factor=0.95,  # Less sensitive for stronger signals
-        liquidation_factor=0.95,
-        breakout_factor=0.93,
-        significant_levels_factor=1.10,
-        atr_multiplier=0.28,
-        volume_weighted_efficiency=0.20,  # Lower for intermediate term
-        high_threshold=0.92,
-        low_threshold=0.88,
-        wyckoff_volatility_factor=0.95,  # Slightly stricter for intermediate term
-        wyckoff_trend_lookback=6,  # Extended lookback
-        wyckoff_lps_volume_threshold=0.32,
-        wyckoff_lps_price_multiplier=0.72,
-        wyckoff_sos_multiplier=1.22,
-        wyckoff_ut_multiplier=0.42,
-        wyckoff_sc_multiplier=1.22,
-        wyckoff_ar_multiplier=1.12,
-        wyckoff_confirmation_threshold=0.34,
-    ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.08,  # Reduced for context only
+        phase_weight=0.10,
         description="4h structural context",
         chart_image_time_delta=pd.Timedelta(
             days=5
-        ),  # Extended for better structure view
-        ema_length=21,  # Standard daily-like period
-        atr_settings=(24, 16, 30, 12, 16),  # Longer periods for structure
-        supertrend_multiplier=2.4,  # Higher for less noise
-        base_multiplier=1.0,  # Standard sensitivity
-        momentum_multiplier=1.2,  # Lower for structure
-        volume_ma_window=24,  # Longer for structural volume
-        spring_upthrust_window=8,  # Extended for structural patterns
-        support_resistance_lookback=84,  # Full week of 4h candles
-        swing_lookback=8,  # Extended for structural swings
+        ),
+        ema_length=21,
+        atr_settings=(24, 16, 30, 12, 16),
+        supertrend_multiplier=2.4,
+        base_multiplier=1.0,
+        momentum_multiplier=1.2,
+        volume_ma_window=24,
+        spring_upthrust_window=8,
+        support_resistance_lookback=84,
+        swing_lookback=8,
         effort_lookback=10,
-        min_move_multiplier=1.2,  # Higher for significant structural moves
-        spring_factor=1.0,  # Standard for structural signals
+        min_move_multiplier=1.2,
+        spring_factor=1.0,
         liquidation_factor=1.0,
         breakout_factor=1.0,
-        significant_levels_factor=1.3,  # Higher for key structural levels
+        significant_levels_factor=1.3,
         atr_multiplier=0.28,
-        volume_weighted_efficiency=0.18,  # Lower for structural analysis
+        volume_weighted_efficiency=0.18,
         high_threshold=1.0,
         low_threshold=0.9,
-        wyckoff_volatility_factor=1.0,  # Standard for structural
-        wyckoff_trend_lookback=7,  # Extended for trend context
+        wyckoff_volatility_factor=1.0,
+        wyckoff_trend_lookback=7,
         wyckoff_lps_volume_threshold=0.32,
         wyckoff_lps_price_multiplier=0.75,
         wyckoff_sos_multiplier=1.25,
         wyckoff_ut_multiplier=0.45,
         wyckoff_sc_multiplier=1.25,
         wyckoff_ar_multiplier=1.15,
-        wyckoff_confirmation_threshold=0.35,  # Higher for structural confirmation
+        wyckoff_confirmation_threshold=0.35,
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.02,  # Minimal weight for long-term context only
+        phase_weight=0.02,
         description="8h market regime context",
-        chart_image_time_delta=pd.Timedelta(days=10),  # Extended for regime analysis
-        ema_length=30,  # Longer for regime identification
-        atr_settings=(32, 20, 40, 14, 18),  # Extended periods for regime context
-        supertrend_multiplier=2.6,  # Higher to filter noise in regime analysis
-        base_multiplier=1.1,  # Less sensitive for regime changes
-        momentum_multiplier=1.0,  # Lower for long-term regime
-        volume_ma_window=30,  # Extended for regime volume analysis
-        spring_upthrust_window=10,  # Extended for regime-level patterns
-        support_resistance_lookback=120,  # Extended for major structural levels
-        swing_lookback=10,  # Extended for regime swings
+        chart_image_time_delta=pd.Timedelta(days=10),
+        ema_length=30,
+        atr_settings=(32, 20, 40, 14, 18),
+        supertrend_multiplier=2.6,
+        base_multiplier=1.1,
+        momentum_multiplier=1.0,
+        volume_ma_window=30,
+        spring_upthrust_window=10,
+        support_resistance_lookback=120,
+        swing_lookback=10,
         effort_lookback=12,
-        min_move_multiplier=1.5,  # Much higher for regime-significant moves
-        spring_factor=1.2,  # Higher for regime-level signals
+        min_move_multiplier=1.5,
+        spring_factor=1.2,
         liquidation_factor=1.1,
         breakout_factor=1.2,
-        significant_levels_factor=1.5,  # Much higher for major levels
+        significant_levels_factor=1.5,
         atr_multiplier=0.30,
-        volume_weighted_efficiency=0.15,  # Lower for regime analysis
+        volume_weighted_efficiency=0.15,
         high_threshold=1.2,
         low_threshold=0.8,
-        wyckoff_volatility_factor=1.2,  # Higher for regime filtering
-        wyckoff_trend_lookback=8,  # Extended for regime context
-        wyckoff_lps_volume_threshold=0.35,  # Higher for regime significance
+        wyckoff_volatility_factor=1.2,
+        wyckoff_trend_lookback=8,
+        wyckoff_lps_volume_threshold=0.35,
         wyckoff_lps_price_multiplier=0.80,
-        wyckoff_sos_multiplier=1.30,  # Higher for regime-level strength
+        wyckoff_sos_multiplier=1.30,
         wyckoff_ut_multiplier=0.50,
         wyckoff_sc_multiplier=1.30,
         wyckoff_ar_multiplier=1.20,
-        wyckoff_confirmation_threshold=0.40,  # Much higher for regime confirmation
+        wyckoff_confirmation_threshold=0.40,
     ),
 }
 
 SHORT_TERM_TIMEFRAMES = {Timeframe.MINUTES_15}
 INTERMEDIATE_TIMEFRAMES = {Timeframe.MINUTES_30, Timeframe.HOUR_1}
-LONG_TERM_TIMEFRAMES = {Timeframe.HOURS_2}
+LONG_TERM_TIMEFRAMES: Set[Timeframe] = set()
 CONTEXT_TIMEFRAMES = {Timeframe.HOURS_4, Timeframe.HOURS_8}
 
 
