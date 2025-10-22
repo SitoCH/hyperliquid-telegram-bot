@@ -30,6 +30,8 @@ def get_trade_suggestion(
     if confidence < min_confidence:
         return None
 
+    min_rr = float(os.getenv("HTB_TRADE_MIN_RR", str(MIN_RR_DEFAULT)))
+
     def get_valid_levels(
         coin: str,
         timeframe: Timeframe,
@@ -94,7 +96,7 @@ def get_trade_suggestion(
             # Use same buffer for SL/TP to keep simple and stable
             return adj, adj
 
-        best = None  # (rr, side, tp, sl)
+        candidates: List[tuple[float, str, float, float, float]] = []
 
         if direction == MultiTimeframeDirection.BULLISH:
             side = "Long"
@@ -132,15 +134,22 @@ def get_trade_suggestion(
                 if sl_p == 0:
                     continue
                 rr = tp_p / sl_p
-                if best is None or rr > best[0]:
-                    best = (rr, side, tp, sl)
+                candidates.append((rr, side, tp, sl, tp_p))
 
-        if best is None:
+        if not candidates:
             # No valid directional pair found
             raise ValueError("no_valid_pair")
 
-        _, side, tp, sl = best
-        return side, tp, sl
+        selected: Optional[tuple[float, str, float, float, float]] = None
+
+        windowed = [c for c in candidates if c[0] >= min_rr]
+        if windowed:
+            selected = min(windowed, key=lambda c: c[4])
+        else:
+            selected = max(candidates, key=lambda c: c[0])
+
+        _, side_out, tp_out, sl_out, _ = selected
+        return side_out, tp_out, sl_out
 
     def _validate_and_format_trade(
         coin: str, side: str, entry: float, tp: float, sl: float, timeframe: Timeframe
@@ -172,8 +181,6 @@ def get_trade_suggestion(
             )
             return None
 
-        # Minimum R:R (configurable via env HTB_TRADE_MIN_RR)
-        min_rr = float(os.getenv("HTB_TRADE_MIN_RR", str(MIN_RR_DEFAULT)))
         rr = tp_pct / sl_pct
         if rr < min_rr:
             logger.info(
