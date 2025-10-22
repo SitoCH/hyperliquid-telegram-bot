@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional, TypedDict
 import pandas as pd
 import numpy as np
 import time
@@ -11,6 +11,13 @@ from ..funding_rates_cache import get_funding_with_cache
 from ..data_processor import prepare_dataframe, apply_indicators
 from hyperliquid_utils.utils import hyperliquid_utils
 
+
+class Cluster(TypedDict):
+    price: float
+    weight: float
+    count: int
+    vol_sum: float
+
 def cluster_points(
     points: np.ndarray,
     volumes: np.ndarray, 
@@ -18,12 +25,12 @@ def cluster_points(
     min_price: float,
     max_price: float,
     tolerance: float,
-    wyckoff_state: WyckoffState
-) -> Dict[float, Dict[str, float]]:
+    wyckoff_state: Optional[WyckoffState]
+) -> Dict[float, Cluster]:
     """
     Enhanced clustering that considers Wyckoff state
     """
-    clusters: Dict[float, Dict[str, float]] = {}
+    clusters: Dict[float, Cluster] = {}
     
     # Adjust weights based on Wyckoff phase
     volume_weight = 1.0
@@ -33,13 +40,21 @@ def cluster_points(
         if wyckoff_state.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.DISTRIBUTING]:
             volume_weight = 1.35  # Even more weight when clear institutional action
     
+    n = len(timestamps)
+    denom = max(1, n - 1)  # avoid divide-by-zero for very short series
+
     for idx, price in enumerate(points):
         if not min_price <= price <= max_price:
             continue
             
-        # Add a decay factor to the recency weight
-        time_decay = 0.95 ** (len(timestamps) - timestamps[idx])
-        recency_weight = (1 / (1 + np.exp(-5 * (timestamps[idx] / len(timestamps) - 0.5)))) * time_decay
+        # Add a decay factor to the recency weight (latest point gets full weight)
+        # time distance in periods from the most recent index
+        time_distance = (n - 1) - int(timestamps[idx])
+        if time_distance < 0:
+            time_distance = 0
+        time_decay = 0.95 ** time_distance
+        pos = float(timestamps[idx]) / denom
+        recency_weight = (1 / (1 + np.exp(-5 * (pos - 0.5)))) * time_decay
         nearby_price = next((p for p in clusters if abs(p - price) <= tolerance), None)
         
         if nearby_price:
@@ -59,12 +74,12 @@ def cluster_points(
     return clusters
 
 def score_level(
-    cluster: Dict[str, float], 
+    cluster: Cluster, 
     max_vol: float, 
     current_price: float,
-    wyckoff_state: WyckoffState,
+    wyckoff_state: Optional[WyckoffState],
     total_periods: int,
-    df: pd.DataFrame
+    df: Optional[pd.DataFrame]
 ) -> float:
     """
     Enhanced scoring that incorporates Wyckoff analysis and adjusts for available data
@@ -119,19 +134,25 @@ def score_level(
             score *= 0.8
             
     # Add Bollinger Band context with importance based on recency
-    if df is not None and all(col in df.columns for col in ['BB_upper', 'BB_lower']):
+    if df is not None and all(col in df.columns for col in ['BB_upper', 'BB_lower', 'h', 'l']):
         price = cluster['price']
         
         # Weight recent BB touches more heavily with exponential decay
-        bb_touch_score = 0
-        for idx in range(-min(20, len(df)), 0):
+        bb_touch_score = 0.0
+        window = min(20, len(df))
+        for idx in range(-window, 0):
+            h_i = df['h'].iloc[idx]
+            l_i = df['l'].iloc[idx]
+            bu_i = df['BB_upper'].iloc[idx]
+            bl_i = df['BB_lower'].iloc[idx]
+            if not (np.isfinite(h_i) and np.isfinite(l_i) and np.isfinite(bu_i) and np.isfinite(bl_i)):
+                continue
+
             day_age = abs(idx)
             decay_factor = np.exp(-0.1 * day_age)  # Exponential decay based on recency
             
-            if ((df['h'].iloc[idx] >= df['BB_upper'].iloc[idx] * 0.995 and 
-                 abs(price - df['h'].iloc[idx]) / price < 0.005) or
-                (df['l'].iloc[idx] <= df['BB_lower'].iloc[idx] * 1.005 and 
-                 abs(price - df['l'].iloc[idx]) / price < 0.005)):
+            if ((h_i >= bu_i * 0.995 and abs(price - h_i) / price < 0.005) or
+                (l_i <= bl_i * 1.005 and abs(price - l_i) / price < 0.005)):
                 bb_touch_score += decay_factor * 0.5
         
         # Apply BB touch boost
@@ -141,12 +162,13 @@ def score_level(
         # More tolerant of levels outside BBs for crypto with adjustable thresholds
         bb_upper = df['BB_upper'].iloc[-1]
         bb_lower = df['BB_lower'].iloc[-1]
-        bb_width_pct = (bb_upper - bb_lower) / current_price
-        
-        # Adjust thresholds based on current volatility
-        volatility_factor = min(1.5, max(1.0, 1.2 * bb_width_pct / 0.05))
-        if price > bb_upper * volatility_factor or price < bb_lower / volatility_factor:
-            score *= 0.85
+        if np.isfinite(bb_upper) and np.isfinite(bb_lower):
+            bb_width_pct = (bb_upper - bb_lower) / current_price if current_price > 0 else 0.0
+            
+            # Adjust thresholds based on current volatility
+            volatility_factor = min(1.5, max(1.0, 1.2 * bb_width_pct / 0.05))
+            if price > bb_upper * volatility_factor or price < bb_lower / volatility_factor:
+                score *= 0.85
             
     return min(score, 1.0)
 
@@ -162,7 +184,7 @@ async def get_significant_levels_from_timeframe(coin: str, mid: float, timeframe
 
 def find_significant_levels(
     df: pd.DataFrame,
-    wyckoff_state: WyckoffState,
+    wyckoff_state: Optional[WyckoffState],
     current_price: float,
     timeframe: Timeframe,
     n_levels: int = 4,
@@ -192,8 +214,9 @@ def find_significant_levels(
         bb_width_sma = df['BB_width'].rolling(window=min(5, len(df))).mean().iloc[-1]
         
         # Enhanced volatility detection with rate of change
-        bb_width_change = recent_bb_width / bb_width_sma if bb_width_sma > 0 else 1.0
-        if recent_bb_width > df['BB_width'].mean():
+        bb_width_change = (recent_bb_width / bb_width_sma) if (bb_width_sma and np.isfinite(bb_width_sma)) else 1.0
+        series_mean = float(df['BB_width'].mean())
+        if np.isfinite(recent_bb_width) and np.isfinite(series_mean) and recent_bb_width > series_mean:
             # Scale multiplier based on BB width change rate
             volatility_multiplier = min(1.5, 1.2 + (bb_width_change - 1) * 0.3)
     except (IndexError, ZeroDivisionError):
@@ -205,15 +228,20 @@ def find_significant_levels(
     price_sma = df['c'].rolling(window=lookback).mean()
     price_std = df['c'].rolling(window=lookback).std()
     
-    # Avoid zero division with a minimum floor value
-    last_price_sma = max(price_sma.iloc[-1], current_price * 0.001)
-    volatility = (price_std.iloc[-1] / last_price_sma) * volatility_multiplier
+    # Avoid zero division/NaN with a minimum floor value
+    last_price_sma_raw = price_sma.iloc[-1]
+    last_price_sma = last_price_sma_raw if np.isfinite(last_price_sma_raw) and last_price_sma_raw > 0 else max(current_price, 1e-6)
+    price_std_last = price_std.iloc[-1]
+    price_std_last = price_std_last if np.isfinite(price_std_last) and price_std_last >= 0 else 0.0
+    volatility = (price_std_last / last_price_sma) * volatility_multiplier
     
     # Dynamic price range based on timeframe and current volatility
     # Use the significant_levels_factor from timeframe settings
     timeframe_factor = timeframe.settings.significant_levels_factor
     
     max_deviation = min(STRONG_DEV_THRESHOLD * volatility * timeframe_factor, 0.25)
+    # Apply a minimum floor to avoid collapsing window in flat markets (1%)
+    max_deviation = max(max_deviation, 0.01)
     min_price = current_price * (1 - max_deviation)
     max_price = current_price * (1 + max_deviation)
     
@@ -227,10 +255,17 @@ def find_significant_levels(
     volatility_component = volatility * 0.2  # Reduced from 0.25 for finer control
     # Safeguard against invalid ATR values
     default_atr = current_price * 0.002  # Default 0.2% ATR if missing
-    base_tolerance = (recent_df['ATR'].iloc[-1] if recent_df['ATR'].iloc[-1] > 0 else default_atr) * (atr_multiplier + volatility_component)
+    atr_last = recent_df['ATR'].iloc[-1]
+    if not (np.isfinite(atr_last) and atr_last > 0):
+        atr_last = default_atr
+    base_tolerance = atr_last * (atr_multiplier + volatility_component)
     
     length_factor = np.log1p(len(recent_df) / timeframe.settings.support_resistance_lookback) / 2
     tolerance = base_tolerance * (1 + length_factor)
+    # Clamp tolerance to reasonable bounds relative to price
+    tol_min = current_price * 0.0005  # 0.05%
+    tol_max = current_price * 0.02    # 2%
+    tolerance = float(np.clip(tolerance, tol_min, tol_max))
     
     data = dict(
         highs=recent_df['h'].values,
@@ -249,7 +284,10 @@ def find_significant_levels(
     max_vol = np.sum(np.asarray(data['volumes']))
     total_periods = len(recent_df)
 
-    def filter_levels(clusters: Dict[float, Dict[str, float]], is_resistance: bool) -> List[float]:
+    # Use a dedupe threshold related to tolerance to avoid returning clustered duplicates
+    dedupe_threshold = max(tolerance * 0.75, tol_min)
+
+    def filter_levels(clusters: Dict[float, Cluster], is_resistance: bool) -> List[float]:
         """Filters and scores clustered price levels to identify significant resistance or support."""
         if not clusters:
             return []
@@ -269,16 +307,21 @@ def find_significant_levels(
         # Filter by position relative to current price and minimum score
         valid_levels: List[float] = [
             price for price, score in sorted_levels
-            if (is_resistance and price > current_price or
-                not is_resistance and price < current_price) and
-            score > min_score
+            if ((is_resistance and price > current_price) or
+                (not is_resistance and price < current_price)) and
+               score > min_score
         ]
 
-        # Check if valid_levels is empty
         if not valid_levels:
             return []
 
-        return valid_levels[:n_levels]
+        # De-duplicate nearby levels
+        deduped: List[float] = []
+        for lvl in valid_levels:
+            if all(abs(lvl - kept) > dedupe_threshold for kept in deduped):
+                deduped.append(lvl)
+
+        return deduped[:n_levels]
     
     return (
         filter_levels(clusters['resistance'], True),
