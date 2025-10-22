@@ -7,14 +7,25 @@ import os
 from logging_utils import logger
 
 from ..wyckoff_types import (
-    WyckoffPhase, WyckoffSign, SignificantLevelsData,
-    CompositeAction, Timeframe, VolatilityState
+    WyckoffPhase,
+    WyckoffSign,
+    SignificantLevelsData,
+    CompositeAction,
+    Timeframe,
+    VolatilityState,
 )
 
 from .wyckoff_multi_timeframe_types import (
-    AllTimeframesAnalysis, MultiTimeframeDirection, TimeframeGroupAnalysis,
-    STRONG_MOMENTUM, MODERATE_MOMENTUM, WEAK_MOMENTUM, MODERATE_VOLUME_THRESHOLD, STRONG_VOLUME_THRESHOLD,
-    MIXED_MOMENTUM, LOW_MOMENTUM
+    AllTimeframesAnalysis,
+    MultiTimeframeDirection,
+    TimeframeGroupAnalysis,
+    STRONG_MOMENTUM,
+    MODERATE_MOMENTUM,
+    WEAK_MOMENTUM,
+    MODERATE_VOLUME_THRESHOLD,
+    STRONG_VOLUME_THRESHOLD,
+    MIXED_MOMENTUM,
+    LOW_MOMENTUM,
 )
 
 # Constants for common thresholds
@@ -24,7 +35,8 @@ MODERATE_ALIGNMENT_THRESHOLD = 0.6
 # Minimum acceptable Risk:Reward for proposed trades
 MIN_RR = 1.4
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 def _weighted_average(values: List[float], weights: List[float]) -> float:
     """Calculate weighted average of values with corresponding weights."""
@@ -33,12 +45,11 @@ def _weighted_average(values: List[float], weights: List[float]) -> float:
         return 0.0
     return sum(v * w for v, w in zip(values, weights)) / total_weight
 
+
 def _get_timeframe_weights(analysis: AllTimeframesAnalysis) -> List[float]:
     """Return standard timeframe weights for consistency."""
-    return [
-        analysis.short_term.group_weight,
-        analysis.intermediate.group_weight
-    ]
+    return [analysis.short_term.group_weight, analysis.intermediate.group_weight]
+
 
 def _get_volume_description(volume_strength: float) -> str:
     """Get standardized volume description based on strength."""
@@ -47,6 +58,7 @@ def _get_volume_description(volume_strength: float) -> str:
     elif volume_strength > MODERATE_VOLUME_THRESHOLD:
         return "moderate volume"
     return "light volume"
+
 
 def _get_sign_description(sign: WyckoffSign) -> str:
     """
@@ -65,32 +77,46 @@ def _get_sign_description(sign: WyckoffSign) -> str:
         WyckoffSign.UPTHRUST: "upthrust",
         WyckoffSign.SECONDARY_TEST_RESISTANCE: "secondary test resistance",
         WyckoffSign.LAST_POINT_OF_RESISTANCE: "last point of resistance",
-        WyckoffSign.SIGN_OF_WEAKNESS: "sign of weakness"
+        WyckoffSign.SIGN_OF_WEAKNESS: "sign of weakness",
     }
-    
+
     return f" | {descriptions.get(sign, sign.value.lower())}"
+
 
 def _calculate_weighted_volume_strength(analysis: AllTimeframesAnalysis) -> float:
     """Calculate weighted volume strength across timeframes."""
     weights = _get_timeframe_weights(analysis)
     values = [
         analysis.short_term.volume_strength,
-        analysis.intermediate.volume_strength
+        analysis.intermediate.volume_strength,
     ]
     return _weighted_average(values, weights)
 
-def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalysis, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData], interactive_analysis: bool) -> str:
+
+def generate_all_timeframes_description(
+    coin: str,
+    analysis: AllTimeframesAnalysis,
+    mid: float,
+    significant_levels: Dict[Timeframe, SignificantLevelsData],
+    interactive_analysis: bool,
+) -> str:
     """Generate comprehensive description including four timeframe groups."""
     alignment_pct = f"{analysis.alignment_score * 100:.0f}%"
     confidence_pct = f"{analysis.confidence_level * 100:.0f}%"
-    
+
     # Get phase, volume, sign and action info for short and intermediate timeframes
     short_phase = analysis.short_term.dominant_phase.value
-    if analysis.short_term.uncertain_phase and analysis.short_term.dominant_phase != WyckoffPhase.UNKNOWN:
+    if (
+        analysis.short_term.uncertain_phase
+        and analysis.short_term.dominant_phase != WyckoffPhase.UNKNOWN
+    ):
         short_phase = f"~{short_phase}"
-        
+
     interm_phase = analysis.intermediate.dominant_phase.value
-    if analysis.intermediate.uncertain_phase and analysis.intermediate.dominant_phase != WyckoffPhase.UNKNOWN:
+    if (
+        analysis.intermediate.uncertain_phase
+        and analysis.intermediate.dominant_phase != WyckoffPhase.UNKNOWN
+    ):
         interm_phase = f"~{interm_phase}"
 
     short_volume = _get_volume_description(analysis.short_term.volume_strength)
@@ -98,9 +124,17 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
 
     short_sign = _get_sign_description(analysis.short_term.dominant_sign)
     interm_sign = _get_sign_description(analysis.intermediate.dominant_sign)
-    
-    short_action = "" if analysis.short_term.dominant_action == CompositeAction.UNKNOWN else f" | {analysis.short_term.dominant_action.value}"
-    interm_action = "" if analysis.intermediate.dominant_action == CompositeAction.UNKNOWN else f" | {analysis.intermediate.dominant_action.value}"
+
+    short_action = (
+        ""
+        if analysis.short_term.dominant_action == CompositeAction.UNKNOWN
+        else f" | {analysis.short_term.dominant_action.value}"
+    )
+    interm_action = (
+        ""
+        if analysis.intermediate.dominant_action == CompositeAction.UNKNOWN
+        else f" | {analysis.intermediate.dominant_action.value}"
+    )
 
     emoji = _get_trend_emoji_all_timeframes(analysis)
 
@@ -109,7 +143,8 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
             f"{emoji} <b>Market Analysis:</b>\n"
             f"Confidence: {confidence_pct}\n"
             f"Intraday Trend (30m-1h): {interm_phase} ({interm_volume}{interm_sign}{interm_action})\n"
-            f"Immediate Signals (15m): {short_phase} ({short_volume}{short_sign}{short_action})\n"      )
+            f"Immediate Signals (15m): {short_phase} ({short_volume}{short_sign}{short_action})\n"
+        )
 
     short_term_desc = _get_timeframe_trend_description(analysis.short_term)
     intermediate_desc = _get_timeframe_trend_description(analysis.intermediate)
@@ -129,35 +164,46 @@ def generate_all_timeframes_description(coin: str, analysis: AllTimeframesAnalys
         f"{insight}"
     )
 
-    trade_suggestion = _get_trade_suggestion(coin, analysis.overall_direction, mid, significant_levels, analysis.confidence_level)
+    trade_suggestion = _get_trade_suggestion(
+        coin,
+        analysis.overall_direction,
+        mid,
+        significant_levels,
+        analysis.confidence_level,
+    )
     if trade_suggestion:
         full_description += f"\n\n{trade_suggestion}"
 
     return full_description
+
 
 def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     """Get appropriate trend emoji based on overall analysis state."""
     # First check if we have enough confidence
     if analysis.confidence_level < 0.4:
         return "📊"  # Low confidence
-        
+
     # Get the overall trend strength using both alignment and momentum
     trend_strength = (
-        analysis.alignment_score > MODERATE_ALIGNMENT_THRESHOLD and 
-        analysis.confidence_level > MODERATE_CONFIDENCE_THRESHOLD and 
-        analysis.momentum_intensity > MODERATE_MOMENTUM
+        analysis.alignment_score > MODERATE_ALIGNMENT_THRESHOLD
+        and analysis.confidence_level > MODERATE_CONFIDENCE_THRESHOLD
+        and analysis.momentum_intensity > MODERATE_MOMENTUM
     )
-    
+
     direction = analysis.overall_direction
-    
+
     # Use simplified dictionary lookup for emoji selection
     emoji_map = {
-        (MultiTimeframeDirection.BULLISH, True): "⬆️",   # Strong bullish
-        (MultiTimeframeDirection.BULLISH, False): "↗️" if analysis.momentum_intensity > WEAK_MOMENTUM else "➡️⬆️",
-        (MultiTimeframeDirection.BEARISH, True): "⬇️",   # Strong bearish
-        (MultiTimeframeDirection.BEARISH, False): "↘️" if analysis.momentum_intensity > WEAK_MOMENTUM else "➡️⬇️",
+        (MultiTimeframeDirection.BULLISH, True): "⬆️",  # Strong bullish
+        (MultiTimeframeDirection.BULLISH, False): (
+            "↗️" if analysis.momentum_intensity > WEAK_MOMENTUM else "➡️⬆️"
+        ),
+        (MultiTimeframeDirection.BEARISH, True): "⬇️",  # Strong bearish
+        (MultiTimeframeDirection.BEARISH, False): (
+            "↘️" if analysis.momentum_intensity > WEAK_MOMENTUM else "➡️⬇️"
+        ),
     }
-    
+
     if direction == MultiTimeframeDirection.NEUTRAL:
         # Check if we're in consolidation or in conflict
         if analysis.alignment_score > MODERATE_ALIGNMENT_THRESHOLD:
@@ -165,8 +211,9 @@ def _get_trend_emoji_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
         elif analysis.momentum_intensity < LOW_MOMENTUM:
             return "🔀"  # Very low momentum, ranging market
         return "🔄"  # Mixed signals
-    
+
     return emoji_map.get((direction, trend_strength), "📊")
+
 
 def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis) -> str:
     """
@@ -188,14 +235,16 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         """Get primary trading signal focused on intraday timeframes."""
         # Focus on intermediate timeframe for intraday trading bias (30m-1h)
         intraday_bias = analysis.intermediate.momentum_bias
-        
+
         # Use short term for immediate direction (15m)
         immediate_bias = analysis.short_term.momentum_bias
-        
+
         # Calculate volume context for signal strength
         avg_volume = (
-            analysis.short_term.volume_strength * 0.6 +  # Higher weight for short timeframe volume
-            analysis.intermediate.volume_strength * 0.4  # Lower weight for intermediate timeframe
+            analysis.short_term.volume_strength
+            * 0.6  # Higher weight for short timeframe volume
+            + analysis.intermediate.volume_strength
+            * 0.4  # Lower weight for intermediate timeframe
         )
 
         # Alignment label to reflect how coherent the intraday picture is
@@ -208,42 +257,57 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
 
         if analysis.momentum_intensity > STRONG_MOMENTUM:
             momentum_desc = "strong"
-            position_advice = "Consider aggressive intraday positions with proper risk management."
+            position_advice = (
+                "Consider aggressive intraday positions with proper risk management."
+            )
         elif analysis.momentum_intensity > MODERATE_MOMENTUM:
             momentum_desc = "steady"
-            position_advice = "Favorable environment for swing positions with moderate risk exposure."
+            position_advice = (
+                "Favorable environment for swing positions with moderate risk exposure."
+            )
         elif analysis.momentum_intensity > WEAK_MOMENTUM:
             momentum_desc = "moderate"
-            position_advice = "Use scaled entries and definitive technical triggers for entries."
+            position_advice = (
+                "Use scaled entries and definitive technical triggers for entries."
+            )
         elif analysis.momentum_intensity > MIXED_MOMENTUM:
             momentum_desc = "mixed"
-            position_advice = "Focus on shorter timeframe setups and reduced position sizes."
+            position_advice = (
+                "Focus on shorter timeframe setups and reduced position sizes."
+            )
         else:
             momentum_desc = "weak"
             position_advice = "Consider range trading strategies or reduce exposure until clearer signals emerge."
 
         # Volatility-aware adjustments to execution guidance
         if analysis.intermediate.volatility_state == VolatilityState.HIGH:
-            position_advice += " Widen stops and stagger entries; take partial profits faster."
+            position_advice += (
+                " Widen stops and stagger entries; take partial profits faster."
+            )
         elif analysis.intermediate.volatility_state == VolatilityState.NORMAL:
-            position_advice += " Require breakout confirmation; avoid chasing early moves."
-        
+            position_advice += (
+                " Require breakout confirmation; avoid chasing early moves."
+            )
+
         # Volume qualifier for more precise signal description
         volume_qualifier = ""
         if avg_volume > STRONG_VOLUME_THRESHOLD:
             volume_qualifier = "high volume "
         elif avg_volume < MODERATE_VOLUME_THRESHOLD:
             volume_qualifier = "light volume "
-        
+
         # Check intraday alignment - focus on short and intermediate timeframes
         # Soft alignment: treat immediate NEUTRAL as aligned with intraday bias
         intraday_aligned = (
-            immediate_bias == intraday_bias or immediate_bias == MultiTimeframeDirection.NEUTRAL
+            immediate_bias == intraday_bias
+            or immediate_bias == MultiTimeframeDirection.NEUTRAL
         )
-        
+
         # Generate improved timeframe-specific momentum prefix
-        signal_prefix = f"{align_label} alignment, {momentum_desc} {volume_qualifier}momentum "
-        
+        signal_prefix = (
+            f"{align_label} alignment, {momentum_desc} {volume_qualifier}momentum "
+        )
+
         # Improved signal direction with more specific crypto trading language
         if intraday_aligned:
             if intraday_bias == MultiTimeframeDirection.BULLISH:
@@ -254,7 +318,7 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
                 if avg_volume > STRONG_VOLUME_THRESHOLD:
                     signal_direction += " with above-average volume support"
                 signal_direction += ". "
-                
+
             elif intraday_bias == MultiTimeframeDirection.BEARISH:
                 signal_direction = (
                     f"bearish alignment across 15m-1h timeframes indicating continued selling pressure. "
@@ -263,21 +327,21 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
                 if avg_volume > STRONG_VOLUME_THRESHOLD:
                     signal_direction += " with above-average volume"
                 signal_direction += ". "
-                
+
             else:
                 signal_direction = (
                     f"neutral price action across key timeframes suggesting range-bound conditions. "
                     f"Trade range edges or wait for break of range high/low with rising volume. "
                 )
-                
+
         else:  # Timeframes not aligned
             # Check for potential reversal setups - common in crypto
             potential_reversal = (
-                immediate_bias != MultiTimeframeDirection.NEUTRAL and
-                intraday_bias != immediate_bias and 
-                analysis.short_term.volume_strength > MODERATE_VOLUME_THRESHOLD
+                immediate_bias != MultiTimeframeDirection.NEUTRAL
+                and intraday_bias != immediate_bias
+                and analysis.short_term.volume_strength > MODERATE_VOLUME_THRESHOLD
             )
-            
+
             if potential_reversal:
                 if immediate_bias == MultiTimeframeDirection.BULLISH:
                     signal_direction = (
@@ -332,7 +396,11 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
 
         # Funding-aware cautioning
         # Coerce enum or string funding_state into a normalized lowercase string
-        _funding_raw = getattr(analysis.intermediate.funding_state, "value", analysis.intermediate.funding_state)
+        _funding_raw = getattr(
+            analysis.intermediate.funding_state,
+            "value",
+            analysis.intermediate.funding_state,
+        )
         funding_val = str(_funding_raw).lower()
         if "positive" in funding_val:
             position_advice += " Crowded longs; prefer pullback entries over breakouts."
@@ -348,9 +416,8 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
     # Format the complete insight
     intraday_signal = get_intraday_signal()
 
-    return (
-        f"<b>💡 Trading Insight:</b>\n{intraday_signal}"
-    )
+    return f"<b>💡 Trading Insight:</b>\n{intraday_signal}"
+
 
 def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
     """Generate enhanced trend description for a timeframe group."""
@@ -358,49 +425,78 @@ def _get_timeframe_trend_description(analysis: TimeframeGroupAnalysis) -> str:
     phase_desc = analysis.dominant_phase.value
     if analysis.uncertain_phase and analysis.dominant_phase != WyckoffPhase.UNKNOWN:
         phase_desc = f"~ {phase_desc}"
-    
+
     # Format action description with validation
     action_desc = (
-        analysis.dominant_action.value 
-        if analysis.dominant_action != CompositeAction.UNKNOWN 
+        analysis.dominant_action.value
+        if analysis.dominant_action != CompositeAction.UNKNOWN
         else "no clear action"
     )
-    
+
     volume_desc = _get_volume_description(analysis.volume_strength)
-        
+
     volatility = ""
     if analysis.volatility_state == VolatilityState.HIGH:
         volatility = " | high volatility"
-        
-    return (
-        f"• {phase_desc} phase {action_desc}\n"
-        f"  └─ {volume_desc}{volatility}"
-    )
 
-def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: float, significant_levels: Dict[Timeframe, SignificantLevelsData], confidence: float) -> Optional[str]:
+    return f"• {phase_desc} phase {action_desc}\n" f"  └─ {volume_desc}{volatility}"
+
+
+def _get_trade_suggestion(
+    coin: str,
+    direction: MultiTimeframeDirection,
+    mid: float,
+    significant_levels: Dict[Timeframe, SignificantLevelsData],
+    confidence: float,
+) -> Optional[str]:
     """Generate trade suggestion with stop loss and take profit based on nearby levels."""
 
     min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
     if confidence < min_confidence:
         return None
 
-    def get_valid_levels(timeframe: Timeframe, min_dist_sl: float, max_dist_sl: float, 
-                         min_dist_tp: float, max_dist_tp: float) -> tuple[List[float], List[float], List[float], List[float]]:
+    def get_valid_levels(
+        timeframe: Timeframe,
+        min_dist_sl: float,
+        max_dist_sl: float,
+        min_dist_tp: float,
+        max_dist_tp: float,
+    ) -> tuple[List[float], List[float], List[float], List[float]]:
         """Get valid support and resistance levels for a specific timeframe with separate ranges for SL and TP."""
         if timeframe not in significant_levels:
             return ([], [], [], [])
-        
+
         # Separate levels for take profit and stop loss with different distance constraints
-        tp_resistances = [r for r in significant_levels[timeframe]['resistance'] if min_dist_tp < abs(r - mid) < max_dist_tp]
-        tp_supports = [s for s in significant_levels[timeframe]['support'] if min_dist_tp < abs(s - mid) < max_dist_tp]
-        sl_resistances = [r for r in significant_levels[timeframe]['resistance'] if min_dist_sl < abs(r - mid) < max_dist_sl]
-        sl_supports = [s for s in significant_levels[timeframe]['support'] if min_dist_sl < abs(s - mid) < max_dist_sl]
-        
+        tp_resistances = [
+            r
+            for r in significant_levels[timeframe]["resistance"]
+            if min_dist_tp < abs(r - mid) < max_dist_tp
+        ]
+        tp_supports = [
+            s
+            for s in significant_levels[timeframe]["support"]
+            if min_dist_tp < abs(s - mid) < max_dist_tp
+        ]
+        sl_resistances = [
+            r
+            for r in significant_levels[timeframe]["resistance"]
+            if min_dist_sl < abs(r - mid) < max_dist_sl
+        ]
+        sl_supports = [
+            s
+            for s in significant_levels[timeframe]["support"]
+            if min_dist_sl < abs(s - mid) < max_dist_sl
+        ]
+
         return (tp_resistances, tp_supports, sl_resistances, sl_supports)
 
-    def get_trade_levels(direction: MultiTimeframeDirection, tp_resistances: List[float], 
-                         tp_supports: List[float], sl_resistances: List[float], 
-                         sl_supports: List[float]) -> tuple[str, float, float]:
+    def get_trade_levels(
+        direction: MultiTimeframeDirection,
+        tp_resistances: List[float],
+        tp_supports: List[float],
+        sl_resistances: List[float],
+        sl_supports: List[float],
+    ) -> tuple[str, float, float]:
         """Compute trade side, TP and SL levels based on direction."""
 
         def _buffers(distance_pct: float) -> tuple[float, float]:
@@ -467,7 +563,9 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         _, side, tp, sl = best
         return side, tp, sl
 
-    def _validate_and_format_trade(coin: str, side: str, entry: float, tp: float, sl: float, timeframe: Timeframe) -> Optional[str]:
+    def _validate_and_format_trade(
+        coin: str, side: str, entry: float, tp: float, sl: float, timeframe: Timeframe
+    ) -> Optional[str]:
         """Validate a computed trade and return formatted message, logging all rejection reasons."""
 
         if side == "Long" and (tp <= entry or sl >= entry):
@@ -482,7 +580,9 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
             return None
 
         if entry == 0:
-            logger.info(f"Skipping trade suggestion {coin} {timeframe.name}: Entry price is zero")
+            logger.info(
+                f"Skipping trade suggestion {coin} {timeframe.name}: Entry price is zero"
+            )
             return None
 
         tp_pct = abs((tp - entry) / entry) * 100
@@ -498,13 +598,19 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         rr = tp_pct / sl_pct
         if rr < min_rr:
             logger.info(
-                f"Skipping trade suggestion {coin} {timeframe.name}: R:R too low (RR={rr:.2f} < {min_rr:.2f}, tp%={tp_pct:.2f}, sl%={sl_pct:.2f})"
+                f"Skipping trade suggestion for {coin} {timeframe.name}: R:R too low (RR={rr:.2f} < {min_rr:.2f}, tp%={tp_pct:.2f}, sl%={sl_pct:.2f})"
             )
             return None
 
         enc_side = "L" if side == "Long" else "S"
-        enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(sl)}_{fmt_price(tp)}".encode('utf-8')).decode('utf-8')
-        trade_link = f" ({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
+        enc_trade = base64.b64encode(
+            f"{enc_side}_{coin}_{fmt_price(sl)}_{fmt_price(tp)}".encode("utf-8")
+        ).decode("utf-8")
+        trade_link = (
+            f" ({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})"
+            if exchange_enabled
+            else ""
+        )
 
         return (
             f"<b>💰 {side} trade for {coin}</b>{trade_link}<b>:</b>\n"
@@ -521,42 +627,58 @@ def _get_trade_suggestion(coin: str, direction: MultiTimeframeDirection, mid: fl
         return None
 
     # Distance bands tuned for healthier baseline R:R
-    # SL: 1.75%–3.5%, TP: 1.75%–5%
+    # SL: 1.75%–3.5%, TP: 1.50%–5%
     min_distance_sl = mid * 0.0175
     max_distance_sl = mid * 0.035
-    
-    min_distance_tp = mid * 0.0175
+
+    min_distance_tp = mid * 0.015
     max_distance_tp = mid * 0.05
 
     # Evaluate across timeframes starting from the shortest and return the first valid suggestion
     timeframes_order = [
-        Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4
+        Timeframe.MINUTES_15,
+        Timeframe.MINUTES_30,
+        Timeframe.HOUR_1,
+        Timeframe.HOURS_4,
     ]
 
-    def _search_levels(sl_min: float, sl_max: float, tp_min: float, tp_max: float) -> Optional[str]:
+    def _search_levels(
+        sl_min: float, sl_max: float, tp_min: float, tp_max: float
+    ) -> Optional[str]:
         for timeframe in timeframes_order:
             tp_resistances, tp_supports, sl_resistances, sl_supports = get_valid_levels(
                 timeframe, sl_min, sl_max, tp_min, tp_max
             )
 
-            # Need at least one directional candidate on each side depending on direction
             directional_possible = (
-                (direction == MultiTimeframeDirection.BULLISH and any(r > mid for r in tp_resistances) and any(s < mid for s in sl_supports)) or
-                (direction == MultiTimeframeDirection.BEARISH and any(s < mid for s in tp_supports) and any(r > mid for r in sl_resistances))
+                direction == MultiTimeframeDirection.BULLISH
+                and any(r > mid for r in tp_resistances)
+                and any(s < mid for s in sl_supports)
+            ) or (
+                direction == MultiTimeframeDirection.BEARISH
+                and any(s < mid for s in tp_supports)
+                and any(r > mid for r in sl_resistances)
             )
             if not directional_possible:
                 continue
             try:
-                side, tp, sl = get_trade_levels(direction, tp_resistances, tp_supports, sl_resistances, sl_supports)
+                side, tp, sl = get_trade_levels(
+                    direction, tp_resistances, tp_supports, sl_resistances, sl_supports
+                )
             except ValueError:
+                logger.info(
+                    f"Skipping trade suggestion for {coin} {timeframe.name}: no valid level pair"
+                )
                 continue
-            # Use validator to enforce final constraints and format
+
             message = _validate_and_format_trade(coin, side, mid, tp, sl, timeframe)
             if message:
                 return message
         return None
 
-    best_trade = _search_levels(min_distance_sl, max_distance_sl, min_distance_tp, max_distance_tp)
+    best_trade = _search_levels(
+        min_distance_sl, max_distance_sl, min_distance_tp, max_distance_tp
+    )
     if best_trade:
         return best_trade
 
