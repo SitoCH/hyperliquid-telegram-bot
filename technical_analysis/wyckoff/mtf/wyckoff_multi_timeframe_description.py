@@ -606,6 +606,11 @@ def _get_trade_suggestion(
             )
             return None
 
+        logger.info(
+            f"Accepted trade suggestion for {coin} {timeframe.name}: "
+            f"tp%={tp_pct:.2f}, sl%={sl_pct:.2f}, RR={rr:.2f}"
+        )
+
         enc_side = "L" if side == "Long" else "S"
         enc_trade = base64.b64encode(
             f"{enc_side}_{coin}_{fmt_price(sl)}_{fmt_price(tp)}".encode("utf-8")
