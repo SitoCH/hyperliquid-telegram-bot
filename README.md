@@ -68,6 +68,7 @@ docker-compose up -d
 | HTB_LLM_MAIN_MODEL | Main model for LLM analysis | "gpt-4" | "gpt-4" |
 | HTB_LLM_FAST_MODEL | Fast model for filtering analysis | "gpt-3.5-turbo" | "gpt-3.5-turbo" |
 | HTB_ALWAYS_RUN_LLM_FILTER | Always run LLM filter (use filter before analysis) | "True" or "False" | "False" |
+| HTB_TRADE_MIN_RR | Minimum Risk:Reward ratio required to propose a trade | "1.6" | 1.4 |
 
 ## Technical Analysis Modes
 

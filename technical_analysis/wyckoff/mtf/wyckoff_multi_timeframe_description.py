@@ -32,8 +32,8 @@ from .wyckoff_multi_timeframe_types import (
 MODERATE_CONFIDENCE_THRESHOLD = 0.5
 MODERATE_ALIGNMENT_THRESHOLD = 0.6
 
-# Minimum acceptable Risk:Reward for proposed trades
-MIN_RR = 1.4
+# Minimum acceptable Risk:Reward for proposed trades (default; override via env HTB_TRADE_MIN_RR)
+MIN_RR_DEFAULT = 1.4
 
 T = TypeVar("T")
 
@@ -456,6 +456,7 @@ def _get_trade_suggestion(
         return None
 
     def get_valid_levels(
+        coin: str,
         timeframe: Timeframe,
         min_dist_sl: float,
         max_dist_sl: float,
@@ -464,6 +465,9 @@ def _get_trade_suggestion(
     ) -> tuple[List[float], List[float], List[float], List[float]]:
         """Get valid support and resistance levels for a specific timeframe with separate ranges for SL and TP."""
         if timeframe not in significant_levels:
+            logger.info(
+                f"Skipping trade suggestion for {coin} {timeframe.name}: timeframe not in significant levels"
+            )
             return ([], [], [], [])
 
         # Separate levels for take profit and stop loss with different distance constraints
@@ -593,8 +597,8 @@ def _get_trade_suggestion(
             )
             return None
 
-        # Minimum R:R enforced via constant
-        min_rr = MIN_RR
+        # Minimum R:R (configurable via env HTB_TRADE_MIN_RR)
+        min_rr = float(os.getenv("HTB_TRADE_MIN_RR", str(MIN_RR_DEFAULT)))
         rr = tp_pct / sl_pct
         if rr < min_rr:
             logger.info(
@@ -647,20 +651,9 @@ def _get_trade_suggestion(
     ) -> Optional[str]:
         for timeframe in timeframes_order:
             tp_resistances, tp_supports, sl_resistances, sl_supports = get_valid_levels(
-                timeframe, sl_min, sl_max, tp_min, tp_max
+                coin, timeframe, sl_min, sl_max, tp_min, tp_max
             )
 
-            directional_possible = (
-                direction == MultiTimeframeDirection.BULLISH
-                and any(r > mid for r in tp_resistances)
-                and any(s < mid for s in sl_supports)
-            ) or (
-                direction == MultiTimeframeDirection.BEARISH
-                and any(s < mid for s in tp_supports)
-                and any(r > mid for r in sl_resistances)
-            )
-            if not directional_possible:
-                continue
             try:
                 side, tp, sl = get_trade_levels(
                     direction, tp_resistances, tp_supports, sl_resistances, sl_supports
