@@ -51,22 +51,22 @@ def get_trade_suggestion(
         tp_resistances = [
             r
             for r in significant_levels[timeframe]["resistance"]
-            if min_dist_tp < abs(r - mid) < max_dist_tp
+            if min_dist_tp <= abs(r - mid) <= max_dist_tp
         ]
         tp_supports = [
             s
             for s in significant_levels[timeframe]["support"]
-            if min_dist_tp < abs(s - mid) < max_dist_tp
+            if min_dist_tp <= abs(s - mid) <= max_dist_tp
         ]
         sl_resistances = [
             r
             for r in significant_levels[timeframe]["resistance"]
-            if min_dist_sl < abs(r - mid) < max_dist_sl
+            if min_dist_sl <= abs(r - mid) <= max_dist_sl
         ]
         sl_supports = [
             s
             for s in significant_levels[timeframe]["support"]
-            if min_dist_sl < abs(s - mid) < max_dist_sl
+            if min_dist_sl <= abs(s - mid) <= max_dist_sl
         ]
 
         return (tp_resistances, tp_supports, sl_resistances, sl_supports)
@@ -84,7 +84,9 @@ def get_trade_suggestion(
             """Dynamic buffers: tighter when distance is small, slightly wider if further away."""
             # distance_pct is in [0, 1] fraction (e.g. 0.02 for 2%)
             # Base buffers ~0.15%, tighten to 0.10% if close; allow up to 0.20% when far
-            if distance_pct <= 0.02:
+            if distance_pct <= 0.01:
+                adj = 0.0005
+            elif distance_pct <= 0.02:
                 adj = 0.0010
             elif distance_pct >= 0.035:
                 adj = 0.0020

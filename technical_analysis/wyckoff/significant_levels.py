@@ -102,7 +102,8 @@ def score_level(
     
     # Improved proximity scoring with steeper falloff
     price_deviation = abs(cluster['price'] - current_price) / current_price
-    proximity_score = max(0, 1 - min(1, (price_deviation / 0.03)**1.5)) * 0.2  # Reduced from 0.25 to 0.2
+    # Reduce weight to avoid over-favoring ultra-close levels; keep some preference within ~3%
+    proximity_score = max(0, 1 - min(1, (price_deviation / 0.03)**1.5)) * 0.12
     
     score = volume_score + touch_score + proximity_score
     
@@ -112,12 +113,8 @@ def score_level(
     if cluster['count'] >= strong_touches:
         score *= 1.1
         
-    # More nuanced proximity effect
-    if price_deviation < 0.005:  # Very close levels (0.5%)
-        score *= 1.15
-    elif price_deviation < 0.01:  # Close levels (1%)
-        score *= 1.10
-    elif price_deviation > 0.1:  # Far levels
+    # Proximity multiplier: remove strong boost for ultra-close; lightly penalize far levels only
+    if price_deviation > 0.1:  # Far levels
         score *= 0.85
         
     # Adjust score based on Wyckoff phase
@@ -240,8 +237,8 @@ def find_significant_levels(
     timeframe_factor = timeframe.settings.significant_levels_factor
     
     max_deviation = min(STRONG_DEV_THRESHOLD * volatility * timeframe_factor, 0.25)
-    # Apply a minimum floor to avoid collapsing window in flat markets (1%)
-    max_deviation = max(max_deviation, 0.01)
+    # Apply a minimum floor to avoid collapsing window in flat markets (2%)
+    max_deviation = max(max_deviation, 0.02)
     min_price = current_price * (1 - max_deviation)
     max_price = current_price * (1 + max_deviation)
     
@@ -285,7 +282,7 @@ def find_significant_levels(
     total_periods = len(recent_df)
 
     # Use a dedupe threshold related to tolerance to avoid returning clustered duplicates
-    dedupe_threshold = max(tolerance * 0.75, tol_min)
+    dedupe_threshold = max(tolerance * 1.0, tol_min)
 
     def filter_levels(clusters: Dict[float, Cluster], is_resistance: bool) -> List[float]:
         """Filters and scores clustered price levels to identify significant resistance or support."""
