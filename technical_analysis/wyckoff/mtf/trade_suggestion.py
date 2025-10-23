@@ -220,12 +220,12 @@ def get_trade_suggestion(
         return None
 
     # Distance bands tuned for healthier baseline R:R
-    # SL: 1.75%–3.5%, TP: 1.50%–5%
-    min_distance_sl = mid * 0.0175
+    # SL: 1.50%–3.75%, TP: 1.50%–5.50%
+    min_distance_sl = mid * 0.015
     max_distance_sl = mid * 0.035
 
     min_distance_tp = mid * 0.015
-    max_distance_tp = mid * 0.05
+    max_distance_tp = mid * 0.055
 
     # Evaluate across timeframes starting from the shortest and return the first valid suggestion
     timeframes_order = [
