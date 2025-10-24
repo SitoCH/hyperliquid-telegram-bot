@@ -59,7 +59,7 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
         current_time = time.time()
         stale_from = (current_time - (6 * 60 * 60)) * 1000
 
-        min_pnl_threshold = float(os.getenv('HTB_STALE_POSITION_MIN_PNL', '0.50'))
+        min_pnl_threshold = float(os.getenv('HTB_STALE_POSITION_MIN_PNL', '5'))
         auto_close_stale = os.getenv('HTB_AUTO_CLOSE_STALE_POSITIONS', 'False').lower() == 'true'
         
         positions_to_close = []
@@ -68,6 +68,7 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
             position = asset_position["position"]
             coin = position["coin"]
             pnl = float(position["unrealizedPnl"])
+            pnl_pct = float(position.get("returnOnEquity") or 0.0) * 100.0
 
             position_trades = [
                 trade for trade in trade_history
@@ -79,12 +80,14 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
                 oldest_trade = position_trades[0]
                 trade_time = int(oldest_trade["timestamp"])
                 
-                if trade_time < stale_from and pnl > min_pnl_threshold:
+                meets_threshold = pnl_pct > min_pnl_threshold
+                if trade_time < stale_from and meets_threshold:
                     positions_to_close.append({
                         "coin": coin,
                         "size": position["szi"],
                         "entry_price": position["entryPx"],
-                        "pnl": pnl
+                        "pnl": pnl,
+                        "pnl_pct": pnl_pct
                     })
 
         if positions_to_close:
@@ -92,7 +95,7 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
                 coin = pos['coin']
                 message = [
                     f"⏰ <b>Stale position on {coin}</b>",
-                    f"Current PnL: {fmt(pos['pnl'])} USDC"
+                    f"Current PnL: {fmt(pos['pnl'])} USDC ({fmt(pos.get('pnl_pct', 0.0))}%)"
                 ]
                 await telegram_utils.send('\n'.join(message), parse_mode=ParseMode.HTML)
                 if auto_close_stale:

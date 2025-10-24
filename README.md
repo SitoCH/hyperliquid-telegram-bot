@@ -59,7 +59,7 @@ docker-compose up -d
 | HTB_ANALYZE_COINS_WITH_OPEN_ORDERS | Include coins with open orders in analysis | "True" or "False" | "False" |
 | HTB_COINS_ANALYSIS_MIN_CONFIDENCE | Minimum confidence level for coin analysis notifications | "0.75" | 0.75 |
 | HTB_MONITOR_STALE_POSITIONS | Monitor positions older than 1 day with positive PnL | "True" or "False" | "False" |
-| HTB_STALE_POSITION_MIN_PNL | Minimum PnL in USDC to consider a position as stale | "0.50" | 0.50 |
+| HTB_STALE_POSITION_MIN_PNL | Minimum PnL% to consider a position as stale. Provide a float like "5" for 5% (percent sign not supported) | "5" | 5 |
 | HTB_AUTO_CLOSE_STALE_POSITIONS | Automatically close stale positions instead of just alerting | "True" or "False" | "False" |
 | HTB_USE_ISOLATED_LEVERAGE | Use isolated leverage instead of cross | "True" or "False" | "True" |
 | HTB_ALPHAVANTAGE_API_KEY | API key for Alpha Vantage (required for performance comparison against S&P500) | "XXXXXXXXXXXXXXXX" | None |
