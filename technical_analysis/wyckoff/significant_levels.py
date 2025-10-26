@@ -237,8 +237,20 @@ def find_significant_levels(
     timeframe_factor = timeframe.settings.significant_levels_factor
     
     max_deviation = min(STRONG_DEV_THRESHOLD * volatility * timeframe_factor, 0.25)
-    # Apply a minimum floor to avoid collapsing window in flat markets (2%)
-    max_deviation = max(max_deviation, 0.02)
+    # Apply a timeframe-aware minimum floor to ensure TP window coverage for trade suggestions
+    # 15m: ≥3%, 30m: ≥4%, 1h: ≥5.5% (covers TP up to 5.5%), 4h: ≥6%
+    if timeframe == Timeframe.MINUTES_15:
+        min_deviation_floor = 0.03
+    elif timeframe == Timeframe.MINUTES_30:
+        min_deviation_floor = 0.04
+    elif timeframe == Timeframe.HOUR_1:
+        min_deviation_floor = 0.055
+    elif timeframe == Timeframe.HOURS_4:
+        min_deviation_floor = 0.06
+    else:
+        # Default legacy floor (2%) for other timeframes
+        min_deviation_floor = 0.02
+    max_deviation = max(max_deviation, min_deviation_floor)
     min_price = current_price * (1 - max_deviation)
     max_price = current_price * (1 + max_deviation)
     
@@ -281,11 +293,20 @@ def find_significant_levels(
     max_vol = np.sum(np.asarray(data['volumes']))
     total_periods = len(recent_df)
 
-    # Use a dedupe threshold related to tolerance to avoid returning clustered duplicates
-    dedupe_threshold = max(tolerance * 1.0, tol_min)
+    # Use a volatility-aware dedupe threshold to keep more alternatives under high volatility
+    # Clamp upper bound to ~1% of price to avoid over-deduping in wide ATR contexts
+    if volatility > 0.02:
+        dedupe_base = tolerance * 0.6
+    else:
+        dedupe_base = tolerance * 0.8
+    dedupe_threshold = float(np.clip(dedupe_base, tol_min, current_price * 0.01))
 
     def filter_levels(clusters: Dict[float, Cluster], is_resistance: bool) -> List[float]:
-        """Filters and scores clustered price levels to identify significant resistance or support."""
+        """Filters and scores clustered price levels to identify significant resistance or support.
+        Enhancements:
+        - Dynamic min_score adjusted by volatility and scarcity
+        - Distance-banded selection to keep diversity across near/mid/far targets
+        """
         if not clusters:
             return []
 
@@ -301,24 +322,86 @@ def find_significant_levels(
             reverse=True
         )
 
-        # Filter by position relative to current price and minimum score
-        valid_levels: List[float] = [
-            price for price, score in sorted_levels
-            if ((is_resistance and price > current_price) or
-                (not is_resistance and price < current_price)) and
-               score > min_score
+        # Compute distance percent and pre-filter by side
+        with_pct: List[Tuple[float, float, float]] = [
+            (price, score, abs(price - current_price) / max(current_price, 1e-9))
+            for price, score in sorted_levels
+            if (price > current_price) == is_resistance  # True for resistance, False for support
         ]
 
-        if not valid_levels:
+        if not with_pct:
             return []
 
-        # De-duplicate nearby levels
-        deduped: List[float] = []
-        for lvl in valid_levels:
-            if all(abs(lvl - kept) > dedupe_threshold for kept in deduped):
-                deduped.append(lvl)
+        # Dynamic min_score: adjust with volatility and scarcity of candidates
+        base_min = min_score
+        # Volatility adjustment: higher vol -> slightly stricter, lower vol -> slightly looser
+        vol_adj = np.clip((volatility - 0.02) / 0.04, -0.25, 0.5)  # maps ~[0, 0.06] into [-0.25, 0.5]
+        eff_min = max(0.08, base_min * (1 + float(vol_adj)))
 
-        return deduped[:n_levels]
+        # Apply score threshold, relax if too few pass
+        def apply_threshold(th: float) -> List[Tuple[float, float, float]]:
+            return [(p, s, pct) for (p, s, pct) in with_pct if s > th]
+
+        candidates = apply_threshold(eff_min)
+        relax_steps = [eff_min * 0.9, eff_min * 0.8, max(0.08, eff_min * 0.7)]
+        min_needed = min(2, n_levels)
+        for th in relax_steps:
+            if len(candidates) >= min_needed:
+                break
+            candidates = apply_threshold(th)
+
+        if not candidates:
+            return []
+
+        # Distance bands (fractions):
+        # b1: 0–2%, b2: 2–3.5%, b3: 3.5–5.5%, b4: >5.5%
+        def band_idx(pct: float) -> int:
+            if pct <= 0.02:
+                return 1
+            if pct <= 0.035:
+                return 2
+            if pct <= 0.055:
+                return 3
+            return 4
+
+        bands: Dict[int, List[Tuple[float, float, float]]] = {1: [], 2: [], 3: [], 4: []}
+        for p, s, pct in candidates:
+            bands[band_idx(pct)].append((p, s, pct))
+        # Keep strongest first in each band
+        for b in bands:
+            bands[b].sort(key=lambda x: x[1], reverse=True)
+
+        # Selection preference order: mid-near (2) → near (1) → mid-far (3) → far (4)
+        order = [2, 1, 3, 4]
+        selected: List[float] = []
+        # Round-robin take one from each band, respecting dedupe
+        while len(selected) < n_levels and any(bands[b] for b in order):
+            progressed = False
+            for b in order:
+                if not bands[b] or len(selected) >= n_levels:
+                    continue
+                cand_p, _, _ = bands[b][0]
+                # De-duplicate nearby levels
+                if all(abs(cand_p - kept) > dedupe_threshold for kept in selected):
+                    selected.append(cand_p)
+                    progressed = True
+                # Pop tried candidate regardless to avoid loops
+                bands[b].pop(0)
+                if len(selected) >= n_levels:
+                    break
+            if not progressed:
+                break
+
+        # Fallback fill from all remaining candidates by score
+        if len(selected) < n_levels:
+            remaining_all = sorted(candidates, key=lambda x: x[1], reverse=True)
+            for p, _, _ in remaining_all:
+                if len(selected) >= n_levels:
+                    break
+                if all(abs(p - kept) > dedupe_threshold for kept in selected):
+                    selected.append(p)
+
+        return selected[:n_levels]
     
     return (
         filter_levels(clusters['resistance'], True),
