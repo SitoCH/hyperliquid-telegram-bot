@@ -69,6 +69,7 @@ docker-compose up -d
 | HTB_LLM_FAST_MODEL | Fast model for filtering analysis | "gpt-3.5-turbo" | "gpt-3.5-turbo" |
 | HTB_ALWAYS_RUN_LLM_FILTER | Always run LLM filter (use filter before analysis) | "True" or "False" | "False" |
 | HTB_TRADE_MIN_RR | Minimum Risk:Reward ratio required to propose a trade | "1.6" | 1.4 |
+| HTB_USE_HEIKIN_ASHI | Use Heikin Ashi candles in generated charts | "True" or "False" | False |
 
 ## Technical Analysis Modes
 
@@ -77,6 +78,15 @@ The bot supports two different technical analysis modes that can be switched usi
 ### Wyckoff Analysis Mode (Default)
 
 The default mode uses traditional Wyckoff methodology to analyze market phases across multiple timeframes with volume pattern detection and chart generation.
+
+You can toggle the chart candle type to standard candles by setting:
+
+```yaml
+environment:
+  HTB_USE_HEIKIN_ASHI: "False"
+```
+
+When enabled (the default), charts use Heikin Ashi candles for smoother visualization while calculations (indicators and level detection) still use the original OHLCV data.
 
 ### LLM Analysis Mode
 
