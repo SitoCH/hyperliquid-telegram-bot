@@ -304,10 +304,12 @@ class Timeframe(Enum):
         return self._name
 
 
-# Optimized Timeframe Settings for Intraday Crypto Trading with Hourly Analysis
+# Optimized Timeframe Settings for Intraday Crypto Trading with Balanced Multi-Timeframe Analysis
+# Weights rebalanced for day trading: higher weight on 15m/30m for better entry/exit timing
+# Total weights: 0.25 + 0.32 + 0.30 + 0.10 + 0.03 = 1.00
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.18,
+        phase_weight=0.25,  # 25% - Increased from 0.18 for better scalping signals
         description="15min scalping entries",
         chart_image_time_delta=pd.Timedelta(hours=8),
         ema_length=8,
@@ -320,7 +322,7 @@ _TIMEFRAME_SETTINGS = {
         support_resistance_lookback=24,
         swing_lookback=3,
         effort_lookback=3,
-        min_move_multiplier=0.65,
+        min_move_multiplier=0.70,  # Increased from 0.65 to reduce noise on fastest timeframe
         spring_factor=0.75,
         liquidation_factor=0.85,
         breakout_factor=0.85,
@@ -340,14 +342,14 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.25,
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.28,
+        phase_weight=0.32,  # 32% - Increased from 0.28 for better swing trade signals
         description="30min intraday swings",
         chart_image_time_delta=pd.Timedelta(hours=16),
         ema_length=10,
         atr_settings=(14, 8, 18, 6, 8),
         supertrend_multiplier=2.0,
-        base_multiplier=0.85,
-        momentum_multiplier=1.4,
+        base_multiplier=0.88,  # Increased from 0.85 to match higher weight and importance
+        momentum_multiplier=1.5,  # Increased from 1.4 to better capture intraday swings
         volume_ma_window=16,
         spring_upthrust_window=4,
         support_resistance_lookback=36,
@@ -356,25 +358,25 @@ _TIMEFRAME_SETTINGS = {
         min_move_multiplier=0.80,
         spring_factor=0.82,
         liquidation_factor=0.90,
-        breakout_factor=0.85,
-        significant_levels_factor=0.90,
+        breakout_factor=0.88,  # Increased from 0.85 to better catch swing breakouts
+        significant_levels_factor=0.92,  # Increased from 0.90 for better S/R detection
         atr_multiplier=0.24,
         volume_weighted_efficiency=0.30,
         high_threshold=0.85,
         low_threshold=0.80,
         wyckoff_volatility_factor=0.80,
         wyckoff_trend_lookback=3,
-        wyckoff_lps_volume_threshold=0.24,
+        wyckoff_lps_volume_threshold=0.22,  # Increased from 0.24 - now more important timeframe
         wyckoff_lps_price_multiplier=0.62,
-        wyckoff_sos_multiplier=1.08,
-        wyckoff_ut_multiplier=0.34,
+        wyckoff_sos_multiplier=1.10,  # Increased from 1.08 for stronger bullish signals
+        wyckoff_ut_multiplier=0.36,  # Increased from 0.34 for better upthrust detection
         wyckoff_sc_multiplier=1.10,
-        wyckoff_ar_multiplier=0.98,
+        wyckoff_ar_multiplier=1.00,  # Increased from 0.98 for better rally detection
         wyckoff_confirmation_threshold=0.28,
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.42,
-        description="1h primary trend analysis",
+        phase_weight=0.30,  # 30% - Reduced from 0.42 to balance with shorter timeframes for day trading
+        description="1h trend confirmation",
         chart_image_time_delta=pd.Timedelta(hours=48),
         ema_length=14,
         atr_settings=(18, 12, 24, 8, 10),
@@ -406,7 +408,7 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.32,
     ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.10,
+        phase_weight=0.10,  # 10% - Unchanged, provides structural context
         description="4h structural context",
         chart_image_time_delta=pd.Timedelta(
             days=5
@@ -441,7 +443,7 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.35,
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.02,
+        phase_weight=0.03,  # 3% - Slightly increased from 0.02 for minimal regime awareness
         description="8h market regime context",
         chart_image_time_delta=pd.Timedelta(days=10),
         ema_length=30,

@@ -110,24 +110,32 @@ def analyze_multi_timeframe(
             for reason in reasons:
                 logger.info(f"- {reason}")
         
-        # Simplified direction-specific criteria - more balanced for crypto
+        # Simplified direction-specific criteria - balanced treatment for both directions
         if should_notify:
             direction_checks = []
             
+            # Symmetric volume and momentum requirements for balanced day trading
+            MIN_ALIGNMENT = 0.45
+            VOLUME_MULTIPLIER = 0.70  # Same for both directions
+            
             if all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:
                 direction_checks = [
-                    (all_analysis.short_term.internal_alignment >= 0.45 or all_analysis.intermediate.internal_alignment >= 0.45, 
+                    (all_analysis.short_term.internal_alignment >= MIN_ALIGNMENT or 
+                     all_analysis.intermediate.internal_alignment >= MIN_ALIGNMENT, 
                      f"Low alignment in both timeframes"),
-                    (momentum_intensity >= WEAK_MOMENTUM * 0.8, f"Weak momentum: {momentum_intensity:.2f}"),
-                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.8, 
+                    (momentum_intensity >= WEAK_MOMENTUM * 0.75, 
+                     f"Weak momentum: {momentum_intensity:.2f}"),
+                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * VOLUME_MULTIPLIER, 
                      f"Low volume strength: {all_analysis.intermediate.volume_strength:.2f}"),
                 ]
-            else:  # BEARISH
+            else:  # BEARISH - now has symmetric requirements
                 direction_checks = [
-                    (all_analysis.short_term.internal_alignment >= 0.45 or all_analysis.intermediate.internal_alignment >= 0.45, 
+                    (all_analysis.short_term.internal_alignment >= MIN_ALIGNMENT or 
+                     all_analysis.intermediate.internal_alignment >= MIN_ALIGNMENT, 
                      f"Low alignment in both timeframes"),
-                    (momentum_intensity >= WEAK_MOMENTUM * 0.7, f"Weak momentum: {momentum_intensity:.2f}"),
-                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * 0.6, 
+                    (momentum_intensity >= WEAK_MOMENTUM * 0.75, 
+                     f"Weak momentum: {momentum_intensity:.2f}"),
+                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * VOLUME_MULTIPLIER, 
                      f"Low volume strength: {all_analysis.intermediate.volume_strength:.2f}"),
                 ]
             
@@ -611,7 +619,7 @@ def _calculate_group_weight(timeframes: Dict[Timeframe, WyckoffState]) -> float:
 
 
 def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overall_direction: MultiTimeframeDirection) -> float:
-    """Calculate momentum intensity with a streamlined approach for intraday crypto trading."""
+    """Calculate momentum intensity with balanced approach for day trading crypto."""
     if not analyses or overall_direction == MultiTimeframeDirection.NEUTRAL:
         return 0.0
     
@@ -621,11 +629,12 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         (a.dominant_sign in [WyckoffSign.SIGN_OF_STRENGTH, WyckoffSign.SIGN_OF_WEAKNESS] and a.volume_strength > 0.6)
     ))
     if rapid_moves >= len(analyses) // 2:
-        return 0.8 if overall_direction == MultiTimeframeDirection.BEARISH else 0.85
+        # Symmetric treatment: 0.8 for both directions on rapid moves
+        return 0.80
     
-    # Direction-specific base parameters
+    # Symmetric base parameters for balanced day trading
     is_bearish = overall_direction == MultiTimeframeDirection.BEARISH
-    base_momentum = 0.45 if is_bearish else 0.4
+    base_momentum = 0.42  # Same base for both directions
     
     # 1. Calculate alignment score (simpler approach)
     aligned_count = sum(1 for a in analyses if a.momentum_bias == overall_direction)
@@ -638,10 +647,10 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     ))
     phase_score = phase_confirmations / len(analyses) if analyses else 0
     
-    # 3. Calculate volume support (directionally aware)
+    # 3. Calculate volume support with minimal directional adjustment
     volume_score = sum(a.volume_strength * a.group_weight for a in analyses) / sum(a.group_weight for a in analyses)
-    # Apply direction-specific volume discount factor
-    volume_factor = 1.3 if is_bearish else 1.0
+    # Only 10% boost for bearish (crypto does fall faster on less volume)
+    volume_factor = 1.10 if is_bearish else 1.0
     adjusted_volume = min(1.0, volume_score * volume_factor)
     
     # 4. Calculate timeframe agreement (weight intermediate timeframes more)
@@ -660,12 +669,9 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         timeframe_bonus
     )
     
-    # Apply final direction-specific adjustment
-    if is_bearish:
-        # Lower sigmoid threshold for bearish moves (0.35 vs 0.4)
-        final_momentum = 1.0 / (1.0 + np.exp(-6 * (raw_momentum - 0.35)))
-    else:
-        final_momentum = 1.0 / (1.0 + np.exp(-6 * (raw_momentum - 0.4)))
+    # Apply final sigmoid with symmetric threshold for balanced signals
+    sigmoid_threshold = 0.38  # Same for both directions (was 0.35 bearish / 0.4 bullish)
+    final_momentum = 1.0 / (1.0 + np.exp(-6 * (raw_momentum - sigmoid_threshold)))
     
     # Ensure minimum non-zero value
     if final_momentum < 0.01:
