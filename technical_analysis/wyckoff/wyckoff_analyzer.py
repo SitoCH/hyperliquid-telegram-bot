@@ -25,12 +25,13 @@ class WyckoffAnalyzer:
     """Wyckoff-based technical analysis implementation."""
     
     def __init__(self):
+        # Lookback values are DAYS, not candle counts.
         self.wyckoff_timeframes = {
-            Timeframe.MINUTES_15: 60,   # ~15 hours
-            Timeframe.MINUTES_30: 70,   # ~35 hours
-            Timeframe.HOUR_1: 72,       # 3 days
-            Timeframe.HOURS_4: 90,      # ~15 days
-            Timeframe.HOURS_8: 120      # ~40 days
+            Timeframe.MINUTES_15: 12,
+            Timeframe.MINUTES_30: 18,
+            Timeframe.HOUR_1: 30,
+            Timeframe.HOURS_4: 60,
+            Timeframe.HOURS_8: 90,
         }
     
     async def analyze(self, context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:
