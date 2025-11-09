@@ -308,28 +308,29 @@ class Timeframe(Enum):
 # Weights rebalanced for day trading: higher weight on 15m/30m for better entry/exit timing
 # Total weights: 0.25 + 0.32 + 0.30 + 0.10 + 0.03 = 1.00
 _TIMEFRAME_SETTINGS = {
+    # Faster entries: favor 15m/30m a bit more and lower momentum thresholds
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.25,  # 25% - Increased from 0.18 for better scalping signals
+        phase_weight=0.35,  # 35% (prev 0.25) – prioritize entry timing
         description="15min scalping entries",
         chart_image_time_delta=pd.Timedelta(hours=8),
-        ema_length=8,
+        ema_length=7,
         atr_settings=(10, 6, 14, 4, 6),
-        supertrend_multiplier=1.8,
-        base_multiplier=0.85,
-        momentum_multiplier=1.6,
+        supertrend_multiplier=1.7,
+        base_multiplier=0.82,
+        momentum_multiplier=1.35,  # lower = earlier momentum confirmation
         volume_ma_window=16,
         spring_upthrust_window=3,
         support_resistance_lookback=24,
         swing_lookback=3,
         effort_lookback=3,
-        min_move_multiplier=0.70,  # Increased from 0.65 to reduce noise on fastest timeframe
+        min_move_multiplier=0.65,  # allow slightly smaller early moves
         spring_factor=0.75,
         liquidation_factor=0.85,
-        breakout_factor=0.85,
-        significant_levels_factor=0.80,
+        breakout_factor=0.88,
+        significant_levels_factor=0.85,
         atr_multiplier=0.22,
         volume_weighted_efficiency=0.35,
-        high_threshold=0.80,
+        high_threshold=0.78,
         low_threshold=0.80,
         wyckoff_volatility_factor=0.70,
         wyckoff_trend_lookback=3,
@@ -339,56 +340,56 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_ut_multiplier=0.30,
         wyckoff_sc_multiplier=1.05,
         wyckoff_ar_multiplier=0.95,
-        wyckoff_confirmation_threshold=0.25,
+        wyckoff_confirmation_threshold=0.24,
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.32,  # 32% - Increased from 0.28 for better swing trade signals
+        phase_weight=0.33,  # 33% (prev 0.32) – main swing alignment
         description="30min intraday swings",
         chart_image_time_delta=pd.Timedelta(hours=16),
-        ema_length=10,
+        ema_length=9,
         atr_settings=(14, 8, 18, 6, 8),
-        supertrend_multiplier=2.0,
-        base_multiplier=0.88,  # Increased from 0.85 to match higher weight and importance
-        momentum_multiplier=1.5,  # Increased from 1.4 to better capture intraday swings
+        supertrend_multiplier=1.9,
+        base_multiplier=0.86,
+        momentum_multiplier=1.40,
         volume_ma_window=16,
         spring_upthrust_window=4,
         support_resistance_lookback=36,
         swing_lookback=3,
         effort_lookback=4,
-        min_move_multiplier=0.80,
+        min_move_multiplier=0.78,
         spring_factor=0.82,
         liquidation_factor=0.90,
-        breakout_factor=0.88,  # Increased from 0.85 to better catch swing breakouts
-        significant_levels_factor=0.92,  # Increased from 0.90 for better S/R detection
+        breakout_factor=0.90,
+        significant_levels_factor=0.94,
         atr_multiplier=0.24,
         volume_weighted_efficiency=0.30,
-        high_threshold=0.85,
+        high_threshold=0.84,
         low_threshold=0.80,
         wyckoff_volatility_factor=0.80,
         wyckoff_trend_lookback=3,
-        wyckoff_lps_volume_threshold=0.22,  # Increased from 0.24 - now more important timeframe
+        wyckoff_lps_volume_threshold=0.22,
         wyckoff_lps_price_multiplier=0.62,
-        wyckoff_sos_multiplier=1.10,  # Increased from 1.08 for stronger bullish signals
-        wyckoff_ut_multiplier=0.36,  # Increased from 0.34 for better upthrust detection
+        wyckoff_sos_multiplier=1.10,
+        wyckoff_ut_multiplier=0.36,
         wyckoff_sc_multiplier=1.10,
-        wyckoff_ar_multiplier=1.00,  # Increased from 0.98 for better rally detection
-        wyckoff_confirmation_threshold=0.28,
+        wyckoff_ar_multiplier=1.00,
+        wyckoff_confirmation_threshold=0.27,
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.30,  # 30% - Reduced from 0.42 to balance with shorter timeframes for day trading
+        phase_weight=0.22,  # 22% (prev 0.30) – still confirm but less lag
         description="1h trend confirmation",
         chart_image_time_delta=pd.Timedelta(hours=48),
-        ema_length=14,
+        ema_length=13,
         atr_settings=(18, 12, 24, 8, 10),
-        supertrend_multiplier=2.2,
-        base_multiplier=0.90,
-        momentum_multiplier=1.5,
+        supertrend_multiplier=2.1,
+        base_multiplier=0.88,
+        momentum_multiplier=1.45,
         volume_ma_window=20,
         spring_upthrust_window=5,
         support_resistance_lookback=48,
         swing_lookback=5,
         effort_lookback=6,
-        min_move_multiplier=0.90,
+        min_move_multiplier=0.88,
         spring_factor=0.90,
         liquidation_factor=0.88,
         breakout_factor=0.92,
@@ -408,7 +409,7 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.32,
     ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.10,  # 10% - Unchanged, provides structural context
+        phase_weight=0.07,  # 7% (prev 0.10) – structural context only
         description="4h structural context",
         chart_image_time_delta=pd.Timedelta(
             days=5
@@ -443,7 +444,7 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.35,
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.03,  # 3% - Slightly increased from 0.02 for minimal regime awareness
+        phase_weight=0.03,  # 3% – minimal regime awareness
         description="8h market regime context",
         chart_image_time_delta=pd.Timedelta(days=10),
         ema_length=30,

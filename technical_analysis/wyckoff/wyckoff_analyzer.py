@@ -26,11 +26,11 @@ class WyckoffAnalyzer:
     
     def __init__(self):
         self.wyckoff_timeframes = {
-            Timeframe.MINUTES_15: 28,
-            Timeframe.MINUTES_30: 42,
-            Timeframe.HOUR_1: 60,
-            Timeframe.HOURS_4: 90,
-            Timeframe.HOURS_8: 120
+            Timeframe.MINUTES_15: 60,   # ~15 hours
+            Timeframe.MINUTES_30: 70,   # ~35 hours
+            Timeframe.HOUR_1: 72,       # 3 days
+            Timeframe.HOURS_4: 90,      # ~15 days
+            Timeframe.HOURS_8: 120      # ~40 days
         }
     
     async def analyze(self, context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:

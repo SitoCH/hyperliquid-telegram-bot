@@ -654,10 +654,19 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     adjusted_volume = min(1.0, volume_score * volume_factor)
     
     # 4. Calculate timeframe agreement (weight intermediate timeframes more)
-    short_term_aligned = any(a.momentum_bias == overall_direction 
-                            for a in analyses if a.group_weight in {tf.settings.phase_weight for tf in SHORT_TERM_TIMEFRAMES})
-    intermediate_aligned = any(a.momentum_bias == overall_direction 
-                              for a in analyses if a.group_weight in {tf.settings.phase_weight for tf in INTERMEDIATE_TIMEFRAMES})
+    # Identify groups by approximate total weight rather than per-timeframe weights
+    short_group_weight = sum(tf.settings.phase_weight for tf in SHORT_TERM_TIMEFRAMES)
+    intermediate_group_weight = sum(tf.settings.phase_weight for tf in INTERMEDIATE_TIMEFRAMES)
+    def _is_close(a: float, b: float, tol: float = 0.05) -> bool:
+        return abs(a - b) <= tol
+    short_term_aligned = any(
+        (a.momentum_bias == overall_direction) and _is_close(a.group_weight, short_group_weight, 0.10)
+        for a in analyses
+    )
+    intermediate_aligned = any(
+        (a.momentum_bias == overall_direction) and _is_close(a.group_weight, intermediate_group_weight, 0.10)
+        for a in analyses
+    )
     timeframe_bonus = 0.1 if (short_term_aligned and intermediate_aligned) else 0.0
     
     # Combine scores with simplified formula

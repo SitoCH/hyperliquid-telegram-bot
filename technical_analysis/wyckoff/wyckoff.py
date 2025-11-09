@@ -107,8 +107,9 @@ def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol
         return False, False
     
     try:
-        # Use standard window for better reliability
-        window = df.iloc[max(0, idx-4):idx+1]  # Ensure we don't go below 0
+        # Use timeframe-configured window for better responsiveness per TF
+        win = max(3, timeframe.settings.spring_upthrust_window)
+        window = df.iloc[max(0, idx - win): idx + 1]  # Ensure we don't go below 0
         
         if len(window) < 3:  # Need minimum window size
             return False, False
@@ -164,21 +165,29 @@ def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol
 
 def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> WyckoffState:
     """Analyze and store Wyckoff phase data incorporating funding rates."""
-    # Safety check for minimum required periods
-    if len(df) < MIN_PERIODS:
+    # Safety check for minimum required periods (adaptive per timeframe to reduce lag)
+    tf_min_periods_map = {
+        Timeframe.MINUTES_15: 34,
+        Timeframe.MINUTES_30: 40,
+        Timeframe.HOUR_1: 50,
+        Timeframe.HOURS_4: 55,
+        Timeframe.HOURS_8: 55,
+    }
+    min_periods = tf_min_periods_map.get(timeframe, MIN_PERIODS)
+    if len(df) < min_periods:
         return WyckoffState.unknown()
 
     try:
         # Calculate volume metrics first - now includes volume_state
         vol_metrics = calculate_volume_metrics(df, timeframe)
-        
+
         # Process last period
-        short_term_window = min(MIN_PERIODS, len(df) - 1)
+        short_term_window = min(min_periods, len(df) - 1)
         recent_df = df.iloc[-short_term_window:]
-        
+
         # Rest of function remains the same
-        price_sma = df['c'].rolling(window=MIN_PERIODS).mean()
-        price_std = df['c'].rolling(window=MIN_PERIODS).std()
+        price_sma = df['c'].rolling(window=min_periods).mean()
+        price_std = df['c'].rolling(window=min_periods).std()
         
         # Volume analysis (VSA)
         effort_vs_result = pd.Series([0.0] * len(recent_df), index=recent_df.index)
