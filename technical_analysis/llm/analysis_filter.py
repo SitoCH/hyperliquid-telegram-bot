@@ -175,13 +175,13 @@ class AnalysisFilter:
                     f"4h consolidation + weak signals: Tight 4h range in {range_prison_tf} and muted 15m/30m momentum+volume."
                 ), 0.3
 
-        if signal_abs_moves and all(x < 0.2 for x in signal_abs_moves):
+        if signal_abs_moves and all(x < 0.15 for x in signal_abs_moves):
             return False, (
-                "Signal timeframe micro moves: Price changes <0.2% in ALL signal timeframes (15m, 30m). High risk of false intraday signal."
+                "Signal timeframe micro moves: Price changes <0.15% in ALL 15m/30m. High risk of false intraday signal."
             ), 0.3
 
         if medium_v_ratios:
-            medium_drought_th = 0.80 if (bearish_primary_fast or bearish_primary_moderate) else 0.95
+            medium_drought_th = 0.75 if (bearish_primary_fast or bearish_primary_moderate) else 0.90
             if all(x < medium_drought_th for x in medium_v_ratios):
                 vals = ", ".join([f"{x:.2f}x" for x in medium_v_ratios])
                 return False, (
@@ -189,7 +189,7 @@ class AnalysisFilter:
                 ), 0.3
 
         if signal_v_ratios:
-            signal_drought_th = 0.70 if (bearish_primary_fast or bearish_primary_moderate) else 0.85
+            signal_drought_th = 0.65 if (bearish_primary_fast or bearish_primary_moderate) else 0.80
             if all(x < signal_drought_th for x in signal_v_ratios):
                 svals = ", ".join([f"{x:.2f}x" for x in signal_v_ratios])
                 return False, (
@@ -206,9 +206,9 @@ class AnalysisFilter:
             details = ", ".join([f"{tf} (> {chop_allowance.get(tf, 4)})" for tf in choppy_signal_tfs])
             return False, f"Signal timeframe chop: Price reversals exceed dynamic allowance in: {details}. High noise in signal detection timeframes.", 0.4
 
-        if bb_expansion_info and bb_expansion_info['v_ratio'] is not None and bb_expansion_info['v_ratio'] < 1.1:
+        if bb_expansion_info and bb_expansion_info['v_ratio'] is not None and bb_expansion_info['v_ratio'] < 1.05:
             # Only block if signal momentum is weak; otherwise allow potential breakdowns to proceed
-            weak_signal = (signal_abs_moves and max(signal_abs_moves) < 0.5)
+            weak_signal = (signal_abs_moves and max(signal_abs_moves) < 0.45)
             if weak_signal:
                 return False, (
                     f"Volatility expansion with low volume and weak signal momentum (BB width {bb_expansion_info['bb_width_now']:.2f}, v_ratio {bb_expansion_info['v_ratio']:.2f})."
@@ -218,9 +218,9 @@ class AnalysisFilter:
         if price_changes:
             max_move = max(price_changes)
             avg_move = sum(price_changes) / len(price_changes)
-            if max_move < 0.25:
+            if max_move < 0.20:
                 return False, f"Dead market - max price change {max_move:.2f}% < 0.25%", 0.0
-            if avg_move < 0.15:
+            if avg_move < 0.12:
                 return False, f"Low activity - avg price change {avg_move:.2f}% < 0.15%", 0.0
 
         # Volume quality relative to move magnitude and direction
@@ -233,18 +233,18 @@ class AnalysisFilter:
             moderate_bearish = largest_down <= -0.5
 
             if significant_abs:
-                drought_th = 0.35 if significant_bearish else 0.45
+                drought_th = 0.32 if significant_bearish else 0.42
                 if max_volume < drought_th:
                     return False, f"Extreme volume drought during significant move - max volume {max_volume:.2f} < {drought_th:.2f}", 0.0
             elif moderate_abs:
-                drought_th = 0.50 if moderate_bearish else 0.65
+                drought_th = 0.48 if moderate_bearish else 0.60
                 if max_volume < drought_th:
                     return False, f"Low volume during moderate move - max volume {max_volume:.2f} < {drought_th:.2f}", 0.0
             else:
-                base_th = 0.70 if (bearish_primary_fast or bearish_primary_moderate) else 0.85
+                base_th = 0.68 if (bearish_primary_fast or bearish_primary_moderate) else 0.78
                 if max_volume < base_th:
                     return False, f"Volume drought - max volume {max_volume:.2f} < {base_th:.2f}", 0.0
-                avg_min = 0.60 if (bearish_primary_fast or bearish_primary_moderate) else 0.70
+                avg_min = 0.58 if (bearish_primary_fast or bearish_primary_moderate) else 0.68
                 if avg_volume < avg_min:
                     return False, f"Weak volume - avg volume {avg_volume:.2f} below minimum {avg_min:.2f}", 0.0
 
@@ -266,16 +266,16 @@ class AnalysisFilter:
 
             # Tier 1 momentum requirements (aligned with main framework)
             # Primary timeframes: 1H (40%) and 30m (35%) priority
-            if on1h and abs(move_pct) > 0.8 and v_val > 1.3:
+            if on1h and abs(move_pct) > 0.7 and v_val > 1.2:
                 has_tier1_momentum = True
                 break
-            elif '30m' in label and abs(move_pct) > 1.0 and v_val > 1.2:
+            elif '30m' in label and abs(move_pct) > 0.65 and v_val > 1.15:
                 has_tier1_momentum = True  
                 break
-            elif sig and abs(move_pct) > 1.2 and v_val > 1.5:  # Higher bar for 15m
+            elif sig and abs(move_pct) > 0.75 and v_val > 1.35:  # Moderated for 15m with volume
                 has_tier1_momentum = True
                 break
-            elif on4h and abs(move_pct) > 0.6 and v_val > 1.4:  # Context only
+            elif on4h and abs(move_pct) > 0.6 and v_val > 1.3:  # Context only
                 has_tier1_momentum = True
                 break
 

@@ -26,10 +26,10 @@ class LLMAnalyzer:
     
     def __init__(self):
         self.timeframe_lookback_days = {
-            Timeframe.MINUTES_15: 3,
+            Timeframe.MINUTES_15: 2,
             Timeframe.MINUTES_30: 3,
-            Timeframe.HOUR_1: 7,
-            Timeframe.HOURS_4: 14,
+            Timeframe.HOUR_1: 4,
+            Timeframe.HOURS_4: 5,
         }
         self.prompt_generator = LLMPromptGenerator(self.timeframe_lookback_days)
         self.analysis_filter = AnalysisFilter()
