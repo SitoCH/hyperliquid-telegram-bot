@@ -161,7 +161,7 @@ class AlphaGStrategy():
             initial_signal = "Surge" if reversal.movement_type == 'surge' else "Crash"
             icon = "🚀" if reversal.movement_type == 'surge' else "📉"
             line = (
-                f"{icon} <b>{reversal.symbol}</b> ({reversal.name})\n"
+                f"{icon} <b>{telegram_utils.get_link(reversal.symbol, f'TA_{reversal.symbol}')}</b> ({reversal.name})\n"
                 f" • {initial_signal} ({fmt(reversal.full_candles_change_pct)}%)\n"
                 f" • Daily change: {fmt(reversal.current_change_pct)}%\n"
             )
