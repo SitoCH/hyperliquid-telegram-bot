@@ -1,6 +1,7 @@
 import os
 import time
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional, Any
 
 from telegram import Update
@@ -25,11 +26,16 @@ class ReversalSignal:
     current_change_pct: float
     current_price: float
     confirmed: bool = False
+    reasons: List[str] = field(default_factory=list)
 
 class AlphaGStrategy():
     """AlphaG strategy."""
 
     COIN_MIN_VOLUME = 2_500_000
+    # Strategy constants
+    ATR_MULT: float = 3.0
+    WICK_RATIO_MIN: float = 0.55
+    BB_PERIOD: int = 20
 
     def __init__(self) -> None:
         self._lookback_days: int = int(os.getenv("HTB_ALPHA_G_STRATEGY_LOOKBACK_DAYS", "3"))
@@ -167,6 +173,8 @@ class AlphaGStrategy():
             )
             if reversal.confirmed:
                 line += f" • ✅ Confirmed reversal\n"
+            if reversal.reasons:
+                line += " • Signals: " + ", ".join(reversal.reasons) + "\n"
             lines.append(line)
         return lines
 
@@ -198,11 +206,12 @@ class AlphaGStrategy():
             logger.info(f"Analyzing {coin} for price movements")
             
             try:
+                req_count = max(lookback_days + 1, self.BB_PERIOD + 1)
                 candles = await get_candles_with_cache(
                     coin, 
                     Timeframe.DAY_1, 
                     now, 
-                    lookback_days + 1, 
+                    req_count, 
                     hyperliquid_utils.info.candles_snapshot,
                     True
                 )
@@ -234,7 +243,7 @@ class AlphaGStrategy():
                     
                     # Check for reversal signal
                     reversal = self._detect_partial_reversal(
-                        movement_type, partial_candle, entry, price_change_pct
+                        movement_type, partial_candle, entry, price_change_pct, full_candles
                     )
                     if reversal:
                         reversals.append(reversal)
@@ -352,49 +361,84 @@ class AlphaGStrategy():
 
         return complete[-lookback_days:], partial
 
-    @staticmethod
     def _classify_movement(
+        self,
         full_candles: List[Dict],
         coin_entry: Dict,
         threshold_pct: float,
     ) -> Optional[Tuple[str, float]]:
-        """Classify price movement as surge or crash if threshold is exceeded."""
+        """Classify price movement as surge or crash using ATR-based adaptive threshold only."""
         first_open = float(full_candles[0]['o'])
         last_close = float(full_candles[-1]['c'])
-        
+
         if first_open == 0:
             return None
-            
-        price_change_pct = ((last_close - first_open) / first_open) * 100
 
-        if price_change_pct > threshold_pct:
-            logger.info(f"🚀 Surge detected in {coin_entry['symbol']}: {price_change_pct:.2f}%")
-            return 'surge', price_change_pct
+        price_change = last_close - first_open
+        price_change_pct = (price_change / first_open) * 100
 
-        if price_change_pct < -threshold_pct:
-            logger.info(f"📉 Crash detected in {coin_entry['symbol']}: {price_change_pct:.2f}%")
-            return 'crash', price_change_pct
+        # ATR-based adaptive threshold
+        mean_atr = self._compute_mean_atr(full_candles)
+        atr_hit = False
+        adaptive_threshold = 0.0
+        if mean_atr and first_open:
+            atr_as_pct = (mean_atr / first_open) * 100
+            adaptive_threshold = self.ATR_MULT * atr_as_pct
+            atr_hit = abs(price_change_pct) >= adaptive_threshold
+
+        if atr_hit:
+            if price_change > 0:
+                logger.info(
+                    f"🚀 Surge in {coin_entry['symbol']}: {price_change_pct:.2f}% (≥ {adaptive_threshold:.2f}% ATR-th)"
+                )
+                return 'surge', price_change_pct
+            else:
+                logger.info(
+                    f"📉 Crash in {coin_entry['symbol']}: {price_change_pct:.2f}% (≤ -{adaptive_threshold:.2f}% ATR-th)"
+                )
+                return 'crash', price_change_pct
 
         return None
 
     @staticmethod
+    def _compute_mean_atr(candles: List[Dict]) -> float:
+        """Compute mean ATR over provided candles using standard TR formula."""
+        if not candles:
+            return 0.0
+        trs: List[float] = []
+        prev_close: Optional[float] = None
+        for c in candles:
+            h = float(c['h']); l = float(c['l']); cl = float(c['c'])
+            if prev_close is None:
+                tr = h - l
+            else:
+                tr = max(h - l, abs(h - prev_close), abs(l - prev_close))
+            trs.append(max(tr, 0.0))
+            prev_close = cl
+        if not trs:
+            return 0.0
+        return sum(trs) / len(trs)
+
     def _detect_partial_reversal(
+        self,
         movement_type: str,
         partial_candle: Optional[Dict],
         coin_entry: Dict,
         full_candles_change_pct: float,
+        full_candles: Optional[List[Dict]] = None,
     ) -> Optional[ReversalSignal]:
-        """Detect if the partial candle shows a potential reversal signal.
+        """Detect if the partial candle shows a potential reversal signal with confirmations.
 
-        A reversal is defined as the current partial daily candle moving in the
-        opposite direction of the aggregate move across the last N full daily
-        candles (movement_type = 'surge' for up, 'crash' for down).
+        Base condition: partial candle direction opposes the multi-candle move.
+        Confirmations: exhaustion wick and Bollinger Band re-entry on prior full candles.
         """
         if not partial_candle:
             return None
 
         current_open = float(partial_candle['o'])
         current_close = float(partial_candle['c'])
+        current_high = float(partial_candle.get('h', current_open))
+        current_low = float(partial_candle.get('l', current_open))
         current_direction = current_close - current_open
 
         if current_direction == 0:
@@ -408,6 +452,35 @@ class AlphaGStrategy():
 
         current_change_pct = ((current_close - current_open) / current_open) * 100 if current_open else 0.0
 
+        reasons: List[str] = [f"Opposite partial direction ({current_change_pct:.2f}%)"]
+
+        # Exhaustion wick confirmation
+        range_total = max(current_high - current_low, 1e-12)
+        upper_wick = current_high - max(current_open, current_close)
+        lower_wick = min(current_open, current_close) - current_low
+        upper_ratio = upper_wick / range_total
+        lower_ratio = lower_wick / range_total
+
+        if movement_type == 'surge' and upper_ratio >= self.WICK_RATIO_MIN:
+            reasons.append(f"Long upper wick ({upper_ratio:.2f})")
+        if movement_type == 'crash' and lower_ratio >= self.WICK_RATIO_MIN:
+            reasons.append(f"Long lower wick ({lower_ratio:.2f})")
+
+        # Bollinger Band re-entry using prior full candles only
+        if full_candles and len(full_candles) >= self.BB_PERIOD:
+            closes = [float(c['c']) for c in full_candles[-self.BB_PERIOD:]]
+            _, bb_upper, bb_lower, _ = self._compute_bollinger(closes, self.BB_PERIOD)
+            if movement_type == 'surge':
+                pierced = current_high > bb_upper
+                reentered = current_close < bb_upper
+                if pierced and reentered:
+                    reasons.append("BB upper re-entry")
+            else:
+                pierced = current_low < bb_lower
+                reentered = current_close > bb_lower
+                if pierced and reentered:
+                    reasons.append("BB lower re-entry")
+
         logger.info(
             f"🔄 Reversal signal in {coin_entry['symbol']}: "
             f"full candles {full_candles_change_pct:.2f}%, "
@@ -420,8 +493,23 @@ class AlphaGStrategy():
             movement_type=movement_type,
             full_candles_change_pct=full_candles_change_pct,
             current_change_pct=current_change_pct,
-            current_price=current_close
+            current_price=current_close,
+            reasons=reasons
         )
+
+    @staticmethod
+    def _compute_bollinger(closes: List[float], period: int) -> Tuple[float, float, float, float]:
+        """Compute simple Bollinger Bands (mid, upper, lower, std)."""
+        if not closes:
+            return 0.0, 0.0, 0.0, 0.0
+        # Use last `period` closes
+        data = closes[-period:] if len(closes) >= period else closes
+        mean = sum(data) / len(data)
+        var = sum((x - mean) ** 2 for x in data) / len(data)
+        std = math.sqrt(max(var, 0.0))
+        upper = mean + 2.0 * std
+        lower = mean - 2.0 * std
+        return mean, upper, lower, std
 
     async def analyze(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Analyze current portfolio state and display information."""
