@@ -142,14 +142,11 @@ def get_trade_suggestion(
             # No valid directional pair found
             raise ValueError("no_valid_pair")
 
-        selected: Optional[tuple[float, str, float, float, float]] = None
-
         windowed = [c for c in candidates if c[0] >= min_rr]
-        if windowed:
-            selected = min(windowed, key=lambda c: c[4])
-        else:
-            selected = max(candidates, key=lambda c: c[0])
+        if not windowed:
+            raise ValueError("no_valid_pair")
 
+        selected = min(windowed, key=lambda c: c[4])
         _, side_out, tp_out, sl_out, _ = selected
         return side_out, tp_out, sl_out
 
