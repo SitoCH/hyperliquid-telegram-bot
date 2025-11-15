@@ -183,7 +183,7 @@ class AlphaGStrategy():
         coins: List[Dict],
         lookback_days: int,
         threshold_pct: float
-    ) -> List[ReversalSignal]:
+    ) -> Tuple[List[ReversalSignal], Dict[str, List[Dict]]]:
         """
         Detect coins with potential reversal signals.
         
@@ -199,6 +199,7 @@ class AlphaGStrategy():
         current_candle_start = now - (now % (Timeframe.DAY_1.minutes * 60 * 1000))
         
         reversals: List[ReversalSignal] = []
+        candles_by_symbol: Dict[str, List[Dict]] = {}
         
         for entry in coins:
             start_time = time.time()
@@ -215,6 +216,7 @@ class AlphaGStrategy():
                     hyperliquid_utils.info.candles_snapshot,
                     True
                 )
+                candles_by_symbol[coin] = candles
                 
                 full_candles, partial_candle = self._extract_recent_candles(
                     candles, current_candle_start, coin, lookback_days
@@ -254,7 +256,7 @@ class AlphaGStrategy():
                 logger.error(f"Error analyzing {coin}: {str(e)}", exc_info=True)
                 continue
         
-        return reversals
+        return reversals, candles_by_symbol
 
     @staticmethod
     def _detect_confirmed_reversal(
@@ -532,9 +534,9 @@ class AlphaGStrategy():
             all_mids = hyperliquid_utils.info.all_mids()
 
             filtered_coins = self.filter_top_coins(meta, all_mids)
-            
+
             coins_to_analyze = filtered_coins[2:80]
-            reversals = await self.detect_price_movements(
+            reversals, candles_by_symbol = await self.detect_price_movements(
                 coins_to_analyze,
                 self._lookback_days,
                 self._threshold_pct,
@@ -546,6 +548,9 @@ class AlphaGStrategy():
             coin_volume_map = self._coin_volume_map_from_meta(meta)
             low_liquidity_positions = self._compute_low_liquidity_positions(
                 user_state, coin_volume_map
+            )
+            premove_status_lines = self._compute_premove_status_from_candles(
+                user_state, candles_by_symbol
             )
 
             if reversals:
@@ -560,6 +565,14 @@ class AlphaGStrategy():
                 low_liq_lines.extend(low_liquidity_positions)
                 await telegram_utils.reply(update, '\n'.join(low_liq_lines), parse_mode=ParseMode.HTML)
 
+            if premove_status_lines:
+                premove_lines = [
+                    f"<b>📊 Open positions vs pre-pump/crash levels</b>",
+                    ""
+                ]
+                premove_lines.extend(premove_status_lines)
+                await telegram_utils.reply(update, '\n'.join(premove_lines), parse_mode=ParseMode.HTML)
+
         except Exception as e:
             logger.error(f"Error executing strategy: {str(e)}", exc_info=True)
             await telegram_utils.reply(update, f"Error analyzing portfolio: {str(e)}")
@@ -572,3 +585,60 @@ class AlphaGStrategy():
         telegram_utils.add_handler(CommandHandler(analyze_button_text, self.analyze))
 
         logger.info("AlphaG strategy initialized")
+
+    def _compute_premove_status_from_candles(
+        self,
+        user_state: Dict,
+        candles_by_symbol: Dict[str, List[Dict]],
+    ) -> List[str]:
+        lines: List[str] = []
+
+        now = int(time.time() * 1000)
+        current_candle_start = now - (now % (Timeframe.DAY_1.minutes * 60 * 1000))
+
+        positions = user_state.get("assetPositions", []) or []
+        for pos in positions:
+            coin = pos.get("coin")
+            if not coin:
+                continue
+
+            candles = candles_by_symbol.get(coin)
+            if not candles:
+                continue
+
+            candles_sorted = sorted(candles, key=lambda x: x["T"])
+            complete = [c for c in candles_sorted if c["T"] < current_candle_start]
+
+            # Need at least lookback_days+1 full candles to define pre-move and last move
+            lookback_days = max(self._lookback_days, 1)
+            if len(complete) < lookback_days + 1:
+                continue
+
+            # Pre-move candle = oldest in the lookback window, last_full = most recent
+            pre_move = complete[-(lookback_days + 1)]
+            last_full = complete[-1]
+
+            pre_move_close = float(pre_move["c"])
+            last_full_close = float(last_full["c"])
+            current_close = float(candles_sorted[-1]["c"])
+
+            if pre_move_close == 0:
+                continue
+
+            move_pct = ((last_full_close - pre_move_close) / pre_move_close) * 100
+            current_vs_pre_pct = ((current_close - pre_move_close) / pre_move_close) * 100
+
+            if abs(move_pct) < 3:
+                continue
+
+            direction = "pump" if move_pct > 0 else "crash"
+            fully_corrected = abs(current_vs_pre_pct) <= 3
+
+            status = "✅ Fully corrected" if fully_corrected else "⏳ Still away from pre-move level"
+
+            lines.append(
+                f"<b>{coin}</b>: last 1d {direction} {fmt(move_pct)}% | "
+                f"current vs pre-{direction}: {fmt(current_vs_pre_pct)}% → {status}"
+            )
+
+        return lines
