@@ -31,7 +31,7 @@ class ReversalSignal:
 class AlphaGStrategy():
     """AlphaG strategy."""
 
-    COIN_MIN_VOLUME = 2_500_000
+    COIN_MIN_VOLUME = 2_000_000
     # Strategy constants
     ATR_MULT: float = 3.0
     WICK_RATIO_MIN: float = 0.55
