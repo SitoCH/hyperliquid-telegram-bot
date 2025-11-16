@@ -17,8 +17,8 @@ STRONG_SIGNAL_MULTIPLIER = 1.3
 
 DIRECTIONAL_WEIGHT: Final[float] = 0.35
 VOLUME_WEIGHT: Final[float] = 0.35
-ALIGNMENT_WEIGHT: Final[float] = 0.10
-MOMENTUM_WEIGHT: Final[float] = 0.20
+ALIGNMENT_WEIGHT: Final[float] = 0.08
+MOMENTUM_WEIGHT: Final[float] = 0.22
 
 def _calculate_timeframe_importance() -> Tuple[float, float, float]:
     """
@@ -60,7 +60,7 @@ def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, int
         phase_aligned = 0.70
     elif (is_bullish_phase(short_term_analysis.dominant_phase) and is_bullish_phase(intermediate_analysis.dominant_phase)) or \
          (is_bearish_phase(short_term_analysis.dominant_phase) and is_bearish_phase(intermediate_analysis.dominant_phase)):
-        phase_aligned = 0.45
+        phase_aligned = 0.55
 
     # Action Alignment Scoring: More conservative for crypto intraday
     action_aligned = 0.0
@@ -77,7 +77,7 @@ def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, int
     elif short_term_analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL and intermediate_analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL:
         bias_aligned = 0.50 if short_term_analysis.momentum_bias != intermediate_analysis.momentum_bias else 1.0
     else:
-        bias_aligned = 0.40
+        bias_aligned = 0.30
 
     # Volume Agreement: More direct comparison
     volume_agreement = 1 - abs(short_term_analysis.volume_strength - intermediate_analysis.volume_strength)
@@ -203,10 +203,11 @@ def _calculate_directional_score_direct(short_term: Optional[TimeframeGroupAnaly
             agreement_bonus += 0.15  # Increased from 0.10 - most important agreement for intraday
     
     # Cross-agreement between other timeframes is less important for intraday
-    if 'intermediate' in group_biases and 'long' in group_biases:
+    # Note: we use 'context' here rather than a separate long-term group.
+    if 'intermediate' in group_biases and 'context' in group_biases:
         int_sign = 1 if group_biases['intermediate'] > 0 else -1 if group_biases['intermediate'] < 0 else 0
-        long_sign = 1 if group_biases['long'] > 0 else -1 if group_biases['long'] < 0 else 0
-        if int_sign != 0 and long_sign != 0 and int_sign == int_sign:
+        ctx_sign = 1 if group_biases['context'] > 0 else -1 if group_biases['context'] < 0 else 0
+        if int_sign != 0 and ctx_sign != 0 and int_sign == ctx_sign:
             agreement_bonus += 0.05  # Reduced from 0.07
     
     if not scores:
