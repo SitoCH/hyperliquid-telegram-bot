@@ -369,7 +369,12 @@ class AlphaGStrategy():
         coin_entry: Dict,
         threshold_pct: float,
     ) -> Optional[Tuple[str, float]]:
-        """Classify price movement as surge or crash using ATR-based adaptive threshold only."""
+        """Classify price movement as surge or crash.
+
+        A movement is considered a surge/crash if it exceeds BOTH:
+        - a fixed absolute threshold (``threshold_pct``), and
+        - an ATR-based adaptive threshold (``ATR_MULT`` * ATR as % of price).
+        """
         first_open = float(full_candles[0]['o'])
         last_close = float(full_candles[-1]['c'])
 
@@ -388,15 +393,21 @@ class AlphaGStrategy():
             adaptive_threshold = self.ATR_MULT * atr_as_pct
             atr_hit = abs(price_change_pct) >= adaptive_threshold
 
-        if atr_hit:
+        # Fixed absolute threshold
+        threshold_hit = abs(price_change_pct) >= abs(threshold_pct)
+
+        # Require both thresholds to be hit to reduce noisy signals
+        if atr_hit and threshold_hit:
             if price_change > 0:
                 logger.info(
-                    f"🚀 Surge in {coin_entry['symbol']}: {price_change_pct:.2f}% (≥ {adaptive_threshold:.2f}% ATR-th)"
+                    f"🚀 Surge in {coin_entry['symbol']}: {price_change_pct:.2f}% "
+                    f"(≥ {adaptive_threshold:.2f}% ATR-th & ≥ {abs(threshold_pct):.2f}% abs-th)"
                 )
                 return 'surge', price_change_pct
             else:
                 logger.info(
-                    f"📉 Crash in {coin_entry['symbol']}: {price_change_pct:.2f}% (≤ -{adaptive_threshold:.2f}% ATR-th)"
+                    f"📉 Crash in {coin_entry['symbol']}: {price_change_pct:.2f}% "
+                    f"(≤ -{adaptive_threshold:.2f}% ATR-th & ≤ -{abs(threshold_pct):.2f}% abs-th)"
                 )
                 return 'crash', price_change_pct
 
@@ -468,17 +479,24 @@ class AlphaGStrategy():
         if movement_type == 'crash' and lower_ratio >= self.WICK_RATIO_MIN:
             reasons.append(f"Long lower wick ({lower_ratio:.2f})")
 
-        # Bollinger Band re-entry using prior full candles only
+        # Bollinger Band re-entry using prior full candles only.
+        # We consider a re-entry if the last *full* candle closed outside the band
+        # and the current partial candle has moved back inside.
         if full_candles and len(full_candles) >= self.BB_PERIOD:
-            closes = [float(c['c']) for c in full_candles[-self.BB_PERIOD:]]
+            window = full_candles[-self.BB_PERIOD:]
+            closes = [float(c['c']) for c in window]
             _, bb_upper, bb_lower, _ = self._compute_bollinger(closes, self.BB_PERIOD)
+            last_full_close = float(window[-1]['c'])
+
             if movement_type == 'surge':
-                pierced = current_high > bb_upper
+                # Prior full candle closed above upper band, current partial closes back below.
+                pierced = last_full_close > bb_upper
                 reentered = current_close < bb_upper
                 if pierced and reentered:
                     reasons.append("BB upper re-entry")
             else:
-                pierced = current_low < bb_lower
+                # Prior full candle closed below lower band, current partial closes back above.
+                pierced = last_full_close < bb_lower
                 reentered = current_close > bb_lower
                 if pierced and reentered:
                     reasons.append("BB lower re-entry")
