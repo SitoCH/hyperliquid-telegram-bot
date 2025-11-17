@@ -221,7 +221,7 @@ def get_trade_suggestion(
     max_distance_sl = mid * 0.035
 
     min_distance_tp = mid * 0.0175
-    max_distance_tp = mid * 0.0375
+    max_distance_tp = mid * 0.04
 
     # Evaluate across timeframes starting from the shortest and return the first valid suggestion
     timeframes_order = [
