@@ -229,6 +229,7 @@ def get_trade_suggestion(
         Timeframe.MINUTES_30,
         Timeframe.HOUR_1,
         Timeframe.HOURS_4,
+        Timeframe.HOURS_8
     ]
 
     def _search_levels(
