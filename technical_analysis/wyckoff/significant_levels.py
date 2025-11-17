@@ -236,20 +236,24 @@ def find_significant_levels(
     # Use the significant_levels_factor from timeframe settings
     timeframe_factor = timeframe.settings.significant_levels_factor
     
-    max_deviation = min(STRONG_DEV_THRESHOLD * volatility * timeframe_factor, 0.25)
-    # Apply a timeframe-aware minimum floor to ensure TP window coverage for trade suggestions
-    # 15m: ≥3%, 30m: ≥4%, 1h: ≥5.5% (covers TP up to 5.5%), 4h: ≥6%
+    # Let volatility drive the distance window with a very soft floor
+    # Remove the hard global cap and weaken timeframe floors to avoid over-constraining levels
+    max_deviation = STRONG_DEV_THRESHOLD * volatility * timeframe_factor
+
+    # Timeframe-aware *soft* minimum window primarily to avoid pathological zero-width ranges
+    # Keep these small so structural levels are not constrained by TP logic.
     if timeframe == Timeframe.MINUTES_15:
-        min_deviation_floor = 0.03
+        min_deviation_floor = 0.015  # 1.5%
     elif timeframe == Timeframe.MINUTES_30:
-        min_deviation_floor = 0.04
+        min_deviation_floor = 0.02   # 2%
     elif timeframe == Timeframe.HOUR_1:
-        min_deviation_floor = 0.055
+        min_deviation_floor = 0.025  # 2.5%
     elif timeframe == Timeframe.HOURS_4:
-        min_deviation_floor = 0.06
+        min_deviation_floor = 0.03   # 3%
     else:
-        # Default legacy floor (2%) for other timeframes
-        min_deviation_floor = 0.02
+        # Default soft floor (1.5%) for other timeframes
+        min_deviation_floor = 0.015
+
     max_deviation = max(max_deviation, min_deviation_floor)
     min_price = current_price * (1 - max_deviation)
     max_price = current_price * (1 + max_deviation)
