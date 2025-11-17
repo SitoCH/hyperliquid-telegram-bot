@@ -217,7 +217,7 @@ def get_trade_suggestion(
         return None
 
     # Distance bands tuned for healthier baseline R:R
-    min_distance_sl = mid * 0.0175
+    min_distance_sl = mid * 0.015
     max_distance_sl = mid * 0.035
 
     min_distance_tp = mid * 0.0175
