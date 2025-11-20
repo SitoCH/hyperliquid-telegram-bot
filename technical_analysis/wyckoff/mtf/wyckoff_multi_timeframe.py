@@ -115,7 +115,7 @@ def analyze_multi_timeframe(
             direction_checks = []
             
             # Symmetric volume and momentum requirements for balanced day trading
-            MIN_ALIGNMENT = 0.45
+            MIN_ALIGNMENT = 0.55
             VOLUME_MULTIPLIER = 0.70  # Same for both directions
             
             if all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:

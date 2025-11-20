@@ -27,9 +27,9 @@ class WyckoffAnalyzer:
     def __init__(self):
         # Lookback values are DAYS, not candle counts.
         self.wyckoff_timeframes = {
-            Timeframe.MINUTES_15: 12,
-            Timeframe.MINUTES_30: 18,
-            Timeframe.HOUR_1: 30,
+            Timeframe.MINUTES_15: 6,
+            Timeframe.MINUTES_30: 10,
+            Timeframe.HOUR_1: 20,
             Timeframe.HOURS_4: 60,
             Timeframe.HOURS_8: 90,
         }
