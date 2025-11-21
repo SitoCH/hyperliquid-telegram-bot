@@ -240,11 +240,10 @@ def get_trade_suggestion(
 
     # Evaluate across timeframes starting from the shortest and return the first valid suggestion
     timeframes_order = [
-        Timeframe.MINUTES_15,
         Timeframe.MINUTES_30,
+        Timeframe.MINUTES_15,
         Timeframe.HOUR_1,
-        Timeframe.HOURS_4,
-        Timeframe.HOURS_8
+        Timeframe.HOURS_4
     ]
 
     def _search_levels(
