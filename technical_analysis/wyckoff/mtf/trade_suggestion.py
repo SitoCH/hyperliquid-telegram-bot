@@ -28,6 +28,9 @@ def get_trade_suggestion(
 
     min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
     if confidence < min_confidence:
+        logger.info(
+            f"Skipping trade suggestion for {coin}: confidence {confidence:.2f} below {min_confidence:.2f}"
+        )
         return None
 
     min_rr = float(os.getenv("HTB_TRADE_MIN_RR", str(MIN_RR_DEFAULT)))
@@ -68,6 +71,11 @@ def get_trade_suggestion(
             for s in significant_levels[timeframe]["support"]
             if min_dist_sl <= abs(s - mid) <= max_dist_sl
         ]
+
+        if not (tp_resistances or tp_supports or sl_resistances or sl_supports):
+            logger.info(
+                f"Skipping trade suggestion for {coin} {timeframe.name}: no levels within TP/SL ranges"
+            )
 
         return (tp_resistances, tp_supports, sl_resistances, sl_supports)
 
@@ -139,11 +147,16 @@ def get_trade_suggestion(
                 candidates.append((rr, side, tp, sl, tp_p))
 
         if not candidates:
-            # No valid directional pair found
+            logger.info(
+                f"Skipping trade suggestion for {coin}: no candidate pairs for {direction.name} direction"
+            )
             raise ValueError("no_valid_pair")
 
         windowed = [c for c in candidates if c[0] >= min_rr]
         if not windowed:
+            logger.info(
+                f"Skipping trade suggestion for {coin}: all {len(candidates)} candidates below RR {min_rr:.2f}"
+            )
             raise ValueError("no_valid_pair")
 
         selected = min(windowed, key=lambda c: c[4])
@@ -210,10 +223,12 @@ def get_trade_suggestion(
         )
 
     if direction == MultiTimeframeDirection.NEUTRAL:
+        logger.info(f"Skipping trade suggestion for {coin}: direction neutral")
         return None
 
     # Prevent negative or zero values in calculations
     if mid <= 0:
+        logger.info(f"Skipping trade suggestion for {coin}: invalid mid price {mid}")
         return None
 
     # Distance bands tuned for healthier baseline R:R
@@ -261,4 +276,7 @@ def get_trade_suggestion(
     if best_trade:
         return best_trade
 
+    logger.info(
+        f"No trade suggestion produced for {coin}: exhausted timeframes without valid TP/SL pairs"
+    )
     return None
