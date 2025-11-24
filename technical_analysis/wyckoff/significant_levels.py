@@ -243,13 +243,13 @@ def find_significant_levels(
     # Timeframe-aware *soft* minimum window primarily to avoid pathological zero-width ranges
     # Keep these small so structural levels are not constrained by TP logic.
     if timeframe == Timeframe.MINUTES_15:
-        min_deviation_floor = 0.015  # 1.5%
-    elif timeframe == Timeframe.MINUTES_30:
         min_deviation_floor = 0.02   # 2%
-    elif timeframe == Timeframe.HOUR_1:
+    elif timeframe == Timeframe.MINUTES_30:
         min_deviation_floor = 0.025  # 2.5%
+    elif timeframe == Timeframe.HOUR_1:
+        min_deviation_floor = 0.035  # 3.5%
     elif timeframe == Timeframe.HOURS_4:
-        min_deviation_floor = 0.03   # 3%
+        min_deviation_floor = 0.05   # 5%
     else:
         # Default soft floor (1.5%) for other timeframes
         min_deviation_floor = 0.015
