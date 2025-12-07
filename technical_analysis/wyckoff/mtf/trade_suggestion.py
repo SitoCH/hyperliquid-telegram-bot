@@ -231,12 +231,12 @@ def get_trade_suggestion(
         logger.info(f"Skipping trade suggestion for {coin}: invalid mid price {mid}")
         return None
 
-    # Distance bands tuned for healthier baseline R:R
-    min_distance_sl = mid * 0.015
-    max_distance_sl = mid * 0.0375
+    # Distance bands 
+    min_distance_sl = mid * 0.02
+    max_distance_sl = mid * 0.05
 
-    min_distance_tp = mid * 0.015
-    max_distance_tp = mid * 0.04
+    min_distance_tp = mid * 0.025
+    max_distance_tp = mid * 0.06
 
     # Evaluate across timeframes starting from the shortest and return the first valid suggestion
     timeframes_order = [

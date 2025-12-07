@@ -98,8 +98,8 @@ def analyze_multi_timeframe(
               all_analysis.short_term.momentum_bias != MultiTimeframeDirection.NEUTRAL or
               all_analysis.intermediate.momentum_bias != MultiTimeframeDirection.NEUTRAL), 
              "All timeframes are ranging or neutral"),
-            # Basic alignment check
-            (all_analysis.alignment_score >= 0.35, f"Low alignment: {all_analysis.alignment_score:.2f} < 0.35"),
+            # Basic alignment check - relaxed from 0.35 to 0.28 to allow more valid setups
+            (all_analysis.alignment_score >= 0.28, f"Low alignment: {all_analysis.alignment_score:.2f} < 0.28"),
         ]
         
         should_notify = all(check[0] for check in notification_checks)
@@ -115,8 +115,8 @@ def analyze_multi_timeframe(
             direction_checks = []
             
             # Symmetric volume and momentum requirements for balanced day trading
-            MIN_ALIGNMENT = 0.55
-            VOLUME_MULTIPLIER = 0.70  # Same for both directions
+            MIN_ALIGNMENT = 0.45
+            VOLUME_MULTIPLIER = 0.65
             
             if all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:
                 direction_checks = [

@@ -19,6 +19,7 @@ from .mtf.wyckoff_multi_timeframe import analyze_multi_timeframe
 from ..data_processor import prepare_dataframe, apply_indicators
 from .significant_levels import find_significant_levels
 from .wyckoff import detect_wyckoff_phase
+from .phase_hysteresis import phase_hysteresis
 
 
 class WyckoffAnalyzer:
@@ -56,7 +57,7 @@ class WyckoffAnalyzer:
         }
 
         states = {
-            tf: self._analyze_timeframe_data(df, tf, funding_rates, local_tz)
+            tf: self._analyze_timeframe_data(df, tf, funding_rates, local_tz, coin)
             for tf, df in dataframes.items()
         }
 
@@ -80,13 +81,61 @@ class WyckoffAnalyzer:
             candles_data[tf] = await get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
         return candles_data
     
-    def _analyze_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry], local_tz) -> WyckoffState:
-        """Process data for a single timeframe."""
+    def _analyze_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry], local_tz, coin: str) -> WyckoffState:
+        """Process data for a single timeframe with phase hysteresis to reduce flip-flopping."""
         if df.empty:
             return WyckoffState.unknown()
         
         apply_indicators(df, timeframe)
-        return detect_wyckoff_phase(df, timeframe, funding_rates)
+        state = detect_wyckoff_phase(df, timeframe, funding_rates)
+        
+        # Apply phase hysteresis to reduce phase flip-flopping in short-term timeframes
+        confirmed_phase, confirmed_uncertain = phase_hysteresis.get_confirmed_phase(
+            coin, timeframe, state.phase, state.uncertain_phase
+        )
+        
+        # Update the state with the confirmed phase
+        if confirmed_phase != state.phase:
+            # Create a new state with the confirmed phase
+            from .wyckoff_description import generate_wyckoff_description
+            state = WyckoffState(
+                phase=confirmed_phase,
+                uncertain_phase=confirmed_uncertain,
+                volume=state.volume,
+                pattern=state.pattern,
+                volatility=state.volatility,
+                is_spring=state.is_spring,
+                is_upthrust=state.is_upthrust,
+                effort_vs_result=state.effort_vs_result,
+                composite_action=state.composite_action,
+                wyckoff_sign=state.wyckoff_sign,
+                funding_state=state.funding_state,
+                description=generate_wyckoff_description(
+                    confirmed_phase, confirmed_uncertain, state.volume,
+                    state.is_spring, state.is_upthrust, state.effort_vs_result,
+                    state.composite_action, state.wyckoff_sign
+                ),
+                liquidity=state.liquidity
+            )
+        elif confirmed_uncertain != state.uncertain_phase:
+            # Just update the uncertainty flag
+            state = WyckoffState(
+                phase=state.phase,
+                uncertain_phase=confirmed_uncertain,
+                volume=state.volume,
+                pattern=state.pattern,
+                volatility=state.volatility,
+                is_spring=state.is_spring,
+                is_upthrust=state.is_upthrust,
+                effort_vs_result=state.effort_vs_result,
+                composite_action=state.composite_action,
+                wyckoff_sign=state.wyckoff_sign,
+                funding_state=state.funding_state,
+                description=state.description,
+                liquidity=state.liquidity
+            )
+        
+        return state
     
     def _calculate_significant_levels(
         self, 

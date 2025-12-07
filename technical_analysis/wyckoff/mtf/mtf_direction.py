@@ -12,7 +12,10 @@ from .wyckoff_multi_timeframe_types import (
 )
 
 def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> MultiTimeframeDirection:
-    """Determine overall market direction using a weighted voting system based on timeframe phases and momentum."""
+    """Determine overall market direction using a weighted voting system based on timeframe phases and momentum.
+    
+    Improved to require intermediate trend confirmation before generating signals - reduces counter-trend entries.
+    """
     if not analyses:
         return MultiTimeframeDirection.NEUTRAL
 
@@ -21,7 +24,17 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
     bearish_weight = 0.0
     total_weight = 0.0
     
-    for analysis in analyses:
+    # Track short-term and intermediate momentum separately for confirmation
+    short_term_momentum = None
+    intermediate_momentum = None
+    
+    for idx, analysis in enumerate(analyses):
+        # Track short-term (first) and intermediate (second) momentum
+        if idx == 0:
+            short_term_momentum = analysis.momentum_bias
+        elif idx == 1:
+            intermediate_momentum = analysis.momentum_bias
+        
         # Base weight from the timeframe group
         weight = analysis.group_weight
         
@@ -34,9 +47,17 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
             volume_factor = 1.2
         elif analysis.volume_strength < LOW_VOLUME_THRESHOLD:
             volume_factor = 0.8
+
+        # Reduce short-term weight if intermediate disagrees
+        intermediate_confirmation_factor = 1.0
+        if idx == 0 and intermediate_momentum is not None:  # Short-term analysis
+            if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL:
+                if analysis.momentum_bias != intermediate_momentum and intermediate_momentum != MultiTimeframeDirection.NEUTRAL:
+                    # Short-term disagrees with intermediate - reduce its influence by 40%
+                    intermediate_confirmation_factor = 0.6
         
         # Calculate adjusted weight for this timeframe
-        adjusted_weight = weight * certainty_factor * volume_factor
+        adjusted_weight = weight * certainty_factor * volume_factor * intermediate_confirmation_factor
         total_weight += adjusted_weight
         
         # Assign weight based on phase and momentum bias

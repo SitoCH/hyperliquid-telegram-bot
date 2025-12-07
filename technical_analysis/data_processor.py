@@ -4,7 +4,7 @@ Extracted from hyperliquid_candles.py for better modularity.
 """
 
 import time
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import pandas as pd
 import pandas_ta_classic as ta # type: ignore[import]
 
@@ -101,21 +101,22 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
 
     atr_length, macd_fast, macd_slow, macd_signal, st_length = get_indicator_settings(timeframe, len(df))
 
-    _add_bollinger_bands(df)
+    _add_bollinger_bands(df, timeframe)
     _add_volume_indicators(df)
     _add_vwap_indicator(df)
     _add_atr_indicator(df, atr_length)
     _add_supertrend_indicator(df, timeframe, st_length)
     _add_macd_indicator(df, macd_fast, macd_slow, macd_signal)
     _add_ema_indicator(df, timeframe)
-    _add_rsi_indicator(df)
-    _add_fibonacci_levels(df)
+    _add_rsi_indicator(df, timeframe)
+    _add_fibonacci_levels(df, timeframe)
     _add_pivot_points(df)
 
 
-def _add_bollinger_bands(df: pd.DataFrame) -> None:
-    """Add Bollinger Bands indicators."""
-    bb_period = max(5, len(df) // 6)  # More sensitive for short-term
+def _add_bollinger_bands(df: pd.DataFrame, timeframe: Optional[Timeframe] = None) -> None:
+    """Add Bollinger Bands indicators with fixed per-timeframe periods for intraday trading."""
+    bb_period = timeframe.settings.bb_period if timeframe else 20
+    bb_period = min(bb_period, len(df) - 1)  # Ensure we have enough data
     bb_std = 2.0
     
     bb = ta.bbands(df["c"], length=bb_period, std=bb_std)
@@ -196,17 +197,19 @@ def _add_vwap_indicator(df: pd.DataFrame) -> None:
     df["VWAP"] = vwap
 
 
-def _add_rsi_indicator(df: pd.DataFrame) -> None:
-    """Add RSI (Relative Strength Index) indicator."""
-    rsi_period = max(5, len(df) // 8)  # Shorter for fast moves
+def _add_rsi_indicator(df: pd.DataFrame, timeframe: Optional[Timeframe] = None) -> None:
+    """Add RSI (Relative Strength Index) indicator with fixed per-timeframe periods."""
+    rsi_period = timeframe.settings.rsi_period if timeframe else 14
+    rsi_period = min(rsi_period, len(df) - 1)  # Ensure we have enough data
     rsi = ta.rsi(df["c"], length=rsi_period)
     if rsi is not None:
         df["RSI"] = rsi
 
 
-def _add_fibonacci_levels(df: pd.DataFrame) -> None:
-    """Add Fibonacci retracement levels."""
-    lookback_period = max(10, len(df) // 8)  # Shorter for fast moves
+def _add_fibonacci_levels(df: pd.DataFrame, timeframe: Optional[Timeframe] = None) -> None:
+    """Add Fibonacci retracement levels with fixed per-timeframe lookback."""
+    lookback_period = timeframe.settings.fib_lookback if timeframe else 32
+    lookback_period = min(lookback_period, len(df) - 1)  # Ensure we have enough data
     if len(df) < lookback_period:
         df["FIB_23"] = df["FIB_38"] = df["FIB_50"] = df["FIB_61"] = df["FIB_78"] = df["c"]
         return

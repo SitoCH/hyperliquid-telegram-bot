@@ -226,6 +226,11 @@ class TimeframeSettings:
     effort_lookback: int = 5
     min_move_multiplier: float = 1.0
 
+    # Indicator periods for intraday trading
+    bb_period: int = 20  # Bollinger Bands period
+    rsi_period: int = 14  # RSI period
+    fib_lookback: int = 32  # Fibonacci lookback period
+
     spring_factor: float = 1.0
     liquidation_factor: float = 1.0
     breakout_factor: float = 1.0
@@ -306,7 +311,7 @@ class Timeframe(Enum):
 
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.38,
+        phase_weight=0.35,  # Reduced from 0.38 to give more weight to context timeframes
         description="15min entries",
         chart_image_time_delta=pd.Timedelta(hours=8),
         ema_length=10,
@@ -320,6 +325,9 @@ _TIMEFRAME_SETTINGS = {
         swing_lookback=3,
         effort_lookback=3,
         min_move_multiplier=0.90,
+        bb_period=20,
+        rsi_period=14,
+        fib_lookback=32,
         spring_factor=1.05,
         liquidation_factor=1.05,
         breakout_factor=1.10,
@@ -339,7 +347,7 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.32,
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.30,
+        phase_weight=0.27,  # Reduced from 0.30 to give more weight to context timeframes
         description="30min swings",
         chart_image_time_delta=pd.Timedelta(hours=16),
         ema_length=16,
@@ -353,6 +361,9 @@ _TIMEFRAME_SETTINGS = {
         swing_lookback=4,
         effort_lookback=4,
         min_move_multiplier=1.00,
+        bb_period=24,
+        rsi_period=14,
+        fib_lookback=40,
         spring_factor=1.05,
         liquidation_factor=1.05,
         breakout_factor=1.10,
@@ -372,7 +383,7 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.33,
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.25,
+        phase_weight=0.23,  # Reduced from 0.25 to give more weight to context timeframes
         description="1h confirmation",
         chart_image_time_delta=pd.Timedelta(hours=48),
         ema_length=20,
@@ -386,6 +397,9 @@ _TIMEFRAME_SETTINGS = {
         swing_lookback=4,
         effort_lookback=5,
         min_move_multiplier=1.00,
+        bb_period=26,
+        rsi_period=14,
+        fib_lookback=48,
         spring_factor=0.95,
         liquidation_factor=0.95,
         breakout_factor=1.0,
@@ -405,7 +419,7 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.33,
     ),
     Timeframe.HOURS_4: TimeframeSettings(
-        phase_weight=0.05,
+        phase_weight=0.10,  # Increased from 0.05 to give more weight to longer-term context
         description="4h context",
         chart_image_time_delta=pd.Timedelta(days=5),
         ema_length=21,
@@ -419,6 +433,9 @@ _TIMEFRAME_SETTINGS = {
         swing_lookback=8,
         effort_lookback=10,
         min_move_multiplier=1.20,
+        bb_period=20,
+        rsi_period=14,
+        fib_lookback=30,
         spring_factor=1.05,
         liquidation_factor=1.0,
         breakout_factor=1.05,
@@ -438,7 +455,7 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.36,
     ),
     Timeframe.HOURS_8: TimeframeSettings(
-        phase_weight=0.02,
+        phase_weight=0.05,  # Increased from 0.02 to give more weight to regime context
         description="8h regime context",
         chart_image_time_delta=pd.Timedelta(days=10),
         ema_length=30,
@@ -452,6 +469,9 @@ _TIMEFRAME_SETTINGS = {
         swing_lookback=10,
         effort_lookback=12,
         min_move_multiplier=1.50,
+        bb_period=20,
+        rsi_period=14,
+        fib_lookback=24,
         spring_factor=1.15,
         liquidation_factor=1.1,
         breakout_factor=1.15,
