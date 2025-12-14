@@ -311,17 +311,17 @@ class Timeframe(Enum):
 
 _TIMEFRAME_SETTINGS = {
     Timeframe.MINUTES_15: TimeframeSettings(
-        phase_weight=0.35,  # Reduced from 0.38 to give more weight to context timeframes
+        phase_weight=0.40,  # Increased from 0.35 to emphasize execution timeframe
         description="15min entries",
         chart_image_time_delta=pd.Timedelta(hours=8),
         ema_length=10,
-        atr_settings=(10, 5, 12, 4, 6),
-        supertrend_multiplier=1.8,
+        atr_settings=(10, 8, 17, 6, 7),  # Slower MACD (8,17,6) and ST length (7) to reduce noise
+        supertrend_multiplier=2.0,  # Increased from 1.8 to reduce whipsaws
         base_multiplier=0.95,
         momentum_multiplier=1.15,
         volume_ma_window=14,
         spring_upthrust_window=3,
-        support_resistance_lookback=18,
+        support_resistance_lookback=48,  # Increased from 18 to 48 (12h) for better levels
         swing_lookback=3,
         effort_lookback=3,
         min_move_multiplier=0.90,
@@ -347,17 +347,17 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.32,
     ),
     Timeframe.MINUTES_30: TimeframeSettings(
-        phase_weight=0.27,  # Reduced from 0.30 to give more weight to context timeframes
+        phase_weight=0.25,  # Adjusted from 0.27
         description="30min swings",
         chart_image_time_delta=pd.Timedelta(hours=16),
         ema_length=16,
-        atr_settings=(14, 7, 16, 6, 8),
-        supertrend_multiplier=1.9,
+        atr_settings=(14, 10, 20, 7, 9),  # Slightly slower MACD/ST
+        supertrend_multiplier=2.1,  # Increased from 1.9
         base_multiplier=1.00,
         momentum_multiplier=1.12,
         volume_ma_window=16,
         spring_upthrust_window=4,
-        support_resistance_lookback=30,
+        support_resistance_lookback=48,  # Increased from 30 to 48 (24h)
         swing_lookback=4,
         effort_lookback=4,
         min_move_multiplier=1.00,
@@ -383,17 +383,17 @@ _TIMEFRAME_SETTINGS = {
         wyckoff_confirmation_threshold=0.33,
     ),
     Timeframe.HOUR_1: TimeframeSettings(
-        phase_weight=0.23,  # Reduced from 0.25 to give more weight to context timeframes
+        phase_weight=0.20,  # Adjusted from 0.23
         description="1h confirmation",
         chart_image_time_delta=pd.Timedelta(hours=48),
         ema_length=20,
-        atr_settings=(18, 11, 22, 8, 10),
-        supertrend_multiplier=2.0,
+        atr_settings=(18, 12, 26, 9, 10),  # Standard MACD (12,26,9) for 1h
+        supertrend_multiplier=2.2,  # Increased from 2.0
         base_multiplier=0.95,
         momentum_multiplier=1.30,
         volume_ma_window=20,
         spring_upthrust_window=5,
-        support_resistance_lookback=60,
+        support_resistance_lookback=72,  # Increased from 60 to 72 (3 days)
         swing_lookback=4,
         effort_lookback=5,
         min_move_multiplier=1.00,
