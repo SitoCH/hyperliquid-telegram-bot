@@ -95,14 +95,14 @@ def get_trade_suggestion(
             if distance_pct <= 0.01:
                 adj = 0.0005
             elif distance_pct <= 0.02:
-                adj = 0.0010
+                adj = 0.0008  # Slightly tighter than before (was 0.0010)
             elif distance_pct >= 0.035:
-                adj = 0.0020
+                adj = 0.0015  # Slightly tighter than before (was 0.0020)
             else:
-                # linear interpolate between 0.10% and 0.20%
-                # 0.02 -> 0.0010, 0.035 -> 0.0020
-                slope = (0.0020 - 0.0010) / (0.035 - 0.02)
-                adj = 0.0010 + slope * (distance_pct - 0.02)
+                # linear interpolate between 0.08% and 0.15%
+                # 0.02 -> 0.0008, 0.035 -> 0.0015
+                slope = (0.0015 - 0.0008) / (0.035 - 0.02)
+                adj = 0.0008 + slope * (distance_pct - 0.02)
             # Use same buffer for SL/TP to keep simple and stable
             return adj, adj
 
@@ -232,16 +232,16 @@ def get_trade_suggestion(
         return None
 
     # Distance bands 
-    min_distance_sl = mid * 0.02
-    max_distance_sl = mid * 0.05
+    min_distance_sl = mid * 0.0125
+    max_distance_sl = mid * 0.03
 
-    min_distance_tp = mid * 0.025
-    max_distance_tp = mid * 0.06
+    min_distance_tp = mid * 0.0125
+    max_distance_tp = mid * 0.035
 
     # Evaluate across timeframes starting from the shortest and return the first valid suggestion
     timeframes_order = [
-        Timeframe.MINUTES_30,
         Timeframe.MINUTES_15,
+        Timeframe.MINUTES_30,
         Timeframe.HOUR_1,
         Timeframe.HOURS_4
     ]

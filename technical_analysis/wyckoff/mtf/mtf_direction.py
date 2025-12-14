@@ -96,7 +96,7 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
     certain_ratio = certain_phases / len(analyses)
     
     # Lower threshold when we have high certainty or strong volume
-    decision_threshold = 0.15
+    decision_threshold = 0.20
     if certain_ratio > 0.7 or avg_volume > MODERATE_VOLUME_THRESHOLD:
         decision_threshold = 0.12
     

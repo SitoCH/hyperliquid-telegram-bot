@@ -82,11 +82,10 @@ def calculate_overall_alignment(short_term_analysis: TimeframeGroupAnalysis, int
     # Volume Agreement: More direct comparison
     volume_agreement = 1 - abs(short_term_analysis.volume_strength - intermediate_analysis.volume_strength)
 
-    # Composite Score: Adjusted Weights
     alignment_score = (
-        phase_aligned * 0.35 +
-        action_aligned * 0.35 +
-        bias_aligned * 0.20 +
+        phase_aligned * 0.30 +
+        action_aligned * 0.30 +
+        bias_aligned * 0.30 +
         volume_agreement * 0.10
     )
 
