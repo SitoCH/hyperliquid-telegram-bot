@@ -57,7 +57,7 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
         trade_history = hyperliquid_utils.info.frontend_open_orders(hyperliquid_utils.address)
         
         current_time = time.time()
-        stale_from = (current_time - (6 * 60 * 60)) * 1000
+        stale_duration_ms = 4 * 60 * 60 * 1000
 
         min_pnl_threshold = float(os.getenv('HTB_STALE_POSITION_MIN_PNL', '5'))
         auto_close_stale = os.getenv('HTB_AUTO_CLOSE_STALE_POSITIONS', 'False').lower() == 'true'
@@ -80,15 +80,20 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
                 oldest_trade = position_trades[0]
                 trade_time = int(oldest_trade["timestamp"])
                 
-                meets_threshold = pnl_pct > min_pnl_threshold
-                if trade_time < stale_from and meets_threshold:
-                    positions_to_close.append({
-                        "coin": coin,
-                        "size": position["szi"],
-                        "entry_price": position["entryPx"],
-                        "pnl": pnl,
-                        "pnl_pct": pnl_pct
-                    })
+                current_time_ms = current_time * 1000
+                position_duration_ms = current_time_ms - trade_time
+                
+                if position_duration_ms > stale_duration_ms:
+                    dynamic_threshold = min_pnl_threshold * (stale_duration_ms / position_duration_ms)
+                    
+                    if pnl_pct > dynamic_threshold:
+                        positions_to_close.append({
+                            "coin": coin,
+                            "size": position["szi"],
+                            "entry_price": position["entryPx"],
+                            "pnl": pnl,
+                            "pnl_pct": pnl_pct
+                        })
 
         if positions_to_close:
             for pos in positions_to_close:
