@@ -111,6 +111,7 @@ def apply_indicators(df: pd.DataFrame, timeframe: Timeframe) -> None:
     _add_rsi_indicator(df, timeframe)
     _add_fibonacci_levels(df, timeframe)
     _add_pivot_points(df)
+    _add_adx_indicator(df, timeframe)
 
 
 def _add_bollinger_bands(df: pd.DataFrame, timeframe: Optional[Timeframe] = None) -> None:
@@ -252,3 +253,29 @@ def _add_pivot_points(df: pd.DataFrame) -> None:
     df["R2"] = pivot + (df["h"].shift(1) - df["l"].shift(1))
     df["S1"] = 2 * pivot - df["h"].shift(1)
     df["S2"] = pivot - (df["h"].shift(1) - df["l"].shift(1))
+
+
+def _add_adx_indicator(df: pd.DataFrame, timeframe: Optional[Timeframe] = None) -> None:
+    """Add ADX (Average Directional Index) for trend strength measurement.
+    
+    ADX > 25 indicates strong trend, < 20 indicates weak/ranging market.
+    DI+ > DI- suggests bullish trend, DI- > DI+ suggests bearish trend.
+    """
+    adx_length = max(14, timeframe.settings.ema_length) if timeframe else 14
+    adx_length = min(adx_length, len(df) - 1)
+    
+    if len(df) < adx_length + 1:
+        df['ADX_value'] = 0.0
+        df['DI_plus'] = 0.0
+        df['DI_minus'] = 0.0
+        return
+    
+    adx = ta.adx(df['h'], df['l'], df['c'], length=adx_length)
+    if adx is not None:
+        df['ADX_value'] = adx[f'ADX_{adx_length}']
+        df['DI_plus'] = adx[f'DMP_{adx_length}']
+        df['DI_minus'] = adx[f'DMN_{adx_length}']
+    else:
+        df['ADX_value'] = 0.0
+        df['DI_plus'] = 0.0
+        df['DI_minus'] = 0.0

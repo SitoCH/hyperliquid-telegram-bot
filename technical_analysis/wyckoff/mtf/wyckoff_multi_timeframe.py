@@ -503,30 +503,44 @@ def _analyze_timeframe_group(
             elif s.phase == WyckoffPhase.MARKUP:
                 bearish_signals += 0.7  # Reversal in uptrend - bearish
 
-        # Sentiment signals - contra-indicators often suggest reversals
-        if s.funding_state in [FundingState.HIGHLY_NEGATIVE, FundingState.NEGATIVE]:
-            # Amplify signal based on volume state
-            if s.volume == VolumeState.VERY_HIGH:
-                bullish_signals += 0.8    # Stronger signal with very high volume
-            elif s.volume == VolumeState.HIGH:
-                bullish_signals += 0.6    # Regular signal with high volume
-            elif s.volume != VolumeState.VERY_LOW:  # Skip very low volume
-                bullish_signals += 0.4    # Weaker signal with normal/low volume
-        elif s.funding_state in [FundingState.HIGHLY_POSITIVE, FundingState.POSITIVE]:
-            # Amplify signal based on volume state
-            if s.volume == VolumeState.VERY_HIGH:
-                bearish_signals += 0.8    # Stronger signal with very high volume
-            elif s.volume == VolumeState.HIGH:
-                bearish_signals += 0.6    # Regular signal with high volume
-            elif s.volume != VolumeState.VERY_LOW:  # Skip very low volume
-                bearish_signals += 0.4    # Weaker signal with normal/low volume
+        # FIXED: Funding contrarian signals - only use at EXTREME levels with confirmation
+        # Only HIGHLY_POSITIVE/HIGHLY_NEGATIVE are reliable contrarian signals
+        # Require both high volume AND aligned phase/action for confirmation
+        if s.funding_state == FundingState.HIGHLY_NEGATIVE:
+            # Potential short squeeze - only if we see bullish confirmation
+            has_bullish_confirmation = (
+                is_bullish_phase(s.phase) or 
+                is_bullish_action(s.composite_action) or
+                s.is_spring
+            )
+            if has_bullish_confirmation:
+                if s.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
+                    bullish_signals += 0.4  # Reduced from 0.8
+                else:
+                    bullish_signals += 0.2  # Reduced from 0.4
+        elif s.funding_state == FundingState.HIGHLY_POSITIVE:
+            # Potential long squeeze - only if we see bearish confirmation
+            has_bearish_confirmation = (
+                is_bearish_phase(s.phase) or 
+                is_bearish_action(s.composite_action) or
+                s.is_upthrust
+            )
+            if has_bearish_confirmation:
+                if s.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
+                    bearish_signals += 0.4  # Reduced from 0.8
+                else:
+                    bearish_signals += 0.2  # Reduced from 0.4
+        # Note: POSITIVE/NEGATIVE funding (non-extreme) no longer adds contrarian signals
+        # This prevents premature entries on normal funding conditions
 
         # Effort-result signals - efficiency and exhaustion indicators
+        # NEUTRAL effort should not contribute to signals (ambiguous)
         if s.effort_vs_result == EffortResult.WEAK:
             if is_bearish_phase(s.phase):
                 bullish_signals += 0.4  # Weak selling effort can signal bullish potential
             elif is_bullish_phase(s.phase):
                 bearish_signals += 0.4  # Weak buying effort can signal bearish potential
+        # Note: EffortResult.NEUTRAL now explicitly does not add signals
 
         # Volatility signals - often indicate potential change of character
         if s.volatility == VolatilityState.HIGH:

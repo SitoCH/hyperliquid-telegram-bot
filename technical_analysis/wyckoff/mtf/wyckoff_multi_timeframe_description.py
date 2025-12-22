@@ -1,8 +1,9 @@
-from typing import Dict, List, TypeVar
+from typing import Dict, List, Optional, TypeVar
 
 from ..wyckoff_types import (
     WyckoffPhase,
     WyckoffSign,
+    WyckoffState,
     SignificantLevelsData,
     CompositeAction,
     Timeframe,
@@ -94,6 +95,7 @@ def generate_all_timeframes_description(
     mid: float,
     significant_levels: Dict[Timeframe, SignificantLevelsData],
     interactive_analysis: bool,
+    states: Optional[Dict[Timeframe, WyckoffState]] = None,
 ) -> str:
     """Generate comprehensive description including four timeframe groups."""
     alignment_pct = f"{analysis.alignment_score * 100:.0f}%"
@@ -165,6 +167,7 @@ def generate_all_timeframes_description(
         mid,
         significant_levels,
         analysis.confidence_level,
+        states,
     )
     if trade_suggestion:
         full_description += f"\n\n{trade_suggestion}"

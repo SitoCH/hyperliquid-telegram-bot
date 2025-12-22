@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import base64
 import os
 
@@ -6,10 +6,98 @@ from logging_utils import logger
 from telegram_utils import telegram_utils
 from utils import exchange_enabled, fmt_price
 
-from ..wyckoff_types import SignificantLevelsData, Timeframe
+from ..wyckoff_types import SignificantLevelsData, Timeframe, WyckoffState
 from .wyckoff_multi_timeframe_types import MultiTimeframeDirection
 
 MIN_RR_DEFAULT = 1.4
+
+# Entry timing filter constants
+PIVOT_PROXIMITY_THRESHOLD = 0.015  # 1.5% from pivot point
+VWAP_CONFIRMATION_REQUIRED = True  # Require VWAP alignment for entry
+
+
+def check_entry_timing(
+    coin: str,
+    direction: MultiTimeframeDirection,
+    mid: float,
+    states: Dict[Timeframe, WyckoffState],
+    significant_levels: Dict[Timeframe, SignificantLevelsData],
+) -> Tuple[bool, str, Optional[float]]:
+    """
+    Check if current price action offers good entry timing based on:
+    1. Proximity to pivot points (support for longs, resistance for shorts)
+    2. VWAP confirmation (price above VWAP for longs, below for shorts)
+    3. RSI not overbought/oversold against direction
+    
+    Returns:
+        tuple: (is_good_entry, reason, optimal_entry_price)
+    """
+    if direction == MultiTimeframeDirection.NEUTRAL:
+        return True, "", None
+    
+    reasons = []
+    entry_price = mid
+    
+    # Get 30m and 1h states for timing analysis
+    state_30m = states.get(Timeframe.MINUTES_30)
+    state_1h = states.get(Timeframe.HOUR_1)
+    
+    # 1. Check VWAP alignment if available
+    vwap_aligned = True
+    if state_30m and state_30m.vwap_bias != "unknown":
+        if direction == MultiTimeframeDirection.BULLISH:
+            vwap_aligned = state_30m.vwap_bias in ["above", "neutral"]
+        else:  # BEARISH
+            vwap_aligned = state_30m.vwap_bias in ["below", "neutral"]
+        
+        if not vwap_aligned and VWAP_CONFIRMATION_REQUIRED:
+            reasons.append(f"VWAP={state_30m.vwap_bias} contradicts {direction.value} entry")
+    
+    # 2. Check RSI for overbought/oversold conditions
+    rsi_ok = True
+    for state in [state_30m, state_1h]:
+        if state and state.rsi_value > 0:
+            if direction == MultiTimeframeDirection.BULLISH and state.rsi_value > 75:
+                rsi_ok = False
+                reasons.append(f"RSI overbought ({state.rsi_value:.1f}) for long entry")
+            elif direction == MultiTimeframeDirection.BEARISH and state.rsi_value < 25:
+                rsi_ok = False
+                reasons.append(f"RSI oversold ({state.rsi_value:.1f}) for short entry")
+    
+    # 3. Check proximity to significant levels for optimal entry
+    optimal_entry = None
+    for tf in [Timeframe.MINUTES_30, Timeframe.HOUR_1]:
+        if tf not in significant_levels:
+            continue
+        
+        levels = significant_levels[tf]
+        
+        if direction == MultiTimeframeDirection.BULLISH:
+            # For longs, look for nearby support levels
+            nearby_supports = [
+                s for s in levels.get("support", [])
+                if abs(s - mid) / mid <= PIVOT_PROXIMITY_THRESHOLD and s <= mid
+            ]
+            if nearby_supports:
+                # Entry near support is good
+                optimal_entry = max(nearby_supports)  # Closest to price from below
+                logger.info(f"{coin}: Good long entry near support at {optimal_entry:.4f}")
+        else:  # BEARISH
+            # For shorts, look for nearby resistance levels
+            nearby_resistances = [
+                r for r in levels.get("resistance", [])
+                if abs(r - mid) / mid <= PIVOT_PROXIMITY_THRESHOLD and r >= mid
+            ]
+            if nearby_resistances:
+                # Entry near resistance is good
+                optimal_entry = min(nearby_resistances)  # Closest to price from above
+                logger.info(f"{coin}: Good short entry near resistance at {optimal_entry:.4f}")
+    
+    # Entry timing is good if VWAP is aligned and RSI is not extreme
+    is_good = vwap_aligned and rsi_ok
+    reason = "; ".join(reasons) if reasons else "Good entry timing"
+    
+    return is_good, reason, optimal_entry
 
 
 def get_trade_suggestion(
@@ -18,12 +106,21 @@ def get_trade_suggestion(
     mid: float,
     significant_levels: Dict[Timeframe, SignificantLevelsData],
     confidence: float,
+    states: Optional[Dict[Timeframe, WyckoffState]] = None,
 ) -> Optional[str]:
     """Generate trade suggestion with stop loss and take profit based on nearby levels.
 
     This function is extracted from wyckoff_multi_timeframe_description to keep that file small.
     It examines significant support/resistance levels across timeframes and, if confidence and
     risk:reward constraints are satisfied, returns a formatted suggestion string.
+    
+    Args:
+        coin: The coin symbol
+        direction: Bullish or bearish direction
+        mid: Current mid price
+        significant_levels: Dict of timeframe to support/resistance levels
+        confidence: Confidence level (0-1)
+        states: Optional dict of timeframe to WyckoffState for entry timing checks
     """
 
     min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
@@ -32,6 +129,15 @@ def get_trade_suggestion(
             f"Skipping trade suggestion for {coin}: confidence {confidence:.2f} below {min_confidence:.2f}"
         )
         return None
+
+    # Check entry timing if states are available
+    if states:
+        entry_ok, entry_reason, _ = check_entry_timing(
+            coin, direction, mid, states, significant_levels
+        )
+        if not entry_ok:
+            logger.info(f"Skipping trade suggestion for {coin}: poor entry timing - {entry_reason}")
+            return None
 
     min_rr = float(os.getenv("HTB_TRADE_MIN_RR", str(MIN_RR_DEFAULT)))
 

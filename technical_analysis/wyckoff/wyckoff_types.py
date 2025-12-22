@@ -37,6 +37,7 @@ class MarketPattern(Enum):
 
 class EffortResult(Enum):
     STRONG = "strong"
+    NEUTRAL = "neutral"
     WEAK = "weak"
     UNKNOWN = "unknown"
 
@@ -151,6 +152,11 @@ class WyckoffState:
     funding_state: FundingState
     description: str
     liquidity: MarketLiquidity = MarketLiquidity.UNKNOWN
+    # New trend indicator fields
+    supertrend_trend: str = "unknown"  # "uptrend", "downtrend", "unknown"
+    vwap_bias: int = 0  # 1 = bullish (above VWAP), -1 = bearish (below), 0 = neutral
+    rsi_value: float = 50.0  # RSI value (0-100)
+    adx_value: float = 0.0  # ADX trend strength (0-100)
 
     def to_dict(self):
         return {
@@ -167,6 +173,10 @@ class WyckoffState:
             "funding_state": self.funding_state.value,
             "description": self.description,
             "liquidity": self.liquidity.value,
+            "supertrend_trend": self.supertrend_trend,
+            "vwap_bias": self.vwap_bias,
+            "rsi_value": self.rsi_value,
+            "adx_value": self.adx_value,
         }
 
     @staticmethod
@@ -185,6 +195,10 @@ class WyckoffState:
             funding_state=FundingState.UNKNOWN,
             description="Unknown market state",
             liquidity=MarketLiquidity.UNKNOWN,
+            supertrend_trend="unknown",
+            vwap_bias=0,
+            rsi_value=50.0,
+            adx_value=0.0,
         )
 
 

@@ -163,6 +163,61 @@ def detect_spring_upthrust(df: pd.DataFrame, timeframe: Timeframe, idx: int, vol
         logger.error(f"Error in spring/upthrust detection: {e}")
         return False, False
 
+
+def extract_trend_indicators(df: pd.DataFrame) -> tuple[str, int, float, float]:
+    """
+    Extract trend indicator values from dataframe for signal quality assessment.
+    
+    Returns:
+        tuple: (supertrend_trend, vwap_bias, rsi_value, adx_value)
+        - supertrend_trend: "uptrend", "downtrend", or "unknown"
+        - vwap_bias: 1 (bullish, above VWAP), -1 (bearish, below VWAP), 0 (neutral)
+        - rsi_value: RSI value (0-100)
+        - adx_value: ADX trend strength (0-100)
+    """
+    try:
+        # SuperTrend direction
+        supertrend_trend = "unknown"
+        if "SuperTrend" in df.columns and len(df) >= 2:
+            last_close = df['c'].iloc[-1]
+            last_st = df['SuperTrend'].iloc[-1]
+            if pd.notna(last_st) and pd.notna(last_close):
+                supertrend_trend = "uptrend" if last_close > last_st else "downtrend"
+        
+        # VWAP bias
+        vwap_bias = 0
+        if "VWAP" in df.columns and len(df) >= 1:
+            last_close = df['c'].iloc[-1]
+            last_vwap = df['VWAP'].iloc[-1]
+            if pd.notna(last_vwap) and pd.notna(last_close):
+                # Use a small buffer to avoid noise around VWAP
+                buffer = last_close * 0.001  # 0.1% buffer
+                if last_close > last_vwap + buffer:
+                    vwap_bias = 1
+                elif last_close < last_vwap - buffer:
+                    vwap_bias = -1
+        
+        # RSI value
+        rsi_value = 50.0
+        if "RSI" in df.columns and len(df) >= 1:
+            last_rsi = df['RSI'].iloc[-1]
+            if pd.notna(last_rsi):
+                rsi_value = float(last_rsi)
+        
+        # ADX value
+        adx_value = 0.0
+        if "ADX_value" in df.columns and len(df) >= 1:
+            last_adx = df['ADX_value'].iloc[-1]
+            if pd.notna(last_adx):
+                adx_value = float(last_adx)
+        
+        return supertrend_trend, vwap_bias, rsi_value, adx_value
+        
+    except Exception as e:
+        logger.warning(f"Error extracting trend indicators: {e}")
+        return "unknown", 0, 50.0, 0.0
+
+
 def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry]) -> WyckoffState:
     """Analyze and store Wyckoff phase data incorporating funding rates."""
     # Safety check for minimum required periods (adaptive per timeframe to reduce lag)
@@ -249,6 +304,27 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
         composite_action = detect_composite_action(df, price_strength, vol_metrics, effort_vs_result.iloc[-1])
         wyckoff_sign = detect_wyckoff_signs(df, price_strength, vol_metrics.trend_strength, is_spring, is_upthrust, timeframe)
 
+        # Extract trend indicator values for signal quality assessment
+        supertrend_trend, vwap_bias, rsi_value, adx_value = extract_trend_indicators(df)
+        
+        # Use VWAP and RSI to refine phase certainty
+        phase_vwap_aligned = (
+            (current_phase in [WyckoffPhase.MARKUP, WyckoffPhase.ACCUMULATION] and vwap_bias >= 0) or
+            (current_phase in [WyckoffPhase.MARKDOWN, WyckoffPhase.DISTRIBUTION] and vwap_bias <= 0) or
+            current_phase == WyckoffPhase.RANGING
+        )
+        
+        # RSI extreme check - overbought in markup or oversold in markdown increases certainty
+        rsi_confirms_phase = (
+            (current_phase == WyckoffPhase.MARKUP and 40 < rsi_value < 80) or
+            (current_phase == WyckoffPhase.MARKDOWN and 20 < rsi_value < 60) or
+            (current_phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.DISTRIBUTION, WyckoffPhase.RANGING])
+        )
+        
+        # If indicators contradict phase, increase uncertainty
+        if not phase_vwap_aligned or not rsi_confirms_phase:
+            uncertain_phase = True
+
         # Create WyckoffState instance
         wyckoff_state = WyckoffState(
             phase=current_phase,
@@ -266,7 +342,11 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
                 current_phase, uncertain_phase, vol_metrics.state, 
                 is_spring, is_upthrust, effort_result,
                 composite_action, wyckoff_sign
-            )
+            ),
+            supertrend_trend=supertrend_trend,
+            vwap_bias=vwap_bias,
+            rsi_value=rsi_value,
+            adx_value=adx_value,
         )
 
         return wyckoff_state # type: ignore
@@ -456,6 +536,8 @@ def analyze_effort_result(
 ) -> EffortResult:
     """
     Balanced effort vs result analysis with improved validation and error handling.
+    Now returns NEUTRAL for ambiguous cases to avoid forcing weak classifications.
+    
     Args:
         df: Price and volume data
         vol_metrics: Volume metrics from calculate_volume_metrics
@@ -514,6 +596,10 @@ def analyze_effort_result(
         high_threshold = HIGH_EFFICIENCY_THRESHOLD * timeframe.settings.high_threshold
         low_threshold = LOW_EFFICIENCY_THRESHOLD * timeframe.settings.low_threshold
         
+        # Define neutral zone thresholds
+        neutral_high = 0.55  # Below this is neutral zone
+        neutral_low = 0.35   # Above this is neutral zone
+        
         # Final efficiency score
         efficiency = min(1.0, max(0.0, volume_weighted_efficiency))
         
@@ -522,21 +608,32 @@ def analyze_effort_result(
         volume_factor = vol_metrics.ratio / (EFFORT_VOLUME_THRESHOLD * 
                          (0.9 if is_short_timeframe else 1.0))
         
-        # Clear classification logic
+        # Clear classification logic with explicit NEUTRAL zone
+        # Strong signals - clear evidence of effective volume/price translation
         if efficiency > high_threshold and volume_quality > 0.6:
             return EffortResult.STRONG
+        elif price_impact > 1.2 and volume_factor > 1.1:
+            return EffortResult.STRONG
+            
+        # Weak signals - clear evidence of ineffective volume/price translation
         elif efficiency < low_threshold and volume_quality < 0.4:
             return EffortResult.WEAK
         elif price_change < min_move * 0.5:
             return EffortResult.WEAK
-        elif price_impact > 1.2 and volume_factor > 1.1:
-            return EffortResult.STRONG
         elif price_impact < 0.4 and volume_factor < 0.7:
             return EffortResult.WEAK
+        
+        # NEUTRAL zone - ambiguous signals that should not affect trading decisions
+        elif neutral_low <= efficiency <= neutral_high:
+            return EffortResult.NEUTRAL
+        elif 0.4 <= volume_quality <= 0.6:
+            return EffortResult.NEUTRAL
+            
+        # Edge cases - lean towards the closer threshold
         elif efficiency > 0.5:
             return EffortResult.STRONG
         else:
-            return EffortResult.WEAK
+            return EffortResult.NEUTRAL  # Changed from WEAK - uncertain cases go to NEUTRAL
             
     except Exception as e:
         logger.error(f"Error in effort vs result analysis: {e}")

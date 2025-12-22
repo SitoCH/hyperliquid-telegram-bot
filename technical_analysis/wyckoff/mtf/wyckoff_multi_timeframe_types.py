@@ -61,3 +61,4 @@ class AllTimeframesAnalysis:
     confidence_level: float
     alignment_score: float
     momentum_intensity: float = 0.0
+    signal_quality: float = 0.0  # 0-100 composite signal quality score
