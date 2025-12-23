@@ -17,12 +17,17 @@ class PortfolioBalance:
     perp_margin_available: float 
     spot_total: float
     stacked_total: float
+    vaults: List[Dict[str, Any]]
     cross_margin_ratio: float
     cross_account_leverage: float
     
     @property
+    def vault_total(self) -> float:
+        return sum(float(vault.get('equity', 0)) for vault in self.vaults)
+    
+    @property
     def total(self) -> float:
-        return self.perp_total + self.spot_total + self.stacked_total
+        return self.perp_total + self.spot_total + self.stacked_total + self.vault_total
         
 def _calculate_spot_balance(spot_state: Dict[str, Any], token_prices: Dict[str, float]) -> float:
     """Calculate total spot balance from user state and token prices."""
@@ -49,6 +54,7 @@ def _get_portfolio_balance() -> PortfolioBalance:
     spot_state = hyperliquid_utils.info.spot_user_state(address)
     token_prices = _get_token_prices()
     staking_summary = hyperliquid_utils.info.user_staking_summary(address)
+    vault_equities = hyperliquid_utils.info.user_vault_equities(address)
 
     cross_margin_account_value =float(perp_state['crossMarginSummary']['accountValue'])
     cross_margin_positions_value =float(perp_state['crossMarginSummary']['totalNtlPos'])
@@ -62,6 +68,7 @@ def _get_portfolio_balance() -> PortfolioBalance:
         perp_margin_available = max(cross_margin_account_value - total_margin_used, 0.0),
         spot_total=_calculate_spot_balance(spot_state, token_prices),
         stacked_total=_calculate_stacked_balance(staking_summary, token_prices),
+        vaults=vault_equities,
         cross_margin_ratio = maintenance_margin / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
         cross_account_leverage = cross_margin_positions_value / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
     )
@@ -83,6 +90,12 @@ def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
         message.extend([
         "<b>Stacked positions:</b>",
         f"Total balance: {fmt(balance.stacked_total)} USDC", 
+        ])
+
+    if balance.vault_total > 0:
+        message.extend([
+        "<b>Vault positions:</b>",
+        f"Total balance: {fmt(balance.vault_total)} USDC", 
         ])
 
     message.extend([
@@ -206,6 +219,10 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if len(spot_messages) > 0:
             await telegram_utils.reply(update, '\n'.join(spot_messages), parse_mode=ParseMode.HTML)
 
+        vault_messages = vault_positions_messages(tablefmt, balance.vaults)
+        if len(vault_messages) > 0:
+            await telegram_utils.reply(update, '\n'.join(vault_messages), parse_mode=ParseMode.HTML)
+
     except Exception as e:
         logger.error(f"Error getting positions: {str(e)}")
         await telegram_utils.reply(
@@ -259,6 +276,11 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
         spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address))
         message_lines += spot_messages
+
+        vault_messages = vault_positions_messages(tablefmt, balance.vaults)
+        if len(vault_messages) > 0:
+            message_lines += vault_messages
+
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
     except Exception as e:
@@ -341,5 +363,45 @@ async def spot_positions_messages(tablefmt, spot_user_state):
     return [
         "",
         "<b>Spot positions:</b>",
+        f"<pre>{table}</pre>"
+    ]
+
+def vault_positions_messages(tablefmt, vaults: List[Dict[str, Any]]):
+    """Generate messages for vault positions, sorted by USD value."""
+
+    if not vaults:
+        return []
+    
+    positions = []
+    for vault in vaults:
+        vault_address = vault['vaultAddress']
+        usd_value = float(vault['equity'])
+        
+        positions.append({
+            'vault_address': vault_address[:6] + "..." +vault_address[-4:],
+            'usd_value': usd_value
+        })
+
+    if len(positions) == 0:
+        return []
+
+    positions.sort(key=lambda x: x['usd_value'], reverse=True)
+
+    table = tabulate(
+        [
+            [
+                pos['vault_address'],
+                f"{fmt(pos['usd_value'])}$",
+            ]
+            for pos in positions
+        ],
+        headers=["Vault", "Balance"],
+        tablefmt=tablefmt,
+        colalign=("left", "right")
+    )
+    
+    return [
+        "",
+        "<b>Vault positions:</b>",
         f"<pre>{table}</pre>"
     ]

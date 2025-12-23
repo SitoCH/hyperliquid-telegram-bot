@@ -15,6 +15,7 @@ class InfoProxy:
         'user_staking_summary': 20,
         'user_fills': 20,
         'user_fills_by_time': 20,
+        'user_vault_equities': 20,
         'frontend_open_orders': 20,
         'meta': 20,
         'subscribe': 0,
