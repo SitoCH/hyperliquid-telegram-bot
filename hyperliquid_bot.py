@@ -28,6 +28,13 @@ def main() -> None:
     hyperliquid_utils.info.subscribe(
         {"type": "userEvents", "user": hyperliquid_utils.address}, on_user_events
     )
+
+    def on_user_fundings_events(event) -> None:
+        logger.info('Received user fundings event')
+
+    hyperliquid_utils.info.subscribe(
+        {"type": "userFundings", "user": hyperliquid_utils.address}, on_user_fundings_events
+    )
     
     enter_position_states = {
             SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
