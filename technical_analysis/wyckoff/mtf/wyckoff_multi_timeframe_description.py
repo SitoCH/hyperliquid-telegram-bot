@@ -30,6 +30,35 @@ MODERATE_CONFIDENCE_THRESHOLD = 0.5
 MODERATE_ALIGNMENT_THRESHOLD = 0.6
 
 
+def _get_phase_context(phase: WyckoffPhase, direction: MultiTimeframeDirection) -> str:
+    """Get phase-specific context that varies the language."""
+    phase_contexts = {
+        WyckoffPhase.ACCUMULATION: "building a base" if direction != MultiTimeframeDirection.BEARISH else "testing support",
+        WyckoffPhase.MARKUP: "in an uptrend" if direction == MultiTimeframeDirection.BULLISH else "attempting recovery",
+        WyckoffPhase.DISTRIBUTION: "topping out" if direction != MultiTimeframeDirection.BULLISH else "meeting resistance",
+        WyckoffPhase.MARKDOWN: "in a downtrend" if direction == MultiTimeframeDirection.BEARISH else "under pressure",
+        WyckoffPhase.RANGING: "consolidating",
+        WyckoffPhase.UNKNOWN: "unclear structure",
+    }
+    return phase_contexts.get(phase, "evolving")
+
+
+def _get_tf_divergence_note(
+    context_bias: MultiTimeframeDirection,
+    intraday_bias: MultiTimeframeDirection,
+    context_phase: WyckoffPhase,
+) -> str:
+    """Generate note when higher TF diverges from intraday."""
+    if context_bias == intraday_bias or context_bias == MultiTimeframeDirection.NEUTRAL:
+        return ""
+    
+    if context_bias == MultiTimeframeDirection.BULLISH:
+        return f" Higher TFs remain bullish ({context_phase.value}); dips may find support."
+    elif context_bias == MultiTimeframeDirection.BEARISH:
+        return f" Higher TFs bearish ({context_phase.value}); rallies may face resistance."
+    return ""
+
+
 
 T = TypeVar("T")
 
@@ -306,30 +335,42 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
             f"{align_label} alignment, {momentum_desc} {volume_qualifier}momentum "
         )
 
-        # Improved signal direction with more specific crypto trading language
+        # Improved signal direction with phase-aware, varied language
+        interm_phase = analysis.intermediate.dominant_phase
+        context_phase = analysis.context.dominant_phase
+        context_bias = analysis.context.momentum_bias
+        
+        # Get phase-specific backdrop from context TF
+        backdrop = _get_phase_context(context_phase, context_bias)
+        
         if intraday_aligned:
             if intraday_bias == MultiTimeframeDirection.BULLISH:
-                signal_direction = (
-                    f"bullish alignment across 15m-1h timeframes suggesting continuation. "
-                    f"Price action shows {momentum_desc} buying interest"
-                )
+                # Vary based on whether we're early (accumulation) or extended (markup)
+                if interm_phase == WyckoffPhase.ACCUMULATION:
+                    signal_direction = f"bullish setup forming; price {backdrop} on higher TFs"
+                elif interm_phase == WyckoffPhase.MARKUP:
+                    signal_direction = f"uptrend continuation; momentum {momentum_desc}"
+                else:
+                    signal_direction = f"bullish bias emerging from {interm_phase.value} phase"
                 if avg_volume > STRONG_VOLUME_THRESHOLD:
-                    signal_direction += " with above-average volume support"
+                    signal_direction += ", volume confirms"
                 signal_direction += ". "
 
             elif intraday_bias == MultiTimeframeDirection.BEARISH:
-                signal_direction = (
-                    f"bearish alignment across 15m-1h timeframes indicating continued selling pressure. "
-                    f"Price structure shows {momentum_desc} selling"
-                )
+                if interm_phase == WyckoffPhase.DISTRIBUTION:
+                    signal_direction = f"bearish setup developing; price {backdrop} on higher TFs"
+                elif interm_phase == WyckoffPhase.MARKDOWN:
+                    signal_direction = f"downtrend continuation; selling pressure {momentum_desc}"
+                else:
+                    signal_direction = f"bearish bias emerging from {interm_phase.value} phase"
                 if avg_volume > STRONG_VOLUME_THRESHOLD:
-                    signal_direction += " with above-average volume"
+                    signal_direction += ", volume confirms"
                 signal_direction += ". "
 
             else:
                 signal_direction = (
-                    f"neutral price action across key timeframes suggesting range-bound conditions. "
-                    f"Trade range edges or wait for break of range high/low with rising volume. "
+                    f"range-bound; price {backdrop}. "
+                    f"Trade edges or wait for breakout with volume. "
                 )
 
         else:  # Timeframes not aligned
@@ -339,75 +380,73 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
                 and intraday_bias != immediate_bias
                 and analysis.short_term.volume_strength > MODERATE_VOLUME_THRESHOLD
             )
+            
+            # Get divergence context from higher TFs
+            tf_divergence = _get_tf_divergence_note(context_bias, intraday_bias, context_phase)
 
             if potential_reversal:
                 if immediate_bias == MultiTimeframeDirection.BULLISH:
                     signal_direction = (
-                        f"potential bullish reversal forming on 15m against "
-                        f"{'bullish' if analysis.context.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} "
-                        f"larger trend. Look for confirmation on the 30m-1h timeframes before adding size. "
+                        f"early bullish reversal on 15m; await 30m-1h confirmation.{tf_divergence} "
                     )
                 else:  # BEARISH
                     signal_direction = (
-                        f"potential bearish reversal forming on 15m against "
-                        f"{'bullish' if analysis.context.momentum_bias == MultiTimeframeDirection.BULLISH else 'bearish'} "
-                        f"larger trend. Wait for confirmation on the 30m-1h timeframes before committing. "
+                        f"early bearish reversal on 15m; await 30m-1h confirmation.{tf_divergence} "
                     )
             else:
                 if immediate_bias == MultiTimeframeDirection.NEUTRAL:
-                    # Short-term consolidation
                     signal_direction = (
-                        f"15m consolidation within the {intraday_bias.value} intermediate trend. "
-                        f"Trade range edges or wait for break of range high/low with rising volume. "
+                        f"15m consolidating within {intraday_bias.value} intraday trend.{tf_divergence} "
                     )
                 else:
-                    # General timeframe conflict
+                    # TF conflict - be specific about which TFs disagree
                     signal_direction = (
-                        f"{immediate_bias.value} short-term momentum not yet confirmed on higher timeframes. "
-                        f"{'Consider quick scalps only until alignment improves.' if avg_volume > MODERATE_VOLUME_THRESHOLD else 'Avoid chasing moves until alignment improves.'} "
+                        f"15m {immediate_bias.value} vs 30m-1h {intraday_bias.value}; conflicting signals.{tf_divergence} "
                     )
 
-        # Concise Wyckoff context tail (dominant sign/action)
+        # Concise Wyckoff context with sign-specific insights
         context_tail = ""
         short_sign = analysis.short_term.dominant_sign
         interm_sign = analysis.intermediate.dominant_sign
         chosen_sign = short_sign if short_sign != WyckoffSign.NONE else interm_sign
-        if chosen_sign != WyckoffSign.NONE:
-            sign_text = _get_sign_description(chosen_sign).replace(" | ", "")
-            if sign_text:
-                context_tail += f" after {sign_text}"
+        
+        # Map signs to actionable context
+        sign_insights = {
+            WyckoffSign.SELLING_CLIMAX: "capitulation may signal bottom",
+            WyckoffSign.AUTOMATIC_RALLY: "relief bounce in progress",
+            WyckoffSign.SECONDARY_TEST: "retesting prior level",
+            WyckoffSign.LAST_POINT_OF_SUPPORT: "final support test before markup",
+            WyckoffSign.SIGN_OF_STRENGTH: "demand overcoming supply",
+            WyckoffSign.BUYING_CLIMAX: "exhaustion may signal top",
+            WyckoffSign.UPTHRUST: "failed breakout, watch for reversal",
+            WyckoffSign.SECONDARY_TEST_RESISTANCE: "retesting resistance",
+            WyckoffSign.LAST_POINT_OF_RESISTANCE: "final resistance before markdown",
+            WyckoffSign.SIGN_OF_WEAKNESS: "supply overcoming demand",
+        }
+        
+        if chosen_sign != WyckoffSign.NONE and chosen_sign in sign_insights:
+            context_tail = sign_insights[chosen_sign]
 
-        # Add dominant action note once if present
-        if not context_tail:
-            # If no sign tail, try action context; otherwise, append action after sign
-            pass
+        # Add action context if different from sign implication
         action_text = None
         if analysis.short_term.dominant_action != CompositeAction.UNKNOWN:
             action_text = analysis.short_term.dominant_action.value
         elif analysis.intermediate.dominant_action != CompositeAction.UNKNOWN:
             action_text = analysis.intermediate.dominant_action.value
-        if action_text:
-            if context_tail:
-                context_tail += f"; setup aligns with {action_text}"
-            else:
-                context_tail += f" setup aligns with {action_text}"
+        
+        if action_text and context_tail:
+            # Only add if it provides new info
+            if action_text.lower() not in context_tail.lower():
+                context_tail = f"{context_tail} ({action_text})"
+        elif action_text and not context_tail:
+            context_tail = f"Composite action: {action_text}"
 
-        # Funding-aware cautioning
-        # Coerce enum or string funding_state into a normalized lowercase string
-        _funding_raw = getattr(
-            analysis.intermediate.funding_state,
-            "value",
-            analysis.intermediate.funding_state,
-        )
-        funding_val = str(_funding_raw).lower()
-        if "positive" in funding_val:
-            position_advice += " Crowded longs; prefer pullback entries over breakouts."
-        elif "negative" in funding_val:
-            position_advice += " Short-cover squeeze risk; breakout entries acceptable with tight risk."
-
+        # Build the complete insight with context tail integrated naturally
+        wyckoff_note = f" Wyckoff: {context_tail}." if context_tail else ""
+        
         return (
-            f"{signal_prefix}with {signal_direction.strip()}"  # ensure clean spacing
-            f"{context_tail}. "
+            f"{signal_prefix}with {signal_direction.strip()}"
+            f"{wyckoff_note} "
             f"{position_advice}"
         )
 
