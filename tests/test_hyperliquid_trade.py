@@ -12,7 +12,6 @@ from hyperliquid_trade import (
     enter_position,
     enter_long,
     enter_short,
-    ger_price_estimate,
     skip_sl_tp_prompt,
     has_order_error,
     get_order_error_message,
@@ -32,26 +31,210 @@ from hyperliquid_trade import (
     exit_all_positions,
     exit_position,
     exit_selected_coin,
+    _has_sl_tp_set,
+    _is_long_position,
+    _validate_stop_loss_price,
+    _validate_take_profit_price,
+    _validate_order_context,
+    _handle_callback_selection,
+    _handle_callback_cancel,
 )
 
 
-class TestGerPriceEstimate:
-    def test_decrease_percentage(self):
-        mid = 100.0
-        result = ger_price_estimate(mid, decrease=True, percentage=5.0)
-        assert result == "95.000"  # 100 * (1 - 0.05) = 95
+class TestHandleCallbackCancel:
+    """Tests for _handle_callback_cancel helper."""
+    
+    @pytest.mark.asyncio
+    async def test_cancel_edits_message_and_ends(self):
+        query = AsyncMock()
+        result = await _handle_callback_cancel(query)
+        query.edit_message_text.assert_called_once()
+        assert result == ConversationHandler.END
 
-    def test_increase_percentage(self):
-        mid = 100.0
-        result = ger_price_estimate(mid, decrease=False, percentage=5.0)
-        assert result == "105.00"  # 100 * (1 + 0.05) = 105
 
-    def test_zero_percentage(self):
-        mid = 100.0
-        result_decrease = ger_price_estimate(mid, decrease=True, percentage=0.0)
-        result_increase = ger_price_estimate(mid, decrease=False, percentage=0.0)
-        assert result_decrease == "100.000"
-        assert result_increase == "100.000"
+class TestHandleCallbackSelection:
+    """Tests for _handle_callback_selection helper."""
+    
+    @pytest.mark.asyncio
+    async def test_no_query_returns_end(self):
+        update = MagicMock()
+        update.callback_query = None
+        result = await _handle_callback_selection(update, int, "Error", AsyncMock())
+        assert result == ConversationHandler.END
+    
+    @pytest.mark.asyncio
+    async def test_cancel_data_calls_cancel_handler(self):
+        update = MagicMock()
+        query = AsyncMock()
+        query.data = 'cancel'
+        update.callback_query = query
+        
+        result = await _handle_callback_selection(update, int, "Error", AsyncMock())
+        query.answer.assert_called_once()
+        query.edit_message_text.assert_called_once()
+        assert result == ConversationHandler.END
+    
+    @pytest.mark.asyncio
+    async def test_none_data_calls_cancel_handler(self):
+        update = MagicMock()
+        query = AsyncMock()
+        query.data = None
+        update.callback_query = query
+        
+        result = await _handle_callback_selection(update, int, "Error", AsyncMock())
+        assert result == ConversationHandler.END
+    
+    @pytest.mark.asyncio
+    async def test_valid_data_with_converter_calls_next_action(self):
+        update = MagicMock()
+        query = AsyncMock()
+        query.data = '42'
+        update.callback_query = query
+        
+        next_action = AsyncMock(return_value=SELECTING_STOP_LOSS)
+        result = await _handle_callback_selection(update, int, "Error", next_action)
+        
+        next_action.assert_called_once_with(query, 42)
+        assert result == SELECTING_STOP_LOSS
+    
+    @pytest.mark.asyncio
+    async def test_valid_data_without_converter_passes_raw_value(self):
+        update = MagicMock()
+        query = AsyncMock()
+        query.data = 'BTC'
+        update.callback_query = query
+        
+        next_action = AsyncMock(return_value=SELECTING_AMOUNT)
+        result = await _handle_callback_selection(update, None, "Error", next_action)
+        
+        next_action.assert_called_once_with(query, 'BTC')
+        assert result == SELECTING_AMOUNT
+    
+    @pytest.mark.asyncio
+    async def test_invalid_conversion_shows_error(self):
+        update = MagicMock()
+        query = AsyncMock()
+        query.data = 'not_a_number'
+        update.callback_query = query
+        
+        result = await _handle_callback_selection(update, int, "Invalid number.", AsyncMock())
+        
+        query.edit_message_text.assert_called_once_with("Invalid number.")
+        assert result == ConversationHandler.END
+
+
+class TestHelperFunctions:
+    """Tests for helper functions introduced during refactoring."""
+    
+    def test_has_sl_tp_set_both_present(self):
+        context = MagicMock()
+        context.user_data = {'stop_loss_price': 45000, 'take_profit_price': 55000}
+        assert _has_sl_tp_set(context) is True
+
+    def test_has_sl_tp_set_only_sl(self):
+        context = MagicMock()
+        context.user_data = {'stop_loss_price': 45000}
+        assert _has_sl_tp_set(context) is False
+
+    def test_has_sl_tp_set_only_tp(self):
+        context = MagicMock()
+        context.user_data = {'take_profit_price': 55000}
+        assert _has_sl_tp_set(context) is False
+
+    def test_has_sl_tp_set_neither(self):
+        context = MagicMock()
+        context.user_data = {}
+        assert _has_sl_tp_set(context) is False
+
+    def test_is_long_position_long(self):
+        context = MagicMock()
+        context.user_data = {'enter_mode': 'long'}
+        assert _is_long_position(context) is True
+
+    def test_is_long_position_short(self):
+        context = MagicMock()
+        context.user_data = {'enter_mode': 'short'}
+        assert _is_long_position(context) is False
+
+
+class TestValidateStopLossPrice:
+    def test_negative_price(self):
+        assert _validate_stop_loss_price(-100, 50000, True) == "Price must be zero or greater."
+
+    def test_zero_price_valid(self):
+        assert _validate_stop_loss_price(0, 50000, True) is None
+
+    def test_long_sl_above_market_invalid(self):
+        error = _validate_stop_loss_price(55000, 50000, True)
+        assert error == "Stop loss price must be below current market price for long positions."
+
+    def test_long_sl_below_market_valid(self):
+        assert _validate_stop_loss_price(45000, 50000, True) is None
+
+    def test_short_sl_below_market_invalid(self):
+        error = _validate_stop_loss_price(45000, 50000, False)
+        assert error == "Stop loss price must be above current market price for short positions."
+
+    def test_short_sl_above_market_valid(self):
+        assert _validate_stop_loss_price(55000, 50000, False) is None
+
+
+class TestValidateTakeProfitPrice:
+    def test_zero_price_invalid(self):
+        assert _validate_take_profit_price(0, 50000, True) == "Price must be greater than 0."
+
+    def test_negative_price_invalid(self):
+        assert _validate_take_profit_price(-100, 50000, True) == "Price must be greater than 0."
+
+    def test_long_tp_below_market_invalid(self):
+        error = _validate_take_profit_price(45000, 50000, True)
+        assert error == "Take profit price must be above current market price for long positions."
+
+    def test_long_tp_above_market_valid(self):
+        assert _validate_take_profit_price(55000, 50000, True) is None
+
+    def test_short_tp_above_market_invalid(self):
+        error = _validate_take_profit_price(55000, 50000, False)
+        assert error == "Take profit price must be below current market price for short positions."
+
+    def test_short_tp_below_market_valid(self):
+        assert _validate_take_profit_price(45000, 50000, False) is None
+
+
+class TestValidateOrderContext:
+    def test_missing_amount(self):
+        context = MagicMock()
+        context.user_data = {'stop_loss_price': 45000, 'take_profit_price': 55000, 'selected_coin': 'BTC'}
+        error = _validate_order_context(context)
+        assert "No amount selected" in error
+
+    def test_missing_stop_loss(self):
+        context = MagicMock()
+        context.user_data = {'amount': 100, 'take_profit_price': 55000, 'selected_coin': 'BTC'}
+        error = _validate_order_context(context)
+        assert "No stop loss selected" in error
+
+    def test_missing_take_profit(self):
+        context = MagicMock()
+        context.user_data = {'amount': 100, 'stop_loss_price': 45000, 'selected_coin': 'BTC'}
+        error = _validate_order_context(context)
+        assert "No take profit selected" in error
+
+    def test_missing_coin(self):
+        context = MagicMock()
+        context.user_data = {'amount': 100, 'stop_loss_price': 45000, 'take_profit_price': 55000}
+        error = _validate_order_context(context)
+        assert "No coin selected" in error
+
+    def test_all_present_valid(self):
+        context = MagicMock()
+        context.user_data = {
+            'amount': 100,
+            'stop_loss_price': 45000,
+            'take_profit_price': 55000,
+            'selected_coin': 'BTC'
+        }
+        assert _validate_order_context(context) is None
 
 
 class TestSkipSlTpPrompt:
@@ -423,10 +606,12 @@ class TestSelectedStopLoss:
         update.message = message
 
         context = MagicMock()
-        context.user_data = {'selected_coin': 'BTC'}
+        context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'long'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
+             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
+            mock_hl.info.all_mids.return_value = {'BTC': '50000'}
 
             result = await selected_stop_loss(update, context)
 
@@ -616,9 +801,12 @@ class TestSelectedTakeProfit:
         update.message = message
 
         context = MagicMock()
+        context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'long'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
+             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
+            mock_hl.info.all_mids.return_value = {'BTC': '50000'}
 
             result = await selected_take_profit(update, context)
 

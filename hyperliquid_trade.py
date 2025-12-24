@@ -14,6 +14,59 @@ from tabulate import tabulate, simple_separated_format
 
 EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT, SELECTING_LEVERAGE = range(6)
 
+# Type alias for context types used throughout the module
+ContextType = Union[CallbackContext, ContextTypes.DEFAULT_TYPE]
+
+
+def _has_sl_tp_set(context: ContextType) -> bool:
+    """Check if both stop loss and take profit prices are set in context."""
+    return 'stop_loss_price' in context.user_data and 'take_profit_price' in context.user_data  # type: ignore
+
+
+def _get_mid_price(coin: str) -> float:
+    """Get current mid price for a coin."""
+    return float(hyperliquid_utils.info.all_mids()[coin])
+
+
+def _is_long_position(context: ContextType) -> bool:
+    """Check if current position is long."""
+    return context.user_data["enter_mode"] == "long"  # type: ignore
+
+
+def _create_keyboard_with_cancel(buttons: List[List[InlineKeyboardButton]]) -> InlineKeyboardMarkup:
+    """Create an InlineKeyboardMarkup with a cancel button appended."""
+    buttons.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
+    return InlineKeyboardMarkup(buttons)
+
+
+async def _handle_callback_cancel(query: CallbackQuery) -> int:
+    """Handle cancel action for callback queries."""
+    await query.edit_message_text(OPERATION_CANCELLED)
+    return ConversationHandler.END
+
+
+async def _handle_callback_selection(
+    update: Update,
+    converter: Any,
+    invalid_msg: str,
+    next_action: Any
+) -> int:
+    """Generic handler for callback query selections (amount, leverage, coin)."""
+    query: CallbackQuery = update.callback_query  # type: ignore
+    if not query:
+        return ConversationHandler.END
+    await query.answer()
+
+    value = query.data
+    if not value or value == 'cancel':
+        return await _handle_callback_cancel(query)
+
+    try:
+        return await next_action(query, converter(value) if converter else value)
+    except (ValueError, TypeError):
+        await query.edit_message_text(invalid_msg)
+        return ConversationHandler.END
+
 async def enter_position(update: Update, context: CallbackContext, enter_mode: str) -> int:
     context.user_data.clear() # type: ignore
     context.user_data["enter_mode"] = enter_mode # type: ignore
@@ -39,9 +92,6 @@ async def enter_long(update: Update, context: CallbackContext) -> int:
 async def enter_short(update: Update, context: CallbackContext) -> int:
     return await enter_position(update, context, "short")
 
-
-def ger_price_estimate(mid: float, decrease: bool, percentage: float) -> str:
-    return fmt_price(mid * (1.0 - percentage / 100.0) if decrease else mid * (1.0 + percentage / 100.0))
 
 def skip_sl_tp_prompt() -> bool:
     return os.getenv('HTB_SKIP_SL_TP_PROMPT', 'False') == 'True'
@@ -72,43 +122,43 @@ def get_order_error_message(result: Any) -> str:
                 return status['error']
     return "Unknown order error"
 
-async def selected_amount(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
-    query: CallbackQuery = update.callback_query # type: ignore
-    if not query:
-        return ConversationHandler.END
-    await query.answer()
-
-    amount = query.data
-    if not amount or amount == 'cancel':
-        await query.edit_message_text(OPERATION_CANCELLED)
-        return ConversationHandler.END
-
-    try:
-        context.user_data["amount"] = float(amount) # type: ignore
-    except ValueError:
-        await query.edit_message_text("Invalid amount.")
-        return ConversationHandler.END
-
-    coin = context.user_data.get("selected_coin", "") # type: ignore
+async def _process_amount_selection(query: CallbackQuery, context: ContextType, amount: float) -> int:
+    """Process the amount selection and determine next step."""
+    context.user_data["amount"] = amount  # type: ignore
+    coin = context.user_data.get("selected_coin", "")  # type: ignore
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     current_leverage = hyperliquid_utils.get_leverage(user_state, coin)
+    
     if current_leverage is not None:
-        context.user_data["leverage"] = int(current_leverage) # type: ignore
+        context.user_data["leverage"] = int(current_leverage)  # type: ignore
+        return await _proceed_after_leverage_set(query, context, user_state, coin)
 
-        if 'stop_loss_price' in context.user_data and 'take_profit_price' in context.user_data: # type: ignore
-            await query.delete_message()
-            return await open_order(context, user_state, float(hyperliquid_utils.info.all_mids()[coin]))
+    return await _prompt_for_leverage(query, coin)
 
-        await send_stop_loss_suggestions(query, context)
-        return SELECTING_STOP_LOSS
 
+async def selected_amount(update: Update, context: ContextType) -> int:
+    async def process(query: CallbackQuery, amount: float) -> int:
+        return await _process_amount_selection(query, context, amount)
+    return await _handle_callback_selection(update, float, "Invalid amount.", process)
+
+
+async def _proceed_after_leverage_set(query: CallbackQuery, context: ContextType, user_state: Dict[str, Any], coin: str) -> int:
+    """Handle the flow after leverage is determined - either open order or prompt for SL."""
+    if _has_sl_tp_set(context):
+        await query.delete_message()
+        return await open_order(context, user_state, _get_mid_price(coin))
+    await send_stop_loss_suggestions(query, context)
+    return SELECTING_STOP_LOSS
+
+
+async def _prompt_for_leverage(query: CallbackQuery, coin: str) -> int:
+    """Prompt user to select leverage for the given coin."""
     try:
         meta: List[Dict[str, Any]] = hyperliquid_utils.info.meta()
         asset_info_map = {
             info["name"]: int(info["maxLeverage"])
-            for info in meta.get("universe", []) # type: ignore
+            for info in meta.get("universe", [])  # type: ignore
         }
-            
         max_leverage = asset_info_map.get(coin, 1)
         suggested_leverages = [l for l in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30] if l <= max_leverage]
 
@@ -116,43 +166,22 @@ async def selected_amount(update: Update, context: Union[CallbackContext, Contex
             [InlineKeyboardButton(f"{leverage}x", callback_data=str(leverage))]
             for leverage in suggested_leverages
         ]
-        keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(
-            "Please select the leverage to use:",
-            reply_markup=reply_markup
-        )
-        
+        reply_markup = _create_keyboard_with_cancel(keyboard)
+        await query.edit_message_text("Please select the leverage to use:", reply_markup=reply_markup)
         return SELECTING_LEVERAGE
-        
     except Exception as e:
         logger.error(f"Error processing metadata for coin {coin}: {str(e)}")
         await query.edit_message_text("Error: Could not process coin metadata. Please try again.")
         return ConversationHandler.END
 
 
-async def selected_leverage(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
-    query: CallbackQuery = update.callback_query # type: ignore
-    await query.answer()
-
-    leverage = query.data
-    if leverage == 'cancel':
-        await query.edit_message_text(OPERATION_CANCELLED)
-        return ConversationHandler.END
-
-    try:
-        context.user_data["leverage"] = int(leverage) # type: ignore
-    except ValueError:
-        await query.edit_message_text("Invalid leverage.")
-        return ConversationHandler.END
-
-    if 'stop_loss_price' in context.user_data and 'take_profit_price' in context.user_data: # type: ignore
-        await query.delete_message()
-        coin = context.user_data.get("selected_coin", "") # type: ignore
-        return await open_order(context, hyperliquid_utils.info.user_state(hyperliquid_utils.address), float(hyperliquid_utils.info.all_mids()[coin]))
-
-    await send_stop_loss_suggestions(query, context)
-    return SELECTING_STOP_LOSS
+async def selected_leverage(update: Update, context: ContextType) -> int:
+    async def process(query: CallbackQuery, leverage: int) -> int:
+        context.user_data["leverage"] = leverage  # type: ignore
+        coin = context.user_data.get("selected_coin", "")  # type: ignore
+        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+        return await _proceed_after_leverage_set(query, context, user_state, coin)
+    return await _handle_callback_selection(update, int, "Invalid leverage.", process)
 
 
 class PriceSuggestion(NamedTuple):
@@ -191,11 +220,11 @@ async def get_price_suggestions(coin: str, mid: float, is_stop_loss: bool, is_lo
     return suggestions
 
 
-async def get_price_suggestions_text(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE], is_stop_loss: bool) -> str:
+async def get_price_suggestions_text(context: ContextType, is_stop_loss: bool) -> str:
     """Send formatted price suggestions for either stop loss or take profit."""
-    coin = context.user_data["selected_coin"] # type: ignore
-    mid = float(hyperliquid_utils.info.all_mids()[coin])
-    is_long = context.user_data["enter_mode"] == "long" # type: ignore
+    coin = context.user_data["selected_coin"]  # type: ignore
+    mid = _get_mid_price(coin)
+    is_long = _is_long_position(context)
 
     suggestions = await get_price_suggestions(coin, mid, is_stop_loss, is_long)
     
@@ -211,180 +240,193 @@ async def get_price_suggestions_text(context: Union[CallbackContext, ContextType
         colalign=("left", "right", "right")
     )
 
+    price_type = 'stop loss' if is_stop_loss else 'take profit'
     return (
         f"Current market price: {fmt_price(mid)} USDC\n"
         f"Suggested {'stop losses' if is_stop_loss else 'take profits'}:\n"
         f"<pre>{table}</pre>\n"
-        f"\nEnter your desired {'stop loss' if is_stop_loss else 'take profit'} price in USDC, or 'cancel' to stop:"
+        f"\nEnter your desired {price_type} price in USDC, or 'cancel' to stop:"
     )
 
 
-async def send_stop_loss_suggestions(query: Any, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> None:
-    await query.edit_message_text(f"Loading price suggestions for {context.user_data['selected_coin']}...") # type: ignore
+async def send_stop_loss_suggestions(query: Any, context: ContextType) -> None:
+    await query.edit_message_text(f"Loading price suggestions for {context.user_data['selected_coin']}...")  # type: ignore
     await query.edit_message_text(await get_price_suggestions_text(context, True), parse_mode=ParseMode.HTML)
 
 
-async def selected_stop_loss(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
+def _validate_stop_loss_price(price: float, mid: float, is_long: bool) -> Optional[str]:
+    """Validate stop loss price. Returns error message if invalid, None if valid."""
+    if price < 0:
+        return "Price must be zero or greater."
+    if price > 0:
+        if is_long and price >= mid:
+            return "Stop loss price must be below current market price for long positions."
+        if not is_long and price <= mid:
+            return "Stop loss price must be above current market price for short positions."
+    return None
+
+
+def _validate_take_profit_price(price: float, mid: float, is_long: bool) -> Optional[str]:
+    """Validate take profit price. Returns error message if invalid, None if valid."""
+    if price <= 0:
+        return "Price must be greater than 0."
+    if is_long and price <= mid:
+        return "Take profit price must be above current market price for long positions."
+    if not is_long and price >= mid:
+        return "Take profit price must be below current market price for short positions."
+    return None
+
+
+async def _handle_price_input(
+    update: Update,
+    context: ContextType,
+    field_name: str,
+    validator: Any,
+    current_state: int,
+    next_action: Any
+) -> int:
+    """Generic handler for price input (stop loss or take profit)."""
     if not update.message:
         return ConversationHandler.END
 
-    stop_loss = update.message.text
-    if stop_loss.lower() == 'cancel': # type: ignore
+    text = update.message.text
+    if text.lower() == 'cancel':  # type: ignore
         await telegram_utils.reply(update, OPERATION_CANCELLED)
         return ConversationHandler.END
-    
-    coin = context.user_data["selected_coin"] # type: ignore
 
+    coin = context.user_data["selected_coin"]  # type: ignore
     try:
-        stop_loss_price = float(stop_loss) # type: ignore
-        if stop_loss_price < 0:
-            await telegram_utils.reply(update, "Price must be zero or greater.")
-            return SELECTING_STOP_LOSS
+        price = float(text)  # type: ignore
+        mid = _get_mid_price(coin)
+        is_long = _is_long_position(context)
+        
+        error = validator(price, mid, is_long)
+        if error:
+            await telegram_utils.reply(update, error)
+            return current_state
 
-        # Only validate stop loss price if it's not zero
-        if stop_loss_price > 0:
-            mid = float(hyperliquid_utils.info.all_mids()[coin])
-            is_long = context.user_data["enter_mode"] == "long" # type: ignore
-            
-            if is_long and stop_loss_price >= mid:
-                await telegram_utils.reply(update, "Stop loss price must be below current market price for long positions.")
-                return SELECTING_STOP_LOSS
-            elif not is_long and stop_loss_price <= mid:
-                await telegram_utils.reply(update, "Stop loss price must be above current market price for short positions.")
-                return SELECTING_STOP_LOSS
-
-        context.user_data["stop_loss_price"] = stop_loss_price # type: ignore
+        context.user_data[field_name] = price  # type: ignore
     except ValueError:
         await telegram_utils.reply(update, "Invalid price. Please enter a number or 'cancel'.")
-        return SELECTING_STOP_LOSS
+        return current_state
 
+    return await next_action(update, context, coin, mid)
+
+
+async def _after_stop_loss_set(update: Update, context: ContextType, coin: str, mid: float) -> int:
+    """Action after stop loss is set - prompt for take profit."""
     await telegram_utils.reply(update, f"Loading price suggestions for {coin}...")
     await telegram_utils.reply(update, await get_price_suggestions_text(context, False), parse_mode=ParseMode.HTML)
-
     return SELECTING_TAKE_PROFIT
 
 
-async def selected_coin(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
-    query: CallbackQuery = update.callback_query # type: ignore
-    await query.answer()
+async def _after_take_profit_set(update: Update, context: ContextType, coin: str, mid: float) -> int:
+    """Action after take profit is set - open the order."""
+    return await open_order(context, hyperliquid_utils.info.user_state(hyperliquid_utils.address), mid)
 
-    coin = query.data
-    if coin == 'cancel':
-        await query.edit_message_text(OPERATION_CANCELLED)
-        return ConversationHandler.END
 
-    await query.edit_message_text("Loading...")
-    context.user_data["selected_coin"] = coin # type: ignore
+async def selected_stop_loss(update: Update, context: ContextType) -> int:
+    return await _handle_price_input(
+        update, context, "stop_loss_price",
+        _validate_stop_loss_price, SELECTING_STOP_LOSS, _after_stop_loss_set
+    )
 
-    message, reply_markup = await get_amount_suggestions(context)
-    await query.edit_message_text(message, reply_markup=reply_markup)
 
-    return SELECTING_AMOUNT
+async def selected_take_profit(update: Update, context: ContextType) -> int:
+    return await _handle_price_input(
+        update, context, "take_profit_price",
+        _validate_take_profit_price, SELECTING_TAKE_PROFIT, _after_take_profit_set
+    )
 
-def calculate_available_margin():
+
+async def selected_coin(update: Update, context: ContextType) -> int:
+    async def process(query: CallbackQuery, coin: str) -> int:
+        await query.edit_message_text("Loading...")
+        context.user_data["selected_coin"] = coin  # type: ignore
+        message, reply_markup = await get_amount_suggestions(context)
+        await query.edit_message_text(message, reply_markup=reply_markup)
+        return SELECTING_AMOUNT
+    return await _handle_callback_selection(update, None, "Invalid coin.", process)
+
+
+def calculate_available_margin() -> float:
     perp_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-    cross_margin_account_value =float(perp_state['crossMarginSummary']['accountValue'])
+    cross_margin_account_value = float(perp_state['crossMarginSummary']['accountValue'])
     total_margin_used = float(perp_state['crossMarginSummary']['totalMarginUsed'])
-    perp_margin_available = max(cross_margin_account_value - total_margin_used, 0.0)
-    return perp_margin_available
+    return max(cross_margin_account_value - total_margin_used, 0.0)
 
-async def get_amount_suggestions(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> Tuple[str, InlineKeyboardMarkup]:
+
+async def get_amount_suggestions(context: ContextType) -> Tuple[str, InlineKeyboardMarkup]:
     available_margin = calculate_available_margin()
 
     keyboard = [
         [InlineKeyboardButton(f"{amount}% (~{fmt(available_margin * amount / 100.0)} USDC)", callback_data=str(amount))]
         for amount in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     ]
-    keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    return f"You selected {context.user_data['selected_coin']}. Please enter the amount to {context.user_data['enter_mode']}:", reply_markup # type: ignore
+    reply_markup = _create_keyboard_with_cancel(keyboard)
+    coin = context.user_data['selected_coin']  # type: ignore
+    enter_mode = context.user_data['enter_mode']  # type: ignore
+    return f"You selected {coin}. Please enter the amount to {enter_mode}:", reply_markup
 
-async def selected_take_profit(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
-    if not update.message:
+def _validate_order_context(context: ContextType) -> Optional[str]:
+    """Validate that all required order data is present. Returns error message if invalid."""
+    required_fields = [
+        ('amount', 'No amount selected'),
+        ('stop_loss_price', 'No stop loss selected'),
+        ('take_profit_price', 'No take profit selected'),
+        ('selected_coin', 'No coin selected'),
+    ]
+    for field, error_msg in required_fields:
+        if not context.user_data.get(field):  # type: ignore
+            return f"Error: {error_msg}. Please restart the process."
+    return None
+
+
+async def open_order(context: ContextType, user_state: Dict[str, Any], mid: float) -> int:
+    error = _validate_order_context(context)
+    if error:
+        await telegram_utils.send(error)
         return ConversationHandler.END
 
-    take_profit = update.message.text
-    if take_profit.lower() == 'cancel': # type: ignore
-        await telegram_utils.reply(update, OPERATION_CANCELLED)
-        return ConversationHandler.END
+    # After validation, these are guaranteed to be set
+    amount: float = context.user_data.get('amount')  # type: ignore
+    stop_loss_price: float = context.user_data.get('stop_loss_price')  # type: ignore
+    take_profit_price: float = context.user_data.get('take_profit_price')  # type: ignore
+    selected_coin: str = context.user_data.get('selected_coin')  # type: ignore
+    is_long = _is_long_position(context)
 
-    try:
-        take_profit_price = float(take_profit) # type: ignore
-        if take_profit_price <= 0:
-            await telegram_utils.reply(update, "Price must be greater than 0.")
-            return SELECTING_TAKE_PROFIT
-
-        # Validate take profit price based on position direction
-        coin = context.user_data["selected_coin"] # type: ignore
-        mid = float(hyperliquid_utils.info.all_mids()[coin]) # type: ignore
-        is_long = context.user_data["enter_mode"] == "long" # type: ignore
-        
-        if is_long and take_profit_price <= mid:
-            await telegram_utils.reply(update, "Take profit price must be above current market price for long positions.")
-            return SELECTING_TAKE_PROFIT
-        elif not is_long and take_profit_price >= mid:
-            await telegram_utils.reply(update, "Take profit price must be below current market price for short positions.")
-            return SELECTING_TAKE_PROFIT
-
-        context.user_data["take_profit_price"] = take_profit_price # type: ignore
-
-    except ValueError:
-        await telegram_utils.reply(update, "Invalid price. Please enter a number or 'cancel'.")
-        return SELECTING_TAKE_PROFIT
-
-    return await open_order(context, hyperliquid_utils.info.user_state(hyperliquid_utils.address), mid)
-
-async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE], user_state: Dict[str, Any], mid: float) -> int:
-    amount = context.user_data.get('amount') # type: ignore
-    if not amount:
-        await telegram_utils.send("Error: No amount selected. Please restart the process.")
-        return ConversationHandler.END
-
-    stop_loss_price = context.user_data.get('stop_loss_price') # type: ignore
-    if not stop_loss_price:
-        await telegram_utils.send("Error: No stop loss selected. Please restart the process.")
-        return ConversationHandler.END
-
-    take_profit_price = context.user_data.get('take_profit_price') # type: ignore
-    if not take_profit_price:
-        await telegram_utils.send("Error: No take profit selected. Please restart the process.")
-        return ConversationHandler.END
-
-    selected_coin = context.user_data.get('selected_coin') # type: ignore
-    if not selected_coin:
-        await telegram_utils.send("Error: No coin selected. Please restart the process.")
-        return ConversationHandler.END
-
-    message = await telegram_utils.send(f"Opening {context.user_data['enter_mode']} for {selected_coin}...") # type: ignore
+    message = await telegram_utils.send(f"Opening {'long' if is_long else 'short'} for {selected_coin}...")
     try:
         exchange = hyperliquid_utils.get_exchange()
-        if exchange:
-            available_margin = calculate_available_margin()
-            balance_to_use = available_margin * amount / 100.0
-            leverage = context.user_data.get('leverage', 1) # type: ignore
-            use_isolated_leverage = os.getenv('HTB_USE_ISOLATED_LEVERAGE', 'True') == 'True'
-            update_leverage_result = exchange.update_leverage(leverage, selected_coin, not use_isolated_leverage)
-            logger.info(update_leverage_result)
-            sz_decimals = hyperliquid_utils.get_sz_decimals()
-            sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
-            if sz * mid < 10.0:
-                await telegram_utils.send("The order value is less than 10 USDC and can't be executed")
-                return ConversationHandler.END
-
-            is_long = context.user_data["enter_mode"] == "long" # type: ignore
-            open_result = exchange.market_open(selected_coin, is_long, sz)
-            logger.info(open_result)
-
-            # Check for errors in the order result
-            if has_order_error(open_result):
-                error_msg = get_order_error_message(open_result)
-                await telegram_utils.send(f"Failed to open position: {error_msg}")
-            elif not skip_sl_tp_prompt():
-                await place_stop_loss_and_take_profit_orders(exchange, user_state, selected_coin, is_long, sz, stop_loss_price, take_profit_price)
-            
-            await message.delete() # type: ignore
-        else:
+        if not exchange:
             await telegram_utils.send("Exchange is not enabled")
+            return ConversationHandler.END
+
+        available_margin = calculate_available_margin()
+        balance_to_use = available_margin * amount / 100.0
+        leverage: int = context.user_data.get('leverage', 1)  # type: ignore
+        use_isolated_leverage = os.getenv('HTB_USE_ISOLATED_LEVERAGE', 'True') == 'True'
+        update_leverage_result = exchange.update_leverage(leverage, selected_coin, not use_isolated_leverage)
+        logger.info(update_leverage_result)
+        
+        sz_decimals = hyperliquid_utils.get_sz_decimals()
+        sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
+        if sz * mid < 10.0:
+            await telegram_utils.send("The order value is less than 10 USDC and can't be executed")
+            return ConversationHandler.END
+
+        open_result = exchange.market_open(selected_coin, is_long, sz)
+        logger.info(open_result)
+
+        if has_order_error(open_result):
+            error_msg = get_order_error_message(open_result)
+            await telegram_utils.send(f"Failed to open position: {error_msg}")
+        elif not skip_sl_tp_prompt():
+            await place_stop_loss_and_take_profit_orders(
+                exchange, user_state, selected_coin, is_long, sz, stop_loss_price, take_profit_price
+            )
+        
+        await message.delete()  # type: ignore
     except Exception as e:
         logger.critical(e, exc_info=True)
         await telegram_utils.send(f"Failed to update orders: {str(e)}")
@@ -392,49 +434,77 @@ async def open_order(context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE],
     return ConversationHandler.END
 
 
-def place_stop_loss_order(exchange: Any, 
-    user_state: Dict[str, Any],
-    selected_coin: str, 
-    is_long: bool, 
+def _place_trigger_order(
+    exchange: Any,
+    coin: str,
+    is_long: bool,
     sz: float,
-    stop_loss_price: float) -> None:
+    trigger_px: float,
+    tpsl: str
+) -> None:
+    """Place a trigger order (stop loss or take profit)."""
+    if trigger_px <= 0:
+        return
+    # For SL: limit below trigger for longs, above for shorts
+    # For TP: limit above trigger for longs, below for shorts
+    if tpsl == "sl":
+        limit_px = trigger_px * (0.97 if is_long else 1.03)
+    else:
+        limit_px = trigger_px * (1.02 if is_long else 0.98)
+    
+    order_type = {"trigger": {"triggerPx": px_round(trigger_px), "isMarket": True, "tpsl": tpsl}}
+    result = exchange.order(coin, not is_long, sz, px_round(limit_px), order_type, reduce_only=True)
+    logger.info(result)
 
+
+def _get_adjusted_stop_loss_trigger(
+    user_state: Dict[str, Any],
+    coin: str,
+    is_long: bool,
+    stop_loss_price: float
+) -> float:
+    """Get stop loss trigger price, adjusted for liquidation if needed."""
     sl_trigger_px = stop_loss_price
-
-    liquidation_px_str = hyperliquid_utils.get_liquidation_px_str(user_state, selected_coin)
+    liquidation_px_str = hyperliquid_utils.get_liquidation_px_str(user_state, coin)
 
     if liquidation_px_str is not None:
         liquidation_px = float(liquidation_px_str)
         if liquidation_px > 0.0:
             liquidation_trigger_px = liquidation_px * (1.0025 if is_long else 0.9975)
-            
-            if stop_loss_price == 0 or (is_long and stop_loss_price < liquidation_trigger_px) or (not is_long and stop_loss_price > liquidation_trigger_px):
+            should_use_liquidation = (
+                stop_loss_price == 0 or
+                (is_long and stop_loss_price < liquidation_trigger_px) or
+                (not is_long and stop_loss_price > liquidation_trigger_px)
+            )
+            if should_use_liquidation:
                 sl_trigger_px = liquidation_trigger_px
     
-    if sl_trigger_px > 0:
-        sl_limit_px = sl_trigger_px * 0.97 if is_long else sl_trigger_px * 1.03
-        sl_order_type = {"trigger": {"triggerPx": px_round(sl_trigger_px), "isMarket": True, "tpsl": "sl"}}
-        sl_order_result = exchange.order(selected_coin, not is_long, sz, px_round(sl_limit_px), sl_order_type, reduce_only=True)
-        logger.info(sl_order_result)
+    return sl_trigger_px
+
+
+def place_stop_loss_order(
+    exchange: Any,
+    user_state: Dict[str, Any],
+    selected_coin: str,
+    is_long: bool,
+    sz: float,
+    stop_loss_price: float
+) -> None:
+    sl_trigger_px = _get_adjusted_stop_loss_trigger(user_state, selected_coin, is_long, stop_loss_price)
+    _place_trigger_order(exchange, selected_coin, is_long, sz, sl_trigger_px, "sl")
+
 
 async def place_stop_loss_and_take_profit_orders(
-    exchange: Any, 
+    exchange: Any,
     user_state: Dict[str, Any],
-    selected_coin: str, 
-    is_long: bool, 
+    selected_coin: str,
+    is_long: bool,
     sz: float,
-    stop_loss_price: float, 
+    stop_loss_price: float,
     take_profit_price: float
 ) -> None:
-
     place_stop_loss_order(exchange, user_state, selected_coin, is_long, sz, stop_loss_price)
-
-    if take_profit_price > 0:
-        tp_trigger_px = take_profit_price
-        tp_limit_px = tp_trigger_px * 1.02 if is_long else tp_trigger_px * 0.98
-        tp_order_type = {"trigger": {"triggerPx": px_round(tp_trigger_px), "isMarket": True, "tpsl": "tp"}}
-        tp_order_result = exchange.order(selected_coin, not is_long, sz, px_round(tp_limit_px), tp_order_type, reduce_only=True)
-        logger.info(tp_order_result)
+    _place_trigger_order(exchange, selected_coin, is_long, sz, take_profit_price, "tp")
 
 
 def close_all_positions_core(exchange: Any) -> Tuple[List[str], List[Tuple[str, str]]]:
@@ -458,7 +528,7 @@ def close_all_positions_core(exchange: Any) -> Tuple[List[str], List[Tuple[str, 
 
     return closed, errors
 
-async def exit_all_positions(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> None:
+async def exit_all_positions(update: Update, context: ContextType) -> None:
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
@@ -470,7 +540,7 @@ async def exit_all_positions(update: Update, context: Union[CallbackContext, Con
         await telegram_utils.reply(update, f"Failed to exit all positions: {str(e)}")
 
 
-async def exit_position(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
+async def exit_position(update: Update, context: ContextType) -> int:
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     coins = sorted({asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])})
 
@@ -479,47 +549,40 @@ async def exit_position(update: Update, context: Union[CallbackContext, ContextT
         return ConversationHandler.END
 
     keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in coins]
-    keyboard += [[InlineKeyboardButton("All", callback_data='all')]]
-    keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard.append([InlineKeyboardButton("All", callback_data='all')])
+    reply_markup = _create_keyboard_with_cancel(keyboard)
     await telegram_utils.reply(update, 'Choose a coin to close, or select All:', reply_markup=reply_markup)
     return EXIT_CHOOSING
 
 
-async def exit_selected_coin(update: Update, context: Union[CallbackContext, ContextTypes.DEFAULT_TYPE]) -> int:
-    query: CallbackQuery = update.callback_query # type: ignore
-    await query.answer()
-
-    coin = query.data
-    if coin is None or coin == 'cancel':
-        await query.edit_message_text('Operation cancelled')
-        return ConversationHandler.END
-
-    if coin == 'all':
-        await query.edit_message_text("Closing all positions...")
-        try:
-            exchange = hyperliquid_utils.get_exchange()
-            if exchange:
-                close_all_positions_core(exchange)
-                await query.delete_message()
-            else:
-                await query.edit_message_text("Exchange is not enabled")
-        except Exception as e:
-            logger.critical(e, exc_info=True)
-            await query.edit_message_text(f"Failed to exit all positions: {str(e)}")
-
-        return ConversationHandler.END
-
-    await query.edit_message_text(f"Closing {coin}...")
+async def _close_position_with_exchange(
+    query: CallbackQuery,
+    close_action: Any,
+    error_prefix: str
+) -> int:
+    """Helper to close position(s) with exchange error handling."""
     try:
         exchange = hyperliquid_utils.get_exchange()
         if exchange:
-            exchange.market_close(coin)
+            close_action(exchange)
             await query.delete_message()
         else:
             await query.edit_message_text("Exchange is not enabled")
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await query.edit_message_text(f"Failed to exit {coin}: {str(e)}")
-
+        await query.edit_message_text(f"{error_prefix}: {str(e)}")
     return ConversationHandler.END
+
+
+async def exit_selected_coin(update: Update, context: ContextType) -> int:
+    async def process(query: CallbackQuery, coin: str) -> int:
+        if coin == 'all':
+            await query.edit_message_text("Closing all positions...")
+            return await _close_position_with_exchange(
+                query, close_all_positions_core, "Failed to exit all positions"
+            )
+        await query.edit_message_text(f"Closing {coin}...")
+        return await _close_position_with_exchange(
+            query, lambda ex: ex.market_close(coin), f"Failed to exit {coin}"
+        )
+    return await _handle_callback_selection(update, None, "Invalid coin.", process)
