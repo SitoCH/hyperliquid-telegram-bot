@@ -1,13 +1,14 @@
 import os
 
-from typing import Dict, Any, List, Optional, Union, NamedTuple, Tuple
+from hyperliquid.exchange import Exchange, OrderType
+from typing import Dict, Any, List, Optional, Union, NamedTuple, Tuple, Literal
 from logging_utils import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
 from telegram_utils import telegram_utils
 from hyperliquid_utils.utils import hyperliquid_utils
 from telegram.constants import ParseMode
-from utils import OPERATION_CANCELLED, fmt, px_round, fmt_price
+from utils import OPERATION_CANCELLED, fmt, fmt_price
 from technical_analysis.wyckoff.significant_levels import get_significant_levels_from_timeframe
 from technical_analysis.wyckoff.wyckoff_types import Timeframe
 from tabulate import tabulate, simple_separated_format
@@ -423,7 +424,7 @@ async def open_order(context: ContextType, user_state: Dict[str, Any], mid: floa
             await telegram_utils.send(f"Failed to open position: {error_msg}")
         elif not skip_sl_tp_prompt():
             await place_stop_loss_and_take_profit_orders(
-                exchange, user_state, selected_coin, is_long, sz, stop_loss_price, take_profit_price
+                exchange, user_state, selected_coin, is_long, sz, stop_loss_price, take_profit_price, sz_decimals[selected_coin]
             )
         
         await message.delete()  # type: ignore
@@ -434,13 +435,23 @@ async def open_order(context: ContextType, user_state: Dict[str, Any], mid: floa
     return ConversationHandler.END
 
 
+def px_round(px: float, sz_decimals) -> float:
+    max_decimals = 6
+    if px > 100_000:
+        px = round(px)
+    else:
+        px = round(float(f"{px:.5g}"), max_decimals - sz_decimals)
+    return px
+
+
 def _place_trigger_order(
-    exchange: Any,
+    exchange: Exchange,
     coin: str,
     is_long: bool,
     sz: float,
     trigger_px: float,
-    tpsl: str
+    tpsl: Union[Literal["tp"], Literal["sl"]],
+    sz_decimals
 ) -> None:
     """Place a trigger order (stop loss or take profit)."""
     if trigger_px <= 0:
@@ -452,8 +463,8 @@ def _place_trigger_order(
     else:
         limit_px = trigger_px * (1.02 if is_long else 0.98)
     
-    order_type = {"trigger": {"triggerPx": px_round(trigger_px), "isMarket": True, "tpsl": tpsl}}
-    result = exchange.order(coin, not is_long, sz, px_round(limit_px), order_type, reduce_only=True)
+    order_type: OrderType = {"trigger": {"triggerPx": px_round(trigger_px, sz_decimals), "isMarket": True, "tpsl": tpsl}}
+    result = exchange.order(coin, not is_long, sz, px_round(limit_px, sz_decimals), order_type, reduce_only=True) 
     logger.info(result)
 
 
@@ -483,28 +494,30 @@ def _get_adjusted_stop_loss_trigger(
 
 
 def place_stop_loss_order(
-    exchange: Any,
-    user_state: Dict[str, Any],
-    selected_coin: str,
-    is_long: bool,
-    sz: float,
-    stop_loss_price: float
-) -> None:
-    sl_trigger_px = _get_adjusted_stop_loss_trigger(user_state, selected_coin, is_long, stop_loss_price)
-    _place_trigger_order(exchange, selected_coin, is_long, sz, sl_trigger_px, "sl")
-
-
-async def place_stop_loss_and_take_profit_orders(
-    exchange: Any,
+    exchange: Exchange,
     user_state: Dict[str, Any],
     selected_coin: str,
     is_long: bool,
     sz: float,
     stop_loss_price: float,
-    take_profit_price: float
+    sz_decimals
 ) -> None:
-    place_stop_loss_order(exchange, user_state, selected_coin, is_long, sz, stop_loss_price)
-    _place_trigger_order(exchange, selected_coin, is_long, sz, take_profit_price, "tp")
+    sl_trigger_px = _get_adjusted_stop_loss_trigger(user_state, selected_coin, is_long, stop_loss_price)
+    _place_trigger_order(exchange, selected_coin, is_long, sz, sl_trigger_px, "sl", sz_decimals)
+
+
+async def place_stop_loss_and_take_profit_orders(
+    exchange: Exchange,
+    user_state: Dict[str, Any],
+    selected_coin: str,
+    is_long: bool,
+    sz: float,
+    stop_loss_price: float,
+    take_profit_price: float,
+    sz_decimals
+) -> None:
+    place_stop_loss_order(exchange, user_state, selected_coin, is_long, sz, stop_loss_price, sz_decimals)
+    _place_trigger_order(exchange, selected_coin, is_long, sz, take_profit_price, "tp", sz_decimals)
 
 
 def close_all_positions_core(exchange: Any) -> Tuple[List[str], List[Tuple[str, str]]]:

@@ -6,7 +6,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from telegram_utils import telegram_utils
 from hyperliquid_utils.utils import hyperliquid_utils
-from utils import fmt, px_round
+from utils import fmt
 
 
 async def get_orders_from_hyperliquid():

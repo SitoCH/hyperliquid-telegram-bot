@@ -30,10 +30,6 @@ def fmt(value: float) -> str:
     return format(value, ',.2f')
 
 
-def px_round(value: float) -> str:
-    return round(float(f"{value:.5g}"), 6)
-
-
 def log_execution_time(func):
     if asyncio.iscoroutinefunction(func):
         async def async_wrapper(*args, **kwargs):

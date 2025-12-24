@@ -918,7 +918,7 @@ class TestPlaceStopLossOrder:
             mock_hl.get_liquidation_px_str.return_value = None
 
             place_stop_loss_order(
-                mock_exchange, user_state, 'BTC', True, 1.0, 45000.0
+                mock_exchange, user_state, 'BTC', True, 1.0, 45000.0, 6
             )
 
             mock_exchange.order.assert_called_once()
@@ -932,7 +932,7 @@ class TestPlaceStopLossOrder:
             mock_hl.get_liquidation_px_str.return_value = "46000"
 
             place_stop_loss_order(
-                mock_exchange, user_state, 'BTC', True, 1.0, 45000.0
+                mock_exchange, user_state, 'BTC', True, 1.0, 45000.0, 6
             )
 
             mock_exchange.order.assert_called_once()
@@ -945,7 +945,7 @@ class TestPlaceStopLossOrder:
             mock_hl.get_liquidation_px_str.return_value = None
 
             place_stop_loss_order(
-                mock_exchange, user_state, 'BTC', True, 1.0, 0.0
+                mock_exchange, user_state, 'BTC', True, 1.0, 0.0, 6
             )
 
             # No order should be placed with zero stop loss and no liquidation
@@ -963,7 +963,7 @@ class TestPlaceStopLossAndTakeProfitOrders:
             mock_hl.get_liquidation_px_str.return_value = None
 
             await place_stop_loss_and_take_profit_orders(
-                mock_exchange, user_state, 'BTC', True, 1.0, 45000.0, 55000.0
+                mock_exchange, user_state, 'BTC', True, 1.0, 45000.0, 55000.0, 6
             )
 
             mock_sl.assert_called_once()
@@ -979,7 +979,7 @@ class TestPlaceStopLossAndTakeProfitOrders:
             mock_hl.get_liquidation_px_str.return_value = None
 
             await place_stop_loss_and_take_profit_orders(
-                mock_exchange, user_state, 'BTC', True, 1.0, 45000.0, 0.0
+                mock_exchange, user_state, 'BTC', True, 1.0, 45000.0, 0.0, 6
             )
 
             mock_sl.assert_called_once()

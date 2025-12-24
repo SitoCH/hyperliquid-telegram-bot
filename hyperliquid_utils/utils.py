@@ -50,7 +50,7 @@ class HyperliquidUtils:
         telegram_utils.send_and_exit("Websocket closed, restarting the application...")
 
 
-    def get_exchange(self):
+    def get_exchange(self) -> Exchange | None:
         key_file = os.environ.get("HTB_KEY_FILE")
         if key_file is not None and os.path.isfile(key_file):
             with open(key_file, 'r') as file:
