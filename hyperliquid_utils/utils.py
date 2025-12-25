@@ -25,6 +25,7 @@ class HyperliquidUtils:
         user_wallet = os.environ.get("HTB_USER_WALLET")
         if user_wallet is None:
             logger.error("HTB_USER_WALLET environment variable is not set")
+            raise ValueError("HTB_USER_WALLET environment variable is required")
             
         user_vault = os.environ.get("HTB_USER_VAULT")
         self.address = user_vault if user_vault is not None else user_wallet
