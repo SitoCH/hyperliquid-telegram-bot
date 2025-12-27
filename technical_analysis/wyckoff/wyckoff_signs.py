@@ -254,8 +254,19 @@ def detect_wyckoff_signs(
         norm = max(1e-9, price_volatility * vol_ratio_current)
         scored = {k: (float(v) / norm) for k, v in sign_scores.items()}
         best_sign, best_score = max(scored.items(), key=lambda x: x[1])
-        # Require a minimum confidence depending on regime
-        min_conf = 0.6 if is_high_volatility else 0.5
+        
+        # Tier-based confidence: high-importance signs (climax, SOS/SOW) need lower threshold
+        high_importance_signs = {
+            WyckoffSign.SELLING_CLIMAX, WyckoffSign.BUYING_CLIMAX,
+            WyckoffSign.SIGN_OF_STRENGTH, WyckoffSign.SIGN_OF_WEAKNESS,
+            WyckoffSign.LAST_POINT_OF_SUPPORT, WyckoffSign.LAST_POINT_OF_RESISTANCE
+        }
+        
+        if best_sign in high_importance_signs:
+            min_conf = 0.40 if is_high_volatility else 0.35  # Lower threshold for key signs
+        else:
+            min_conf = 0.50 if is_high_volatility else 0.45  # Standard threshold
+        
         if best_score >= min_conf:
             return best_sign
 

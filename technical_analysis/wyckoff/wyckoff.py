@@ -57,16 +57,16 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
         # Optimized volume state determination with cleaner threshold logic
         volume_threshold = timeframe.settings.thresholds[0]
         
-        # Define threshold boundaries - more balanced
+        # Define threshold boundaries - symmetric for balanced bull/bear detection
         thresholds = {
-            'very_high_ratio': volume_threshold * 1.5,
-            'high_ratio': volume_threshold * 1.1,
-            'low_ratio': 0.75,
-            'very_low_ratio': 0.5,
-            'very_high_strength': 2.5,
-            'high_strength': 1.5,
-            'low_strength': -0.8,
-            'very_low_strength': -1.5
+            'very_high_ratio': volume_threshold * 1.4,  # Slightly lower for earlier detection
+            'high_ratio': volume_threshold * 1.05,
+            'low_ratio': 0.70,
+            'very_low_ratio': 0.45,
+            'very_high_strength': 2.2,   # Symmetric with very_low
+            'high_strength': 1.3,        # Symmetric with low
+            'low_strength': -1.3,        # Now symmetric with high
+            'very_low_strength': -2.2    # Now symmetric with very_high
         }
         
         # Clean determination of volume state
@@ -596,10 +596,6 @@ def analyze_effort_result(
         high_threshold = HIGH_EFFICIENCY_THRESHOLD * timeframe.settings.high_threshold
         low_threshold = LOW_EFFICIENCY_THRESHOLD * timeframe.settings.low_threshold
         
-        # Define neutral zone thresholds
-        neutral_high = 0.55  # Below this is neutral zone
-        neutral_low = 0.35   # Above this is neutral zone
-        
         # Final efficiency score
         efficiency = min(1.0, max(0.0, volume_weighted_efficiency))
         
@@ -610,30 +606,33 @@ def analyze_effort_result(
         
         # Clear classification logic with explicit NEUTRAL zone
         # Strong signals - clear evidence of effective volume/price translation
-        if efficiency > high_threshold and volume_quality > 0.6:
+        if efficiency > high_threshold and volume_quality > 0.55:
             return EffortResult.STRONG
-        elif price_impact > 1.2 and volume_factor > 1.1:
+        elif price_impact > 1.1 and volume_factor > 1.05:
             return EffortResult.STRONG
             
         # Weak signals - clear evidence of ineffective volume/price translation
-        elif efficiency < low_threshold and volume_quality < 0.4:
+        elif efficiency < low_threshold and volume_quality < 0.35:
             return EffortResult.WEAK
-        elif price_change < min_move * 0.5:
+        elif price_change < min_move * 0.4:
             return EffortResult.WEAK
-        elif price_impact < 0.4 and volume_factor < 0.7:
+        elif price_impact < 0.35 and volume_factor < 0.65:
             return EffortResult.WEAK
         
-        # NEUTRAL zone - ambiguous signals that should not affect trading decisions
-        elif neutral_low <= efficiency <= neutral_high:
+        # NEUTRAL zone - explicitly defined non-overlapping range
+        # Efficiency between 0.32-0.58 OR volume_quality between 0.35-0.55 = NEUTRAL
+        elif LOW_EFFICIENCY_THRESHOLD < efficiency < HIGH_EFFICIENCY_THRESHOLD:
             return EffortResult.NEUTRAL
-        elif 0.4 <= volume_quality <= 0.6:
+        elif 0.35 <= volume_quality <= 0.55:
             return EffortResult.NEUTRAL
             
-        # Edge cases - lean towards the closer threshold
-        elif efficiency > 0.5:
+        # Edge cases - use conservative classification
+        elif efficiency >= HIGH_EFFICIENCY_THRESHOLD:
             return EffortResult.STRONG
+        elif efficiency <= LOW_EFFICIENCY_THRESHOLD:
+            return EffortResult.WEAK
         else:
-            return EffortResult.NEUTRAL  # Changed from WEAK - uncertain cases go to NEUTRAL
+            return EffortResult.NEUTRAL  # Default to NEUTRAL for truly ambiguous cases
             
     except Exception as e:
         logger.error(f"Error in effort vs result analysis: {e}")

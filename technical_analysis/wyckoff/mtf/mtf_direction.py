@@ -49,12 +49,14 @@ def determine_overall_direction(analyses: List[TimeframeGroupAnalysis]) -> Multi
             volume_factor = 0.8
 
         # Reduce short-term weight if intermediate disagrees
+        # In crypto, short-term often leads intermediate, so use a lighter penalty
         intermediate_confirmation_factor = 1.0
         if idx == 0 and intermediate_momentum is not None:  # Short-term analysis
             if analysis.momentum_bias != MultiTimeframeDirection.NEUTRAL:
                 if analysis.momentum_bias != intermediate_momentum and intermediate_momentum != MultiTimeframeDirection.NEUTRAL:
-                    # Short-term disagrees with intermediate - reduce its influence by 40%
-                    intermediate_confirmation_factor = 0.6
+                    # Short-term disagrees with intermediate - reduce its influence by only 20%
+                    # (crypto reversals often start on short timeframes before intermediate confirms)
+                    intermediate_confirmation_factor = 0.80
         
         # Calculate adjusted weight for this timeframe
         adjusted_weight = weight * certainty_factor * volume_factor * intermediate_confirmation_factor

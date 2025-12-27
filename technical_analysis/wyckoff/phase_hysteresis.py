@@ -10,14 +10,10 @@ from dataclasses import dataclass
 from collections import defaultdict
 from .wyckoff_types import WyckoffPhase, Timeframe
 
-# Number of consecutive confirmations required before changing phase
-PHASE_CONFIRMATION_BARS: Dict[Timeframe, int] = {
-    Timeframe.MINUTES_15: 2,  # Require 2 consecutive readings (30 min of confirmation)
-    Timeframe.MINUTES_30: 2,  # Require 2 consecutive readings (1 hour of confirmation)
-    Timeframe.HOUR_1: 1,      # Less hysteresis for longer timeframes
-    Timeframe.HOURS_4: 1,
-    Timeframe.HOURS_8: 1,
-}
+# Base confirmation bars - 1 for immediate phase change in crypto's fast markets
+# Hysteresis only applies when phase detection is uncertain (requires 2 confirmations)
+BASE_CONFIRMATION_BARS: int = 1
+UNCERTAIN_CONFIRMATION_BARS: int = 2
 
 
 @dataclass
@@ -115,12 +111,8 @@ class PhaseHysteresisManager:
         key = f"{coin}_{timeframe.name}"
         tracker = self._trackers[key]
         
-        # Get required confirmations for this timeframe
-        required = PHASE_CONFIRMATION_BARS.get(timeframe, 1)
-        
-        # If the detection was uncertain, require more confirmations
-        if uncertain:
-            required = max(required, 2)
+        # Use higher confirmation requirement when detection is uncertain
+        required = UNCERTAIN_CONFIRMATION_BARS if uncertain else BASE_CONFIRMATION_BARS
         
         confirmed_phase, is_pending = tracker.update(detected_phase, required)
         

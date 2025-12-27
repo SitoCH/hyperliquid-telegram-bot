@@ -264,10 +264,13 @@ def _calculate_momentum_score_direct(short_term: Optional[TimeframeGroupAnalysis
     avg_momentum = sum(momentum_values) / len(momentum_values) if momentum_values else 0.0
     
     # Apply a more responsive curve for crypto momentum
-    if avg_momentum > 0.5:  # Lowered threshold from 0.6 to 0.5
-        return min(1.0, avg_momentum * 1.15)  # Increased boost
+    # Crypto markets often have clear directional moves that should be captured earlier
+    if avg_momentum > 0.45:  # Lower threshold for strong signal detection
+        return min(1.0, avg_momentum * 1.20)  # Stronger boost for confident momentum
+    elif avg_momentum > 0.25:  # Medium confidence range
+        return min(1.0, avg_momentum * 1.10)  # Moderate boost
     else:
-        return avg_momentum * 0.95  # Reduced penalty
+        return avg_momentum  # No penalty for low momentum - just return as-is
 
 def _calculate_volume_score_direct(short_term: Optional[TimeframeGroupAnalysis], 
                                   intermediate: Optional[TimeframeGroupAnalysis],

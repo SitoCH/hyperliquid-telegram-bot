@@ -43,26 +43,40 @@ def check_entry_timing(
     state_1h = states.get(Timeframe.HOUR_1)
     
     # 1. Check VWAP alignment if available
+    # vwap_bias is an int: 1 = above VWAP, -1 = below VWAP, 0 = neutral
     vwap_aligned = True
-    if state_30m and state_30m.vwap_bias != "unknown":
+    if state_30m and state_30m.vwap_bias != 0:
         if direction == MultiTimeframeDirection.BULLISH:
-            vwap_aligned = state_30m.vwap_bias in ["above", "neutral"]
+            # For longs, we want price at or above VWAP (1 or 0)
+            vwap_aligned = state_30m.vwap_bias >= 0
         else:  # BEARISH
-            vwap_aligned = state_30m.vwap_bias in ["below", "neutral"]
+            # For shorts, we want price at or below VWAP (-1 or 0)
+            vwap_aligned = state_30m.vwap_bias <= 0
         
         if not vwap_aligned and VWAP_CONFIRMATION_REQUIRED:
-            reasons.append(f"VWAP={state_30m.vwap_bias} contradicts {direction.value} entry")
+            vwap_desc = "above" if state_30m.vwap_bias > 0 else "below"
+            reasons.append(f"VWAP={vwap_desc} contradicts {direction.value} entry")
     
     # 2. Check RSI for overbought/oversold conditions
+    # Use higher thresholds for crypto - momentum often runs to extremes
     rsi_ok = True
     for state in [state_30m, state_1h]:
         if state and state.rsi_value > 0:
-            if direction == MultiTimeframeDirection.BULLISH and state.rsi_value > 75:
-                rsi_ok = False
-                reasons.append(f"RSI overbought ({state.rsi_value:.1f}) for long entry")
-            elif direction == MultiTimeframeDirection.BEARISH and state.rsi_value < 25:
-                rsi_ok = False
-                reasons.append(f"RSI oversold ({state.rsi_value:.1f}) for short entry")
+            # Only block entries at extreme RSI levels (82+ for longs, 18- for shorts)
+            # Also require both timeframes to confirm extreme, not just one
+            if direction == MultiTimeframeDirection.BULLISH and state.rsi_value > 82:
+                # Check if this is a sustained overbought (both TFs agree)
+                other_rsi = state_1h.rsi_value if state == state_30m and state_1h else (
+                    state_30m.rsi_value if state == state_1h and state_30m else 50)
+                if other_rsi > 75:  # Both timeframes showing overbought
+                    rsi_ok = False
+                    reasons.append(f"RSI overbought ({state.rsi_value:.1f}) for long entry")
+            elif direction == MultiTimeframeDirection.BEARISH and state.rsi_value < 18:
+                other_rsi = state_1h.rsi_value if state == state_30m and state_1h else (
+                    state_30m.rsi_value if state == state_1h and state_30m else 50)
+                if other_rsi < 25:  # Both timeframes showing oversold
+                    rsi_ok = False
+                    reasons.append(f"RSI oversold ({state.rsi_value:.1f}) for short entry")
     
     # 3. Check proximity to significant levels for optimal entry
     optimal_entry = None
