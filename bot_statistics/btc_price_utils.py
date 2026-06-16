@@ -1,7 +1,7 @@
 import time
 import requests
-import bisect
 from logging_utils import logger
+from .utils import get_historical_price
 
 
 def get_btc_price_history(start_timestamp):
@@ -42,41 +42,6 @@ def get_btc_price_history(start_timestamp):
         return {}
 
 
-def get_btc_historical_price(timestamp, price_history):
-    """
-    Get BTC price at a specific historical timestamp.
-
-    Args:
-        timestamp: Timestamp in milliseconds
-        price_history: Dictionary of historical prices (optional)
-
-    Returns:
-        BTC price in USD
-    """
-    timestamps = sorted(price_history.keys())
-    if not timestamps:
-        return None
-
-    # Find the index where timestamp would be inserted
-    idx = bisect.bisect_left(timestamps, timestamp)
-
-    if idx == 0:
-        # If timestamp is before the earliest available data, use the earliest
-        return price_history[timestamps[0]]
-    elif idx == len(timestamps):
-        # If timestamp is after the latest available data, use the latest
-        return price_history[timestamps[-1]]
-    else:
-        # Find the closest timestamp (either before or after)
-        before = timestamps[idx - 1]
-        after = timestamps[idx]
-
-        if timestamp - before <= after - timestamp:
-            return price_history[before]
-        else:
-            return price_history[after]
-
-
 def get_btc_current_price():
     """
     Get current BTC price.
@@ -109,7 +74,7 @@ def calculate_btc_hold_performance(start_timestamp, btc_current_price, price_his
         Dictionary with BTC hold performance
     """
     try:
-        starting_price = get_btc_historical_price(start_timestamp, price_history)
+        starting_price = get_historical_price(start_timestamp, price_history)
 
         if starting_price and btc_current_price:
             pct_change = ((btc_current_price - starting_price) / starting_price) * 100

@@ -22,7 +22,7 @@ When reporting, please include:
 ## Scope
 
 The following are in scope:
-- The bot's trading logic (`hyperliquid_trade.py`, `hyperliquid_orders.py`)
+- The bot's trading logic (`trade_conversation.py`, `trade_execution.py`, `trade_pricing.py`, `hyperliquid_orders.py`)
 - Private key handling (`hyperliquid_utils/utils.py`, `HTB_KEY_FILE`)
 - API rate limiting and abuse prevention
 - Environment variable leakage in logs or error messages

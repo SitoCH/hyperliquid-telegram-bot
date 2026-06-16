@@ -7,7 +7,7 @@ from telegram.constants import ParseMode
 from tabulate import simple_separated_format, tabulate
 from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
-from hyperliquid_trade import exit_all_positions
+from trade_conversation import exit_all_positions
 from logging_utils import logger
 from utils import fmt
 

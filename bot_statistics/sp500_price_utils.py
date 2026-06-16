@@ -2,7 +2,7 @@ import requests
 import os
 from datetime import datetime
 from logging_utils import logger
-from bot_statistics.btc_price_utils import get_btc_historical_price
+from .utils import get_historical_price, format_timestamp
 
 
 def get_sp500_price_history(start_timestamp):
@@ -16,7 +16,7 @@ def get_sp500_price_history(start_timestamp):
         Dictionary with timestamps as keys and prices as values
     """
     try:
-        start_date = datetime.fromtimestamp(start_timestamp / 1000).strftime('%Y-%m-%d')
+        start_date = format_timestamp(start_timestamp)
 
         api_key = os.environ.get("HTB_ALPHAVANTAGE_API_KEY")
         if not api_key:
@@ -99,7 +99,7 @@ def get_sp500_historical_price(timestamp, price_history):
     Returns:
         S&P500 price in USD
     """
-    return get_btc_historical_price(timestamp, price_history)
+    return get_historical_price(timestamp, price_history)
 
 
 def calculate_sp500_hold_performance(start_timestamp, sp500_current_price, price_history):
