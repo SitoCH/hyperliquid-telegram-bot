@@ -1,25 +1,24 @@
 import base64
-from typing import Dict, Any
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from utils import fmt_price, exchange_enabled
 from telegram_utils import telegram_utils
-from .llm_analysis_result import LLMAnalysisResult, LLMAnalysisTradingSetup, Signal
+from .llm_analysis_result import LLMAnalysisResult, Signal
 
 
 class LLMMessageFormatter:
     """Handles formatting and sending of LLM analysis messages."""
-    
+
     async def send_llm_analysis_message(
-        self, 
-        context: ContextTypes.DEFAULT_TYPE, 
+        self,
+        context: ContextTypes.DEFAULT_TYPE,
         coin: str,
         current_price: float,
         llm_result: LLMAnalysisResult,
         short_analysis: bool
     ) -> None:
         """Send AI analysis results to Telegram."""
-        
+
         # Build analysis message
         message = self._build_analysis_message(coin, current_price, llm_result, short_analysis)
         await telegram_utils.send(message, parse_mode=ParseMode.HTML)
@@ -39,7 +38,7 @@ class LLMMessageFormatter:
         # Escape HTML characters in recap heading to prevent parsing errors
         escaped_recap = self._escape_html_text(llm_result.recap_heading)
         message += f"<b>{direction_emoji} Market Analysis:</b> {escaped_recap}\n\n"
-        
+
         # Add signal information
         message += (
             f"📊 <b>Signal:</b> {llm_result.signal.value}\n"
@@ -68,11 +67,11 @@ class LLMMessageFormatter:
                 # Escape HTML characters in key drivers to prevent parsing errors
                 escaped_driver = self._escape_html_text(driver)
                 message += f"\n• {escaped_driver}"
-        
+
         trade_setup = self._build_trade_setup_format(coin, current_price, llm_result)
         if trade_setup:
             message += trade_setup
-           
+
         return message
 
     def _build_trade_setup_format(self, coin: str, current_price: float, llm_result: LLMAnalysisResult) -> str:
@@ -85,7 +84,7 @@ class LLMMessageFormatter:
 
         enc_side = "L" if llm_result.signal == Signal.LONG else "S"
         enc_trade = base64.b64encode(f"{enc_side}_{coin}_{fmt_price(trading_setup.stop_loss)}_{fmt_price(trading_setup.take_profit)}".encode('utf-8')).decode('utf-8')
-        trade_link = f"({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})" if exchange_enabled else ""
+        trade_link = f"({telegram_utils.get_link('Trade', f'TRD_{enc_trade}')})" if exchange_enabled else ""
 
         side = "Long" if llm_result.signal == Signal.LONG else "Short"
 
@@ -98,25 +97,25 @@ class LLMMessageFormatter:
                 sl_percentage = ((trading_setup.stop_loss - current_price) / current_price) * 100
             else:  # short
                 sl_percentage = ((current_price - trading_setup.stop_loss) / current_price) * 100
-            
+
             setup += f"\nStop Loss: {fmt_price(trading_setup.stop_loss)} USDC ({sl_percentage:+.1f}%)"
-        
+
         # Take Profit with percentage
         if trading_setup.take_profit > 0:
             if llm_result.signal == Signal.LONG:
                 tp_percentage = ((trading_setup.take_profit - current_price) / current_price) * 100
             else:  # short
                 tp_percentage = ((current_price - trading_setup.take_profit) / current_price) * 100
-            
+
             setup += f"\nTake Profit: {fmt_price(trading_setup.take_profit)} USDC ({tp_percentage:+.1f}%)"
-        
+
         return setup
 
     def _escape_html_text(self, text: str) -> str:
         """Escape HTML characters in text to prevent parsing errors."""
         if not text:
             return text
-        
+
         # Replace problematic characters with HTML entities
         return (text
                 .replace("&", "&amp;")  # Must be first to avoid double-escaping

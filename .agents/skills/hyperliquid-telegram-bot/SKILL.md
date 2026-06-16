@@ -165,9 +165,9 @@ All `HTB_*` env vars have safe defaults for real-money accounts. The bot is read
 | Variable | Values | Default | Notes |
 |----------|--------|---------|-------|
 | `HTB_ANALYSIS_MODE` | `wyckoff` or `llm` | `wyckoff` | Switches between Wyckoff and LLM TA pipelines |
-| `HTB_USE_HEIKIN_ASHI` | `True` or `False` | `True` | Heikin Ashi candles for charts; calculations always use real OHLCV |
-| `HTB_LLM_MAIN_MODEL` | model name | `gpt-4` | Main LLM for analysis |
-| `HTB_LLM_FAST_MODEL` | model name | `gpt-3.5-turbo` | Fast model for filter |
+| `HTB_USE_HEIKIN_ASHI` | `True` or `False` | `False` | Heikin Ashi candles for charts; calculations always use real OHLCV |
+| `HTB_LLM_MAIN_MODEL` | model name | `unknown` | Main LLM for analysis; must be set when `HTB_ANALYSIS_MODE=llm` |
+| `HTB_LLM_FAST_MODEL` | model name | `unknown` | Fast model for filter; must be set when `HTB_ANALYSIS_MODE=llm` |
 | `HTB_ALWAYS_RUN_LLM_FILTER` | `True` or `False` | `False` | Force LLM filter before analysis |
 | `HTB_TRADE_MIN_RR` | float | `1.4` | Min risk/reward ratio for LLM trade proposals |
 
@@ -179,7 +179,7 @@ All `HTB_*` env vars have safe defaults for real-money accounts. The bot is read
 | `HTB_TOP_COINS_TO_ANALYZE` | int | None | Number of top coins by volume to analyze |
 | `HTB_TOP_COINS_OFFSET` | int | `0` | Skip N top coins before selecting |
 | `HTB_ANALYZE_COINS_WITH_OPEN_ORDERS` | bool | `False` | Include coins with open orders |
-| `HTB_COINS_ANALYSIS_MIN_CONFIDENCE` | float | `0.75` | Min confidence to send analysis |
+| `HTB_COINS_ANALYSIS_MIN_CONFIDENCE` | float | `0.65` | Min confidence to send analysis |
 
 ### Trading & Risk
 

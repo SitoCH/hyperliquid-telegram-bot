@@ -1,8 +1,8 @@
-import time
-from typing import Any, Dict
+from typing import Any
 from hyperliquid.info import Info
 from .hyperliquid_ratelimiter import hyperliquid_rate_limiter
 from logging_utils import logger
+
 
 class InfoProxy:
     # Weight definitions for each endpoint

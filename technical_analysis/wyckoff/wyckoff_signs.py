@@ -6,6 +6,7 @@ from .wyckoff_types import WyckoffSign, Timeframe
 # Constants for Wyckoff sign detection
 STRONG_DEV_THRESHOLD: Final[float] = 2.1
 
+
 def detect_wyckoff_signs(
     df: pd.DataFrame,
     price_strength: float,
@@ -25,15 +26,15 @@ def detect_wyckoff_signs(
     # Calculate key metrics with noise reduction
     price_change = df['c'].pct_change()
     # Avoid using volume pct_change directly (noisy/unstable). We'll use ratio/z later.
-    
+
     # Use timeframe-specific lookback periods from settings
     volatility_window = max(5, timeframe.settings.spring_upthrust_window)
     volume_ma_window = max(5, timeframe.settings.volume_ma_window // 3)
     price_ma_window = max(8, int(timeframe.settings.ema_length * 0.75))
-    
+
     # Use timeframe settings for recent high/low lookback
     recent_window = timeframe.settings.swing_lookback
-    
+
     # Calculate rolling metrics with adaptive windows (NaN-safe)
     # Price volatility based on last-N non-NaN returns
     price_ret = price_change
@@ -49,7 +50,7 @@ def detect_wyckoff_signs(
     volume_ma = df['v'].rolling(volume_ma_window, min_periods=max(3, volume_ma_window // 2)).mean()
     volume_std = df['v'].rolling(volume_ma_window, min_periods=max(3, volume_ma_window // 2)).std(ddof=0)
     price_ma = df['c'].rolling(price_ma_window, min_periods=max(4, price_ma_window // 2)).mean()
-    
+
     # Use dedicated Wyckoff sign detection parameters from settings
     volatility_factor = timeframe.settings.wyckoff_volatility_factor
     trend_lookback = timeframe.settings.wyckoff_trend_lookback
@@ -77,7 +78,7 @@ def detect_wyckoff_signs(
     # Dynamic volume thresholds (tunable per timeframe)
     min_volume_ratio = 1.8 * volatility_factor
     min_volume_z = 1.5 * volatility_factor
-    
+
     # Detect market context for better signal relevance
     baseline_std = price_ret.rolling(volatility_window * 3, min_periods=max(volatility_window, 3)).std(ddof=0).mean()
     baseline_std = float(baseline_std) if np.isfinite(baseline_std) else price_volatility
@@ -105,7 +106,7 @@ def detect_wyckoff_signs(
             weighted_confirms = (rc < -k) * weights
 
         return float(np.nansum(weighted_confirms)) >= float(np.sum(weights)) * confirmation_threshold
-        
+
     def confirm_volume(window: int, min_ratio: float, min_z: float) -> bool:
         """Check if volume confirms a significant move using ratio and z-score with stricter criteria."""
         window = max(1, min(window, len(df)))
@@ -127,7 +128,7 @@ def detect_wyckoff_signs(
     # Check for recent trend reversal
     recent_trend_changed = False
     if len(df) > (trend_lookback * 2):
-        prev_trend = np.sign(df['c'].pct_change(trend_lookback).iloc[-trend_lookback-1])
+        prev_trend = np.sign(df['c'].pct_change(trend_lookback).iloc[-trend_lookback - 1])
         current_trend = np.sign(df['c'].pct_change(trend_lookback).iloc[-1])
         recent_trend_changed = prev_trend != current_trend and abs(current_trend) > 0
 
@@ -136,7 +137,7 @@ def detect_wyckoff_signs(
     recent_high = df['h'].iloc[-recent_window:].max()
     current_close = df['c'].iloc[-1]
     # Safe MAs and derived features
-    price_ma_last = float(price_ma.iloc[-1]) if np.isfinite(price_ma.iloc[-1]) else float(df['c'].rolling(max(3, price_ma_window//2), min_periods=3).mean().iloc[-1])
+    price_ma_last = float(price_ma.iloc[-1]) if np.isfinite(price_ma.iloc[-1]) else float(df['c'].rolling(max(3, price_ma_window // 2), min_periods=3).mean().iloc[-1])
     if not np.isfinite(price_ma_last) or price_ma_last == 0:
         price_ma_last = float(df['c'].mean()) if len(df) else current_close
     price_distance_from_ma = current_close / max(1e-9, price_ma_last) - 1
@@ -148,104 +149,103 @@ def detect_wyckoff_signs(
     high = float(df['h'].iloc[-1])
     low = float(df['l'].iloc[-1])
     close = float(df['c'].iloc[-1])
-    body = abs(close - open_price)
     rng = max(1e-9, high - low)
     upper_wick = max(0.0, high - max(close, open_price))
     lower_wick = max(0.0, min(close, open_price) - low)
     upper_wick_ratio = upper_wick / rng
     lower_wick_ratio = lower_wick / rng
-    
+
     # Implement sign detection overlap prevention
     # Only return the strongest sign when multiple conditions are met
     sign_scores = {}
-    
+
     # Selling Climax (SC) - more stringent conditions
-    if (price_change.iloc[-1] < -min_price_move * sc_multiplier * 1.2 and
-        ((volume_ratio > min_volume_ratio * 1.3) or (volume_z > min_volume_z)) and
-        price_strength < -STRONG_DEV_THRESHOLD * 0.9 and
-        price_distance_from_ma < -0.04 and
-        lower_wick_ratio > 0.5 and  # long lower wick
-        (low <= recent_low * 1.005) and  # near recent low
-        confirm_volume(3, min_volume_ratio * 0.8, min_volume_z * 0.8)):
+    if (price_change.iloc[-1] < -min_price_move * sc_multiplier * 1.2
+        and ((volume_ratio > min_volume_ratio * 1.3) or (volume_z > min_volume_z))
+        and price_strength < -STRONG_DEV_THRESHOLD * 0.9
+        and price_distance_from_ma < -0.04
+        and lower_wick_ratio > 0.5  # long lower wick
+        and (low <= recent_low * 1.005)  # near recent low
+            and confirm_volume(3, min_volume_ratio * 0.8, min_volume_z * 0.8)):
         sign_scores[WyckoffSign.SELLING_CLIMAX] = abs(float(price_change.iloc[-1])) * max(volume_ratio, 1.0)
-        
+
     # Automatic Rally (AR) - more stringent conditions
-    if (price_change.iloc[-1] > min_price_move * ar_multiplier * 1.2 and
-        price_change.iloc[-2] < -min_price_move * 0.5 and  # Require prior decline
-        df['l'].iloc[-1] > recent_low and
-        price_strength > -0.1 and
-        (volume_ratio > 1.1 or volume_z > 0.5) and
-        recent_trend_changed and
-        confirm_trend(2, min_price_move * 0.8)):
+    if (price_change.iloc[-1] > min_price_move * ar_multiplier * 1.2
+        and price_change.iloc[-2] < -min_price_move * 0.5  # Require prior decline
+        and df['l'].iloc[-1] > recent_low
+        and price_strength > -0.1
+        and (volume_ratio > 1.1 or volume_z > 0.5)
+        and recent_trend_changed
+            and confirm_trend(2, min_price_move * 0.8)):
         sign_scores[WyckoffSign.AUTOMATIC_RALLY] = float(price_change.iloc[-1]) * max(1.0, volume_ratio)
-        
+
     # Secondary Test (ST) - stricter tolerance range
-    if (abs(price_change.iloc[-1]) < price_volatility * 0.6 and  # Stricter volatility threshold
-        df['l'].iloc[-1] >= recent_low * 1.001 and  # Simplified and tighter tolerance
-        df['l'].iloc[-1] <= recent_low * 1.015 and  # Upper bound more restrictive
-        current_volume < vol_ma_last * 0.7 and  # Lower volume requirement
-        price_strength < -0.5 and  # Stronger negative price strength
-        df['v'].iloc[-1] < df['v'].iloc[-5:].min() * 1.2):  # Ensure truly decreased volume
+    if (abs(price_change.iloc[-1]) < price_volatility * 0.6  # Stricter volatility threshold
+        and df['l'].iloc[-1] >= recent_low * 1.001  # Simplified and tighter tolerance
+        and df['l'].iloc[-1] <= recent_low * 1.015  # Upper bound more restrictive
+        and current_volume < vol_ma_last * 0.7  # Lower volume requirement
+        and price_strength < -0.5  # Stronger negative price strength
+            and df['v'].iloc[-1] < df['v'].iloc[-5:].min() * 1.2):  # Ensure truly decreased volume
         # Modified scoring formula to reduce sensitivity
         sign_scores[WyckoffSign.SECONDARY_TEST] = 0.7 / (abs(df['l'].iloc[-1] / recent_low - 1.0) + 0.03)
 
     # Last Point of Support (LPS)
-    if (is_spring and
-        volume_trend > lps_volume_threshold * 1.2 and
-        price_change.iloc[-1] > min_price_move * lps_price_multiplier * 1.2 and
-        price_strength < STRONG_DEV_THRESHOLD * 0.4 and
-        confirm_trend(3, min_price_move * 0.6)):
+    if (is_spring
+        and volume_trend > lps_volume_threshold * 1.2
+        and price_change.iloc[-1] > min_price_move * lps_price_multiplier * 1.2
+        and price_strength < STRONG_DEV_THRESHOLD * 0.4
+            and confirm_trend(3, min_price_move * 0.6)):
         sign_scores[WyckoffSign.LAST_POINT_OF_SUPPORT] = price_change.iloc[-1] * volume_trend
-        
+
     # Sign of Strength (SOS)
-    if (price_change.iloc[-1] > min_price_move * sos_multiplier * 1.2 and
-        confirm_trend(3, min_price_move * 0.8) and
-        (volume_ratio > 1.2 or volume_z > 0.7) and  # Higher volume requirement
-        price_strength > 0.4 and  # Higher strength threshold
-        df['c'].iloc[-1] > price_ma_last * 1.01):  # Must be clearly above MA
+    if (price_change.iloc[-1] > min_price_move * sos_multiplier * 1.2
+        and confirm_trend(3, min_price_move * 0.8)
+        and (volume_ratio > 1.2 or volume_z > 0.7)  # Higher volume requirement
+        and price_strength > 0.4  # Higher strength threshold
+            and df['c'].iloc[-1] > price_ma_last * 1.01):  # Must be clearly above MA
         sign_scores[WyckoffSign.SIGN_OF_STRENGTH] = float(price_change.iloc[-1]) * max(1.0, volume_ratio)
-        
+
     # Buying Climax (BC)
-    if (price_change.iloc[-1] > min_price_move * 2.0 and  # Increased from 1.8
-        ((volume_ratio > min_volume_ratio * 1.2) or (volume_z > min_volume_z)) and 
-        price_strength > STRONG_DEV_THRESHOLD * 0.9 and  # Higher strength
-        price_distance_from_ma > 0.05 and  # Further from MA
-        confirm_volume(3, min_volume_ratio * 0.8, min_volume_z * 0.8)):
+    if (price_change.iloc[-1] > min_price_move * 2.0  # Increased from 1.8
+        and ((volume_ratio > min_volume_ratio * 1.2) or (volume_z > min_volume_z))
+        and price_strength > STRONG_DEV_THRESHOLD * 0.9  # Higher strength
+        and price_distance_from_ma > 0.05  # Further from MA
+            and confirm_volume(3, min_volume_ratio * 0.8, min_volume_z * 0.8)):
         sign_scores[WyckoffSign.BUYING_CLIMAX] = float(price_change.iloc[-1]) * max(1.0, volume_ratio)
-        
+
     # Upthrust (UT)
-    if (is_upthrust and
-        ((volume_ratio > min_volume_ratio * 0.8) or (volume_z > min_volume_z * 0.8)) and
-        price_change.iloc[-1] < -min_price_move * ut_multiplier * 1.1 and
-        (df['c'].iloc[-1] / df['h'].iloc[-1]) < 0.985 and  # Stricter closing ratio
-        upper_wick_ratio > 0.5 and  # long upper wick
-        (high >= recent_high * 0.995)):
+    if (is_upthrust
+        and ((volume_ratio > min_volume_ratio * 0.8) or (volume_z > min_volume_z * 0.8))
+        and price_change.iloc[-1] < -min_price_move * ut_multiplier * 1.1
+        and (df['c'].iloc[-1] / df['h'].iloc[-1]) < 0.985  # Stricter closing ratio
+        and upper_wick_ratio > 0.5  # long upper wick
+            and (high >= recent_high * 0.995)):
         sign_scores[WyckoffSign.UPTHRUST] = abs(float(price_change.iloc[-1])) * max(1.0, volume_ratio)
 
     # Secondary Test Resistance (STR) - stricter tolerance range
-    if (abs(price_change.iloc[-1]) < price_volatility * 0.6 and  # Stricter volatility threshold
-        df['h'].iloc[-1] <= recent_high * 0.999 and  # Simplified and tighter tolerance
-        df['h'].iloc[-1] >= recent_high * 0.985 and  # Lower bound more restrictive
-        current_volume < vol_ma_last * 0.7 and  # Lower volume requirement
-        price_strength > 0.5 and  # Stronger positive price strength
-        df['v'].iloc[-1] < df['v'].iloc[-5:].min() * 1.2):  # Ensure truly decreased volume
+    if (abs(price_change.iloc[-1]) < price_volatility * 0.6  # Stricter volatility threshold
+        and df['h'].iloc[-1] <= recent_high * 0.999  # Simplified and tighter tolerance
+        and df['h'].iloc[-1] >= recent_high * 0.985  # Lower bound more restrictive
+        and current_volume < vol_ma_last * 0.7  # Lower volume requirement
+        and price_strength > 0.5  # Stronger positive price strength
+            and df['v'].iloc[-1] < df['v'].iloc[-5:].min() * 1.2):  # Ensure truly decreased volume
         # Modified scoring formula to reduce sensitivity
         sign_scores[WyckoffSign.SECONDARY_TEST_RESISTANCE] = 0.7 / (abs(df['h'].iloc[-1] / recent_high - 1.0) + 0.03)
 
     # Last Point of Supply (LPSY)
-    if (is_upthrust and
-        volume_trend > lps_volume_threshold * 1.2 and
-        price_change.iloc[-1] < -min_price_move * lps_price_multiplier * 1.2 and
-        price_strength > -STRONG_DEV_THRESHOLD * 0.4 and
-        confirm_trend(3, min_price_move * 0.6, -1)):
+    if (is_upthrust
+        and volume_trend > lps_volume_threshold * 1.2
+        and price_change.iloc[-1] < -min_price_move * lps_price_multiplier * 1.2
+        and price_strength > -STRONG_DEV_THRESHOLD * 0.4
+            and confirm_trend(3, min_price_move * 0.6, -1)):
         sign_scores[WyckoffSign.LAST_POINT_OF_RESISTANCE] = abs(float(price_change.iloc[-1])) * float(volume_trend)
 
     # Sign of Weakness (SOW)
-    if (price_change.iloc[-1] < -min_price_move * sos_multiplier * 1.2 and
-        confirm_trend(3, min_price_move * 0.8, -1) and
-        (volume_ratio > 1.2 or volume_z > 0.7) and  # Higher volume requirement
-        price_strength < -0.4 and  # Lower strength threshold
-        df['c'].iloc[-1] < price_ma_last * 0.99):  # Must be clearly below MA
+    if (price_change.iloc[-1] < -min_price_move * sos_multiplier * 1.2
+        and confirm_trend(3, min_price_move * 0.8, -1)
+        and (volume_ratio > 1.2 or volume_z > 0.7)  # Higher volume requirement
+        and price_strength < -0.4  # Lower strength threshold
+            and df['c'].iloc[-1] < price_ma_last * 0.99):  # Must be clearly below MA
         sign_scores[WyckoffSign.SIGN_OF_WEAKNESS] = abs(float(price_change.iloc[-1])) * max(1.0, volume_ratio)
 
     # Return the strongest sign if it exists, otherwise NONE
@@ -254,19 +254,19 @@ def detect_wyckoff_signs(
         norm = max(1e-9, price_volatility * vol_ratio_current)
         scored = {k: (float(v) / norm) for k, v in sign_scores.items()}
         best_sign, best_score = max(scored.items(), key=lambda x: x[1])
-        
+
         # Tier-based confidence: high-importance signs (climax, SOS/SOW) need lower threshold
         high_importance_signs = {
             WyckoffSign.SELLING_CLIMAX, WyckoffSign.BUYING_CLIMAX,
             WyckoffSign.SIGN_OF_STRENGTH, WyckoffSign.SIGN_OF_WEAKNESS,
             WyckoffSign.LAST_POINT_OF_SUPPORT, WyckoffSign.LAST_POINT_OF_RESISTANCE
         }
-        
+
         if best_sign in high_importance_signs:
             min_conf = 0.40 if is_high_volatility else 0.35  # Lower threshold for key signs
         else:
             min_conf = 0.50 if is_high_volatility else 0.45  # Standard threshold
-        
+
         if best_score >= min_conf:
             return best_sign
 

@@ -1,3 +1,11 @@
+from .wyckoff.wyckoff_analyzer import WyckoffAnalyzer
+from .llm.llm_analyzer import LLMAnalyzer
+from hyperliquid_utils.hyperliquid_ratelimiter import hyperliquid_rate_limiter
+from .candles_utils import get_coins_to_analyze
+from utils import OPERATION_CANCELLED, fmt
+from hyperliquid_utils.utils import hyperliquid_utils
+from telegram_utils import telegram_utils
+from logging_utils import logger
 import os
 import time
 from typing import cast
@@ -8,21 +16,14 @@ from telegram.ext import CallbackContext, ContextTypes, ConversationHandler
 # Add analysis mode enum
 from enum import Enum
 
+
 class AnalysisMode(Enum):
     WYCKOFF = "wyckoff"
     LLM = "llm"
 
+
 # Environment variable for analysis mode
 ANALYSIS_MODE = AnalysisMode(os.getenv("HTB_ANALYSIS_MODE", "wyckoff").lower())
-
-from logging_utils import logger
-from telegram_utils import telegram_utils
-from hyperliquid_utils.utils import hyperliquid_utils
-from utils import OPERATION_CANCELLED, fmt
-from .candles_utils import get_coins_to_analyze
-from hyperliquid_utils.hyperliquid_ratelimiter import hyperliquid_rate_limiter
-from .llm.llm_analyzer import LLMAnalyzer
-from .wyckoff.wyckoff_analyzer import WyckoffAnalyzer
 
 
 SELECTING_COIN_FOR_TA = range(1)
@@ -38,7 +39,7 @@ async def execute_ta(update: Update, context: CallbackContext) -> int:
         await analyze_candles_for_coin(context, coin, True)
         await message.delete()
         return ConversationHandler.END
-    
+
     await update.message.reply_text("Choose a coin to analyze:", reply_markup=hyperliquid_utils.get_coins_reply_markup())
     return cast(int, SELECTING_COIN_FOR_TA)
 
@@ -77,11 +78,11 @@ def has_minimum_balance() -> bool:
 async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
     """Process coins one at a time with rate limiting."""
 
-    coins_to_analyze = context.job.data['coins_to_analyze'] # type: ignore
+    coins_to_analyze = context.job.data['coins_to_analyze']  # type: ignore
     coin = coins_to_analyze.pop()
-        
+
     await analyze_candles_for_coin(context, coin, False)
- 
+
     # Schedule next coin if any remain
     if coins_to_analyze:
         if not has_minimum_balance():
@@ -90,7 +91,7 @@ async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
         weight_per_analysis = 145
         next_available = hyperliquid_rate_limiter.get_next_available_time(weight_per_analysis)
         delay = max(3, next_available)
-        context.application.job_queue.run_once( # type: ignore
+        context.application.job_queue.run_once(  # type: ignore
             analyze_candles_for_coin_job,
             when=delay,
             data={"coins_to_analyze": coins_to_analyze},
@@ -103,7 +104,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     all_mids = hyperliquid_utils.info.all_mids()
     coins_to_analyze = await get_coins_to_analyze(all_mids)
-    
+
     if not coins_to_analyze:
         return
 
@@ -111,7 +112,7 @@ async def analyze_candles(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     logger.info(f"Running TA for {len(coins_to_analyze)} coins")
-    context.application.job_queue.run_once( # type: ignore
+    context.application.job_queue.run_once(  # type: ignore
         analyze_candles_for_coin_job,
         when=2,
         data={"coins_to_analyze": coins_to_analyze},
@@ -135,7 +136,7 @@ async def analyze_candles_for_coin(context: ContextTypes.DEFAULT_TYPE, coin: str
         logger.error(f"Failed to analyze candles for {coin}: {str(e)}", exc_info=True)
         if interactive_analysis:
             await telegram_utils.send(f"Failed to analyze candles for {coin}: {str(e)}")
-    
+
     logger.info(f"TA for {coin} done in {(time.time() - start_time):.2f} seconds")
 
 

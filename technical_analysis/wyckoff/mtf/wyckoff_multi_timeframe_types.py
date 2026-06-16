@@ -32,6 +32,7 @@ class MultiTimeframeDirection(Enum):
     BEARISH = "bearish"
     NEUTRAL = "neutral"
 
+
 @dataclass
 class TimeframeGroupAnalysis:
     dominant_phase: WyckoffPhase
@@ -47,10 +48,12 @@ class TimeframeGroupAnalysis:
     uncertain_phase: bool = True  # Add this field with default value True
     funding_state: FundingState = FundingState.UNKNOWN
 
+
 @dataclass
 class MultiTimeframeContext:
     description: str
     should_notify: bool
+
 
 @dataclass
 class AllTimeframesAnalysis:

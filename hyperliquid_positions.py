@@ -10,25 +10,27 @@ from telegram_utils import telegram_utils
 from utils import fmt
 from logging_utils import logger
 
+
 @dataclass
 class PortfolioBalance:
     perp_total: float
-    perp_withdrawable: float 
-    perp_margin_available: float 
+    perp_withdrawable: float
+    perp_margin_available: float
     spot_total: float
     stacked_total: float
     vaults: List[Dict[str, Any]]
     cross_margin_ratio: float
     cross_account_leverage: float
-    
+
     @property
     def vault_total(self) -> float:
         return sum(float(vault.get('equity', 0)) for vault in self.vaults)
-    
+
     @property
     def total(self) -> float:
         return self.perp_total + self.spot_total + self.stacked_total + self.vault_total
-        
+
+
 def _calculate_spot_balance(spot_state: Dict[str, Any], token_prices: Dict[str, float]) -> float:
     """Calculate total spot balance from user state and token prices."""
     return sum(
@@ -36,14 +38,15 @@ def _calculate_spot_balance(spot_state: Dict[str, Any], token_prices: Dict[str, 
         for balance in spot_state.get('balances', [])
     )
 
+
 def _calculate_stacked_balance(staking_summary: Dict[str, float], token_prices: Dict[str, float]) -> float:
     """Calculate total stacked balance from delegator info and token prices."""
     hype_price = token_prices.get("HYPE", 0.0)
-    
+
     delegated_value = float(staking_summary["delegated"]) * hype_price
     undelegated_value = float(staking_summary["undelegated"]) * hype_price
     pending_value = float(staking_summary["totalPendingWithdrawal"]) * hype_price
-    
+
     return delegated_value + undelegated_value + pending_value
 
 
@@ -56,22 +59,23 @@ def _get_portfolio_balance() -> PortfolioBalance:
     staking_summary = hyperliquid_utils.info.user_staking_summary(address)
     vault_equities = hyperliquid_utils.info.user_vault_equities(address)
 
-    cross_margin_account_value =float(perp_state['crossMarginSummary']['accountValue'])
-    cross_margin_positions_value =float(perp_state['crossMarginSummary']['totalNtlPos'])
+    cross_margin_account_value = float(perp_state['crossMarginSummary']['accountValue'])
+    cross_margin_positions_value = float(perp_state['crossMarginSummary']['totalNtlPos'])
     maintenance_margin = float(perp_state['crossMaintenanceMarginUsed'])
 
     total_margin_used = float(perp_state['crossMarginSummary']['totalMarginUsed'])
-    
+
     return PortfolioBalance(
         perp_total=float(perp_state['marginSummary']['accountValue']),
-        perp_withdrawable = float(perp_state['withdrawable']),
-        perp_margin_available = max(cross_margin_account_value - total_margin_used, 0.0),
+        perp_withdrawable=float(perp_state['withdrawable']),
+        perp_margin_available=max(cross_margin_account_value - total_margin_used, 0.0),
         spot_total=_calculate_spot_balance(spot_state, token_prices),
         stacked_total=_calculate_stacked_balance(staking_summary, token_prices),
         vaults=vault_equities,
-        cross_margin_ratio = maintenance_margin / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
-        cross_account_leverage = cross_margin_positions_value / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
+        cross_margin_ratio=maintenance_margin / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
+        cross_account_leverage=cross_margin_positions_value / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
     )
+
 
 def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
     """Format portfolio balance information as message lines."""
@@ -79,28 +83,28 @@ def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
         "<b>Portfolio:</b>",
         f"Total balance: {fmt(balance.total)} USDC",
     ]
-     
+
     if balance.spot_total > 0:
         message.extend([
-        "<b>Spot positions:</b>",
-        f"Total balance: {fmt(balance.spot_total)} USDC", 
+            "<b>Spot positions:</b>",
+            f"Total balance: {fmt(balance.spot_total)} USDC",
         ])
 
     if balance.stacked_total > 0:
         message.extend([
-        "<b>Stacked positions:</b>",
-        f"Total balance: {fmt(balance.stacked_total)} USDC", 
+            "<b>Stacked positions:</b>",
+            f"Total balance: {fmt(balance.stacked_total)} USDC",
         ])
 
     if balance.vault_total > 0:
         message.extend([
-        "<b>Vault positions:</b>",
-        f"Total balance: {fmt(balance.vault_total)} USDC", 
+            "<b>Vault positions:</b>",
+            f"Total balance: {fmt(balance.vault_total)} USDC",
         ])
 
     message.extend([
         "<b>Perps positions:</b>",
-        f"Total balance: {fmt(balance.perp_total)} USDC", 
+        f"Total balance: {fmt(balance.perp_total)} USDC",
         f"Withdrawable balance: {fmt(balance.perp_withdrawable)} USDC",
     ])
 
@@ -117,12 +121,13 @@ def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
 
     return message
 
+
 async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handler for getting current portfolio positions."""
     try:
         balance = _get_portfolio_balance()
         message_lines = _format_portfolio_message(balance)
-        
+
         all_mids = hyperliquid_utils.info.all_mids()
         perp_user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
         tablefmt = simple_separated_format('  ')
@@ -230,6 +235,7 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             "Error getting positions. Please try again later."
         )
 
+
 async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         balance = _get_portfolio_balance()
@@ -255,7 +261,6 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 direction = "L" if float(position['szi']) > 0 else "S"
                 coin = position['coin'][:4] + "." if len(position['coin']) > 4 else position['coin']
                 return f"{direction} {coin}"
-
 
             table = tabulate(
                 [
@@ -287,6 +292,7 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.critical(e, exc_info=True)
         await telegram_utils.reply(update, f"Failed to fetch positions: {str(e)}")
 
+
 def _get_token_prices():
     """Get token prices from market data."""
     metadata, market_data = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
@@ -298,9 +304,9 @@ def _get_token_prices():
         market = market_data_map.get(pair["index"])
         if not market or not (mid_price := float(market.get("midPx") or 0)):
             continue
-        
+
         base_token, quote_token = (tokens[idx]["name"] for idx in pair["tokens"])
-        
+
         if quote_token == "USDC":
             token_prices[base_token] = mid_price
         elif base_token == "USDC":
@@ -317,11 +323,11 @@ def _get_token_prices():
 async def spot_positions_messages(tablefmt, spot_user_state):
     """Generate messages for spot positions, sorted by USD value."""
 
-    if not spot_user_state['balances']:
+    if not spot_user_state.get('balances'):
         return []
 
     token_prices = _get_token_prices()
-    
+
     positions = []
     for balance in spot_user_state['balances']:
         token = balance['coin']
@@ -329,7 +335,7 @@ async def spot_positions_messages(tablefmt, spot_user_state):
         entry_value = float(balance['entryNtl'])
         price = token_prices.get(token, 0.0)
         usd_value = price * amount
-        
+
         if usd_value > 1.0:
             pnl = usd_value - entry_value
             pnl_percentage = (pnl / entry_value * 100) if entry_value != 0 else 0
@@ -359,26 +365,27 @@ async def spot_positions_messages(tablefmt, spot_user_state):
         tablefmt=tablefmt,
         colalign=("left", "right", "right", "right")
     )
-    
+
     return [
         "",
         "<b>Spot positions:</b>",
         f"<pre>{table}</pre>"
     ]
 
+
 def vault_positions_messages(tablefmt, vaults: List[Dict[str, Any]]):
     """Generate messages for vault positions, sorted by USD value."""
 
     if not vaults:
         return []
-    
+
     positions = []
     for vault in vaults:
         vault_address = vault['vaultAddress']
         usd_value = float(vault['equity'])
-        
+
         positions.append({
-            'vault_address': vault_address[:6] + "..." +vault_address[-4:],
+            'vault_address': vault_address[:6] + "..." + vault_address[-4:],
             'usd_value': usd_value
         })
 
@@ -399,7 +406,7 @@ def vault_positions_messages(tablefmt, vaults: List[Dict[str, Any]]):
         tablefmt=tablefmt,
         colalign=("left", "right")
     )
-    
+
     return [
         "",
         "<b>Vault positions:</b>",

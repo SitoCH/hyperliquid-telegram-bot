@@ -24,9 +24,9 @@ class FixedTokenStrategy(BaseStrategy):
             leverage=leverage,
             min_yearly_performance=min_yearly_performance
         )
-        self._fixed_token_config = FixedTokenConfig(
-            tokens=set(os.getenv("HTB_FIXED_TOKEN_STRATEGY_TOKENS", "BTC,ETH").split(","))
-        )
+        tokens_raw = os.getenv("HTB_FIXED_TOKEN_STRATEGY_TOKENS", "BTC,ETH")
+        tokens = {s.strip() for s in tokens_raw.split(",") if s.strip()}
+        self._fixed_token_config = FixedTokenConfig(tokens=tokens)
 
     def get_strategy_params(self) -> Tuple[List[Dict], Dict[str, str], Dict]:
         """Get strategy parameters including filtered crypto data and exchange info."""
@@ -37,11 +37,11 @@ class FixedTokenStrategy(BaseStrategy):
             "sparkline": "false",
             "price_change_percentage": "24h,30d,1y",
         }
-        
+
         cryptos = hyperliquid_utils.fetch_cryptos(params, page_count=2)
         all_mids = hyperliquid_utils.info.all_mids()
         meta = hyperliquid_utils.info.meta()
-        
+
         return cryptos, all_mids, meta
 
     def filter_top_cryptos(
@@ -56,19 +56,19 @@ class FixedTokenStrategy(BaseStrategy):
             info["name"]: int(info["maxLeverage"])
             for info in meta.get("universe", [])
         }
-        
+
         for coin in cryptos:
             symbol = coin["symbol"]
             yearly_change = coin["price_change_percentage_1y_in_currency"]
-            
+
             if symbol not in self._fixed_token_config.tokens:
                 logger.info(f"Excluding {symbol}: not in fixed token list")
                 continue
-                
+
             if symbol not in all_mids:
                 logger.info(f"Excluding {symbol}: not available on Hyperliquid")
                 continue
-                
+
             if yearly_change is not None and yearly_change <= self.config.min_yearly_performance:
                 logger.info(f"Excluding {symbol}: yearly change {fmt(yearly_change)}% <= {self.config.min_yearly_performance}%")
                 continue

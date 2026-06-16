@@ -59,7 +59,7 @@ def analyze_multi_timeframe(
 
         # Calculate overall direction with all timeframes
         overall_direction = determine_overall_direction([
-            short_term_analysis, 
+            short_term_analysis,
             intermediate_analysis,
             context_analysis
         ])
@@ -78,69 +78,69 @@ def analyze_multi_timeframe(
             context=context_analysis,
             overall_direction=overall_direction,
             momentum_intensity=momentum_intensity,
-            confidence_level= calculate_overall_confidence(
-                short_term_analysis, 
+            confidence_level=calculate_overall_confidence(
+                short_term_analysis,
                 intermediate_analysis,
                 context_analysis
             ),
-            alignment_score= calculate_overall_alignment(short_term_analysis, intermediate_analysis)
+            alignment_score=calculate_overall_alignment(short_term_analysis, intermediate_analysis)
         )        # Generate comprehensive description
         description = generate_all_timeframes_description(coin, all_analysis, mid, significant_levels, interactive_analysis)
-        
+
         min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
-        
+
         notification_checks = [
             (all_analysis.confidence_level >= min_confidence, f"Low confidence: {all_analysis.confidence_level:.2f} < {min_confidence:.2f}"),
             (all_analysis.overall_direction != MultiTimeframeDirection.NEUTRAL, "Neutral market direction"),
             # Simplified phase checks - allow more signals through
-            ((all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING or 
-              all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING or
-              all_analysis.short_term.momentum_bias != MultiTimeframeDirection.NEUTRAL or
-              all_analysis.intermediate.momentum_bias != MultiTimeframeDirection.NEUTRAL), 
+            ((all_analysis.short_term.dominant_phase != WyckoffPhase.RANGING
+              or all_analysis.intermediate.dominant_phase != WyckoffPhase.RANGING
+              or all_analysis.short_term.momentum_bias != MultiTimeframeDirection.NEUTRAL
+              or all_analysis.intermediate.momentum_bias != MultiTimeframeDirection.NEUTRAL),
              "All timeframes are ranging or neutral"),
             # Basic alignment check - relaxed from 0.35 to 0.28 to allow more valid setups
             (all_analysis.alignment_score >= 0.28, f"Low alignment: {all_analysis.alignment_score:.2f} < 0.28"),
         ]
-        
+
         should_notify = all(check[0] for check in notification_checks)
-          # Log reasons for not notifying
+        # Log reasons for not notifying
         if not should_notify:
             reasons = [reason for condition, reason in notification_checks if not condition]
             logger.info(f"Notification suppressed for {coin} due to following reasons:")
             for reason in reasons:
                 logger.info(f"- {reason}")
-        
+
         # Simplified direction-specific criteria - balanced treatment for both directions
         if should_notify:
             direction_checks = []
-            
+
             # Symmetric volume and momentum requirements for balanced day trading
             MIN_ALIGNMENT = 0.45
             VOLUME_MULTIPLIER = 0.65
-            
+
             if all_analysis.overall_direction == MultiTimeframeDirection.BULLISH:
                 direction_checks = [
-                    (all_analysis.short_term.internal_alignment >= MIN_ALIGNMENT or 
-                     all_analysis.intermediate.internal_alignment >= MIN_ALIGNMENT, 
-                     f"Low alignment in both timeframes"),
-                    (momentum_intensity >= WEAK_MOMENTUM * 0.75, 
+                    (all_analysis.short_term.internal_alignment >= MIN_ALIGNMENT
+                     or all_analysis.intermediate.internal_alignment >= MIN_ALIGNMENT,
+                     "Low alignment in both timeframes"),
+                    (momentum_intensity >= WEAK_MOMENTUM * 0.75,
                      f"Weak momentum: {momentum_intensity:.2f}"),
-                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * VOLUME_MULTIPLIER, 
+                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * VOLUME_MULTIPLIER,
                      f"Low volume strength: {all_analysis.intermediate.volume_strength:.2f}"),
                 ]
             else:  # BEARISH - now has symmetric requirements
                 direction_checks = [
-                    (all_analysis.short_term.internal_alignment >= MIN_ALIGNMENT or 
-                     all_analysis.intermediate.internal_alignment >= MIN_ALIGNMENT, 
-                     f"Low alignment in both timeframes"),
-                    (momentum_intensity >= WEAK_MOMENTUM * 0.75, 
+                    (all_analysis.short_term.internal_alignment >= MIN_ALIGNMENT
+                     or all_analysis.intermediate.internal_alignment >= MIN_ALIGNMENT,
+                     "Low alignment in both timeframes"),
+                    (momentum_intensity >= WEAK_MOMENTUM * 0.75,
                      f"Weak momentum: {momentum_intensity:.2f}"),
-                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * VOLUME_MULTIPLIER, 
+                    (all_analysis.intermediate.volume_strength >= MODERATE_VOLUME_THRESHOLD * VOLUME_MULTIPLIER,
                      f"Low volume strength: {all_analysis.intermediate.volume_strength:.2f}"),
                 ]
-            
+
             should_notify = all(check[0] for check in direction_checks)
-            
+
             if not should_notify:
                 reasons = [reason for condition, reason in direction_checks if not condition]
                 logger.info(f"{all_analysis.overall_direction.value.title()} notification suppressed for {coin}:")
@@ -151,7 +151,7 @@ def analyze_multi_timeframe(
             description=description,
             should_notify=should_notify
         )
-        
+
     except Exception as e:
         logger.error(e, exc_info=True)
         return MultiTimeframeContext(
@@ -160,6 +160,8 @@ def analyze_multi_timeframe(
         )
 
 # Create a helper function to calculate volume-based weight adjustment
+
+
 def get_volume_weight_adjustment(volume_state: VolumeState) -> float:
     """Return weight adjustment multiplier based on volume state"""
     if volume_state == VolumeState.VERY_HIGH:
@@ -172,8 +174,10 @@ def get_volume_weight_adjustment(volume_state: VolumeState) -> float:
         return 0.8
     else:  # NEUTRAL or UNKNOWN
         return 1.0
-    
+
 # Create another helper for volume strength mapping
+
+
 def get_base_volume_strength(volume_state: VolumeState) -> float:
     """Return base volume strength value based on volume state"""
     if volume_state == VolumeState.VERY_HIGH:
@@ -188,6 +192,7 @@ def get_base_volume_strength(volume_state: VolumeState) -> float:
         return 0.25
     else:  # UNKNOWN
         return 0.5
+
 
 def _analyze_timeframe_group(
     group: Dict[Timeframe, WyckoffState]
@@ -213,10 +218,10 @@ def _analyze_timeframe_group(
     uncertain_phase_weights: Dict[WyckoffPhase, float] = {}  # Track uncertain phases separately
     action_weights: Dict[CompositeAction, float] = {}
     uncertain_action_weights: Dict[CompositeAction, float] = {}  # Track uncertain actions separately
-    
+
     # Track Wyckoff signs
     sign_weights: Dict[WyckoffSign, float] = {}
-    
+
     total_weight = 0.0
 
     # Track exhaustion signals - symmetric treatment
@@ -231,12 +236,12 @@ def _analyze_timeframe_group(
         weight = tf.settings.phase_weight
 
         # Detect potential exhaustion based on phase combinations - symmetric detection
-        if (state.phase == WyckoffPhase.MARKUP and 
-            state.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.CONSOLIDATING]):
+        if (state.phase == WyckoffPhase.MARKUP
+                and state.composite_action in [CompositeAction.DISTRIBUTING, CompositeAction.CONSOLIDATING]):
             upside_exhaustion += 1
 
-        if (state.phase == WyckoffPhase.MARKDOWN and 
-            state.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.CONSOLIDATING]):
+        if (state.phase == WyckoffPhase.MARKDOWN
+                and state.composite_action in [CompositeAction.ACCUMULATING, CompositeAction.CONSOLIDATING]):
             downside_exhaustion += 1
 
         # Adjust weights based on exhaustion signals - symmetric treatment
@@ -270,7 +275,7 @@ def _analyze_timeframe_group(
         # Optimize trending weight boost with the same helper
         if state.pattern == MarketPattern.TRENDING and state.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
             weight *= get_volume_weight_adjustment(state.volume)
-        
+
         total_weight += weight
 
         # Improved phase weight handling with certain/uncertain separation
@@ -281,7 +286,7 @@ def _analyze_timeframe_group(
             else:
                 # Confident phases get full weight
                 confident_phase_weights[state.phase] = confident_phase_weights.get(state.phase, 0) + weight
-            
+
             # Track overall phase weights for determining dominant phase
             phase_weights[state.phase] = phase_weights.get(state.phase, 0) + (
                 weight * 0.7 if state.uncertain_phase else weight
@@ -293,12 +298,12 @@ def _analyze_timeframe_group(
                 uncertain_action_weights[state.composite_action] = uncertain_action_weights.get(state.composite_action, 0) + (weight * 0.7)
             else:
                 action_weights[state.composite_action] = action_weights.get(state.composite_action, 0) + weight
-                
+
         # Track Wyckoff signs with weights
         if state.wyckoff_sign != WyckoffSign.NONE:
             # Give additional weight to significant signs
             sign_weight = weight
-            
+
             # Boost weight for critical signs in certain market conditions
             if state.wyckoff_sign in [WyckoffSign.SELLING_CLIMAX, WyckoffSign.BUYING_CLIMAX]:
                 sign_weight *= 1.3  # Climactic events are very important
@@ -306,11 +311,11 @@ def _analyze_timeframe_group(
                 sign_weight *= 1.2  # SOS/SOW are key directional signals
             elif state.wyckoff_sign in [WyckoffSign.UPTHRUST, WyckoffSign.SECONDARY_TEST]:
                 sign_weight *= 1.1  # Tests are important but less decisive
-                
+
             # Further boost for signs confirmed by volume
             if state.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
                 sign_weight *= 1.2
-                
+
             # Add to sign weights dictionary
             sign_weights[state.wyckoff_sign] = sign_weights.get(state.wyckoff_sign, 0) + sign_weight
 
@@ -335,7 +340,7 @@ def _analyze_timeframe_group(
         dominant_action = max(combined_action_weights.items(), key=lambda x: x[1])[0]
     else:
         dominant_action = CompositeAction.UNKNOWN
-        
+
     # Determine dominant Wyckoff sign (two-tier gating: evidence then dominance)
     dominant_sign = WyckoffSign.NONE
     if sign_weights:
@@ -389,7 +394,7 @@ def _analyze_timeframe_group(
             bullish_signals += 0.8  # Slightly less weight than phase
         elif is_bearish_action(s.composite_action):
             bearish_signals += 0.8
-    
+
     # Simple directional bias detection for volume adjustments
     directional_bias = MultiTimeframeDirection.NEUTRAL
     if bullish_signals > bearish_signals + 0.1:
@@ -404,24 +409,24 @@ def _analyze_timeframe_group(
 
         # Use the helper for base strength determination
         base_strength = get_base_volume_strength(state.volume)
-        
+
         # Enhanced phase-specific volume interpretation for crypto markets
         if state.phase in [WyckoffPhase.MARKUP, WyckoffPhase.MARKDOWN]:
             base_strength *= 1.2
             # Higher multiplier for active trend phases - crypto moves fast
             if state.composite_action in [CompositeAction.MARKING_UP, CompositeAction.MARKING_DOWN]:
                 base_strength *= 1.3
-                
+
         # Special handling for accumulation/distribution with high volume
         if state.phase in [WyckoffPhase.ACCUMULATION, WyckoffPhase.DISTRIBUTION] and state.volume in [VolumeState.HIGH, VolumeState.VERY_HIGH]:
             # High volume in accumulation/distribution often signals impending breakout
             base_strength *= 1.15
-        
+
         # Direction-specific volume interpretation - crypto needs less volume for bearish moves
         if directional_bias == MultiTimeframeDirection.BEARISH:
             # For bearish bias, increase effective volume strength
             base_strength *= 1.3  # 30% boost to volume strength for bearish bias
-        
+
         # Consider timeframe-specific volume characteristics
         volume_importance = tf.settings.volume_ma_window / 20.0  # Normalize based on typical window size
 
@@ -430,7 +435,7 @@ def _analyze_timeframe_group(
 
     # Calculate weighted average of volume factors
     volume_strength = (
-        sum(factor * weight for factor, weight in volume_factors) / total_volume_weight 
+        sum(factor * weight for factor, weight in volume_factors) / total_volume_weight
         if total_volume_weight > 0 else 0.0
     )
 
@@ -458,7 +463,7 @@ def _analyze_timeframe_group(
 
     # Check for divergence between volume and price - common in crypto turning points
     divergence_count = sum(1 for s in group.values() if
-        (s.effort_vs_result == EffortResult.WEAK and s.volume in [VolumeState.HIGH, VolumeState.VERY_HIGH]))
+                           (s.effort_vs_result == EffortResult.WEAK and s.volume in [VolumeState.HIGH, VolumeState.VERY_HIGH]))
 
     # Apply penalty for significant divergence - less harsh
     if divergence_count >= len(group) // 2:  # More than half showing divergence
@@ -509,9 +514,9 @@ def _analyze_timeframe_group(
         if s.funding_state == FundingState.HIGHLY_NEGATIVE:
             # Potential short squeeze - only if we see bullish confirmation
             has_bullish_confirmation = (
-                is_bullish_phase(s.phase) or 
-                is_bullish_action(s.composite_action) or
-                s.is_spring
+                is_bullish_phase(s.phase)
+                or is_bullish_action(s.composite_action)
+                or s.is_spring
             )
             if has_bullish_confirmation:
                 if s.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
@@ -521,9 +526,9 @@ def _analyze_timeframe_group(
         elif s.funding_state == FundingState.HIGHLY_POSITIVE:
             # Potential long squeeze - only if we see bearish confirmation
             has_bearish_confirmation = (
-                is_bearish_phase(s.phase) or 
-                is_bearish_action(s.composite_action) or
-                s.is_upthrust
+                is_bearish_phase(s.phase)
+                or is_bearish_action(s.composite_action)
+                or s.is_upthrust
             )
             if has_bearish_confirmation:
                 if s.volume in [VolumeState.VERY_HIGH, VolumeState.HIGH]:
@@ -554,7 +559,7 @@ def _analyze_timeframe_group(
             # Split signal between both directions but with lower weight
             bullish_signals += 0.2
             bearish_signals += 0.2
-            
+
         # Consider Wyckoff signs for directional signals
         if s.wyckoff_sign == WyckoffSign.SELLING_CLIMAX or s.wyckoff_sign == WyckoffSign.AUTOMATIC_RALLY:
             bullish_signals += 0.6  # These typically indicate potential bottoming
@@ -599,7 +604,7 @@ def _analyze_timeframe_group(
             MultiTimeframeDirection.BEARISH if bearish_signals > bullish_signals + threshold_diff else
             MultiTimeframeDirection.NEUTRAL
         )
-    
+
     # Modify momentum bias calculation for rapid moves - symmetric treatment
     if rapid_bullish_moves >= len(group) // 2:
         momentum_bias = MultiTimeframeDirection.BULLISH
@@ -636,41 +641,42 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
     """Calculate momentum intensity with balanced approach for day trading crypto."""
     if not analyses or overall_direction == MultiTimeframeDirection.NEUTRAL:
         return 0.0
-    
+
     # Fast path for rapid move detection with high volume
     rapid_moves = sum(1 for a in analyses if (
-        (a.momentum_bias == overall_direction and a.volume_strength > 0.7) or
-        (a.dominant_sign in [WyckoffSign.SIGN_OF_STRENGTH, WyckoffSign.SIGN_OF_WEAKNESS] and a.volume_strength > 0.6)
+        (a.momentum_bias == overall_direction and a.volume_strength > 0.7)
+        or (a.dominant_sign in [WyckoffSign.SIGN_OF_STRENGTH, WyckoffSign.SIGN_OF_WEAKNESS] and a.volume_strength > 0.6)
     ))
     if rapid_moves >= len(analyses) // 2:
         # Symmetric treatment: 0.8 for both directions on rapid moves
         return 0.80
-    
+
     # Symmetric base parameters for balanced day trading
     is_bearish = overall_direction == MultiTimeframeDirection.BEARISH
     base_momentum = 0.42  # Same base for both directions
-    
+
     # 1. Calculate alignment score (simpler approach)
     aligned_count = sum(1 for a in analyses if a.momentum_bias == overall_direction)
     alignment_score = aligned_count / len(analyses) if analyses else 0
-    
+
     # 2. Calculate phase confirmation score (with direction-specific handling)
     phase_confirmations = sum(1 for a in analyses if (
-        (is_bearish and (is_bearish_phase(a.dominant_phase) or a.dominant_phase == WyckoffPhase.DISTRIBUTION)) or
-        (not is_bearish and (is_bullish_phase(a.dominant_phase) or a.dominant_phase == WyckoffPhase.ACCUMULATION))
+        (is_bearish and (is_bearish_phase(a.dominant_phase) or a.dominant_phase == WyckoffPhase.DISTRIBUTION))
+        or (not is_bearish and (is_bullish_phase(a.dominant_phase) or a.dominant_phase == WyckoffPhase.ACCUMULATION))
     ))
     phase_score = phase_confirmations / len(analyses) if analyses else 0
-    
+
     # 3. Calculate volume support with minimal directional adjustment
     volume_score = sum(a.volume_strength * a.group_weight for a in analyses) / sum(a.group_weight for a in analyses)
     # Only 10% boost for bearish (crypto does fall faster on less volume)
     volume_factor = 1.10 if is_bearish else 1.0
     adjusted_volume = min(1.0, volume_score * volume_factor)
-    
+
     # 4. Calculate timeframe agreement (weight intermediate timeframes more)
     # Identify groups by approximate total weight rather than per-timeframe weights
     short_group_weight = sum(tf.settings.phase_weight for tf in SHORT_TERM_TIMEFRAMES)
     intermediate_group_weight = sum(tf.settings.phase_weight for tf in INTERMEDIATE_TIMEFRAMES)
+
     def _is_close(a: float, b: float, tol: float = 0.05) -> bool:
         return abs(a - b) <= tol
     short_term_aligned = any(
@@ -682,22 +688,22 @@ def _calculate_momentum_intensity(analyses: List[TimeframeGroupAnalysis], overal
         for a in analyses
     )
     timeframe_bonus = 0.1 if (short_term_aligned and intermediate_aligned) else 0.0
-    
+
     # Combine scores with simplified formula
     raw_momentum = (
-        base_momentum +
-        (alignment_score * 0.25) +
-        (phase_score * 0.20) +
-        (adjusted_volume * 0.15) +
-        timeframe_bonus
+        base_momentum
+        + (alignment_score * 0.25)
+        + (phase_score * 0.20)
+        + (adjusted_volume * 0.15)
+        + timeframe_bonus
     )
-    
+
     # Apply final sigmoid with symmetric threshold for balanced signals
     sigmoid_threshold = 0.38  # Same for both directions (was 0.35 bearish / 0.4 bullish)
     final_momentum = 1.0 / (1.0 + np.exp(-6 * (raw_momentum - sigmoid_threshold)))
-    
+
     # Ensure minimum non-zero value
     if final_momentum < 0.01:
         final_momentum = 0.01
-        
+
     return min(1.0, final_momentum)

@@ -51,13 +51,12 @@ def _get_tf_divergence_note(
     """Generate note when higher TF diverges from intraday."""
     if context_bias == intraday_bias or context_bias == MultiTimeframeDirection.NEUTRAL:
         return ""
-    
+
     if context_bias == MultiTimeframeDirection.BULLISH:
         return f" Higher TFs remain bullish ({context_phase.value}); dips may find support."
     elif context_bias == MultiTimeframeDirection.BEARISH:
         return f" Higher TFs bearish ({context_phase.value}); rallies may face resistance."
     return ""
-
 
 
 T = TypeVar("T")
@@ -339,10 +338,10 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         interm_phase = analysis.intermediate.dominant_phase
         context_phase = analysis.context.dominant_phase
         context_bias = analysis.context.momentum_bias
-        
+
         # Get phase-specific backdrop from context TF
         backdrop = _get_phase_context(context_phase, context_bias)
-        
+
         if intraday_aligned:
             if intraday_bias == MultiTimeframeDirection.BULLISH:
                 # Vary based on whether we're early (accumulation) or extended (markup)
@@ -380,7 +379,7 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
                 and intraday_bias != immediate_bias
                 and analysis.short_term.volume_strength > MODERATE_VOLUME_THRESHOLD
             )
-            
+
             # Get divergence context from higher TFs
             tf_divergence = _get_tf_divergence_note(context_bias, intraday_bias, context_phase)
 
@@ -409,7 +408,7 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
         short_sign = analysis.short_term.dominant_sign
         interm_sign = analysis.intermediate.dominant_sign
         chosen_sign = short_sign if short_sign != WyckoffSign.NONE else interm_sign
-        
+
         # Map signs to actionable context
         sign_insights = {
             WyckoffSign.SELLING_CLIMAX: "capitulation may signal bottom",
@@ -423,7 +422,7 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
             WyckoffSign.LAST_POINT_OF_RESISTANCE: "final resistance before markdown",
             WyckoffSign.SIGN_OF_WEAKNESS: "supply overcoming demand",
         }
-        
+
         if chosen_sign != WyckoffSign.NONE and chosen_sign in sign_insights:
             context_tail = sign_insights[chosen_sign]
 
@@ -433,7 +432,7 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
             action_text = analysis.short_term.dominant_action.value
         elif analysis.intermediate.dominant_action != CompositeAction.UNKNOWN:
             action_text = analysis.intermediate.dominant_action.value
-        
+
         if action_text and context_tail:
             # Only add if it provides new info
             if action_text.lower() not in context_tail.lower():
@@ -443,7 +442,7 @@ def _generate_actionable_insight_all_timeframes(analysis: AllTimeframesAnalysis)
 
         # Build the complete insight with context tail integrated naturally
         wyckoff_note = f" Wyckoff: {context_tail}." if context_tail else ""
-        
+
         return (
             f"{signal_prefix}with {signal_direction.strip()}"
             f"{wyckoff_note} "

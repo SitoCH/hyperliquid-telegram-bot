@@ -28,20 +28,19 @@ def check_entry_timing(
     1. Proximity to pivot points (support for longs, resistance for shorts)
     2. VWAP confirmation (price above VWAP for longs, below for shorts)
     3. RSI not overbought/oversold against direction
-    
+
     Returns:
         tuple: (is_good_entry, reason, optimal_entry_price)
     """
     if direction == MultiTimeframeDirection.NEUTRAL:
         return True, "", None
-    
+
     reasons = []
-    entry_price = mid
-    
+
     # Get 30m and 1h states for timing analysis
     state_30m = states.get(Timeframe.MINUTES_30)
     state_1h = states.get(Timeframe.HOUR_1)
-    
+
     # 1. Check VWAP alignment if available
     # vwap_bias is an int: 1 = above VWAP, -1 = below VWAP, 0 = neutral
     vwap_aligned = True
@@ -52,11 +51,11 @@ def check_entry_timing(
         else:  # BEARISH
             # For shorts, we want price at or below VWAP (-1 or 0)
             vwap_aligned = state_30m.vwap_bias <= 0
-        
+
         if not vwap_aligned and VWAP_CONFIRMATION_REQUIRED:
             vwap_desc = "above" if state_30m.vwap_bias > 0 else "below"
             reasons.append(f"VWAP={vwap_desc} contradicts {direction.value} entry")
-    
+
     # 2. Check RSI for overbought/oversold conditions
     # Use higher thresholds for crypto - momentum often runs to extremes
     rsi_ok = True
@@ -77,15 +76,15 @@ def check_entry_timing(
                 if other_rsi < 25:  # Both timeframes showing oversold
                     rsi_ok = False
                     reasons.append(f"RSI oversold ({state.rsi_value:.1f}) for short entry")
-    
+
     # 3. Check proximity to significant levels for optimal entry
     optimal_entry = None
     for tf in [Timeframe.MINUTES_30, Timeframe.HOUR_1]:
         if tf not in significant_levels:
             continue
-        
+
         levels = significant_levels[tf]
-        
+
         if direction == MultiTimeframeDirection.BULLISH:
             # For longs, look for nearby support levels
             nearby_supports = [
@@ -106,11 +105,11 @@ def check_entry_timing(
                 # Entry near resistance is good
                 optimal_entry = min(nearby_resistances)  # Closest to price from above
                 logger.info(f"{coin}: Good short entry near resistance at {optimal_entry:.4f}")
-    
+
     # Entry timing is good if VWAP is aligned and RSI is not extreme
     is_good = vwap_aligned and rsi_ok
     reason = "; ".join(reasons) if reasons else "Good entry timing"
-    
+
     return is_good, reason, optimal_entry
 
 
@@ -127,7 +126,7 @@ def get_trade_suggestion(
     This function is extracted from wyckoff_multi_timeframe_description to keep that file small.
     It examines significant support/resistance levels across timeframes and, if confidence and
     risk:reward constraints are satisfied, returns a formatted suggestion string.
-    
+
     Args:
         coin: The coin symbol
         direction: Bullish or bearish direction
@@ -233,23 +232,23 @@ def get_trade_suggestion(
             raw_tp = [r for r in tp_resistances if r > mid]
             raw_sl = [s for s in sl_supports if s < mid]
             # Transformations to place orders inside the level
-            make_tp = lambda lvl, buf: lvl * (1 - buf)
-            make_sl = lambda lvl, buf: lvl * (1 - buf)
-            valid_pair = lambda tp, sl: tp > mid and sl < mid
+            def make_tp(lvl, buf): return lvl * (1 - buf)
+            def make_sl(lvl, buf): return lvl * (1 - buf)
+            def valid_pair(tp, sl): return tp > mid and sl < mid
             # Distance and RR components
-            tp_dist_unbuffered = lambda lvl: abs((lvl - mid) / mid)
-            tp_pct = lambda tp: abs((tp - mid) / mid)
-            sl_pct = lambda sl: abs((mid - sl) / mid)
+            def tp_dist_unbuffered(lvl): return abs((lvl - mid) / mid)
+            def tp_pct(tp): return abs((tp - mid) / mid)
+            def sl_pct(sl): return abs((mid - sl) / mid)
         else:
             side = "Short"
             raw_tp = [s for s in tp_supports if s < mid]
             raw_sl = [r for r in sl_resistances if r > mid]
-            make_tp = lambda lvl, buf: lvl * (1 + buf)
-            make_sl = lambda lvl, buf: lvl * (1 + buf)
-            valid_pair = lambda tp, sl: tp < mid and sl > mid
-            tp_dist_unbuffered = lambda lvl: abs((mid - lvl) / mid)
-            tp_pct = lambda tp: abs((mid - tp) / mid)
-            sl_pct = lambda sl: abs((sl - mid) / mid)
+            def make_tp(lvl, buf): return lvl * (1 + buf)
+            def make_sl(lvl, buf): return lvl * (1 + buf)
+            def valid_pair(tp, sl): return tp < mid and sl > mid
+            def tp_dist_unbuffered(lvl): return abs((mid - lvl) / mid)
+            def tp_pct(tp): return abs((mid - tp) / mid)
+            def sl_pct(sl): return abs((sl - mid) / mid)
 
         for tp_level in raw_tp:
             dist_tp_pct = tp_dist_unbuffered(tp_level)
@@ -330,7 +329,7 @@ def get_trade_suggestion(
             f"{enc_side}_{coin}_{fmt_price(sl)}_{fmt_price(tp)}".encode("utf-8")
         ).decode("utf-8")
         trade_link = (
-            f" ({telegram_utils.get_link('Trade',f'TRD_{enc_trade}')})"
+            f" ({telegram_utils.get_link('Trade', f'TRD_{enc_trade}')})"
             if exchange_enabled
             else ""
         )
@@ -351,7 +350,7 @@ def get_trade_suggestion(
         logger.info(f"Skipping trade suggestion for {coin}: invalid mid price {mid}")
         return None
 
-    # Distance bands 
+    # Distance bands
     min_distance_sl = mid * 0.0125
     max_distance_sl = mid * 0.03
 

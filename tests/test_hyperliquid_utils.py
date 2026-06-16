@@ -1,0 +1,274 @@
+import pytest
+import os
+from unittest.mock import patch, MagicMock, PropertyMock
+import requests
+
+
+# Must set env var before importing the module
+os.environ.setdefault("HTB_USER_WALLET", "0x0000000000000000000000000000000000000000")
+
+
+class TestHyperliquidUtilsInit:
+    def test_init_success(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.address == "0x0000000000000000000000000000000000000000"
+            mock_info.assert_called_once()
+
+    def test_init_with_vault(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch.dict(os.environ, {"HTB_USER_VAULT": "0xVAULT"}):
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.address == "0xVAULT"
+
+    def test_init_missing_wallet_raises(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with pytest.raises(ValueError, match="HTB_USER_WALLET environment variable is required"):
+                from hyperliquid_utils.utils import HyperliquidUtils
+                HyperliquidUtils()
+
+
+class TestHyperliquidUtilsWebsocket:
+    def test_init_websocket(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            instance.init_websocket()
+            assert mock_info.call_count == 2
+
+    def test_on_websocket_error(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch('hyperliquid_utils.utils.telegram_utils') as mock_tg:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            instance.on_websocket_error(None, "test error")
+            mock_tg.send_and_exit.assert_called_once_with("Websocket error, restarting the application...")
+
+    def test_on_websocket_close(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch('hyperliquid_utils.utils.telegram_utils') as mock_tg:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            instance.on_websocket_close(None, None, "closed")
+            mock_tg.send_and_exit.assert_called_once_with("Websocket closed, restarting the application...")
+
+
+class TestHyperliquidUtilsExchange:
+    def test_get_exchange_with_key_file(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch.dict(os.environ, {"HTB_KEY_FILE": "/tmp/fake_key", "HTB_USER_WALLET": "0xwallet"}), \
+                patch('os.path.isfile', return_value=True), \
+                patch('builtins.open', MagicMock()), \
+                patch('eth_account.Account.from_key') as mock_from_key:
+            mock_account = MagicMock()
+            mock_from_key.return_value = mock_account
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            with patch('hyperliquid_utils.utils.Exchange') as mock_exchange:
+                result = instance.get_exchange()
+                mock_exchange.assert_called_once()
+                assert result is not None
+
+    def test_get_exchange_no_key_file(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            result = instance.get_exchange()
+            assert result is None
+
+
+class TestHyperliquidUtilsSzDecimals:
+    def test_get_sz_decimals(self):
+        mock_meta = {
+            "universe": [
+                {"name": "BTC", "szDecimals": 5},
+                {"name": "ETH", "szDecimals": 4},
+            ]
+        }
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            instance.info.meta = MagicMock(return_value=mock_meta)
+            result = instance.get_sz_decimals()
+            assert result == {"BTC": 5, "ETH": 4}
+
+
+class TestHyperliquidUtilsPositions:
+    def test_get_size_with_position(self, sample_user_state):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_size(sample_user_state, "BTC") == 1.5
+            assert instance.get_size(sample_user_state, "ETH") == -10.0
+
+    def test_get_size_no_position(self, sample_user_state):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_size(sample_user_state, "SOL") == 0.0
+
+    def test_get_entry_px_str(self, sample_user_state):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_entry_px_str(sample_user_state, "BTC") == "40000"
+            assert instance.get_entry_px_str(sample_user_state, "SOL") is None
+
+    def test_get_liquidation_px_str(self, sample_user_state):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_liquidation_px_str(sample_user_state, "BTC") == "39000"
+            assert instance.get_liquidation_px_str(sample_user_state, "SOL") is None
+
+    def test_get_entry_px(self, sample_user_state):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_entry_px(sample_user_state, "BTC") == 40000.0
+            assert instance.get_entry_px(sample_user_state, "SOL") == 0.0
+
+    def test_get_unrealized_pnl(self):
+        user_state = {
+            "assetPositions": [{
+                "position": {"coin": "BTC", "unrealizedPnl": "150.50"}
+            }]
+        }
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_unrealized_pnl(user_state, "BTC") == 150.50
+            assert instance.get_unrealized_pnl(user_state, "SOL") == 0.0
+
+    def test_get_return_on_equity(self, sample_user_state):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_return_on_equity(sample_user_state, "BTC") == 0.15
+            assert instance.get_return_on_equity(sample_user_state, "SOL") == 0.0
+
+    def test_get_leverage(self, sample_user_state):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_leverage(sample_user_state, "BTC") == 10
+            assert instance.get_leverage(sample_user_state, "SOL") is None
+
+    def test_get_coins_with_open_positions(self):
+        mock_user_state = {
+            "assetPositions": [
+                {"position": {"coin": "BTC"}},
+                {"position": {"coin": "ETH"}},
+            ]
+        }
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            instance.info.user_state = MagicMock(return_value=mock_user_state)
+            result = instance.get_coins_with_open_positions()
+            assert result == ["BTC", "ETH"]
+
+
+class TestHyperliquidUtilsCoins:
+    def test_get_coins_by_traded_volume(self):
+        mock_response = (
+            {"universe": [{"name": "BTC"}, {"name": "ETH"}, {"name": "SOL"}]},
+            [{"dayNtlVlm": "1000"}, {"dayNtlVlm": "3000"}, {"dayNtlVlm": "2000"}],
+        )
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            instance.info.meta_and_asset_ctxs = MagicMock(return_value=mock_response)
+            result = instance.get_coins_by_traded_volume()
+            assert result == ["BTC", "SOL", "ETH"]
+
+    def test_get_coins_reply_markup(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch('hyperliquid_utils.utils.InlineKeyboardMarkup') as mock_markup:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            instance.get_coins_by_traded_volume = MagicMock(return_value=["BTC", "ETH"])
+            instance.get_coins_with_open_positions = MagicMock(return_value=["BTC"])
+            result = instance.get_coins_reply_markup()
+            mock_markup.assert_called_once()
+            assert result is not None
+
+
+class TestHyperliquidUtilsSymbol:
+    def test_get_hyperliquid_symbol_no_mapping(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_hyperliquid_symbol("BTC") == "BTC"
+
+    def test_get_hyperliquid_symbol_mapping(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.get_hyperliquid_symbol("SHIB") == "kSHIB"
+            assert instance.get_hyperliquid_symbol("PEPE") == "kPEPE"
+            assert instance.get_hyperliquid_symbol("FLOKI") == "kFLOKI"
+            assert instance.get_hyperliquid_symbol("BONK") == "kBONK"
+
+
+class TestHyperliquidUtilsFetchCryptos:
+    def test_fetch_cryptos_success(self):
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{"symbol": "btc"}, {"symbol": "shib"}]
+        mock_response.raise_for_status = MagicMock()
+
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch('hyperliquid_utils.utils.requests.get', return_value=mock_response):
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            result = instance.fetch_cryptos({"vs_currency": "usd"})
+            assert len(result) == 2
+            assert result[0]["symbol"] == "BTC"
+            assert result[1]["symbol"] == "kSHIB"
+
+    def test_fetch_cryptos_request_exception(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch('hyperliquid_utils.utils.requests.get', side_effect=requests.RequestException("timeout")):
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            result = instance.fetch_cryptos({"vs_currency": "usd"})
+            assert result == []
+
+    def test_fetch_cryptos_pagination(self):
+        mock_response = MagicMock()
+        mock_response.json.return_value = [{"symbol": "btc"}]
+        mock_response.raise_for_status = MagicMock()
+
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch('hyperliquid_utils.utils.requests.get', return_value=mock_response) as mock_get:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            result = instance.fetch_cryptos({"vs_currency": "usd"}, page_count=3)
+            assert len(result) == 3
+            assert mock_get.call_count == 3

@@ -22,11 +22,11 @@ class PhaseTracker:
     current_phase: WyckoffPhase = WyckoffPhase.UNKNOWN
     pending_phase: Optional[WyckoffPhase] = None
     confirmation_count: int = 0
-    
+
     def update(self, new_phase: WyckoffPhase, required_confirmations: int) -> Tuple[WyckoffPhase, bool]:
         """
         Update the phase tracker with a new phase reading.
-        
+
         Returns:
             Tuple of (confirmed_phase, is_transition_pending)
         """
@@ -36,13 +36,13 @@ class PhaseTracker:
             self.pending_phase = None
             self.confirmation_count = 0
             return new_phase, False
-        
+
         # Same as current phase - reset any pending transition
         if new_phase == self.current_phase:
             self.pending_phase = None
             self.confirmation_count = 0
             return self.current_phase, False
-        
+
         # New phase different from current
         if self.pending_phase == new_phase:
             # Continue counting confirmations for this pending phase
@@ -74,53 +74,53 @@ class PhaseTracker:
 class PhaseHysteresisManager:
     """
     Global manager for phase hysteresis across all coin/timeframe combinations.
-    
+
     This uses a simple in-memory cache. Phase history is lost on restart,
     which is acceptable as it will quickly re-establish after a few candles.
     """
-    
+
     _instance: Optional['PhaseHysteresisManager'] = None
     _trackers: Dict[str, PhaseTracker]
-    
+
     def __new__(cls) -> 'PhaseHysteresisManager':
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._trackers = defaultdict(PhaseTracker)
         return cls._instance
-    
+
     def get_confirmed_phase(
-        self, 
-        coin: str, 
-        timeframe: Timeframe, 
+        self,
+        coin: str,
+        timeframe: Timeframe,
         detected_phase: WyckoffPhase,
         uncertain: bool
     ) -> Tuple[WyckoffPhase, bool]:
         """
         Get the confirmed phase after applying hysteresis.
-        
+
         Args:
             coin: The coin symbol
             timeframe: The timeframe being analyzed
             detected_phase: The newly detected phase
             uncertain: Whether the detection was uncertain
-            
+
         Returns:
             Tuple of (confirmed_phase, is_uncertain)
             The is_uncertain flag is set to True if we're still waiting for phase confirmation
         """
         key = f"{coin}_{timeframe.name}"
         tracker = self._trackers[key]
-        
+
         # Use higher confirmation requirement when detection is uncertain
         required = UNCERTAIN_CONFIRMATION_BARS if uncertain else BASE_CONFIRMATION_BARS
-        
+
         confirmed_phase, is_pending = tracker.update(detected_phase, required)
-        
+
         # If a transition is pending, mark as uncertain
         final_uncertain = uncertain or is_pending
-        
+
         return confirmed_phase, final_uncertain
-    
+
     def reset(self, coin: Optional[str] = None, timeframe: Optional[Timeframe] = None) -> None:
         """Reset phase history for a specific coin/timeframe or all."""
         if coin is None and timeframe is None:

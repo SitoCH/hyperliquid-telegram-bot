@@ -1,23 +1,24 @@
 from .wyckoff_types import (
-    WyckoffPhase, CompositeAction, WyckoffSign, FundingState,
+    WyckoffPhase, CompositeAction, WyckoffSign,
     EffortResult, VolumeState
 )
 
+
 def generate_wyckoff_description(
-    phase: WyckoffPhase, 
-    uncertain_phase: bool, 
+    phase: WyckoffPhase,
+    uncertain_phase: bool,
     volume_state: VolumeState,
-    is_spring: bool, 
-    is_upthrust: bool, 
+    is_spring: bool,
+    is_upthrust: bool,
     effort_result: EffortResult,
-    composite_action: CompositeAction, 
+    composite_action: CompositeAction,
     wyckoff_sign: WyckoffSign
 ) -> str:
     """Generate a descriptive summary of the current Wyckoff state."""
-    
+
     if phase == WyckoffPhase.UNKNOWN:
         return "Insufficient data for Wyckoff analysis"
-    
+
     # Phase description with uncertainty marker
     phase_name = {
         WyckoffPhase.ACCUMULATION: "Accumulation",
@@ -26,26 +27,26 @@ def generate_wyckoff_description(
         WyckoffPhase.MARKDOWN: "Markdown",
         WyckoffPhase.RANGING: "Ranging"
     }.get(phase, "Unknown")
-    
+
     phase_desc = f"{'Possible ' if uncertain_phase else ''}{phase_name}"
-    
+
     # Build description components
     components = []
-    
+
     # Add phase with volume context - enhanced with more granular volume states
     volume_desc = volume_state.value
     components.append(f"{phase_desc} phase with {volume_desc} volume")
-    
+
     # Add spring or upthrust if present
     if is_spring:
         components.append("Spring pattern detected (potential reversal from lows)")
     if is_upthrust:
         components.append("Upthrust pattern detected (potential reversal from highs)")
-    
+
     # Add composite operator action if significant
     if composite_action != CompositeAction.UNKNOWN and composite_action != CompositeAction.NEUTRAL:
         components.append(f"Composite operators {composite_action.value}")
-    
+
     # Add Wyckoff sign with expanded description
     if wyckoff_sign != WyckoffSign.NONE:
         sign_explanations = {
@@ -60,15 +61,15 @@ def generate_wyckoff_description(
             WyckoffSign.LAST_POINT_OF_RESISTANCE: "Last Point of Supply (LPSY) - final supply test before markdown",
             WyckoffSign.SIGN_OF_WEAKNESS: "Sign of Weakness (SOW) - significant selling pressure after distribution"
         }
-        
+
         explanation = sign_explanations.get(wyckoff_sign, wyckoff_sign.value)
         components.append(explanation)
-    
+
     # Add effort vs result analysis with more balanced wording
     if effort_result == EffortResult.STRONG:
         components.append("Volume effectively translating to price movement")
     elif effort_result == EffortResult.WEAK:
-        components.append("Volume not effectively translating to price movement") 
+        components.append("Volume not effectively translating to price movement")
     elif effort_result == EffortResult.UNKNOWN:
         # Only add to description if truly unknown (not just neutral)
         if phase not in [WyckoffPhase.RANGING, WyckoffPhase.ACCUMULATION, WyckoffPhase.DISTRIBUTION]:

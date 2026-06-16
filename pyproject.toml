@@ -1,7 +1,7 @@
 [project]
 name = "hyperliquid-telegram-bot"
 version = "0.1.0"
-description = "-"
+description = "Telegram bot for Hyperliquid perpetual futures — monitoring, real-time alerts, Wyckoff/LLM technical analysis, and automated trading strategies"
 readme = "README.md"
 requires-python = ">=3.10, < 3.11"
 dependencies = [

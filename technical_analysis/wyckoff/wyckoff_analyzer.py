@@ -1,4 +1,3 @@
-import io
 import time
 from typing import Dict, List, Any
 import pandas as pd
@@ -24,7 +23,7 @@ from .phase_hysteresis import phase_hysteresis
 
 class WyckoffAnalyzer:
     """Wyckoff-based technical analysis implementation."""
-    
+
     def __init__(self):
         # Lookback values are DAYS, not candle counts.
         self.wyckoff_timeframes = {
@@ -34,10 +33,10 @@ class WyckoffAnalyzer:
             Timeframe.HOURS_4: 60,
             Timeframe.HOURS_8: 90,
         }
-    
+
     async def analyze(self, context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:
         """Main Wyckoff analysis entry point."""
-        
+
         now = int(time.time() * 1000)
         funding_rates = get_funding_with_cache(coin, now, 7)
         local_tz = get_localzone()
@@ -52,7 +51,7 @@ class WyckoffAnalyzer:
 
         # Prepare dataframes and analyze states
         dataframes = {
-            tf: prepare_dataframe(candles, local_tz) 
+            tf: prepare_dataframe(candles, local_tz)
             for tf, candles in candles_data.items()
         }
 
@@ -64,7 +63,7 @@ class WyckoffAnalyzer:
         # Add multi-timeframe analysis
         mid = float(hyperliquid_utils.info.all_mids()[coin])
         significant_levels = self._calculate_significant_levels(dataframes, states, mid)
-        
+
         mtf_context = analyze_multi_timeframe(states, coin, mid, significant_levels, interactive_analysis)
 
         should_notify = interactive_analysis or mtf_context.should_notify
@@ -73,27 +72,27 @@ class WyckoffAnalyzer:
             await self._send_wyckoff_analysis_message(
                 context, mid, dataframes, states, coin, interactive_analysis, mtf_context.description
             )
-    
+
     async def _get_candles_for_timeframes(self, coin: str, now: int) -> Dict[Timeframe, List[Dict[str, Any]]]:
         """Get candles data for all timeframes with optimized lookback periods."""
         candles_data = {}
         for tf, lookback in self.wyckoff_timeframes.items():
             candles_data[tf] = await get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
         return candles_data
-    
+
     def _analyze_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry], local_tz, coin: str) -> WyckoffState:
         """Process data for a single timeframe with phase hysteresis to reduce flip-flopping."""
         if df.empty:
             return WyckoffState.unknown()
-        
+
         apply_indicators(df, timeframe)
         state = detect_wyckoff_phase(df, timeframe, funding_rates)
-        
+
         # Apply phase hysteresis to reduce phase flip-flopping in short-term timeframes
         confirmed_phase, confirmed_uncertain = phase_hysteresis.get_confirmed_phase(
             coin, timeframe, state.phase, state.uncertain_phase
         )
-        
+
         # Update the state with the confirmed phase
         if confirmed_phase != state.phase:
             # Create a new state with the confirmed phase
@@ -134,13 +133,13 @@ class WyckoffAnalyzer:
                 description=state.description,
                 liquidity=state.liquidity
             )
-        
+
         return state
-    
+
     def _calculate_significant_levels(
-        self, 
-        dataframes: Dict[Timeframe, pd.DataFrame], 
-        states: Dict[Timeframe, WyckoffState], 
+        self,
+        dataframes: Dict[Timeframe, pd.DataFrame],
+        states: Dict[Timeframe, WyckoffState],
         mid: float
     ) -> Dict[Timeframe, SignificantLevelsData]:
         """Calculate significant levels for specified timeframes."""
@@ -153,15 +152,15 @@ class WyckoffAnalyzer:
             for tf in significant_timeframes
             for resistance, support in [find_significant_levels(dataframes[tf], states[tf], mid, tf, 6)]
         }
-    
+
     async def _send_wyckoff_analysis_message(
-        self, 
-        context: ContextTypes.DEFAULT_TYPE, 
-        mid: float, 
-        dataframes: Dict[Timeframe, pd.DataFrame], 
-        states: Dict[Timeframe, WyckoffState], 
-        coin: str, 
-        send_charts: bool, 
+        self,
+        context: ContextTypes.DEFAULT_TYPE,
+        mid: float,
+        dataframes: Dict[Timeframe, pd.DataFrame],
+        states: Dict[Timeframe, WyckoffState],
+        coin: str,
+        send_charts: bool,
         mtf_description: str
     ) -> None:
         """Send Wyckoff analysis results to Telegram."""
@@ -170,7 +169,7 @@ class WyckoffAnalyzer:
             charts = []
             try:
                 charts = generate_chart(dataframes, states, coin, mid)
-                
+
                 # Build a single media group (album) with all available charts
                 media_group: List[InputMediaPhoto] = []
 
@@ -180,14 +179,13 @@ class WyckoffAnalyzer:
                     (charts[0] if len(charts) > 0 else None, "15m"),
                 ]
 
-                for idx, (chart, period) in enumerate(chart_entries):
+                for _idx, (chart, period) in enumerate(chart_entries):
                     if not chart:
                         continue
 
                     buf = chart
                     buf.name = f"{coin}_{period}.png"  # type: ignore[attr-defined]
                     buf.seek(0)
-
 
                     media_group.append(
                         InputMediaPhoto(
@@ -206,14 +204,14 @@ class WyckoffAnalyzer:
                 for chart in charts:
                     if chart and not chart.closed:
                         chart.close()
-        
+
         # Add MTF analysis
         await telegram_utils.send(
             f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n"
             f"{mtf_description}",
             parse_mode=ParseMode.HTML
         )
-    
+
     def _get_ta_results(self, df: pd.DataFrame, wyckoff: WyckoffState) -> Dict[str, Any]:
         """Get technical analysis results for a timeframe."""
         # Check if SuperTrend exists and we have enough data points

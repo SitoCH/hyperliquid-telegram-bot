@@ -68,23 +68,25 @@ async def _handle_callback_selection(
         await query.edit_message_text(invalid_msg)
         return ConversationHandler.END
 
+
 async def enter_position(update: Update, context: CallbackContext, enter_mode: str) -> int:
-    context.user_data.clear() # type: ignore
-    context.user_data["enter_mode"] = enter_mode # type: ignore
+    context.user_data.clear()  # type: ignore
+    context.user_data["enter_mode"] = enter_mode  # type: ignore
     if skip_sl_tp_prompt():
-        context.user_data["stop_loss_price"] = "skip" # type: ignore
-        context.user_data["take_profit_price"] = "skip" # type: ignore
+        context.user_data["stop_loss_price"] = "skip"  # type: ignore
+        context.user_data["take_profit_price"] = "skip"  # type: ignore
 
     if context.args and len(context.args) > 2:
-        context.user_data["selected_coin"] = context.args[0] # type: ignore
-        context.user_data["stop_loss_price"] = float(context.args[1].replace(",", "")) # type: ignore
-        context.user_data["take_profit_price"] = float(context.args[2].replace(",", "")) # type: ignore
+        context.user_data["selected_coin"] = context.args[0]  # type: ignore
+        context.user_data["stop_loss_price"] = float(context.args[1].replace(",", ""))  # type: ignore
+        context.user_data["take_profit_price"] = float(context.args[2].replace(",", ""))  # type: ignore
         message, reply_markup = await get_amount_suggestions(context)
         await telegram_utils.reply(update, message, reply_markup=reply_markup)
         return SELECTING_AMOUNT
 
     await telegram_utils.reply(update, f'Choose a coin to {enter_mode}:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
     return SELECTING_COIN
+
 
 async def enter_long(update: Update, context: CallbackContext) -> int:
     return await enter_position(update, context, "long")
@@ -97,6 +99,7 @@ async def enter_short(update: Update, context: CallbackContext) -> int:
 def skip_sl_tp_prompt() -> bool:
     return os.getenv('HTB_SKIP_SL_TP_PROMPT', 'False') == 'True'
 
+
 def has_order_error(result: Any) -> bool:
     """Check if order result contains an error."""
     if not result or not isinstance(result, dict):
@@ -108,6 +111,7 @@ def has_order_error(result: Any) -> bool:
         statuses = response.get('data', {}).get('statuses', [])
         return any('error' in status for status in statuses)
     return False
+
 
 def get_order_error_message(result: Any) -> str:
     """Extract error message from order result."""
@@ -123,13 +127,14 @@ def get_order_error_message(result: Any) -> str:
                 return status['error']
     return "Unknown order error"
 
+
 async def _process_amount_selection(query: CallbackQuery, context: ContextType, amount: float) -> int:
     """Process the amount selection and determine next step."""
     context.user_data["amount"] = amount  # type: ignore
     coin = context.user_data.get("selected_coin", "")  # type: ignore
     user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     current_leverage = hyperliquid_utils.get_leverage(user_state, coin)
-    
+
     if current_leverage is not None:
         context.user_data["leverage"] = int(current_leverage)  # type: ignore
         return await _proceed_after_leverage_set(query, context, user_state, coin)
@@ -161,7 +166,7 @@ async def _prompt_for_leverage(query: CallbackQuery, coin: str) -> int:
             for info in meta.get("universe", [])  # type: ignore
         }
         max_leverage = asset_info_map.get(coin, 1)
-        suggested_leverages = [l for l in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30] if l <= max_leverage]
+        suggested_leverages = [lev for lev in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30] if lev <= max_leverage]
 
         keyboard = [
             [InlineKeyboardButton(f"{leverage}x", callback_data=str(leverage))]
@@ -189,6 +194,7 @@ class PriceSuggestion(NamedTuple):
     type: str
     price: float
     percentage: float
+
 
 async def get_price_suggestions(coin: str, mid: float, is_stop_loss: bool, is_long: bool) -> List[PriceSuggestion]:
     """Get price suggestions for either entry or exit points."""
@@ -228,7 +234,7 @@ async def get_price_suggestions_text(context: ContextType, is_stop_loss: bool) -
     is_long = _is_long_position(context)
 
     suggestions = await get_price_suggestions(coin, mid, is_stop_loss, is_long)
-    
+
     table_data = [
         [sugg.type, fmt_price(sugg.price), f"{fmt(sugg.percentage)}%"]
         for sugg in suggestions
@@ -300,7 +306,7 @@ async def _handle_price_input(
         price = float(text)  # type: ignore
         mid = _get_mid_price(coin)
         is_long = _is_long_position(context)
-        
+
         error = validator(price, mid, is_long)
         if error:
             await telegram_utils.reply(update, error)
@@ -369,6 +375,7 @@ async def get_amount_suggestions(context: ContextType) -> Tuple[str, InlineKeybo
     enter_mode = context.user_data['enter_mode']  # type: ignore
     return f"You selected {coin}. Please enter the amount to {enter_mode}:", reply_markup
 
+
 def _validate_order_context(context: ContextType) -> Optional[str]:
     """Validate that all required order data is present. Returns error message if invalid."""
     required_fields = [
@@ -409,7 +416,7 @@ async def open_order(context: ContextType, user_state: Dict[str, Any], mid: floa
         use_isolated_leverage = os.getenv('HTB_USE_ISOLATED_LEVERAGE', 'True') == 'True'
         update_leverage_result = exchange.update_leverage(leverage, selected_coin, not use_isolated_leverage)
         logger.info(update_leverage_result)
-        
+
         sz_decimals = hyperliquid_utils.get_sz_decimals()
         sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
         if sz * mid < 10.0:
@@ -426,7 +433,7 @@ async def open_order(context: ContextType, user_state: Dict[str, Any], mid: floa
             await place_stop_loss_and_take_profit_orders(
                 exchange, user_state, selected_coin, is_long, sz, stop_loss_price, take_profit_price, sz_decimals[selected_coin]
             )
-        
+
         await message.delete()  # type: ignore
     except Exception as e:
         logger.critical(e, exc_info=True)
@@ -462,9 +469,9 @@ def _place_trigger_order(
         limit_px = trigger_px * (0.97 if is_long else 1.03)
     else:
         limit_px = trigger_px * (1.02 if is_long else 0.98)
-    
+
     order_type: OrderType = {"trigger": {"triggerPx": px_round(trigger_px, sz_decimals), "isMarket": True, "tpsl": tpsl}}
-    result = exchange.order(coin, not is_long, sz, px_round(limit_px, sz_decimals), order_type, reduce_only=True) 
+    result = exchange.order(coin, not is_long, sz, px_round(limit_px, sz_decimals), order_type, reduce_only=True)
     logger.info(result)
 
 
@@ -483,13 +490,13 @@ def _get_adjusted_stop_loss_trigger(
         if liquidation_px > 0.0:
             liquidation_trigger_px = liquidation_px * (1.0025 if is_long else 0.9975)
             should_use_liquidation = (
-                stop_loss_price == 0 or
-                (is_long and stop_loss_price < liquidation_trigger_px) or
-                (not is_long and stop_loss_price > liquidation_trigger_px)
+                stop_loss_price == 0
+                or (is_long and stop_loss_price < liquidation_trigger_px)
+                or (not is_long and stop_loss_price > liquidation_trigger_px)
             )
             if should_use_liquidation:
                 sl_trigger_px = liquidation_trigger_px
-    
+
     return sl_trigger_px
 
 
@@ -540,6 +547,7 @@ def close_all_positions_core(exchange: Any) -> Tuple[List[str], List[Tuple[str, 
             errors.append((coin, str(e)))
 
     return closed, errors
+
 
 async def exit_all_positions(update: Update, context: ContextType) -> None:
     try:

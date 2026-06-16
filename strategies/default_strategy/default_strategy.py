@@ -1,4 +1,3 @@
-from typing import Optional
 from logging_utils import logger
 from telegram.ext import ContextTypes
 

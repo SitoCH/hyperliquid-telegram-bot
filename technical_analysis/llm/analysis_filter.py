@@ -4,7 +4,8 @@ import os
 from typing import Dict, Any, List, Tuple, Optional
 from logging_utils import logger
 from ..wyckoff.wyckoff_types import Timeframe
-from .litellm_client import LiteLLMClient          
+from .litellm_client import LiteLLMClient
+
 
 class AnalysisFilter:
     """Filter logic to determine when expensive AI analysis should be triggered."""
@@ -17,7 +18,7 @@ class AnalysisFilter:
         always_run_filter = os.getenv("HTB_ALWAYS_RUN_LLM_FILTER", "False").lower() == "true"
         if interactive and not always_run_filter:
             return True, f"Pre-filter approved analysis for {coin}: interactive mode", 1.0
-        
+
         passes_filter, filter_reason, filter_confidence = self._passes_pre_filter(dataframes, funding_rates)
         action = "approved" if passes_filter else "rejected"
         pre_filter_message = f"Pre-filter {action} analysis for {coin}: {filter_reason}"
@@ -38,7 +39,7 @@ class AnalysisFilter:
             action = "approved" if should_analyze else "rejected"
             logger.info(f"LLM filter {action} analysis for {coin}: {reason} (confidence: {confidence:.0%})")
             return should_analyze, reason, confidence
-            
+
         except Exception as e:
             logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
             return False, "Fallback: LLM filter failed", 0.0
@@ -270,7 +271,7 @@ class AnalysisFilter:
                 has_tier1_momentum = True
                 break
             elif '30m' in label and abs(move_pct) > 0.65 and v_val > 1.15:
-                has_tier1_momentum = True  
+                has_tier1_momentum = True
                 break
             elif sig and abs(move_pct) > 0.75 and v_val > 1.35:  # Moderated for 15m with volume
                 has_tier1_momentum = True
@@ -288,47 +289,47 @@ class AnalysisFilter:
 
     def _has_significant_market_change(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> bool:
         """Check if market conditions have changed significantly using dataframe history."""
-        
+
         for tf, df in dataframes.items():
             if df.empty or len(df) < 10:
                 continue
-            
+
             # Compare current state with 5 periods ago to detect meaningful changes
             current_idx = -1
             previous_idx = -6 if len(df) >= 6 else -len(df)
-            
+
             # Price change analysis
             current_price = df['c'].iloc[current_idx]
             previous_price = df['c'].iloc[previous_idx]
             price_change = abs((current_price - previous_price) / previous_price * 100)
-            
+
             # Volume change analysis
             if 'v_ratio' in df.columns and not df['v_ratio'].empty:
                 current_volume = df['v_ratio'].iloc[current_idx]
                 previous_volume = df['v_ratio'].iloc[previous_idx]
                 volume_change = abs(current_volume - previous_volume)
-                
+
                 # Significant change if volume ratio changed by >0.5 AND price moved >0.5%
                 if volume_change > 0.5 and price_change > 0.5:
                     return True
-            
+
             # RSI momentum shift detection
             if 'RSI' in df.columns and not df['RSI'].empty and len(df) >= 6:
                 current_rsi = df['RSI'].iloc[current_idx]
                 previous_rsi = df['RSI'].iloc[previous_idx]
                 if not (pd.isna(current_rsi) or pd.isna(previous_rsi)):
                     rsi_change = abs(current_rsi - previous_rsi)
-                    
+
                     # Significant RSI shift (>10 points) suggests regime change
                     if rsi_change > 10:
                         return True
-                    
+
                     # RSI crossing key levels (30/70) with price movement
                     rsi_crossing_oversold = previous_rsi < 30 and current_rsi > 30
                     rsi_crossing_overbought = previous_rsi > 70 and current_rsi < 70
                     if (rsi_crossing_oversold or rsi_crossing_overbought) and price_change > 0.8:
                         return True
-            
+
             # MACD momentum change detection
             if 'MACD_Hist' in df.columns and not df['MACD_Hist'].empty and len(df) >= 6:
                 current_hist = df['MACD_Hist'].iloc[current_idx]
@@ -337,7 +338,7 @@ class AnalysisFilter:
                     # MACD histogram sign change (momentum reversal)
                     if (current_hist > 0 and previous_hist < 0) or (current_hist < 0 and previous_hist > 0):
                         return True
-            
+
             # SuperTrend change (trend direction shift)
             if 'SuperTrend' in df.columns and not df['SuperTrend'].empty and len(df) >= 6:
                 current_st = df['SuperTrend'].iloc[current_idx]
@@ -348,12 +349,12 @@ class AnalysisFilter:
                     is_above = current_price > current_st
                     if was_above != is_above:  # Trend direction changed
                         return True
-            
+
             # Volatility expansion detection
             current_volatility = (df['h'].iloc[current_idx] - df['l'].iloc[current_idx]) / current_price
             previous_volatility = (df['h'].iloc[previous_idx] - df['l'].iloc[previous_idx]) / df['c'].iloc[previous_idx]
             volatility_expansion = current_volatility / previous_volatility if previous_volatility > 0 else 1
-            
+
             # Significant volatility expansion (>50% increase) suggests new market activity
             if volatility_expansion > 1.5 and price_change > 0.5:
                 return True
@@ -365,7 +366,7 @@ class AnalysisFilter:
                 fast_change = (current_price - fast_prev_price) / fast_prev_price * 100
                 if fast_change <= -0.6:  # >= 0.6% decline over last ~10 bars
                     return True
-        
+
         # No significant changes detected across any timeframe
         return False
 
@@ -381,8 +382,8 @@ class AnalysisFilter:
         tail = df.iloc[-n:]
         c = tail['c']
         h = tail['h']
-        l = tail['l']
-        vol_pct = (((h - l) / c) * 100).mean()
+        low = tail['l']
+        vol_pct = (((h - low) / c) * 100).mean()
         allowance = base_allowable
         if vol_pct < 0.4:
             allowance -= 1
@@ -397,7 +398,7 @@ class AnalysisFilter:
         Short MR: RSI >= 75, close near/above BB_upper (>= -0.2%), v_ratio <= 0.9
         """
         reasons: List[str] = []
-        
+
         # Check for mean reversion on primary signal timeframes (15m, 30m)
         for tf, df in dataframes.items():
             tf_str = str(tf).lower()
@@ -418,13 +419,13 @@ class AnalysisFilter:
                 continue
 
             near = 0.002  # 0.2%
-            
+
             # Long mean-reversion (aligned with core framework - RSI extremes)
             if rsi is not None and bb_lower is not None:
                 if rsi <= 25 and v_ratio <= 0.9 and close <= bb_lower * (1 + near):
                     reasons.append(f"Mean-reversion LONG candidate on {tf_str}: RSI {rsi:.1f} (extreme oversold), close near BB_lower, light volume {v_ratio:.2f}x")
 
-            # Short mean-reversion (aligned with core framework - RSI extremes) 
+            # Short mean-reversion (aligned with core framework - RSI extremes)
             if rsi is not None and bb_upper is not None:
                 if rsi >= 75 and v_ratio <= 0.9 and close >= bb_upper * (1 - near):
                     reasons.append(f"Mean-reversion SHORT candidate on {tf_str}: RSI {rsi:.1f} (extreme overbought), close near BB_upper, light volume {v_ratio:.2f}x")
@@ -436,11 +437,11 @@ class AnalysisFilter:
     def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Dict[str, Any]:
         """Create a comprehensive market summary for cheap LLM filtering."""
         summary: Dict[str, Dict[str, Any]] = {"timeframes": {}}
-        
+
         for tf, df in dataframes.items():
             if df.empty or len(df) < 10:
                 continue
-                
+
             current_price = df['c'].iloc[-1]
             timeframe_data = {
                 "price_changes": self._calculate_price_changes(df, current_price),
@@ -450,14 +451,17 @@ class AnalysisFilter:
                 "levels": self._analyze_support_resistance(df),
                 "candles_analyzed": len(df)
             }
-            
+
             summary["timeframes"][str(tf)] = timeframe_data
 
         if funding_rates:
             latest_funding = funding_rates[-1] if funding_rates else None
-            avg_1h = sum(r.funding_rate for r in funding_rates[-1:]) / len(funding_rates[-1:]) if len(funding_rates) >= 1 else (latest_funding.funding_rate if latest_funding else 0)
-            avg_4h = sum(r.funding_rate for r in funding_rates[-4:]) / len(funding_rates[-4:]) if len(funding_rates) >= 4 else (latest_funding.funding_rate if latest_funding else 0)
-            avg_24h = sum(r.funding_rate for r in funding_rates[-24:]) / len(funding_rates[-24:]) if len(funding_rates) >= 24 else (latest_funding.funding_rate if latest_funding else 0)
+            avg_1h = sum(r.funding_rate for r in funding_rates[-1:]) / len(funding_rates[-1:]
+                                                                           ) if len(funding_rates) >= 1 else (latest_funding.funding_rate if latest_funding else 0)
+            avg_4h = sum(r.funding_rate for r in funding_rates[-4:]) / len(funding_rates[-4:]
+                                                                           ) if len(funding_rates) >= 4 else (latest_funding.funding_rate if latest_funding else 0)
+            avg_24h = sum(r.funding_rate for r in funding_rates[-24:]) / len(funding_rates[-24:]
+                                                                             ) if len(funding_rates) >= 24 else (latest_funding.funding_rate if latest_funding else 0)
             summary["funding"] = {
                 "current_rate": latest_funding.funding_rate if latest_funding else 0,
                 "1h_avg": avg_1h,
@@ -467,41 +471,42 @@ class AnalysisFilter:
             }
         else:
             summary["funding"] = {"current_rate": 0, "1h_avg": 0, "4h_avg": 0, "24h_avg": 0, "data_points": 0}
-        
+
         return summary
-    
+
     def _calculate_price_changes(self, df: pd.DataFrame, current_price: float) -> Dict[str, float]:
         """Calculate price changes over multiple periods."""
         lookback_periods = [5, 10, self.TREND_LOOKBACK_PERIODS, 50] if len(df) >= 50 else [5, 10, min(self.TREND_LOOKBACK_PERIODS, len(df))]
         price_changes = {}
-        
+
         for period in lookback_periods:
             if len(df) >= period:
                 open_price = df['o'].iloc[-period]
                 price_changes[f"{period}p"] = round((current_price - open_price) / open_price * 100, 2)
-        
+
         return price_changes
-    
+
     def _calculate_volatility(self, df: pd.DataFrame, current_price: float) -> float:
         """Calculate volatility over the analysis period."""
         high_period = df['h'].iloc[-self.TREND_LOOKBACK_PERIODS:].max() if len(df) >= self.TREND_LOOKBACK_PERIODS else df['h'].max()
         low_period = df['l'].iloc[-self.TREND_LOOKBACK_PERIODS:].min() if len(df) >= self.TREND_LOOKBACK_PERIODS else df['l'].min()
         return round((high_period - low_period) / current_price * 100, 2)
-    
+
     def _analyze_volume_data(self, df: pd.DataFrame) -> Dict[str, float]:
         """Analyze volume patterns and trends."""
         volume_data = {}
-        
+
         if 'v_ratio' in df.columns and not df['v_ratio'].empty:
             volume_data['current_ratio'] = round(df['v_ratio'].iloc[-1], 2)
             volume_data['avg_5p'] = round(df['v_ratio'].iloc[-5:].mean(), 2)
-            volume_data['max_trend_period'] = round(df['v_ratio'].iloc[-self.TREND_LOOKBACK_PERIODS:].max(), 2) if len(df) >= self.TREND_LOOKBACK_PERIODS else round(df['v_ratio'].max(), 2)
-        
+            volume_data['max_trend_period'] = round(df['v_ratio'].iloc[-self.TREND_LOOKBACK_PERIODS:].max(),
+                                                    2) if len(df) >= self.TREND_LOOKBACK_PERIODS else round(df['v_ratio'].max(), 2)
+
         if 'v_trend' in df.columns and not df['v_trend'].empty:
             volume_data['trend'] = round(df['v_trend'].iloc[-1], 2)
-        
+
         return volume_data
-    
+
     def _analyze_all_indicators(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Focus on 6 core crypto indicators aligned with main LLMPromptGenerator approach."""
         indicators = {}
@@ -510,7 +515,7 @@ class AnalysisFilter:
         # Core 6 crypto indicators (aligned with main analysis framework)
         core_indicators = [
             'RSI',           # Primary momentum
-            'v_ratio',       # Volume confirmation (critical for crypto) 
+            'v_ratio',       # Volume confirmation (critical for crypto)
             'ATR',           # Volatility context
             'MACD_Hist',     # Momentum confirmation
             'SuperTrend',    # Primary trend filter
@@ -572,27 +577,27 @@ class AnalysisFilter:
                 }
 
         return indicators
-    
+
     def _analyze_support_resistance(self, df: pd.DataFrame) -> Dict[str, Any]:
         """Focus on core support/resistance levels aligned with main framework."""
         levels: Dict[str, Any] = {}
         lookback = min(self.TREND_LOOKBACK_PERIODS, len(df))
-        
+
         # Core key levels for confluence (aligned with main framework)
         core_levels = [
             'EMA',      # Dynamic support/resistance
             'VWAP',     # Volume-weighted levels
             'BB_upper', 'BB_middle', 'BB_lower',  # Bollinger Band levels
         ]
-        
+
         # Add pivot levels if available (major S/R)
         pivot_levels = ['PIVOT', 'R1', 'R2', 'S1', 'S2']
-        
+
         # Add key Fibonacci levels if available
         fib_levels = ['FIB_38', 'FIB_50', 'FIB_61']
-        
+
         all_levels = core_levels + pivot_levels + fib_levels
-        
+
         for level in all_levels:
             if level in df.columns:
                 values = df[level].iloc[-lookback:].tolist()
@@ -605,25 +610,25 @@ class AnalysisFilter:
                     'current': None,
                     'values': []
                 }
-        
+
         # Calculate key level confluence (within 0.5% of current price)
         current_price = df['c'].iloc[-1] if 'c' in df.columns and not df.empty else None
         if current_price:
             confluence_levels = []
             tolerance = 0.005  # 0.5%
-            
+
             for level_name, level_data in levels.items():
                 level_value = level_data.get('current')
                 if level_value and abs(level_value - current_price) / current_price <= tolerance:
                     confluence_levels.append(level_name)
-            
+
             levels['confluence_count'] = {
                 'current': len(confluence_levels),
                 'levels': confluence_levels
             }
-        
+
         return levels
-    
+
     def _create_filter_prompt(self, coin: str, market_summary: Dict[str, Any]) -> str:
         """Create prompt for cheap LLM model to determine if expensive analysis is needed, aligned with main LLMPromptGenerator approach."""
         return f"""You are a selective signal filter for {coin}. Focus on high-probability setups using 6 core crypto indicators. Aligned with main analysis framework.
@@ -633,7 +638,7 @@ Current Market Data:
 
 🚨 TIMEFRAME PRIORITY (aligned with main analysis):
 - PRIMARY: 1H (40%) and 30m (35%) timeframes are decision drivers
-- SUPPORT: 15m (15%) for entry timing confirmation  
+- SUPPORT: 15m (15%) for entry timing confirmation
 - CONTEXT ONLY: 4H (10%) for broad trend awareness - DO NOT base decisions on 4H data alone
 - IGNORE 4H conflicts: If 1H+30m align strongly, 4H opposition should NOT prevent signals
 
@@ -718,14 +723,14 @@ Response must be pure JSON - no markdown, no explanations. Example:
             should_analyze = data.get("should_analyze", False)
             reason = data.get("reason", "LLM filter decision")
             confidence = data.get("confidence", 0.5)
-            
+
             min_confidence = float(os.getenv("HTB_COINS_ANALYSIS_MIN_CONFIDENCE", "0.65"))
             if confidence < min_confidence:
                 should_analyze = False
                 reason = f"Insufficient confidence ({confidence:.0%}) for analysis. {reason}"
-            
+
             return should_analyze, reason, confidence
-            
+
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"Failed to parse LLM filter response: {str(e)}\nResponse:\n{response}", exc_info=True)
             return False, "LLM filter parsing failed", 0.0

@@ -1,6 +1,6 @@
-from enum import Enum, auto
+from enum import Enum
 from dataclasses import dataclass
-from typing import Optional, Dict, TypedDict, List, Set
+from typing import TypedDict, List, Set
 import pandas as pd  # type: ignore[import]
 
 
