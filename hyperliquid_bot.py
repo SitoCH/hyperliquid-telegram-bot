@@ -3,11 +3,13 @@ import importlib
 import os
 import random
 import base64
+from typing import Any, Optional
 import numpy as np
 from tzlocal import get_localzone
 
 from logging_utils import logger
-from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram import Update
+from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, Application, ContextTypes
 
 from technical_analysis.hyperliquid_candles import SELECTING_COIN_FOR_TA, analyze_candles, execute_ta, selected_coin_for_ta
 from hyperliquid_orders import get_open_orders
@@ -117,7 +119,7 @@ def main() -> None:
     # await telegram_utils.stop()
 
 
-def load_strategy(strategy_name):
+def load_strategy(strategy_name: str) -> Any:
     module_name = f"strategies.{strategy_name}.{strategy_name}"
     try:
         strategy_module = importlib.import_module(module_name)
@@ -128,15 +130,17 @@ def load_strategy(strategy_name):
         return None
 
 
-async def start(update, context):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
     if context.args:
         raw_param = context.args[0]
         if raw_param.startswith("TA_"):
             context.args = [raw_param[3:]]
-            await update.message.delete()
+            if update.message:
+                await update.message.delete()
             return await execute_ta(update, context)
         elif raw_param.startswith("TRD_"):
-            await update.message.delete()
+            if update.message:
+                await update.message.delete()
             decoded_params = base64.b64decode(raw_param[3:]).decode('utf-8')
             side, coin, sl, tp = decoded_params.split('_')
             context.args = [coin, sl, tp]
@@ -149,7 +153,7 @@ async def start(update, context):
     return ConversationHandler.END
 
 
-async def shutdown(application):
+async def shutdown(application: Application) -> None:
     logger.info("Shutting down Hyperliquid Telegram bot...")
     # hyperliquid_utils.info.disconnect_websocket()
     os._exit(0)

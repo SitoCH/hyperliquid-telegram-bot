@@ -1,11 +1,12 @@
 import requests
 import os
 from datetime import datetime
+from typing import Dict, Optional
 from logging_utils import logger
 from .utils import get_historical_price, format_timestamp
 
 
-def get_sp500_price_history(start_timestamp):
+def get_sp500_price_history(start_timestamp: int) -> Dict[int, float]:
     """
     Fetch S&P500 price history for a given time range using Alpha Vantage API.
 
@@ -55,7 +56,7 @@ def get_sp500_price_history(start_timestamp):
         return {}
 
 
-def get_sp500_current_price():
+def get_sp500_current_price() -> Optional[float]:
     """
     Get current S&P500 price.
 
@@ -88,7 +89,7 @@ def get_sp500_current_price():
         return None
 
 
-def get_sp500_historical_price(timestamp, price_history):
+def get_sp500_historical_price(timestamp: int, price_history: Dict[int, float]) -> Optional[float]:
     """
     Get S&P500 price at a specific historical timestamp.
 
@@ -102,7 +103,11 @@ def get_sp500_historical_price(timestamp, price_history):
     return get_historical_price(timestamp, price_history)
 
 
-def calculate_sp500_hold_performance(start_timestamp, sp500_current_price, price_history):
+def calculate_sp500_hold_performance(
+    start_timestamp: int,
+    sp500_current_price: Optional[float],
+    price_history: Dict[int, float]
+) -> Optional[Dict[str, float]]:
     """
     Calculate the performance of simply holding S&P500 from the start timestamp until now.
 

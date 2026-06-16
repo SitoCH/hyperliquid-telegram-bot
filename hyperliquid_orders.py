@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import Dict, List, Any, Optional, Tuple, Callable
 from logging_utils import logger
 from tabulate import simple_separated_format, tabulate
 from telegram import Update
@@ -9,15 +10,15 @@ from hyperliquid_utils.utils import hyperliquid_utils
 from utils import fmt
 
 
-async def get_orders_from_hyperliquid():
+async def get_orders_from_hyperliquid() -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
     open_orders = hyperliquid_utils.info.frontend_open_orders(hyperliquid_utils.address)
-    grouped_data = defaultdict(lambda: defaultdict(list))
+    grouped_data: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
     for order in open_orders:
         grouped_data[order["coin"]][order["orderType"]].append(order)
     return {coin: dict(order_types) for coin, order_types in sorted(grouped_data.items())}
 
 
-def get_sl_tp_orders(order_types, is_long: bool):
+def get_sl_tp_orders(order_types: Dict[str, List[Dict[str, Any]]], is_long: bool) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     sl_raw_orders = order_types.get('Stop Market', [])
     sl_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=is_long)
     tp_raw_orders = order_types.get('Take Profit Market', [])
@@ -25,7 +26,7 @@ def get_sl_tp_orders(order_types, is_long: bool):
     return sl_raw_orders, tp_raw_orders
 
 
-def format_position_info(position, mid):
+def format_position_info(position: Dict[str, Any], mid: float) -> Dict[str, Any]:
     is_long = float(position['szi']) > 0
     entry_px = float(position['entryPx'])
     entry_distance = (entry_px / mid - 1) * (100 if is_long else -100)
@@ -45,12 +46,12 @@ def format_position_info(position, mid):
     return info
 
 
-def create_price_table(mid, position_info, order_types):
+def create_price_table(mid: float, position_info: Dict[str, Any], order_types: Dict[str, List[Dict[str, Any]]]) -> str:
     is_long = position_info['is_long']
     sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, is_long)
 
-    def percentage_calc(triggerPx, mid):
-        price_ratio = float(triggerPx) / mid - 1
+    def percentage_calc(triggerPx: float, mid: float) -> float:
+        price_ratio = triggerPx / mid - 1
         return price_ratio * 100 if is_long else -price_ratio * 100
 
     tp_orders = format_orders(tp_raw_orders, mid, percentage_calc)
@@ -112,7 +113,7 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await telegram_utils.reply(update, f"Failed to check orders: {str(e)}")
 
 
-def format_orders(raw_orders, mid, percentage_format):
+def format_orders(raw_orders: List[Dict[str, Any]], mid: float, percentage_format: Callable[[float, float], float]) -> List[List[Any]]:
     return [
         [
             order['sz'],
@@ -123,7 +124,7 @@ def format_orders(raw_orders, mid, percentage_format):
     ]
 
 
-def insert_order(orders, new_order, is_long):
+def insert_order(orders: List[List[Any]], new_order: List[Any], is_long: bool) -> List[List[Any]]:
     order_px = float(new_order[1])
     inserted = False
 

@@ -4,7 +4,8 @@ import time
 
 from logging_utils import logger
 
-exchange_enabled = True if os.environ.get("HTB_KEY_FILE") is not None and os.path.isfile(os.environ.get("HTB_KEY_FILE")) else False
+key_file = os.environ.get("HTB_KEY_FILE")
+exchange_enabled = True if key_file is not None and os.path.isfile(key_file) else False
 
 
 OPERATION_CANCELLED = 'Operation cancelled'

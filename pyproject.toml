@@ -38,6 +38,12 @@ filterwarnings = [
     "ignore:pkg_resources is deprecated as an API:DeprecationWarning"
 ]
 
+[tool.mypy]
+python_version = "3.10"
+strict = true
+explicit_package_bases = true
+warn_unused_configs = true
+
 [[tool.mypy.overrides]]
 module = "hyperliquid.utils.types"
 ignore_missing_imports = true
