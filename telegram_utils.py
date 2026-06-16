@@ -33,7 +33,7 @@ filterwarnings(
 )
 
 
-async def conversation_cancel(update: Update, context: CallbackContext) -> int:
+async def conversation_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.message:
         await telegram_utils.reply(update, OPERATION_CANCELLED)
     return ConversationHandler.END
@@ -67,7 +67,7 @@ class TelegramUtils:
         is_persistent=True
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         telegram_token = os.environ.get("HTB_TOKEN")
         self.telegram_chat_id = os.environ.get("HTB_CHAT_ID")
 
@@ -106,13 +106,13 @@ class TelegramUtils:
             )
 
     async def send(self, message: str, parse_mode: ODVInput[str] = None) -> Optional[Message]:
-        if not self.telegram_app:
+        if not self.telegram_app or self.telegram_chat_id is None:
             logging.error(self.MISSING_ENV_VARS_ERROR)
             return None
         return await self.telegram_app.bot.send_message(text=message, parse_mode=parse_mode, chat_id=self.telegram_chat_id)
 
-    def send_and_exit(self, message: str):
-        if not self.telegram_app:
+    def send_and_exit(self, message: str) -> None:
+        if not self.telegram_app or self.telegram_chat_id is None or not self.telegram_app.job_queue:
             logging.error(self.MISSING_ENV_VARS_ERROR)
             return
         self.telegram_app.job_queue.run_once(
@@ -120,18 +120,18 @@ class TelegramUtils:
             when=0.25,
             job_kwargs={'misfire_grace_time': 180},
             data=message,
-            chat_id=self.telegram_chat_id,
+            chat_id=int(self.telegram_chat_id),
         )
 
-    def queue_send(self, message: str):
-        if not self.telegram_app:
+    def queue_send(self, message: str) -> None:
+        if not self.telegram_app or self.telegram_chat_id is None or not self.telegram_app.job_queue:
             logging.error(self.MISSING_ENV_VARS_ERROR)
             return
         self.telegram_app.job_queue.run_once(
-            self.send_message, when=0.25, job_kwargs={'misfire_grace_time': 180}, data=message, chat_id=self.telegram_chat_id
+            self.send_message, when=0.25, job_kwargs={'misfire_grace_time': 180}, data=message, chat_id=int(self.telegram_chat_id)
         )
 
-    async def send_message(self, context: ContextTypes.DEFAULT_TYPE):
+    async def send_message(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         if context.job and hasattr(context.job, 'chat_id') and hasattr(context.job, 'data'):
             chat_id = str(context.job.chat_id)
             message = str(context.job.data)
@@ -142,7 +142,7 @@ class TelegramUtils:
                 parse_mode=ParseMode.HTML
             )
 
-    async def send_message_and_exit(self, context: ContextTypes.DEFAULT_TYPE):
+    async def send_message_and_exit(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             await self.send_message(context)
         except Exception as e:
@@ -156,12 +156,12 @@ class TelegramUtils:
             return
         self.telegram_app.add_handler(handler, group)
 
-    def run_once(self, callback: JobCallback[CCT]):
-        if not self.telegram_app:
+    def run_once(self, callback: JobCallback[CCT]) -> None:
+        if not self.telegram_app or self.telegram_chat_id is None or not self.telegram_app.job_queue:
             logging.error(self.MISSING_ENV_VARS_ERROR)
             return
         self.telegram_app.job_queue.run_once(
-            callback, when=0.25, job_kwargs={'misfire_grace_time': 180}, chat_id=self.telegram_chat_id
+            callback, when=0.25, job_kwargs={'misfire_grace_time': 180}, chat_id=int(self.telegram_chat_id)
         )
 
     def run_repeating(
@@ -172,15 +172,15 @@ class TelegramUtils:
             Union[float, datetime.timedelta, datetime.datetime, datetime.time]
         ] = None,
     ) -> None:
-        if not self.telegram_app:
+        if not self.telegram_app or not self.telegram_app.job_queue:
             logging.error(self.MISSING_ENV_VARS_ERROR)
             return
         self.telegram_app.job_queue.run_repeating(
             callback, interval=interval, first=first, job_kwargs={'misfire_grace_time': 180}
         )
 
-    def run_polling(self, shutdown):
-        if not self.telegram_app:
+    def run_polling(self, shutdown: Any) -> None:
+        if not self.telegram_app or self.telegram_chat_id is None or not self.telegram_app.job_queue:
             logging.error(self.MISSING_ENV_VARS_ERROR)
             return
 
@@ -190,7 +190,7 @@ class TelegramUtils:
             when=0.25,
             job_kwargs={'misfire_grace_time': 180},
             data="Hyperliquid Telegram bot up and running",
-            chat_id=self.telegram_chat_id,
+            chat_id=int(self.telegram_chat_id),
         )
 
         self.telegram_app.run_polling(allowed_updates=Update.ALL_TYPES)

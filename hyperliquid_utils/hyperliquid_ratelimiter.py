@@ -4,7 +4,7 @@ from math import floor
 
 class HyperliquidRateLimiter:
 
-    def __init__(self, max_weight_per_minute=1000):
+    def __init__(self, max_weight_per_minute: int = 1000) -> None:
         self.max_weight_per_minute = max_weight_per_minute
         self.current_minute = self._get_current_minute()
         self.current_weight = 0

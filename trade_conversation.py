@@ -225,6 +225,7 @@ async def _after_stop_loss_set(update: Update, context: ContextType, coin: str, 
     is_long = _is_long_position(context)
     await telegram_utils.reply(update, f"Loading price suggestions for {coin}...")
     await telegram_utils.reply(
+        update,
         await get_price_suggestions_text(coin, False, is_long),
         parse_mode=ParseMode.HTML
     )

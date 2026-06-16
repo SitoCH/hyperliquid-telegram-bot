@@ -1,7 +1,7 @@
 from enum import Enum
 from dataclasses import dataclass
-from typing import TypedDict, List, Set
-import pandas as pd  # type: ignore[import]
+from typing import TypedDict, List, Set, Any
+import pandas as pd
 
 
 class WyckoffPhase(Enum):
@@ -158,7 +158,7 @@ class WyckoffState:
     rsi_value: float = 50.0  # RSI value (0-100)
     adx_value: float = 0.0  # ADX trend strength (0-100)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             "phase": self.phase.value,
             "uncertain_phase": self.uncertain_phase,
@@ -180,7 +180,7 @@ class WyckoffState:
         }
 
     @staticmethod
-    def unknown():
+    def unknown() -> "WyckoffState":
         return WyckoffState(
             phase=WyckoffPhase.UNKNOWN,
             uncertain_phase=True,

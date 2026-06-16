@@ -2,7 +2,7 @@ import bisect
 from datetime import datetime
 
 
-def get_historical_price(timestamp, price_history):
+def get_historical_price(timestamp: int, price_history: dict[int, float]) -> float | None:
     """
     Get price at a specific historical timestamp from a price history dictionary.
 
@@ -38,7 +38,7 @@ def get_historical_price(timestamp, price_history):
             return price_history[after]
 
 
-def format_timestamp(timestamp_ms, format_str='%Y-%m-%d'):
+def format_timestamp(timestamp_ms: int, format_str: str = '%Y-%m-%d') -> str:
     """
     Format a millisecond timestamp into a string.
 

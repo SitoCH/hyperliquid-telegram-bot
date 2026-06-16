@@ -27,7 +27,7 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
     ha_df.at[prekey, "o"] = df.at[prekey, "o"]
 
     for key in df.index[1:]:
-        ha_df.at[key, "o"] = (ha_df.at[prekey, "o"] + ha_df.at[prekey, "c"]) / 2.0
+        ha_df.at[key, "o"] = (float(ha_df.at[prekey, "o"]) + float(ha_df.at[prekey, "c"])) / 2.0
         prekey = key
 
     ha_df["h"] = pd.concat([ha_df.o, df.h], axis=1).max(axis=1)

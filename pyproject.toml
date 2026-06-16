@@ -45,14 +45,10 @@ explicit_package_bases = true
 warn_unused_configs = true
 
 [[tool.mypy.overrides]]
-module = "hyperliquid.utils.types"
-ignore_missing_imports = true
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
 [[tool.mypy.overrides]]
-module = "hyperliquid.exchange"
-ignore_missing_imports = true
-[[tool.mypy.overrides]]
-module = "hyperliquid.info"
-ignore_missing_imports = true
-[[tool.mypy.overrides]]
-module = "hyperliquid.utils"
+module = "hyperliquid.*"
 ignore_missing_imports = true
