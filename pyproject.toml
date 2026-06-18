@@ -1,9 +1,9 @@
 [project]
 name = "hyperliquid-telegram-bot"
 version = "0.1.0"
-description = "-"
+description = "Telegram bot for Hyperliquid perpetual futures — monitoring, real-time alerts, Wyckoff/LLM technical analysis, and automated trading strategies"
 readme = "README.md"
-requires-python = ">=3.10, < 3.11"
+requires-python = ">=3.10"
 dependencies = [
     "hyperliquid-python-sdk",
     "matplotlib>=3.9.2",
@@ -31,22 +31,38 @@ hyperliquid-python-sdk = { git = "https://github.com/hyperliquid-dex/hyperliquid
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = ["."]
 filterwarnings = [
-    "ignore:pkg_resources is deprecated as an API:DeprecationWarning"
+    "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
+    "ignore::telegram.warnings.PTBUserWarning"
 ]
 
+[tool.mypy]
+python_version = "3.10"
+strict = true
+explicit_package_bases = true
+warn_unused_configs = true
+
 [[tool.mypy.overrides]]
-module = "hyperliquid.utils.types"
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = "hyperliquid.*"
 ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
-module = "hyperliquid.exchange"
-ignore_missing_imports = true
-[[tool.mypy.overrides]]
-module = "hyperliquid.info"
-ignore_missing_imports = true
-[[tool.mypy.overrides]]
-module = "hyperliquid.utils"
+module = [
+    "litellm.*",
+    "pandas_ta_classic.*",
+    "matplotlib.*",
+    "mplfinance.*",
+    "scipy.*",
+    "tzlocal.*",
+    "dacite.*"
+]
 ignore_missing_imports = true

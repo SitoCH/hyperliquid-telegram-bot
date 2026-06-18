@@ -1,14 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Tuple, ClassVar, Optional
-from dataclasses import dataclass, field
-import requests
+from typing import Any, Optional
+from dataclasses import dataclass
 from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler
+from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 from tabulate import simple_separated_format, tabulate
 from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
-from hyperliquid_trade import exit_all_positions
+from trade_conversation import exit_all_positions
 from logging_utils import logger
 from utils import fmt
 
@@ -16,7 +15,7 @@ from utils import fmt
 @dataclass
 class BaseStrategyConfig:
     """Configuration for base trading strategy.
-    
+
     Attributes:
         leverage: Trading leverage to use (1-10)
         min_yearly_performance: Minimum acceptable yearly performance in percent
@@ -35,8 +34,8 @@ class BaseStrategyConfig:
     min_rebalance_difference: float = 25.0
     drift_check_threshold: float = 25.0
     position_drift_threshold: float = 25.0
-    
-    def __post_init__(self):
+
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         if not 1 <= self.leverage <= 10:
             raise ValueError("Leverage must be between 1 and 10")
@@ -48,7 +47,7 @@ class BaseStrategyConfig:
             raise ValueError("Minimum USDC balance cannot be negative")
         if not 0 < self.usdc_balance_percent < 1:
             raise ValueError("USDC balance percentage must be between 0 and 1")
-    
+
     @classmethod
     def default(cls) -> 'BaseStrategyConfig':
         """Create a configuration with default values."""
@@ -91,7 +90,7 @@ class BaseStrategy(ABC):
     """
     _config: BaseStrategyConfig
 
-    def __init__(self, config: Optional[BaseStrategyConfig] = None):
+    def __init__(self, config: Optional[BaseStrategyConfig] = None) -> None:
         self._config = config or BaseStrategyConfig.default()
 
     @property
@@ -99,8 +98,8 @@ class BaseStrategy(ABC):
         return self._config
 
     def calculate_account_values(
-        self, user_state: Dict, leverage: int
-    ) -> Tuple[Dict[str, float], float, float]:
+        self, user_state: dict[str, Any], leverage: int
+    ) -> tuple[dict[str, float], float, float]:
         """Calculate various account values including positions and balances."""
         position_values = {
             pos["position"]["coin"]: float(pos["position"]["positionValue"])
@@ -116,35 +115,35 @@ class BaseStrategy(ABC):
 
     def calculate_allocations(
         self,
-        top_cryptos: List[Dict],
-        position_values: Dict[str, float],
+        top_cryptos: list[dict[str, Any]],
+        position_values: dict[str, float],
         tradeable_balance: float,
         total_market_cap: float,
-        cryptos: List[Dict],
+        cryptos: list[dict[str, Any]],
         usdc_balance: float,
         usdc_target_balance: float,
-    ) -> Tuple[List[AllocationData], List[PositionData], float]:
+    ) -> tuple[list[AllocationData], list[PositionData], float]:
         """Calculate allocation data for positions and USDC."""
         top_crypto_symbols = {coin["symbol"] for coin in top_cryptos}
         allocation_data = []
-        
+
         initial_targets = {}
         valid_coins = []
         skipped_value = 0.0
-        
+
         for coin in top_cryptos:
             symbol = coin["symbol"]
             rel_market_cap_pct = (coin["market_cap"] / total_market_cap) * 100
             target_value = (rel_market_cap_pct / 100) * tradeable_balance
-            
+
             if target_value < self.config.min_position_size:
                 logger.info(f"Skipping {symbol}: target value {fmt(target_value)} USDC is below minimum")
                 skipped_value += target_value
                 continue
-                
+
             valid_coins.append(coin)
             initial_targets[symbol] = target_value
-            
+
         if valid_coins:
             if skipped_value > 0:
                 valid_total = sum(initial_targets.values())
@@ -156,7 +155,7 @@ class BaseStrategy(ABC):
                 symbol = coin["symbol"]
                 position_value = position_values.get(symbol, 0.0)
                 target_value = initial_targets[symbol] * redistribution_ratio
-                
+
                 allocation_data.append(AllocationData(
                     name=coin["name"],
                     symbol=symbol,
@@ -180,7 +179,7 @@ class BaseStrategy(ABC):
                 ))
 
         usdc_difference = usdc_target_balance - usdc_balance
-        
+
         return allocation_data, other_positions, usdc_difference
 
     def generate_table_rows(
@@ -189,7 +188,7 @@ class BaseStrategy(ABC):
         tradeable_balance: float,
         total_market_cap: float,
         idx: Optional[int] = None,
-    ) -> List[List[Any]]:
+    ) -> list[list[Any]]:
         """Generate table rows for a single allocation."""
         market_cap_billion = allocation.market_cap / 1_000_000_000
         curr_value_pct = (allocation.current_value / tradeable_balance) * 100 if tradeable_balance > 0 else 0
@@ -218,17 +217,17 @@ class BaseStrategy(ABC):
 
     def generate_table_data(
         self,
-        allocation_data: List[AllocationData],
-        other_positions: List[PositionData],
+        allocation_data: list[AllocationData],
+        other_positions: list[PositionData],
         tradeable_balance: float,
         total_market_cap: float,
         usdc_balance: float,
         usdc_target_balance: float,
         usdc_difference: float,
-    ) -> List[List[Any]]:
+    ) -> list[list[Any]]:
         """Generate complete table data for display."""
         table_data = []
-        
+
         for idx, allocation in enumerate(allocation_data, start=1):
             table_data.extend(
                 self.generate_table_rows(allocation, tradeable_balance, total_market_cap, idx)
@@ -238,7 +237,7 @@ class BaseStrategy(ABC):
             if pos.market_cap:
                 market_cap_billion = pos.market_cap / 1_000_000_000
                 price_change_1y_str = f"{pos.price_change_1y:.2f}" if pos.price_change_1y is not None else "-"
-                
+
                 table_data.extend([
                     ["", pos.name, pos.symbol],
                     ["", "1Y", f"{price_change_1y_str}%"],
@@ -314,9 +313,9 @@ class BaseStrategy(ABC):
     async def display_crypto_info(
         self,
         update: Update,
-        cryptos: List[Dict],
-        all_mids: Dict[str, str],
-        meta: Dict
+        cryptos: list[dict[str, Any]],
+        all_mids: dict[str, str],
+        meta: dict[str, Any]
     ) -> None:
         """Display comprehensive crypto portfolio information."""
         try:
@@ -380,15 +379,15 @@ class BaseStrategy(ABC):
         """Rebalance portfolio according to strategy parameters."""
         try:
             await telegram_utils.reply(update, "Closing all current positions...")
-            
+
             exchange = hyperliquid_utils.get_exchange()
             if not exchange:
                 return
 
             await exit_all_positions(update, context)
-            
+
             await telegram_utils.reply(update, "Opening new positions based on current market data...")
-            
+
             cryptos, all_mids, meta = self.get_strategy_params()
             top_cryptos = self.filter_top_cryptos(cryptos, all_mids, meta)
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
@@ -398,16 +397,16 @@ class BaseStrategy(ABC):
 
             total_market_cap = sum(coin["market_cap"] for coin in top_cryptos)
             usdc_balance = float(user_state["crossMarginSummary"]["totalRawUsd"])
-            
+
             # Calculate available balance after keeping target USDC
             available_usdc = max(0, usdc_balance - usdc_target_balance)
             if (available_usdc * self.config.leverage) < self.config.min_position_size:  # Minimum amount to trade
                 await telegram_utils.reply(
-                    update, 
+                    update,
                     f"Insufficient balance for trading. Available: {fmt(available_usdc)} USDC after keeping {fmt(usdc_target_balance)} USDC as reserve"
                 )
                 return
-                
+
             # Calculate tradeable balance using only available USDC
             tradeable_balance = available_usdc * self.config.leverage
 
@@ -420,7 +419,7 @@ class BaseStrategy(ABC):
                 usdc_balance,
                 usdc_target_balance,
             )
-                    
+
             for allocation in allocation_data:
                 try:
                     if allocation.target_value < self.config.min_position_size:  # Check target value instead of difference
@@ -441,7 +440,7 @@ class BaseStrategy(ABC):
                 except Exception as e:
                     logger.error(f"Unable to open position for {allocation.symbol}: {str(e)}")
                     continue
-            
+
             await telegram_utils.reply(update, "Rebalancing completed")
         except Exception as e:
             logger.critical(e, exc_info=True)
@@ -450,16 +449,21 @@ class BaseStrategy(ABC):
             )
 
     @abstractmethod
-    def get_strategy_params(self) -> Tuple[List[Dict], Dict[str, str], Dict]:
+    def get_strategy_params(self) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, Any]]:
         """Get strategy-specific parameters including crypto data and exchange info."""
         pass
 
     @abstractmethod
     def filter_top_cryptos(
         self,
-        cryptos: List[Dict],
-        all_mids: Dict[str, str],
-        meta: Dict
-    ) -> List[Dict]:
+        cryptos: list[dict[str, Any]],
+        all_mids: dict[str, str],
+        meta: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Filter and sort cryptos according to strategy criteria."""
+        pass
+
+    @abstractmethod
+    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Initialize the strategy (e.g., start repeating tasks)."""
         pass

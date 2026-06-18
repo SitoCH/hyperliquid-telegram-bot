@@ -1,10 +1,13 @@
 import os
 import asyncio
 import time
+import functools
+from typing import Callable, Any, TypeVar
 
 from logging_utils import logger
 
-exchange_enabled = True if os.environ.get("HTB_KEY_FILE") is not None and os.path.isfile(os.environ.get("HTB_KEY_FILE")) else False
+key_file = os.environ.get("HTB_KEY_FILE")
+exchange_enabled = True if key_file is not None and os.path.isfile(key_file) else False
 
 
 OPERATION_CANCELLED = 'Operation cancelled'
@@ -30,20 +33,27 @@ def fmt(value: float) -> str:
     return format(value, ',.2f')
 
 
-def log_execution_time(func):
+F = TypeVar('F', bound=Callable[..., Any])
+
+
+def log_execution_time(func: F) -> F:
+    @functools.wraps(func)
+    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+        start_time = time.time()
+        result = await func(*args, **kwargs)
+        execution_time = time.time() - start_time
+        logger.info(f"{func.__name__} execution time: {execution_time:.2f} seconds")
+        return result
+
+    @functools.wraps(func)
+    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        execution_time = time.time() - start_time
+        logger.info(f"{func.__name__} execution time: {execution_time:.2f} seconds")
+        return result
+
     if asyncio.iscoroutinefunction(func):
-        async def async_wrapper(*args, **kwargs):
-            start_time = time.time()
-            result = await func(*args, **kwargs)
-            execution_time = time.time() - start_time
-            logger.info(f"{func.__name__} execution time: {execution_time:.2f} seconds")
-            return result
-        return async_wrapper
+        return async_wrapper  # type: ignore
     else:
-        def sync_wrapper(*args, **kwargs):
-            start_time = time.time()
-            result = func(*args, **kwargs)
-            execution_time = time.time() - start_time
-            logger.info(f"{func.__name__} execution time: {execution_time:.2f} seconds")
-            return result
-        return sync_wrapper
+        return sync_wrapper  # type: ignore

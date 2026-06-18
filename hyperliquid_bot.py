@@ -1,18 +1,24 @@
-import sys
 import datetime
 import importlib
 import os
 import random
 import base64
+import warnings
+from typing import Any, Optional, cast
 import numpy as np
 from tzlocal import get_localzone
+from telegram.warnings import PTBUserWarning
+
+# Suppress PTB warnings about ConversationHandler and CallbackQueryHandler
+warnings.filterwarnings("ignore", category=PTBUserWarning)
 
 from logging_utils import logger
-from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram import Update
+from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, Application, ContextTypes
 
 from technical_analysis.hyperliquid_candles import SELECTING_COIN_FOR_TA, analyze_candles, execute_ta, selected_coin_for_ta
 from hyperliquid_orders import get_open_orders
-from hyperliquid_trade import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_LEVERAGE, enter_long, enter_short, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit, selected_leverage
+from trade_conversation import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_LEVERAGE, enter_long, enter_short, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit, selected_leverage
 from hyperliquid_utils.utils import hyperliquid_utils
 from hyperliquid_positions import get_positions, get_overview
 from bot_statistics.hyperliquid_stats import get_stats
@@ -20,27 +26,32 @@ from hyperliquid_alerts import check_profit_percentage, check_positions_to_close
 from hyperliquid_events import on_user_events
 from telegram_utils import conversation_cancel, telegram_utils
 from utils import exchange_enabled
+from strategies.base_strategy.base_strategy import BaseStrategy
 
 
 def main() -> None:
+    # Suppress PTB warnings about ConversationHandler and CallbackQueryHandler
+    warnings.filterwarnings("ignore", category=PTBUserWarning)
+
     hyperliquid_utils.init_websocket()
 
     hyperliquid_utils.info.subscribe(
         {"type": "userEvents", "user": hyperliquid_utils.address}, on_user_events
     )
-    
+
     enter_position_states = {
-            SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
-            SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
-            SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
-            SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
-            SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
-        }
+        SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
+        SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
+        SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],
+        SELECTING_STOP_LOSS: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_stop_loss)],
+        SELECTING_TAKE_PROFIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, selected_take_profit)]
+    }
 
     start_conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
-        states=enter_position_states, # type: ignore
-        fallbacks=[CommandHandler('cancel', conversation_cancel)]
+        states=enter_position_states,  # type: ignore
+        fallbacks=[CommandHandler('cancel', conversation_cancel)],
+        per_message=False
     )
     telegram_utils.add_handler(start_conv_handler)
 
@@ -53,7 +64,8 @@ def main() -> None:
         states={
             SELECTING_COIN_FOR_TA: [CallbackQueryHandler(selected_coin_for_ta)]
         },
-        fallbacks=[CommandHandler('cancel', conversation_cancel)]
+        fallbacks=[CommandHandler('cancel', conversation_cancel)],
+        per_message=False
     )
     telegram_utils.add_handler(ta_conv_handler)
 
@@ -93,21 +105,24 @@ def main() -> None:
             states={
                 EXIT_CHOOSING: [CallbackQueryHandler(exit_selected_coin)]
             },
-            fallbacks=[CommandHandler('cancel', conversation_cancel)]
+            fallbacks=[CommandHandler('cancel', conversation_cancel)],
+            per_message=False
         )
         telegram_utils.add_handler(sell_conv_handler)
 
         enter_long_conv_handler = ConversationHandler(
             entry_points=[CommandHandler('long', enter_long)],
-            states=enter_position_states, # type: ignore
-            fallbacks=[CommandHandler('cancel', conversation_cancel)]
+            states=enter_position_states,  # type: ignore
+            fallbacks=[CommandHandler('cancel', conversation_cancel)],
+            per_message=False
         )
         telegram_utils.add_handler(enter_long_conv_handler)
 
         enter_short_conv_handler = ConversationHandler(
             entry_points=[CommandHandler('short', enter_short)],
-            states=enter_position_states, # type: ignore
-            fallbacks=[CommandHandler('cancel', conversation_cancel)]
+            states=enter_position_states,  # type: ignore
+            fallbacks=[CommandHandler('cancel', conversation_cancel)],
+            per_message=False
         )
         telegram_utils.add_handler(enter_short_conv_handler)
 
@@ -115,27 +130,31 @@ def main() -> None:
         logger.info('Exchange orders disabled')
 
     telegram_utils.run_polling(shutdown)
-    #await telegram_utils.stop()
+    # await telegram_utils.stop()
 
-def load_strategy(strategy_name):
+
+def load_strategy(strategy_name: str) -> Optional[BaseStrategy]:
     module_name = f"strategies.{strategy_name}.{strategy_name}"
     try:
         strategy_module = importlib.import_module(module_name)
         strategy_class = getattr(strategy_module, strategy_name.title().replace('_', ''))
-        return strategy_class()
+        return cast(BaseStrategy, strategy_class())
     except (ModuleNotFoundError, AttributeError) as e:
         logger.critical(e, exc_info=True)
         return None
 
-async def start(update, context):
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[int]:
     if context.args:
         raw_param = context.args[0]
         if raw_param.startswith("TA_"):
             context.args = [raw_param[3:]]
-            await update.message.delete()
-            return await execute_ta(update, context)    
+            if update.message:
+                await update.message.delete()
+            return await execute_ta(update, context)
         elif raw_param.startswith("TRD_"):
-            await update.message.delete()
+            if update.message:
+                await update.message.delete()
             decoded_params = base64.b64decode(raw_param[3:]).decode('utf-8')
             side, coin, sl, tp = decoded_params.split('_')
             context.args = [coin, sl, tp]
@@ -147,7 +166,8 @@ async def start(update, context):
         await telegram_utils.reply(update, "Welcome! Click the button below to check the account's positions.")
     return ConversationHandler.END
 
-async def shutdown(application):
+
+async def shutdown(application: Application[Any, Any, Any, Any, Any, Any]) -> None:
     logger.info("Shutting down Hyperliquid Telegram bot...")
     # hyperliquid_utils.info.disconnect_websocket()
     os._exit(0)

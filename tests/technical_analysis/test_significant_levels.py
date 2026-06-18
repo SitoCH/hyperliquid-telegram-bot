@@ -1,12 +1,12 @@
 import pandas as pd
-import pytest
-from datetime import datetime, timezone
+from datetime import timezone
 from technical_analysis.wyckoff.significant_levels import find_significant_levels
 from technical_analysis.wyckoff.wyckoff_types import (
-    WyckoffState, WyckoffPhase, MarketPattern, VolatilityState, 
+    WyckoffState, WyckoffPhase, MarketPattern, VolatilityState,
     VolumeState, EffortResult, CompositeAction, WyckoffSign,
     FundingState, Timeframe
 )
+
 
 def test_find_significant_levels_with_single_data_point():
     # Create a basic WyckoffState instance
@@ -34,17 +34,18 @@ def test_find_significant_levels_with_single_data_point():
         'Volume': [1000.0],
         'ATR': [2.0]
     }
-    
+
     # Create DataFrame with single timestamp index
-    df = pd.DataFrame(single_data, 
-                     index=[pd.Timestamp('2025-01-02 21:45:58', tz=timezone.utc)])
-    
+    df = pd.DataFrame(single_data,
+                      index=[pd.Timestamp('2025-01-02 21:45:58', tz=timezone.utc)])
+
     # Test the function with current_price parameter
     resistance_levels, support_levels = find_significant_levels(df, wyckoff_state, 102.0, Timeframe.HOUR_1)
-    
+
     # Assert that we get empty lists for both levels when there's insufficient data
     assert len(resistance_levels) == 0
     assert len(support_levels) == 0
+
 
 def test_find_significant_levels_with_multiple_data_points():
     # Create a WyckoffState instance for accumulation
@@ -72,17 +73,17 @@ def test_find_significant_levels_with_multiple_data_points():
         'Volume': [1000.0, 1100.0],
         'ATR': [2.0, 2.1]
     }
-    
+
     # Create DataFrame with multiple timestamp indices
-    df = pd.DataFrame(multi_data, 
-                     index=[
-                         pd.Timestamp('2025-01-02 21:45:58', tz=timezone.utc),
-                         pd.Timestamp('2025-01-02 22:45:58', tz=timezone.utc)
-                     ])
-    
+    df = pd.DataFrame(multi_data,
+                      index=[
+                          pd.Timestamp('2025-01-02 21:45:58', tz=timezone.utc),
+                          pd.Timestamp('2025-01-02 22:45:58', tz=timezone.utc)
+                      ])
+
     # Test the function with current_price parameter
     resistance_levels, support_levels = find_significant_levels(df, wyckoff_state, 104.0, Timeframe.HOUR_1)
-    
+
     # Assert that we get some levels when there's sufficient data
     assert isinstance(resistance_levels, list)
     assert isinstance(support_levels, list)

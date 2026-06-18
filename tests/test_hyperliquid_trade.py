@@ -1,51 +1,57 @@
 import pytest
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from telegram.ext import ConversationHandler
 
-from hyperliquid_trade import (
+from trade_conversation import (
     EXIT_CHOOSING,
     SELECTING_COIN,
     SELECTING_STOP_LOSS,
     SELECTING_TAKE_PROFIT,
     SELECTING_AMOUNT,
-    SELECTING_LEVERAGE,
     enter_position,
     enter_long,
     enter_short,
     skip_sl_tp_prompt,
-    has_order_error,
-    get_order_error_message,
     selected_amount,
     selected_leverage,
-    get_price_suggestions,
-    PriceSuggestion,
     selected_stop_loss,
     selected_coin,
-    calculate_available_margin,
     get_amount_suggestions,
     selected_take_profit,
-    open_order,
-    place_stop_loss_order,
-    place_stop_loss_and_take_profit_orders,
-    close_all_positions_core,
     exit_all_positions,
     exit_position,
     exit_selected_coin,
     _has_sl_tp_set,
     _is_long_position,
-    _validate_stop_loss_price,
-    _validate_take_profit_price,
-    _validate_order_context,
     _handle_callback_selection,
     _handle_callback_cancel,
+)
+
+from trade_execution import (
+    has_order_error,
+    get_order_error_message,
+    calculate_available_margin,
+    open_order,
+    place_stop_loss_order,
+    place_stop_loss_and_take_profit_orders,
+    close_all_positions_core,
+    _validate_order_context,
+)
+
+from trade_pricing import (
+    get_price_suggestions,
+    PriceSuggestion,
+    validate_stop_loss_price as _validate_stop_loss_price,
+    validate_take_profit_price as _validate_take_profit_price,
 )
 
 
 class TestHandleCallbackCancel:
     """Tests for _handle_callback_cancel helper."""
-    
+
     @pytest.mark.asyncio
-    async def test_cancel_edits_message_and_ends(self):
+    async def test_cancel_edits_message_and_ends(self) -> None:
         query = AsyncMock()
         result = await _handle_callback_cancel(query)
         query.edit_message_text.assert_called_once()
@@ -54,78 +60,78 @@ class TestHandleCallbackCancel:
 
 class TestHandleCallbackSelection:
     """Tests for _handle_callback_selection helper."""
-    
+
     @pytest.mark.asyncio
-    async def test_no_query_returns_end(self):
+    async def test_no_query_returns_end(self) -> None:
         update = MagicMock()
         update.callback_query = None
         result = await _handle_callback_selection(update, int, "Error", AsyncMock())
         assert result == ConversationHandler.END
-    
+
     @pytest.mark.asyncio
-    async def test_cancel_data_calls_cancel_handler(self):
+    async def test_cancel_data_calls_cancel_handler(self) -> None:
         update = MagicMock()
         query = AsyncMock()
         query.data = 'cancel'
         update.callback_query = query
-        
+
         result = await _handle_callback_selection(update, int, "Error", AsyncMock())
         query.answer.assert_called_once()
         query.edit_message_text.assert_called_once()
         assert result == ConversationHandler.END
-    
+
     @pytest.mark.asyncio
-    async def test_none_data_calls_cancel_handler(self):
+    async def test_none_data_calls_cancel_handler(self) -> None:
         update = MagicMock()
         query = AsyncMock()
         query.data = None
         update.callback_query = query
-        
+
         result = await _handle_callback_selection(update, int, "Error", AsyncMock())
         assert result == ConversationHandler.END
-    
+
     @pytest.mark.asyncio
-    async def test_valid_data_with_converter_calls_next_action(self):
+    async def test_valid_data_with_converter_calls_next_action(self) -> None:
         update = MagicMock()
         query = AsyncMock()
         query.data = '42'
         update.callback_query = query
-        
+
         next_action = AsyncMock(return_value=SELECTING_STOP_LOSS)
         result = await _handle_callback_selection(update, int, "Error", next_action)
-        
+
         next_action.assert_called_once_with(query, 42)
         assert result == SELECTING_STOP_LOSS
-    
+
     @pytest.mark.asyncio
     async def test_valid_data_without_converter_passes_raw_value(self):
         update = MagicMock()
         query = AsyncMock()
         query.data = 'BTC'
         update.callback_query = query
-        
+
         next_action = AsyncMock(return_value=SELECTING_AMOUNT)
         result = await _handle_callback_selection(update, None, "Error", next_action)
-        
+
         next_action.assert_called_once_with(query, 'BTC')
         assert result == SELECTING_AMOUNT
-    
+
     @pytest.mark.asyncio
     async def test_invalid_conversion_shows_error(self):
         update = MagicMock()
         query = AsyncMock()
         query.data = 'not_a_number'
         update.callback_query = query
-        
+
         result = await _handle_callback_selection(update, int, "Invalid number.", AsyncMock())
-        
+
         query.edit_message_text.assert_called_once_with("Invalid number.")
         assert result == ConversationHandler.END
 
 
 class TestHelperFunctions:
     """Tests for helper functions introduced during refactoring."""
-    
+
     def test_has_sl_tp_set_both_present(self):
         context = MagicMock()
         context.user_data = {'stop_loss_price': 45000, 'take_profit_price': 55000}
@@ -203,38 +209,39 @@ class TestValidateTakeProfitPrice:
 
 class TestValidateOrderContext:
     def test_missing_amount(self):
-        context = MagicMock()
-        context.user_data = {'stop_loss_price': 45000, 'take_profit_price': 55000, 'selected_coin': 'BTC'}
-        error = _validate_order_context(context)
+        user_data = {'stop_loss_price': 45000, 'take_profit_price': 55000, 'selected_coin': 'BTC'}
+        is_valid, error = _validate_order_context(user_data)
+        assert is_valid is False
         assert "No amount selected" in error
 
     def test_missing_stop_loss(self):
-        context = MagicMock()
-        context.user_data = {'amount': 100, 'take_profit_price': 55000, 'selected_coin': 'BTC'}
-        error = _validate_order_context(context)
+        user_data = {'amount': 100, 'take_profit_price': 55000, 'selected_coin': 'BTC'}
+        is_valid, error = _validate_order_context(user_data)
+        assert is_valid is False
         assert "No stop loss selected" in error
 
     def test_missing_take_profit(self):
-        context = MagicMock()
-        context.user_data = {'amount': 100, 'stop_loss_price': 45000, 'selected_coin': 'BTC'}
-        error = _validate_order_context(context)
+        user_data = {'amount': 100, 'stop_loss_price': 45000, 'selected_coin': 'BTC'}
+        is_valid, error = _validate_order_context(user_data)
+        assert is_valid is False
         assert "No take profit selected" in error
 
     def test_missing_coin(self):
-        context = MagicMock()
-        context.user_data = {'amount': 100, 'stop_loss_price': 45000, 'take_profit_price': 55000}
-        error = _validate_order_context(context)
+        user_data = {'amount': 100, 'stop_loss_price': 45000, 'take_profit_price': 55000}
+        is_valid, error = _validate_order_context(user_data)
+        assert is_valid is False
         assert "No coin selected" in error
 
     def test_all_present_valid(self):
-        context = MagicMock()
-        context.user_data = {
+        user_data = {
             'amount': 100,
             'stop_loss_price': 45000,
             'take_profit_price': 55000,
             'selected_coin': 'BTC'
         }
-        assert _validate_order_context(context) is None
+        is_valid, error = _validate_order_context(user_data)
+        assert is_valid is True
+        assert error == ""
 
 
 class TestSkipSlTpPrompt:
@@ -344,8 +351,8 @@ class TestEnterPosition:
         context.args = []
         context.user_data = {}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
             mock_hl.get_coins_reply_markup.return_value = MagicMock()
 
@@ -361,8 +368,8 @@ class TestEnterPosition:
         context.args = []
         context.user_data = {}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
             mock_hl.get_coins_reply_markup.return_value = MagicMock()
 
@@ -378,9 +385,9 @@ class TestEnterPosition:
         context.args = ['BTC', '45000', '55000']
         context.user_data = {}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.get_amount_suggestions', new_callable=AsyncMock) as mock_suggestions:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils'), \
+                patch('trade_conversation.get_amount_suggestions', new_callable=AsyncMock) as mock_suggestions:
             mock_tg.reply = AsyncMock()
             mock_suggestions.return_value = ("message", MagicMock())
 
@@ -398,9 +405,9 @@ class TestEnterPosition:
         context.args = []
         context.user_data = {}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.skip_sl_tp_prompt', return_value=True):
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl, \
+                patch('trade_conversation.skip_sl_tp_prompt', return_value=True):
             mock_tg.reply = AsyncMock()
             mock_hl.get_coins_reply_markup.return_value = MagicMock()
 
@@ -451,10 +458,10 @@ class TestSelectedAmount:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC'}
 
-        mock_user_state = {'assetPositions': []}
+        mock_user_state: dict[str, Any] = {'assetPositions': []}
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.send_stop_loss_suggestions', new_callable=AsyncMock) as mock_send_sl:
+        with patch('trade_conversation.hyperliquid_utils') as mock_hl, \
+                patch('trade_conversation.send_stop_loss_suggestions', new_callable=AsyncMock):
             mock_hl.info.user_state.return_value = mock_user_state
             mock_hl.get_leverage.return_value = 10
             mock_hl.address = "test_address"
@@ -515,7 +522,7 @@ class TestSelectedLeverage:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC'}
 
-        with patch('hyperliquid_trade.send_stop_loss_suggestions', new_callable=AsyncMock) as mock_send_sl:
+        with patch('trade_conversation.send_stop_loss_suggestions', new_callable=AsyncMock):
             result = await selected_leverage(update, context)
 
             assert result == SELECTING_STOP_LOSS
@@ -525,7 +532,7 @@ class TestSelectedLeverage:
 class TestGetPriceSuggestions:
     @pytest.mark.asyncio
     async def test_long_stop_loss_suggestions(self):
-        with patch('hyperliquid_trade.get_significant_levels_from_timeframe', new_callable=AsyncMock) as mock_levels:
+        with patch('trade_pricing.get_significant_levels_from_timeframe', new_callable=AsyncMock) as mock_levels:
             mock_levels.return_value = ([55000, 60000], [45000, 40000])
 
             suggestions = await get_price_suggestions('BTC', 50000, is_stop_loss=True, is_long=True)
@@ -541,7 +548,7 @@ class TestGetPriceSuggestions:
 
     @pytest.mark.asyncio
     async def test_short_stop_loss_suggestions(self):
-        with patch('hyperliquid_trade.get_significant_levels_from_timeframe', new_callable=AsyncMock) as mock_levels:
+        with patch('trade_pricing.get_significant_levels_from_timeframe', new_callable=AsyncMock) as mock_levels:
             mock_levels.return_value = ([55000, 60000], [45000, 40000])
 
             suggestions = await get_price_suggestions('BTC', 50000, is_stop_loss=True, is_long=False)
@@ -553,7 +560,7 @@ class TestGetPriceSuggestions:
 
     @pytest.mark.asyncio
     async def test_long_take_profit_suggestions(self):
-        with patch('hyperliquid_trade.get_significant_levels_from_timeframe', new_callable=AsyncMock) as mock_levels:
+        with patch('trade_pricing.get_significant_levels_from_timeframe', new_callable=AsyncMock) as mock_levels:
             mock_levels.return_value = ([55000, 60000], [45000, 40000])
 
             suggestions = await get_price_suggestions('BTC', 50000, is_stop_loss=False, is_long=True)
@@ -574,7 +581,7 @@ class TestSelectedStopLoss:
 
         context = MagicMock()
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_conversation.telegram_utils') as mock_tg:
             mock_tg.reply = AsyncMock()
 
             result = await selected_stop_loss(update, context)
@@ -591,7 +598,7 @@ class TestSelectedStopLoss:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_conversation.telegram_utils') as mock_tg:
             mock_tg.reply = AsyncMock()
 
             result = await selected_stop_loss(update, context)
@@ -608,8 +615,8 @@ class TestSelectedStopLoss:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'long'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
             mock_hl.info.all_mids.return_value = {'BTC': '50000'}
 
@@ -627,8 +634,8 @@ class TestSelectedStopLoss:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'long'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
             mock_hl.info.all_mids.return_value = {'BTC': '50000'}
 
@@ -646,8 +653,8 @@ class TestSelectedStopLoss:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'short'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
             mock_hl.info.all_mids.return_value = {'BTC': '50000'}
 
@@ -665,9 +672,9 @@ class TestSelectedStopLoss:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'long'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.get_price_suggestions_text', new_callable=AsyncMock) as mock_suggestions:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl, \
+                patch('trade_conversation.get_price_suggestions_text', new_callable=AsyncMock) as mock_suggestions:
             mock_tg.reply = AsyncMock()
             mock_hl.info.all_mids.return_value = {'BTC': '50000'}
             mock_suggestions.return_value = "Take profit suggestions"
@@ -703,7 +710,7 @@ class TestSelectedCoin:
         context = MagicMock()
         context.user_data = {}
 
-        with patch('hyperliquid_trade.get_amount_suggestions', new_callable=AsyncMock) as mock_suggestions:
+        with patch('trade_conversation.get_amount_suggestions', new_callable=AsyncMock) as mock_suggestions:
             mock_suggestions.return_value = ("message", MagicMock())
 
             result = await selected_coin(update, context)
@@ -721,7 +728,7 @@ class TestCalculateAvailableMargin:
             }
         }
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl:
             mock_hl.info.user_state.return_value = mock_perp_state
             mock_hl.address = "test_address"
 
@@ -737,7 +744,7 @@ class TestCalculateAvailableMargin:
             }
         }
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl:
             mock_hl.info.user_state.return_value = mock_perp_state
             mock_hl.address = "test_address"
 
@@ -752,7 +759,7 @@ class TestGetAmountSuggestions:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'long'}
 
-        with patch('hyperliquid_trade.calculate_available_margin', return_value=10000.0):
+        with patch('trade_conversation.calculate_available_margin', return_value=10000.0):
             message, reply_markup = await get_amount_suggestions(context)
 
             assert 'BTC' in message
@@ -770,7 +777,7 @@ class TestSelectedTakeProfit:
 
         context = MagicMock()
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_conversation.telegram_utils') as mock_tg:
             mock_tg.reply = AsyncMock()
 
             result = await selected_take_profit(update, context)
@@ -786,7 +793,7 @@ class TestSelectedTakeProfit:
 
         context = MagicMock()
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_conversation.telegram_utils') as mock_tg:
             mock_tg.reply = AsyncMock()
 
             result = await selected_take_profit(update, context)
@@ -803,8 +810,8 @@ class TestSelectedTakeProfit:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'long'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
             mock_hl.info.all_mids.return_value = {'BTC': '50000'}
 
@@ -822,8 +829,8 @@ class TestSelectedTakeProfit:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'long'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
             mock_hl.info.all_mids.return_value = {'BTC': '50000'}
 
@@ -841,8 +848,8 @@ class TestSelectedTakeProfit:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC', 'enter_mode': 'short'}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg, \
-             patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.telegram_utils') as mock_tg, \
+                patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_tg.reply = AsyncMock()
             mock_hl.info.all_mids.return_value = {'BTC': '50000'}
 
@@ -853,68 +860,60 @@ class TestSelectedTakeProfit:
 
 class TestOpenOrder:
     @pytest.mark.asyncio
-    async def test_open_order_no_amount(self):
-        context = MagicMock()
-        context.user_data = {}
+    async def test_open_order_no_amount(self) -> None:
+        user_data: dict[str, Any] = {}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_execution.telegram_utils') as mock_tg:
             mock_tg.send = AsyncMock()
 
-            result = await open_order(context, {}, 50000.0)
+            await open_order(user_data, {}, 50000.0, True, False)
 
-            assert result == ConversationHandler.END
             mock_tg.send.assert_called_with("Error: No amount selected. Please restart the process.")
 
     @pytest.mark.asyncio
-    async def test_open_order_no_stop_loss(self):
-        context = MagicMock()
-        context.user_data = {'amount': 100}
+    async def test_open_order_no_stop_loss(self) -> None:
+        user_data: dict[str, Any] = {'amount': 100}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_execution.telegram_utils') as mock_tg:
             mock_tg.send = AsyncMock()
 
-            result = await open_order(context, {}, 50000.0)
+            await open_order(user_data, {}, 50000.0, True, False)
 
-            assert result == ConversationHandler.END
             mock_tg.send.assert_called_with("Error: No stop loss selected. Please restart the process.")
 
     @pytest.mark.asyncio
-    async def test_open_order_no_take_profit(self):
-        context = MagicMock()
-        context.user_data = {'amount': 100, 'stop_loss_price': 45000}
+    async def test_open_order_no_take_profit(self) -> None:
+        user_data: dict[str, Any] = {'amount': 100, 'stop_loss_price': 45000}
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_execution.telegram_utils') as mock_tg:
             mock_tg.send = AsyncMock()
 
-            result = await open_order(context, {}, 50000.0)
+            await open_order(user_data, {}, 50000.0, True, False)
 
-            assert result == ConversationHandler.END
             mock_tg.send.assert_called_with("Error: No take profit selected. Please restart the process.")
 
     @pytest.mark.asyncio
-    async def test_open_order_no_coin(self):
-        context = MagicMock()
-        context.user_data = {
+    async def test_open_order_no_coin(self) -> None:
+        user_data: dict[str, Any] = {
             'amount': 100,
             'stop_loss_price': 45000,
             'take_profit_price': 55000
         }
 
-        with patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_execution.telegram_utils') as mock_tg:
             mock_tg.send = AsyncMock()
 
-            result = await open_order(context, {}, 50000.0)
+            await open_order(user_data, {}, 50000.0, True, False)
 
-            assert result == ConversationHandler.END
             mock_tg.send.assert_called_with("Error: No coin selected. Please restart the process.")
 
 
 class TestPlaceStopLossOrder:
-    def test_place_stop_loss_order_long(self):
+    def test_place_stop_loss_order_long(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl:
             mock_hl.get_liquidation_px_str.return_value = None
 
             place_stop_loss_order(
@@ -923,11 +922,11 @@ class TestPlaceStopLossOrder:
 
             mock_exchange.order.assert_called_once()
 
-    def test_place_stop_loss_order_with_liquidation_adjustment_long(self):
+    def test_place_stop_loss_order_with_liquidation_adjustment_long(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl:
             # Liquidation price that would trigger adjustment
             mock_hl.get_liquidation_px_str.return_value = "46000"
 
@@ -937,11 +936,11 @@ class TestPlaceStopLossOrder:
 
             mock_exchange.order.assert_called_once()
 
-    def test_place_stop_loss_order_zero_price(self):
+    def test_place_stop_loss_order_zero_price(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl:
             mock_hl.get_liquidation_px_str.return_value = None
 
             place_stop_loss_order(
@@ -953,32 +952,30 @@ class TestPlaceStopLossOrder:
 
 
 class TestPlaceStopLossAndTakeProfitOrders:
-    @pytest.mark.asyncio
-    async def test_place_both_orders(self):
+    def test_place_both_orders(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.place_stop_loss_order') as mock_sl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl, \
+                patch('trade_execution.place_stop_loss_order') as mock_sl:
             mock_hl.get_liquidation_px_str.return_value = None
 
-            await place_stop_loss_and_take_profit_orders(
+            place_stop_loss_and_take_profit_orders(
                 mock_exchange, user_state, 'BTC', True, 1.0, 45000.0, 55000.0, 6
             )
 
             mock_sl.assert_called_once()
             mock_exchange.order.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_no_take_profit_when_zero(self):
+    def test_no_take_profit_when_zero(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.place_stop_loss_order') as mock_sl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl, \
+                patch('trade_execution.place_stop_loss_order') as mock_sl:
             mock_hl.get_liquidation_px_str.return_value = None
 
-            await place_stop_loss_and_take_profit_orders(
+            place_stop_loss_and_take_profit_orders(
                 mock_exchange, user_state, 'BTC', True, 1.0, 45000.0, 0.0, 6
             )
 
@@ -990,7 +987,7 @@ class TestCloseAllPositionsCore:
     def test_close_all_positions_empty(self):
         mock_exchange = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl:
             mock_hl.info.user_state.return_value = {'assetPositions': []}
             mock_hl.address = "test_address"
 
@@ -1002,7 +999,7 @@ class TestCloseAllPositionsCore:
     def test_close_all_positions_success(self):
         mock_exchange = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl:
             mock_hl.info.user_state.return_value = {
                 'assetPositions': [
                     {'position': {'coin': 'BTC'}},
@@ -1021,7 +1018,7 @@ class TestCloseAllPositionsCore:
     def test_close_all_positions_missing_coin(self):
         mock_exchange = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_execution.hyperliquid_utils') as mock_hl:
             mock_hl.info.user_state.return_value = {
                 'assetPositions': [
                     {'position': {}},  # Missing coin
@@ -1042,8 +1039,8 @@ class TestExitAllPositions:
         update = MagicMock()
         context = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_conversation.hyperliquid_utils') as mock_hl, \
+                patch('trade_conversation.telegram_utils') as mock_tg:
             mock_hl.get_exchange.return_value = None
             mock_tg.reply = AsyncMock()
 
@@ -1056,8 +1053,8 @@ class TestExitAllPositions:
         update = MagicMock()
         context = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.close_all_positions_core') as mock_close:
+        with patch('trade_conversation.hyperliquid_utils') as mock_hl, \
+                patch('trade_conversation.close_all_positions_core') as mock_close:
             mock_hl.get_exchange.return_value = MagicMock()
             mock_close.return_value = (['BTC'], [])
 
@@ -1072,8 +1069,8 @@ class TestExitPosition:
         update = MagicMock()
         context = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_conversation.hyperliquid_utils') as mock_hl, \
+                patch('trade_conversation.telegram_utils') as mock_tg:
             mock_hl.info.user_state.return_value = {'assetPositions': []}
             mock_hl.address = "test_address"
             mock_tg.reply = AsyncMock()
@@ -1088,8 +1085,8 @@ class TestExitPosition:
         update = MagicMock()
         context = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.telegram_utils') as mock_tg:
+        with patch('trade_conversation.hyperliquid_utils') as mock_hl, \
+                patch('trade_conversation.telegram_utils') as mock_tg:
             mock_hl.info.user_state.return_value = {
                 'assetPositions': [
                     {'position': {'coin': 'BTC'}},
@@ -1128,8 +1125,8 @@ class TestExitSelectedCoin:
 
         context = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl, \
-             patch('hyperliquid_trade.close_all_positions_core') as mock_close:
+        with patch('trade_conversation.hyperliquid_utils') as mock_hl, \
+                patch('trade_conversation.close_all_positions_core') as mock_close:
             mock_hl.get_exchange.return_value = MagicMock()
             mock_close.return_value = (['BTC'], [])
 
@@ -1147,7 +1144,7 @@ class TestExitSelectedCoin:
 
         context = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_exchange = MagicMock()
             mock_hl.get_exchange.return_value = mock_exchange
 
@@ -1165,7 +1162,7 @@ class TestExitSelectedCoin:
 
         context = MagicMock()
 
-        with patch('hyperliquid_trade.hyperliquid_utils') as mock_hl:
+        with patch('trade_conversation.hyperliquid_utils') as mock_hl:
             mock_hl.get_exchange.return_value = None
 
             result = await exit_selected_coin(update, context)

@@ -1,6 +1,6 @@
 # hyperliquid-telegram-bot
 
-A Telegram bot for Hyperliquid that monitors cryptocurrency trading positions and sends notifications for filled orders. Inspired by [Freqtrade](https://www.freqtrade.io/en/stable/).
+A Telegram bot for Hyperliquid that monitors cryptocurrency trading positions, performs technical analysis (Wyckoff or LLM), and sends notifications for filled orders. Inspired by [Freqtrade](https://www.freqtrade.io/en/stable/). Requires Python 3.10.
 
 ## Features
 
@@ -15,7 +15,6 @@ A Telegram bot for Hyperliquid that monitors cryptocurrency trading positions an
 1. Create a `docker-compose.yml` file:
 
 ```yaml
-version: '3'
 services:
   hyperliquid_bot:
     image: sito/hyperliquid-telegram-bot:latest
@@ -29,7 +28,7 @@ services:
 
 2. Run the bot:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Configuration
@@ -57,7 +56,7 @@ docker-compose up -d
 | HTB_TOP_COINS_TO_ANALYZE | Number of top coins by open interest to analyze | "10" | None |
 | HTB_TOP_COINS_OFFSET | Number of top coins to skip before selecting coins for analysis | "0" | 0 |
 | HTB_ANALYZE_COINS_WITH_OPEN_ORDERS | Include coins with open orders in analysis | "True" or "False" | "False" |
-| HTB_COINS_ANALYSIS_MIN_CONFIDENCE | Minimum confidence level for coin analysis notifications | "0.75" | 0.75 |
+| HTB_COINS_ANALYSIS_MIN_CONFIDENCE | Minimum confidence level for coin analysis notifications | "0.65" | 0.65 |
 | HTB_MONITOR_STALE_POSITIONS | Monitor positions older than 1 day with positive PnL | "True" or "False" | "False" |
 | HTB_STALE_POSITION_MIN_PNL | Minimum PnL% to consider a position as stale. Provide a float like "5" for 5% (percent sign not supported) | "5" | 5 |
 | HTB_AUTO_CLOSE_STALE_POSITIONS | Automatically close stale positions instead of just alerting | "True" or "False" | "False" |
@@ -65,10 +64,11 @@ docker-compose up -d
 | HTB_ALPHAVANTAGE_API_KEY | API key for Alpha Vantage (required for performance comparison against S&P500) | "XXXXXXXXXXXXXXXX" | None |
 | HTB_ANALYSIS_MODE | Analysis mode for technical analysis | "wyckoff" or "llm" | "wyckoff" |
 | HTB_SKIP_SL_TP_PROMPT | Skip asking for stop loss and take profit when opening a position | "True" or "False" | "False" |
-| HTB_LLM_MAIN_MODEL | Main model for LLM analysis | "gpt-4" | "gpt-4" |
-| HTB_LLM_FAST_MODEL | Fast model for filtering analysis | "gpt-3.5-turbo" | "gpt-3.5-turbo" |
+| HTB_LLM_MAIN_MODEL | Main model for LLM analysis | "gpt-4" | "unknown" |
+| HTB_LLM_FAST_MODEL | Fast model for filtering analysis | "gpt-3.5-turbo" | "unknown" |
 | HTB_ALWAYS_RUN_LLM_FILTER | Always run LLM filter (use filter before analysis) | "True" or "False" | "False" |
-| HTB_TRADE_MIN_RR | Minimum Risk:Reward ratio required to propose a trade | "1.6" | 1.4 |
+| HTB_STRATEGY | Active trading strategy module name | "etf_strategy" | None |
+| HTB_TRADE_MIN_RR | Minimum Risk:Reward ratio required to propose a trade | "1.4" | 1.4 |
 | HTB_USE_HEIKIN_ASHI | Use Heikin Ashi candles in generated charts | "True" or "False" | False |
 
 ## Technical Analysis Modes
@@ -79,24 +79,24 @@ The bot supports two different technical analysis modes that can be switched usi
 
 The default mode uses traditional Wyckoff methodology to analyze market phases across multiple timeframes with volume pattern detection and chart generation.
 
-You can toggle the chart candle type to standard candles by setting:
+You can toggle between Heikin Ashi and standard candles by setting:
 
 ```yaml
 environment:
-  HTB_USE_HEIKIN_ASHI: "False"
+  HTB_USE_HEIKIN_ASHI: "True"
 ```
 
-When enabled (the default), charts use Heikin Ashi candles for smoother visualization while calculations (indicators and level detection) still use the original OHLCV data.
+When enabled, charts use Heikin Ashi candles for smoother visualization while calculations (indicators and level detection) still use the original OHLCV data.
 
 ### LLM Analysis Mode
 
 An AI-powered mode that uses large language models to provide natural language analysis, confidence scoring, risk assessment, and price predictions with timeframes.
 
-To use LLM mode, you need to:
-
+To use LLM mode:
 1. Set `HTB_ANALYSIS_MODE=llm`
-2. Configure the appropriate environment variables for LiteLLM (e.g., `LITELLM_PROXY_API_BASE`, `LITELLM_PROXY_API_KEY`, etc.)
-3. Optionally customize the models
+2. Set `HTB_LLM_MAIN_MODEL` (e.g., `gpt-4`) and `HTB_LLM_FAST_MODEL` (e.g., `gpt-3.5-turbo`)
+3. Configure LiteLLM proxy settings via `LITELLM_PROXY_API_BASE`, `LITELLM_PROXY_API_KEY`, etc.
+4. Optionally set `HTB_ALWAYS_RUN_LLM_FILTER=True` to always pre-filter before analysis
 
 Example configuration for LLM mode:
 
@@ -133,7 +133,6 @@ The ETF strategy can be configured using the following environment variables:
 
 Example configuration in docker-compose.yml:
 ```yaml
-version: '3'
 services:
   hyperliquid_bot:
     image: sito/hyperliquid-telegram-bot:latest
@@ -170,7 +169,6 @@ The Fixed Token strategy allows you to trade a specific set of tokens with confi
 
 Example configuration in docker-compose.yml:
 ```yaml
-version: '3'
 services:
   hyperliquid_bot:
     image: sito/hyperliquid-telegram-bot:latest
@@ -201,7 +199,6 @@ The AlphaG strategy analyzes top market-cap coins to detect strong multi-day mov
 
 Example configuration in docker-compose.yml:
 ```yaml
-version: '3'
 services:
   hyperliquid_bot:
     image: sito/hyperliquid-telegram-bot:latest
@@ -215,10 +212,37 @@ services:
     restart: unless-stopped
 ```
 
+## Local Setup (without Docker)
+
+1. Clone the repository and install dependencies:
+```bash
+git clone <repo-url>
+cd hyperliquid-telegram-bot
+uv sync --frozen
+```
+
+2. Set environment variables:
+```bash
+export HTB_TOKEN="<TELEGRAM BOT TOKEN>"
+export HTB_CHAT_ID="<TELEGRAM CHAT ID>"
+export HTB_USER_WALLET="<ADDRESS TO WATCH>"
+```
+
+3. Run the bot:
+```bash
+uv run python hyperliquid_bot.py
+```
+
+4. Run tests:
+```bash
+uv run pytest -q
+```
+
 ## Contributing
 
-Contributions are welcome! For major changes:
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
+For major changes:
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)

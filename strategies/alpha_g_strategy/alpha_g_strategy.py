@@ -2,7 +2,7 @@ import os
 import time
 import math
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional, Any
+from typing import Any, Optional
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
@@ -22,11 +22,12 @@ class ReversalSignal:
     symbol: str
     name: str
     movement_type: str  # 'surge' or 'crash'
-    full_candles_change_pct: float  
+    full_candles_change_pct: float
     current_change_pct: float
     current_price: float
     confirmed: bool = False
-    reasons: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
+
 
 class AlphaGStrategy():
     """AlphaG strategy."""
@@ -44,8 +45,8 @@ class AlphaGStrategy():
     def filter_top_coins(
         self,
         meta: Any,
-        all_mids: Dict
-    ) -> List[Dict]:
+        all_mids: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Filter and sort coins according to fixed token strategy criteria."""
 
         params = {
@@ -64,7 +65,7 @@ class AlphaGStrategy():
 
         for coin in coins:
             symbol = coin["symbol"]
-            
+
             if symbol not in all_mids:
                 logger.info(f"Excluding {symbol}: not available on Hyperliquid")
                 continue
@@ -83,15 +84,15 @@ class AlphaGStrategy():
         return sorted(filtered_coins, key=lambda x: x["market_cap"], reverse=True)
 
     @staticmethod
-    def _coin_volume_map_from_meta(meta: Any) -> Dict[str, float]:
+    def _coin_volume_map_from_meta(meta: Any) -> dict[str, float]:
         """Return mapping symbol -> 24h notional volume (USDC) using provided meta."""
         universe, coin_data = meta[0]['universe'], meta[1]
         return {u["name"]: float(c.get("dayNtlVlm", 0.0)) for u, c in zip(universe, coin_data)}
 
-    def _compute_low_liquidity_positions(self, user_state: Dict, coin_volume_map: Dict[str, float]) -> List[str]:
+    def _compute_low_liquidity_positions(self, user_state: dict[str, Any], coin_volume_map: dict[str, float]) -> list[str]:
         """Build list of formatted lines for open positions below a given 24h volume threshold.
         """
-        lines: List[str] = []
+        lines: list[str] = []
         for asset_position in user_state.get("assetPositions", []):
             pos = asset_position.get("position", {})
             raw_coin = str(pos.get("coin", ""))
@@ -105,7 +106,7 @@ class AlphaGStrategy():
         return lines
 
     @staticmethod
-    def _build_portfolio_summary_message(user_state: Dict) -> str:
+    def _build_portfolio_summary_message(user_state: dict[str, Any]) -> str:
         """Return HTML-formatted summary of long/short portfolio state."""
         # Categorize positions as long or short
         long_positions = 0
@@ -138,7 +139,7 @@ class AlphaGStrategy():
         message_lines = [
             "<b>⚖️ Portfolio Long / Short Analysis</b>",
             "",
-            f"<b>Summary:</b>",
+            "<b>Summary:</b>",
             f"Long Positions: {long_positions} positions",
             f" • Margin Used: {fmt(total_long_margin)} USDC ({fmt(long_margin_percentage)}%)",
             f" • Position Value: {fmt(total_long_position_value)} USDC",
@@ -147,14 +148,14 @@ class AlphaGStrategy():
             f" • Margin Used: {fmt(total_short_margin)} USDC ({fmt(short_margin_percentage)}%)",
             f" • Position Value: {fmt(total_short_position_value)} USDC",
             "",
-            f"<b>Totals:</b>",
+            "<b>Totals:</b>",
             f" • Total Margin Used: {fmt(total_margin)} USDC",
             f" • Long/Short Margin Ratio: {fmt(total_long_margin / total_short_margin) if total_short_margin > 0 else '∞'}"
         ]
         return '\n'.join(message_lines)
 
     @staticmethod
-    def _build_reversal_lines(reversals: List[ReversalSignal]) -> List[str]:
+    def _build_reversal_lines(reversals: list[ReversalSignal]) -> list[str]:
         lines = [
             "<b>🔄 Reversal Signals</b>",
             ""
@@ -172,7 +173,7 @@ class AlphaGStrategy():
                 f" • Daily change: {fmt(reversal.current_change_pct)}%\n"
             )
             if reversal.confirmed:
-                line += f" • ✅ Confirmed reversal\n"
+                line += " • ✅ Confirmed reversal\n"
             if reversal.reasons:
                 line += " • Signals: " + ", ".join(reversal.reasons) + "\n"
             lines.append(line)
@@ -180,44 +181,44 @@ class AlphaGStrategy():
 
     async def detect_price_movements(
         self,
-        coins: List[Dict],
+        coins: list[dict[str, Any]],
         lookback_days: int,
         threshold_pct: float
-    ) -> Tuple[List[ReversalSignal], Dict[str, List[Dict]]]:
+    ) -> tuple[list[ReversalSignal], dict[str, list[dict[str, Any]]]]:
         """
         Detect coins with potential reversal signals.
-        
+
         Args:
-            coins: List of coin dictionaries with 'symbol' and 'name' keys
+            coins: list of coin dictionaries with 'symbol' and 'name' keys
             lookback_days: Number of full daily candles to analyze (N)
             threshold_pct: Absolute price change percentage threshold
-            
+
         Returns:
-            List of ReversalSignal objects
+            list of ReversalSignal objects
         """
         now = int(time.time() * 1000)
         current_candle_start = now - (now % (Timeframe.DAY_1.minutes * 60 * 1000))
-        
-        reversals: List[ReversalSignal] = []
-        candles_by_symbol: Dict[str, List[Dict]] = {}
-        
+
+        reversals: list[ReversalSignal] = []
+        candles_by_symbol: dict[str, list[dict[str, Any]]] = {}
+
         for entry in coins:
             start_time = time.time()
             coin = entry['symbol']
             logger.info(f"Analyzing {coin} for price movements")
-            
+
             try:
                 req_count = max(lookback_days + 1, self.BB_PERIOD + 1)
                 candles = await get_candles_with_cache(
-                    coin, 
-                    Timeframe.DAY_1, 
-                    now, 
-                    req_count, 
+                    coin,
+                    Timeframe.DAY_1,
+                    now,
+                    req_count,
                     hyperliquid_utils.info.candles_snapshot,
                     True
                 )
                 candles_by_symbol[coin] = candles
-                
+
                 full_candles, partial_candle = self._extract_recent_candles(
                     candles, current_candle_start, coin, lookback_days
                 )
@@ -242,7 +243,7 @@ class AlphaGStrategy():
                 movement = self._classify_movement(full_candles, entry, threshold_pct)
                 if movement:
                     movement_type, price_change_pct = movement
-                    
+
                     # Check for reversal signal
                     reversal = self._detect_partial_reversal(
                         movement_type, partial_candle, entry, price_change_pct, full_candles
@@ -251,18 +252,18 @@ class AlphaGStrategy():
                         reversals.append(reversal)
 
                 logger.info(f"Analysis for {coin} done in {(time.time() - start_time):.2f}s")
-                    
+
             except Exception as e:
                 logger.error(f"Error analyzing {coin}: {str(e)}", exc_info=True)
                 continue
-        
+
         return reversals, candles_by_symbol
 
     @staticmethod
     def _detect_confirmed_reversal(
-        candles: List[Dict],
+        candles: list[dict[str, Any]],
         current_candle_start: int,
-        coin_entry: Dict,
+        coin_entry: dict[str, Any],
         lookback_days: int,
         threshold_pct: float,
     ) -> Optional[ReversalSignal]:
@@ -342,11 +343,11 @@ class AlphaGStrategy():
 
     @staticmethod
     def _extract_recent_candles(
-        candles: List[Dict],
+        candles: list[dict[str, Any]],
         current_candle_start: int,
         coin_symbol: str,
         lookback_days: int,
-    ) -> Tuple[Optional[List[Dict]], Optional[Dict]]:
+    ) -> tuple[Optional[list[dict[str, Any]]], Optional[dict[str, Any]]]:
         if not candles:
             logger.warning(f"No candle data returned for {coin_symbol}")
             return None, None
@@ -365,10 +366,10 @@ class AlphaGStrategy():
 
     def _classify_movement(
         self,
-        full_candles: List[Dict],
-        coin_entry: Dict,
+        full_candles: list[dict[str, Any]],
+        coin_entry: dict[str, Any],
         threshold_pct: float,
-    ) -> Optional[Tuple[str, float]]:
+    ) -> Optional[tuple[str, float]]:
         """Classify price movement as surge or crash.
 
         A movement is considered a surge/crash if it exceeds BOTH:
@@ -414,18 +415,20 @@ class AlphaGStrategy():
         return None
 
     @staticmethod
-    def _compute_mean_atr(candles: List[Dict]) -> float:
+    def _compute_mean_atr(candles: list[dict[str, Any]]) -> float:
         """Compute mean ATR over provided candles using standard TR formula."""
         if not candles:
             return 0.0
-        trs: List[float] = []
+        trs: list[float] = []
         prev_close: Optional[float] = None
-        for c in candles:
-            h = float(c['h']); l = float(c['l']); cl = float(c['c'])
+        for candle in candles:
+            h = float(candle['h'])
+            low = float(candle['l'])
+            cl = float(candle['c'])
             if prev_close is None:
-                tr = h - l
+                tr = h - low
             else:
-                tr = max(h - l, abs(h - prev_close), abs(l - prev_close))
+                tr = max(h - low, abs(h - prev_close), abs(low - prev_close))
             trs.append(max(tr, 0.0))
             prev_close = cl
         if not trs:
@@ -435,10 +438,10 @@ class AlphaGStrategy():
     def _detect_partial_reversal(
         self,
         movement_type: str,
-        partial_candle: Optional[Dict],
-        coin_entry: Dict,
+        partial_candle: Optional[dict[str, Any]],
+        coin_entry: dict[str, Any],
         full_candles_change_pct: float,
-        full_candles: Optional[List[Dict]] = None,
+        full_candles: Optional[list[dict[str, Any]]] = None,
     ) -> Optional[ReversalSignal]:
         """Detect if the partial candle shows a potential reversal signal with confirmations.
 
@@ -465,7 +468,7 @@ class AlphaGStrategy():
 
         current_change_pct = ((current_close - current_open) / current_open) * 100 if current_open else 0.0
 
-        reasons: List[str] = [f"Opposite partial direction ({current_change_pct:.2f}%)"]
+        reasons: list[str] = [f"Opposite partial direction ({current_change_pct:.2f}%)"]
 
         # Exhaustion wick confirmation
         range_total = max(current_high - current_low, 1e-12)
@@ -518,7 +521,7 @@ class AlphaGStrategy():
         )
 
     @staticmethod
-    def _compute_bollinger(closes: List[float], period: int) -> Tuple[float, float, float, float]:
+    def _compute_bollinger(closes: list[float], period: int) -> tuple[float, float, float, float]:
         """Compute simple Bollinger Bands (mid, upper, lower, std)."""
         if not closes:
             return 0.0, 0.0, 0.0, 0.0
@@ -536,7 +539,7 @@ class AlphaGStrategy():
         try:
             # Get current user state from Hyperliquid
             user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-            
+
             if not user_state.get("assetPositions"):
                 await telegram_utils.reply(update, "No open positions found.")
                 return
@@ -545,7 +548,7 @@ class AlphaGStrategy():
             summary_message = self._build_portfolio_summary_message(user_state)
             await telegram_utils.reply(update, summary_message, parse_mode=ParseMode.HTML)
 
-            message = await telegram_utils.send(f"Analyzing coins...") # type: ignore
+            message = await telegram_utils.send("Analyzing coins...")
 
             # Fetch meta and mids once and reuse
             meta = hyperliquid_utils.info.meta_and_asset_ctxs()
@@ -559,9 +562,9 @@ class AlphaGStrategy():
                 self._lookback_days,
                 self._threshold_pct,
             )
-            
-            await message.delete() # type: ignore
-            
+
+            await message.delete()  # type: ignore
+
             # Pre-compute low-liquidity open positions once
             coin_volume_map = self._coin_volume_map_from_meta(meta)
             low_liquidity_positions = self._compute_low_liquidity_positions(
@@ -577,7 +580,7 @@ class AlphaGStrategy():
 
             if low_liquidity_positions:
                 low_liq_lines = [
-                    f"<b>⚠️ Open positions with low 24h volume</b>",
+                    "<b>⚠️ Open positions with low 24h volume</b>",
                     ""
                 ]
                 low_liq_lines.extend(low_liquidity_positions)
@@ -585,7 +588,7 @@ class AlphaGStrategy():
 
             if premove_status_lines:
                 premove_lines = [
-                    f"<b>📊 Open positions vs pre-pump/crash levels</b>",
+                    "<b>📊 Open positions vs pre-pump/crash levels</b>",
                     ""
                 ]
                 premove_lines.extend(premove_status_lines)
@@ -595,7 +598,7 @@ class AlphaGStrategy():
             logger.error(f"Error executing strategy: {str(e)}", exc_info=True)
             await telegram_utils.reply(update, f"Error analyzing portfolio: {str(e)}")
 
-    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE):
+    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Initialize strategy - implementation to be added."""
 
         analyze_button_text = "analyze"
@@ -606,10 +609,10 @@ class AlphaGStrategy():
 
     def _compute_premove_status_from_candles(
         self,
-        user_state: Dict,
-        candles_by_symbol: Dict[str, List[Dict]],
-    ) -> List[str]:
-        lines: List[str] = []
+        user_state: dict[str, Any],
+        candles_by_symbol: dict[str, list[dict[str, Any]]],
+    ) -> list[str]:
+        lines: list[str] = []
 
         now = int(time.time() * 1000)
         current_candle_start = now - (now % (Timeframe.DAY_1.minutes * 60 * 1000))

@@ -1,10 +1,8 @@
-import os
 import json
 import asyncio
 import math
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
-from utils import log_execution_time
+from typing import Dict, List, Any, Optional, Tuple, Callable
 from .wyckoff.wyckoff_types import Timeframe
 from logging_utils import logger
 
@@ -12,11 +10,13 @@ from logging_utils import logger
 PROJECT_ROOT = Path(__file__).parent.parent
 CACHE_DIR = PROJECT_ROOT / 'cache' / 'candles'
 
+
 def _get_cache_file_path(coin: str, timeframe: Timeframe) -> Path:
     """Get the path for the cache file of a specific coin and timeframe"""
     if not CACHE_DIR.exists():
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
     return CACHE_DIR / f"{coin}_{timeframe}_candles.json"
+
 
 def _load_from_disk(coin: str, timeframe: Timeframe) -> Optional[Tuple[int, List[Dict[str, Any]]]]:
     """Load candles data from disk"""
@@ -30,11 +30,13 @@ def _load_from_disk(coin: str, timeframe: Timeframe) -> Optional[Tuple[int, List
             cache_file.unlink()
     return None
 
+
 def _save_to_disk(coin: str, timeframe: Timeframe, data: Tuple[int, List[Dict[str, Any]]]) -> None:
     """Save candles data to disk"""
     cache_file = _get_cache_file_path(coin, timeframe)
     with open(cache_file, 'w') as f:
         json.dump(list(data), f)
+
 
 def get_cached_candles(coin: str, timeframe: Timeframe, start_time: int, end_time: int) -> Optional[List[Dict[str, Any]]]:
     """Get candles from cache if available and not too old"""
@@ -42,10 +44,11 @@ def get_cached_candles(coin: str, timeframe: Timeframe, start_time: int, end_tim
     cached_data = _load_from_disk(coin, timeframe)
     if cached_data is None:
         return None
-    
+
     _, candles = cached_data
     # Filter candles within requested time range
     return [c for c in candles if start_time <= c['T'] <= end_time]
+
 
 def trim_candles(candles: List[Dict[str, Any]], lookback_days: int) -> List[Dict[str, Any]]:
     """Keep only the candles within lookback period"""
@@ -54,6 +57,7 @@ def trim_candles(candles: List[Dict[str, Any]], lookback_days: int) -> List[Dict
     latest_ts = max(c['T'] for c in candles)
     min_ts = latest_ts - (lookback_days * 86400000)
     return [c for c in candles if c['T'] >= min_ts]
+
 
 def merge_candles(old_candles: List[Dict[str, Any]], new_candles: List[Dict[str, Any]], lookback_days: int) -> List[Dict[str, Any]]:
     """Merge old and new candles, always replacing old with new if timestamp matches"""
@@ -65,12 +69,13 @@ def merge_candles(old_candles: List[Dict[str, Any]], new_candles: List[Dict[str,
         sorted_candles = trim_candles(sorted_candles, lookback_days)
     return sorted_candles
 
+
 def verify_candles(coin: str, candles: List[Dict[str, Any]], timeframe: Timeframe, is_initial_load: bool = False) -> Tuple[bool, str]:
     """
     Verify the integrity of candles data.
     Returns (is_valid, error_message)
     """
-    def _clear_all_timeframe_caches(coin: str):
+    def _clear_all_timeframe_caches(coin: str) -> None:
         """Clear cache for all timeframes of a given coin"""
         for tf in Timeframe:
             cache_file = _get_cache_file_path(coin, tf)
@@ -83,10 +88,10 @@ def verify_candles(coin: str, candles: List[Dict[str, Any]], timeframe: Timefram
 
     if not candles:
         return True, ""
-    
+
     # Sort candles by timestamp to ensure chronological order
     sorted_candles = sorted(candles, key=lambda x: x['T'])
-    
+
     # Check required fields
     required_fields = {'T', 'o', 'h', 'l', 'c', 'v'}
     for candle in sorted_candles:
@@ -94,38 +99,38 @@ def verify_candles(coin: str, candles: List[Dict[str, Any]], timeframe: Timefram
         if missing_fields:
             _clear_all_timeframe_caches(coin)
             return False, f"Missing required fields: {missing_fields}"
-    
+
     # Skip interval checks for initial data load
     if not is_initial_load:
         # Check timeframe intervals
         interval_ms = timeframe.minutes * 60 * 1000
         for i in range(1, len(sorted_candles)):
-            time_diff = sorted_candles[i]['T'] - sorted_candles[i-1]['T']
+            time_diff = sorted_candles[i]['T'] - sorted_candles[i - 1]['T']
             if time_diff != interval_ms:
                 time_diff_minutes = time_diff / (60 * 1000)
                 _clear_all_timeframe_caches(coin)
                 return False, f"Invalid interval at index {i}: expected {timeframe.minutes}min, got {time_diff_minutes}min"
-    
+
     # Check for valid numerical values
     for candle in sorted_candles:
         try:
             o = float(candle['o'])
             h = float(candle['h'])
-            l = float(candle['l'])
-            c = float(candle['c'])
-            # Check for NaN
-            if any(math.isnan(x) for x in [o, h, l, c]):
+            low_price = float(candle['l'])
+            close_price = float(candle['c'])
+            if any(math.isnan(x) for x in [o, h, low_price, close_price]):
                 _clear_all_timeframe_caches(coin)
                 return False, "Invalid numerical values (NaN) found"
         except (ValueError, TypeError):
             _clear_all_timeframe_caches(coin)
             return False, "Non-numeric values found in OHLCV data"
         # Verify OHLC relationships
-        if not (l <= o <= h and l <= c <= h):
+        if not (low_price <= o <= h and low_price <= close_price <= h):
             _clear_all_timeframe_caches(coin)
             return False, f"Invalid OHLC relationships at timestamp {candle['T']}"
-    
+
     return True, ""
+
 
 def update_cache(coin: str, timeframe: Timeframe, candles: List[Dict[str, Any]], current_time: int) -> None:
     """Update disk cache with new candles"""
@@ -143,7 +148,7 @@ def update_cache(coin: str, timeframe: Timeframe, candles: List[Dict[str, Any]],
             min_timestamp = min(c['T'] for c in existing_candles)
             lookback_days = (current_time - min_timestamp) // 86400000
             candles = merge_candles(existing_candles, candles, lookback_days)
-    
+
     # Verify merged data
     is_valid, error_msg = verify_candles(coin, candles, timeframe, is_initial_load)
     if not is_valid:
@@ -152,8 +157,9 @@ def update_cache(coin: str, timeframe: Timeframe, candles: List[Dict[str, Any]],
         if cache_file.exists():
             cache_file.unlink()
         raise ValueError(f"Invalid merged candles data for {coin}: {error_msg}")
-    
+
     _save_to_disk(coin, timeframe, (current_time, candles))
+
 
 def clear_cache() -> None:
     """Clear disk cache"""
@@ -161,22 +167,24 @@ def clear_cache() -> None:
         for cache_file in CACHE_DIR.glob('*_candles.json'):
             cache_file.unlink()
 
+
 def _round_timestamp(ts: int, timeframe: Timeframe) -> int:
     """Round timestamp down to nearest interval based on timeframe"""
     ms_interval = timeframe.minutes * 60 * 1000
     return ts - (ts % ms_interval)
+
 
 async def get_candles_with_cache(
     coin: str,
     timeframe: Timeframe,
     now: int,
     lookback_days: int,
-    fetch_fn,
+    fetch_fn: Callable[[str, str, int, int], List[Dict[str, Any]]],
     include_incomplete: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Get candles using cache, handling the incomplete current candle appropriately.
-    
+
     Args:
         coin: Trading pair symbol
         timeframe: Timeframe enum value
@@ -190,7 +198,7 @@ async def get_candles_with_cache(
         end_ts = now
         start_ts = _round_timestamp(end_ts - lookback_days * 86400000, timeframe)
         current_candle_start = _round_timestamp(now, timeframe)
-        
+
         cached = get_cached_candles(coin, timeframe, start_ts, end_ts)
         if cached and len(cached) > 0:
             # Find the timestamp of the last cached candle
@@ -201,7 +209,7 @@ async def get_candles_with_cache(
             new_candles = await loop.run_in_executor(None, fetch_fn, coin, timeframe.name, last_cached_ts, end_ts)
             # Merge all candles
             merged = merge_candles(cached, new_candles, lookback_days)
-            
+
             # Filter out incomplete candles for both cache and return
             complete_candles = [c for c in merged if c['T'] < current_candle_start]
             if complete_candles:
@@ -220,7 +228,7 @@ async def get_candles_with_cache(
             return candles if include_incomplete else complete_candles
 
         return candles
-        
+
     except Exception as e:
         logger.error(f"Error in get_candles_with_cache for {coin}: {str(e)}")
         raise

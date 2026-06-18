@@ -23,8 +23,8 @@ from html import escape as escape_html
 
 class LLMAnalyzer:
     """LLM-based technical analysis implementation."""
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         self.timeframe_lookback_days = {
             Timeframe.MINUTES_15: 2,
             Timeframe.MINUTES_30: 3,
@@ -36,17 +36,15 @@ class LLMAnalyzer:
         self.llm_client = LiteLLMClient()
         self.message_formatter = LLMMessageFormatter()
 
-
-    async def send_llm_analysis_filter_message(self, coin, reason, confidence):
+    async def send_llm_analysis_filter_message(self, coin: str, reason: str, confidence: float) -> None:
         message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
         message += f"<b>Market Analysis:</b> {escape_html(reason)}\n\n"
         message += f"🎯 <b>Confidence:</b> {confidence:.0%}\n"
         await telegram_utils.send(message, parse_mode=ParseMode.HTML)
 
-
     async def analyze(self, context: ContextTypes.DEFAULT_TYPE, coin: str, interactive_analysis: bool) -> None:
         """Main LLM analysis entry point."""
-        
+
         now = int(time.time() * 1000)
         local_tz = get_localzone()
 
@@ -62,7 +60,7 @@ class LLMAnalyzer:
 
         # Prepare dataframes
         dataframes = {
-            tf: prepare_dataframe(candles, local_tz) 
+            tf: prepare_dataframe(candles, local_tz)
             for tf, candles in candles_data.items()
         }
 
@@ -83,7 +81,7 @@ class LLMAnalyzer:
         llm_result = await self._perform_llm_analysis(dataframes, coin, mid, funding_rates)
 
         should_notify = interactive_analysis or llm_result.should_notify
-        
+
         if should_notify:
             await self.message_formatter.send_llm_analysis_message(context, coin, mid, llm_result, not interactive_analysis)
 
@@ -92,11 +90,10 @@ class LLMAnalyzer:
 
         model = os.getenv("HTB_LLM_MAIN_MODEL", "unknown")
         prompt = self.prompt_generator.generate_prediction_prompt(coin, dataframes, funding_rates, mid)
-        
-        llm_response = await self.llm_client.call_api(model, prompt, 'low')
-        
-        return self._parse_llm_response(coin, llm_response)
 
+        llm_response = await self.llm_client.call_api(model, prompt, 'low')
+
+        return self._parse_llm_response(coin, llm_response)
 
     def _parse_llm_response(self, coin: str, llm_response: str) -> LLMAnalysisResult:
         """Parse AI response into structured analysis result."""
@@ -105,13 +102,13 @@ class LLMAnalyzer:
         signal = Signal(response_data.get("signal", "hold").lower())
         confidence = float(response_data.get("confidence", 0.0))
         risk_level = RiskLevel(response_data.get("risk_level", "medium").lower())
-        
+
         # Extract new fields
         recap_heading = response_data.get("recap_heading", "")
         trading_insight = response_data.get("trading_insight", "")
         key_drivers = response_data.get("key_drivers", [])
         time_horizon_hours = int(response_data.get("time_horizon_hours", 4))
-        
+
         # Parse trading setup
         trading_setup = None
         trading_setup_data = response_data.get("trading_setup")
@@ -135,7 +132,7 @@ class LLMAnalyzer:
         should_notify = signal in [Signal.LONG, Signal.SHORT] and confidence >= min_confidence
         action = "approved" if should_notify else "rejected"
         logger.info(f"LLM {action} analysis for {coin}: {recap_heading} (confidence: {confidence:.0%}, should notify: {should_notify})")
-        
+
         return LLMAnalysisResult(
             signal=signal,
             confidence=confidence,

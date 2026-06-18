@@ -1,15 +1,18 @@
-from typing import Dict, Any, List
+from typing import List
 from enum import Enum
+
 
 class Signal(Enum):
     LONG = "long"
     SHORT = "short"
     HOLD = "hold"
 
+
 class RiskLevel(Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
 
 class LLMAnalysisTradingSetup:
 
@@ -21,9 +24,10 @@ class LLMAnalysisTradingSetup:
         self.stop_loss = stop_loss
         self.take_profit = take_profit
 
+
 class LLMAnalysisResult:
     """Container for LLM analysis results."""
-    
+
     def __init__(
         self,
         signal: Signal = Signal.HOLD,

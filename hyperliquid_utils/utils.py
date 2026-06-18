@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import List, Dict, Any, ClassVar
+from typing import List, Dict, Any, ClassVar, Optional, Tuple
 
 import eth_account
 from eth_account.signers.local import LocalAccount
@@ -20,125 +20,125 @@ class HyperliquidUtils:
 
     COINGECKO_URL: ClassVar[str] = "https://api.coingecko.com/api/v3/coins/markets"
 
-    def __init__(self):
+    def __init__(self) -> None:
 
-        user_wallet = os.environ.get("HTB_USER_WALLET")
+        user_wallet: Optional[str] = os.environ.get("HTB_USER_WALLET")
         if user_wallet is None:
             logger.error("HTB_USER_WALLET environment variable is not set")
             raise ValueError("HTB_USER_WALLET environment variable is required")
-            
-        user_vault = os.environ.get("HTB_USER_VAULT")
-        self.address = user_vault if user_vault is not None else user_wallet
 
-        self.info = InfoProxy(Info(constants.MAINNET_API_URL, True))
+        user_vault: Optional[str] = os.environ.get("HTB_USER_VAULT")
+        self.address: str = user_vault if user_vault is not None else user_wallet
 
+        self._info: Optional[InfoProxy] = None
 
-    def init_websocket(self):
+    @property
+    def info(self) -> InfoProxy:
+        """Lazy initialization of InfoProxy to avoid network calls during module import."""
+        if self._info is None:
+            self._info = InfoProxy(Info(constants.MAINNET_API_URL, True))
+        return self._info
+
+    @info.setter
+    def info(self, value: InfoProxy) -> None:
+        self._info = value
+
+    @info.deleter
+    def info(self) -> None:
+        self._info = None
+
+    def init_websocket(self) -> None:
         """Initialize WebSocket connection for live data."""
         self.info = InfoProxy(Info(constants.MAINNET_API_URL, False))
         if hasattr(self.info._info, 'ws_manager') and self.info._info.ws_manager:
             self.info._info.ws_manager.ws.on_error = self.on_websocket_error
             self.info._info.ws_manager.ws.on_close = self.on_websocket_close
 
-
-    def on_websocket_error(self, ws, error):
+    def on_websocket_error(self, ws: Any, error: Any) -> None:
         logger.error(f"Websocket error: {error}")
         telegram_utils.send_and_exit("Websocket error, restarting the application...")
 
-
-    def on_websocket_close(self, ws, close_status_code, close_msg):
+    def on_websocket_close(self, ws: Any, close_status_code: int, close_msg: str) -> None:
         logger.warning(f"Websocket closed: {close_msg}")
         telegram_utils.send_and_exit("Websocket closed, restarting the application...")
 
-
-    def get_exchange(self) -> Exchange | None:
-        key_file = os.environ.get("HTB_KEY_FILE")
+    def get_exchange(self) -> Optional[Exchange]:
+        key_file: Optional[str] = os.environ.get("HTB_KEY_FILE")
         if key_file is not None and os.path.isfile(key_file):
             with open(key_file, 'r') as file:
-                file_content = file.read()
-                ascii_only = file_content.encode("ascii", "ignore").decode("ascii").strip()
+                file_content: str = file.read()
+                ascii_only: str = file_content.encode("ascii", "ignore").decode("ascii").strip()
                 account: LocalAccount = eth_account.Account.from_key(ascii_only)
                 return Exchange(account, constants.MAINNET_API_URL, vault_address=os.environ.get("HTB_USER_VAULT"), account_address=os.environ["HTB_USER_WALLET"])
         return None
 
-    def get_sz_decimals(self):
-        meta = self.info.meta()
-        sz_decimals = {}
+    def get_sz_decimals(self) -> Dict[str, int]:
+        meta: Dict[str, Any] = self.info.meta()
+        sz_decimals: Dict[str, int] = {}
         for asset_info in meta["universe"]:
             sz_decimals[asset_info["name"]] = asset_info["szDecimals"]
         return sz_decimals
 
-
-    def _get_asset_position(self, user_state, selected_coin):
+    def _get_asset_position(self, user_state: Dict[str, Any], selected_coin: str) -> Optional[Dict[str, Any]]:
         return next(
             (asset_position['position'] for asset_position in user_state.get("assetPositions", [])
              if asset_position['position']['coin'] == selected_coin),
             None
         )
 
-
-    def get_size(self, user_state, selected_coin) -> float:
+    def get_size(self, user_state: Dict[str, Any], selected_coin: str) -> float:
         position = self._get_asset_position(user_state, selected_coin)
         return float(position['szi']) if position else 0.0
 
-
-    def get_entry_px_str(self, user_state, selected_coin) -> float:
+    def get_entry_px_str(self, user_state: Dict[str, Any], selected_coin: str) -> Optional[str]:
         position = self._get_asset_position(user_state, selected_coin)
-        return position['entryPx'] if position else None # type: ignore
+        return position['entryPx'] if position else None
 
-
-    def get_liquidation_px_str(self, user_state, selected_coin) -> float:
+    def get_liquidation_px_str(self, user_state: Dict[str, Any], selected_coin: str) -> Optional[str]:
         position = self._get_asset_position(user_state, selected_coin)
-        return position['liquidationPx'] if position else None # type: ignore
+        return position['liquidationPx'] if position else None
 
-
-    def get_entry_px(self, user_state, selected_coin) -> float:
+    def get_entry_px(self, user_state: Dict[str, Any], selected_coin: str) -> float:
         position = self._get_asset_position(user_state, selected_coin)
         return float(position['entryPx']) if position else 0.0
 
-
-    def get_unrealized_pnl(self, user_state, selected_coin) -> float:
+    def get_unrealized_pnl(self, user_state: Dict[str, Any], selected_coin: str) -> float:
         position = self._get_asset_position(user_state, selected_coin)
         return float(position['unrealizedPnl']) if position else 0.0
 
-
-    def get_return_on_equity(self, user_state, selected_coin) -> float:
+    def get_return_on_equity(self, user_state: Dict[str, Any], selected_coin: str) -> float:
         position = self._get_asset_position(user_state, selected_coin)
         return float(position['returnOnEquity']) if position else 0.0
 
-
-    def get_leverage(self, user_state, selected_coin) -> int | None:
+    def get_leverage(self, user_state: Dict[str, Any], selected_coin: str) -> Optional[int]:
         position = self._get_asset_position(user_state, selected_coin)
         if position:
             return int(position['leverage']['value'])
         return None
 
-
-    def get_coins_with_open_positions(self):
+    def get_coins_with_open_positions(self) -> List[str]:
         user_state = self.info.user_state(self.address)
         return [asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])]
 
-
     def get_coins_by_traded_volume(self) -> List[str]:
-        response_data = self.info.meta_and_asset_ctxs()
-        universe, coin_data = response_data[0]['universe'], response_data[1]
+        response_data: Any = self.info.meta_and_asset_ctxs()
+        universe: List[Dict[str, Any]] = response_data[0]['universe']
+        coin_data: List[Dict[str, Any]] = response_data[1]
 
-        coins = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
+        coins: List[Tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
         sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
         return [coin[0] for coin in reversed(sorted_coins[:75])]
 
+    def get_coins_reply_markup(self) -> InlineKeyboardMarkup:
+        coins: List[str] = self.get_coins_by_traded_volume()
+        open_position_coins: set[str] = set(self.get_coins_with_open_positions())
+        prioritized: List[str] = [c for c in coins if c in open_position_coins]
+        others: List[str] = [c for c in coins if c not in open_position_coins]
+        ordered_coins: List[str] = others + prioritized
 
-    def get_coins_reply_markup(self):
-        coins = self.get_coins_by_traded_volume()
-        open_position_coins = set(self.get_coins_with_open_positions())
-        prioritized = [c for c in coins if c in open_position_coins]
-        others = [c for c in coins if c not in open_position_coins]
-        ordered_coins = others + prioritized
-
-        keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in ordered_coins]
+        keyboard: List[List[InlineKeyboardButton]] = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in ordered_coins]
         keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
         return InlineKeyboardMarkup(keyboard)
-
 
     def get_hyperliquid_symbol(self, symbol: str) -> str:
         """Convert standard symbol to Hyperliquid format if needed."""
@@ -150,10 +150,9 @@ class HyperliquidUtils:
         }
         return symbol_mapping.get(symbol, symbol)
 
-
-    def fetch_cryptos(self, params: Dict[str, Any], page_count: int = 1) -> List[Dict]:
+    def fetch_cryptos(self, params: Dict[str, Any], page_count: int = 1) -> List[Dict[str, Any]]:
         """Fetch crypto data from CoinGecko API with configurable pagination."""
-        all_cryptos = []
+        all_cryptos: List[Dict[str, Any]] = []
         try:
             for page in range(1, page_count + 1):
                 params["page"] = page

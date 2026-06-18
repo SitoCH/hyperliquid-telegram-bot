@@ -63,7 +63,7 @@ These rules guide AI coding agents working in this repo. Focus on keeping the bo
 ## Testing and Safety When Modifying Code
 - Keep existing tests under `tests/` passing; when adding TA/strategy logic, add or extend tests beside the relevant module where patterns already exist.
 - Avoid introducing non-determinism in analysis logic (randomness, time-sensitive branching without explicit inputs), as this would make tests brittle and LLM prompts harder to reason about.
-- When touching trading code (`hyperliquid_trade.py`, `hyperliquid_orders.py`, strategies), **do not** change default order sizes, leverage, or risk parameters without explicit intent.
+- When touching trading code (`trade_conversation.py`, `trade_execution.py`, `trade_pricing.py`, `hyperliquid_orders.py`, strategies), **do not** change default order sizes, leverage, or risk parameters without explicit intent.
 
 ## How Agents Should Extend the Project
 - For new TA features:

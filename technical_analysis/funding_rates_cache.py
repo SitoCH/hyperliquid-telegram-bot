@@ -1,11 +1,9 @@
-import os
 import json
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from dacite import from_dict # type: ignore
+from dacite import from_dict
 from hyperliquid_utils.utils import hyperliquid_utils
-from typing import Dict, List, Any, Optional, Tuple, TypedDict, Callable
-from utils import log_execution_time
+from typing import Dict, List, Any, Optional
 
 # Calculate cache directory relative to project root
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -25,12 +23,12 @@ class FundingRateCache:
     rates: List[FundingRateEntry]
 
 
-
 def _get_funding_cache_file_path(coin: str) -> Path:
     """Get the path for the funding rate cache file of a specific coin"""
     if not CACHE_DIR.exists():
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
     return CACHE_DIR / f"{coin}_funding_rates.json"
+
 
 def _load_funding_from_disk(coin: str) -> Optional[FundingRateCache]:
     """Load funding rate data from disk"""
@@ -61,6 +59,7 @@ def _convert_funding_rate(rate: Dict[str, Any]) -> FundingRateEntry:
         float(str(rate['premium']))
     )
 
+
 def _fetch_new_funding_rates(coin: str, start_ts: int, end_ts: int) -> List[FundingRateEntry]:
     """Fetch new funding rates from HyperLiquid API"""
     try:
@@ -78,14 +77,14 @@ def get_funding_with_cache(coin: str, now: int, lookback_days: int) -> List[Fund
     # Try disk cache
     funding_rate_cache = _load_funding_from_disk(coin)
     if funding_rate_cache:
-        
+
         # Filter cached rates within requested time range
         cached_rates = [r for r in funding_rate_cache.rates if start_ts <= r.time <= end_ts]
-        
+
         # Check if cache is recent enough
         if cached_rates and funding_rate_cache.last_update >= end_ts - 3600000 / 12:  # 5 minutes in milliseconds
             return cached_rates
-            
+
         # Only fetch missing data
         if cached_rates:
             fetch_start = max(r.time for r in cached_rates) + 1
@@ -102,23 +101,24 @@ def get_funding_with_cache(coin: str, now: int, lookback_days: int) -> List[Fund
         _save_funding_to_disk(coin, FundingRateCache(now, funding_rates))
     return funding_rates
 
+
 def merge_funding_rates(
-    old_rates: List[FundingRateEntry], 
-    new_rates: List[FundingRateEntry], 
+    old_rates: List[FundingRateEntry],
+    new_rates: List[FundingRateEntry],
     lookback_days: int
 ) -> List[FundingRateEntry]:
     """Merge old and new funding rates, removing duplicates and keeping only within lookback period"""
     # Use timestamp as key to avoid duplicates
     merged = {r.time: r for r in old_rates}
     merged.update({r.time: r for r in new_rates})
-    
+
     # Sort by timestamp and filter by lookback period
     sorted_rates = sorted(merged.values(), key=lambda x: x.time)
-    
+
     if not sorted_rates:
         return []
-        
+
     latest_ts = max(r.time for r in sorted_rates)
     min_ts = latest_ts - (lookback_days * 86400000)
-    
+
     return [r for r in sorted_rates if r.time >= min_ts]

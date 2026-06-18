@@ -2,19 +2,19 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 import time
 import os
-from datetime import datetime, timedelta
 
 from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 from utils import fmt
 from logging_utils import logger
 
+
 async def check_profit_percentage(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
         total_balance = float(user_state['marginSummary']['accountValue'])
         available_balance = float(user_state['withdrawable'])
-        
+
         if available_balance > 100:
             message = [
                 "💰 <b>Available balance alert</b> 💰",
@@ -22,21 +22,21 @@ async def check_profit_percentage(context: ContextTypes.DEFAULT_TYPE) -> None:
                 f"Available balance: {fmt(available_balance)} USDC",
             ]
             await telegram_utils.send('\n'.join(message), parse_mode=ParseMode.HTML)
-        
+
         if user_state["assetPositions"]:
             total_pnl = sum(
                 float(asset_position['position']['unrealizedPnl'])
                 for asset_position in user_state["assetPositions"]
             )
-            
+
             pnl_percentage = (total_pnl / total_balance) * 100
-            
+
             if abs(pnl_percentage) > 50:
                 alert_info = {
                     True: ("🚀", "profit"),
                     False: ("📉", "loss")
                 }[pnl_percentage > 50]
-                
+
                 message = [
                     f"{alert_info[0]} <b>Unrealized {alert_info[1]} alert</b> {alert_info[0]}",
                     f"Total balance: {fmt(total_balance)} USDC",
@@ -50,20 +50,20 @@ async def check_profit_percentage(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-        
+
         if not user_state["assetPositions"]:
             return
-            
+
         trade_history = hyperliquid_utils.info.frontend_open_orders(hyperliquid_utils.address)
-        
+
         current_time = time.time()
         stale_duration_ms = 4 * 60 * 60 * 1000
 
         min_pnl_threshold = float(os.getenv('HTB_STALE_POSITION_MIN_PNL', '5'))
         auto_close_stale = os.getenv('HTB_AUTO_CLOSE_STALE_POSITIONS', 'False').lower() == 'true'
-        
+
         positions_to_close = []
-        
+
         for asset_position in user_state["assetPositions"]:
             position = asset_position["position"]
             coin = position["coin"]
@@ -74,18 +74,18 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
                 trade for trade in trade_history
                 if trade["coin"] == coin
             ]
-            
+
             if position_trades:
                 position_trades.sort(key=lambda x: int(x["timestamp"]))
                 oldest_trade = position_trades[0]
                 trade_time = int(oldest_trade["timestamp"])
-                
+
                 current_time_ms = current_time * 1000
                 position_duration_ms = current_time_ms - trade_time
-                
+
                 if position_duration_ms > stale_duration_ms:
                     dynamic_threshold = min_pnl_threshold * (stale_duration_ms / position_duration_ms)
-                    
+
                     if pnl_pct > dynamic_threshold:
                         positions_to_close.append({
                             "coin": coin,
@@ -111,6 +111,6 @@ async def check_positions_to_close(context: ContextTypes.DEFAULT_TYPE) -> None:
                     except Exception as e:
                         logger.critical(e, exc_info=True)
                         await telegram_utils.send(f"Failed to exit {coin}: {str(e)}")
-                
+
     except Exception as e:
         logger.critical(e, exc_info=True)

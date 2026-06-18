@@ -4,8 +4,10 @@ from hyperliquid.utils.types import UserEventsMsg, Fill
 from telegram_utils import telegram_utils
 from logging_utils import logger
 
+
 def get_fill_icon(closed_pnl: float) -> str:
     return "🟢" if closed_pnl > 0 else "🔴"
+
 
 def get_fill_description(initial_message: str, coin: str, size: str, fee: float, fee_token: str, amount: float | None = None, closed_pnl: float | None = None) -> str:
     fill_description = [
@@ -24,6 +26,7 @@ def get_fill_description(initial_message: str, coin: str, size: str, fee: float,
 
     logger.info(' '.join(fill_description))
     return '\n'.join(fill_description)
+
 
 def process_fill(fill: Fill) -> None:
     price = float(fill["px"])
@@ -55,6 +58,7 @@ def process_fill(fill: Fill) -> None:
         fill_message = json.dumps(fill)
 
     telegram_utils.queue_send(fill_message)
+
 
 def on_user_events(user_events: UserEventsMsg) -> None:
     user_events_data = user_events["data"]
