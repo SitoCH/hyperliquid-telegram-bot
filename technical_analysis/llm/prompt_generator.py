@@ -107,7 +107,7 @@ class LLMPromptGenerator:
         if df is None or df.empty or len(df) < 24:
             return 0.0
 
-        price_24h_ago = df['c'].iloc[-24] if len(df) >= 24 else df['c'].iloc[0]
+        price_24h_ago = float(df['c'].iloc[-24] if len(df) >= 24 else df['c'].iloc[0])
         return ((current_price - price_24h_ago) / price_24h_ago) * 100
 
     def _generate_candle_data_section(self, dataframes: Dict[Timeframe, pd.DataFrame]) -> List[str]:

@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
-from typing import TypedDict, List, Set, Any
+from typing import TypedDict, List, Set, Any, Final
 import pandas as pd
 
 
@@ -509,6 +509,64 @@ _TIMEFRAME_SETTINGS = {
 SHORT_TERM_TIMEFRAMES = {Timeframe.MINUTES_15}
 INTERMEDIATE_TIMEFRAMES = {Timeframe.MINUTES_30, Timeframe.HOUR_1}
 CONTEXT_TIMEFRAMES = {Timeframe.HOURS_4, Timeframe.HOURS_8}
+
+
+# Recalculate group weights based on updated phase weights
+SHORT_TERM_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in SHORT_TERM_TIMEFRAMES)
+INTERMEDIATE_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in INTERMEDIATE_TIMEFRAMES)
+CONTEXT_WEIGHT = sum(_TIMEFRAME_SETTINGS[tf].phase_weight for tf in CONTEXT_TIMEFRAMES)
+
+# Adjusted for intraday crypto trading focus
+STRONG_VOLUME_THRESHOLD: Final[float] = 0.82  # Increased to filter noise
+MODERATE_VOLUME_THRESHOLD: Final[float] = 0.45  # Increased for clearer distinction
+LOW_VOLUME_THRESHOLD: Final[float] = MODERATE_VOLUME_THRESHOLD * 0.68  # Adjusted ratio
+
+# Momentum thresholds optimized for hourly analysis
+STRONG_MOMENTUM: Final[float] = 0.88  # Increased for stronger signals
+MODERATE_MOMENTUM: Final[float] = 0.62  # Increased for clearer distinction
+WEAK_MOMENTUM: Final[float] = 0.38  # Slightly increased
+MIXED_MOMENTUM: Final[float] = 0.25  # Slightly increased for better classification
+LOW_MOMENTUM: Final[float] = 0.12  # Slightly increased to filter noise
+
+
+class MultiTimeframeDirection(Enum):
+    BULLISH = "bullish"
+    BEARISH = "bearish"
+    NEUTRAL = "neutral"
+
+
+@dataclass
+class TimeframeGroupAnalysis:
+    dominant_phase: WyckoffPhase
+    dominant_action: CompositeAction
+    internal_alignment: float
+    volume_strength: float
+    momentum_bias: MultiTimeframeDirection
+    group_weight: float
+    funding_sentiment: float  # -1 to 1, negative means bearish funding
+    liquidity_state: MarketLiquidity
+    volatility_state: VolatilityState
+    dominant_sign: WyckoffSign = WyckoffSign.NONE  # Add dominant Wyckoff sign
+    uncertain_phase: bool = True  # Add this field with default value True
+    funding_state: FundingState = FundingState.UNKNOWN
+
+
+@dataclass
+class MultiTimeframeContext:
+    description: str
+    should_notify: bool
+
+
+@dataclass
+class AllTimeframesAnalysis:
+    short_term: TimeframeGroupAnalysis
+    intermediate: TimeframeGroupAnalysis
+    context: TimeframeGroupAnalysis
+    overall_direction: MultiTimeframeDirection
+    confidence_level: float
+    alignment_score: float
+    momentum_intensity: float = 0.0
+    signal_quality: float = 0.0  # 0-100 composite signal quality score
 
 
 class SignificantLevelsData(TypedDict):

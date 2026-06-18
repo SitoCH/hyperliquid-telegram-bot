@@ -1,3 +1,4 @@
+from typing import Any
 import pytest
 from unittest.mock import MagicMock, patch
 from strategies.default_strategy.default_strategy import DefaultStrategy
@@ -10,8 +11,8 @@ class TestDefaultStrategy:
         context = MagicMock()
 
         with patch('strategies.default_strategy.default_strategy.logger') as mock_logger, \
-             patch('strategies.default_strategy.default_strategy.telegram_utils') as mock_tg, \
-             patch('strategies.default_strategy.default_strategy.CommandHandler') as mock_handler:
+                patch('strategies.default_strategy.default_strategy.telegram_utils') as mock_tg, \
+                patch('strategies.default_strategy.default_strategy.CommandHandler') as mock_handler:
             await strategy.init_strategy(context)
             mock_logger.info.assert_called_with('Initializing default strategy')
             assert mock_tg.add_buttons.call_count == 2
@@ -54,7 +55,7 @@ class TestDefaultStrategy:
             {"symbol": "XRP", "name": "Ripple", "market_cap": 100},
         ]
         all_mids = {"BTC": "50000", "ETH": "2500"}
-        meta = {}
+        meta: dict[str, Any] = {}
 
         filtered = strategy.filter_top_cryptos(cryptos, all_mids, meta)
 

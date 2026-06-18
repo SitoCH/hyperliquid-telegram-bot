@@ -35,7 +35,8 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = ["."]
 filterwarnings = [
-    "ignore:pkg_resources is deprecated as an API:DeprecationWarning"
+    "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
+    "ignore::telegram.warnings.PTBUserWarning"
 ]
 
 [tool.mypy]
@@ -51,4 +52,16 @@ disallow_incomplete_defs = false
 
 [[tool.mypy.overrides]]
 module = "hyperliquid.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "litellm.*",
+    "pandas_ta_classic.*",
+    "matplotlib.*",
+    "mplfinance.*",
+    "scipy.*",
+    "tzlocal.*",
+    "dacite.*"
+]
 ignore_missing_imports = true

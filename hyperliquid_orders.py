@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Dict, List, Any, Optional, Tuple, Callable
+from typing import Dict, List, Any, Tuple, Callable, TypedDict
 from logging_utils import logger
 from tabulate import simple_separated_format, tabulate
 from telegram import Update
@@ -10,28 +10,46 @@ from hyperliquid_utils.utils import hyperliquid_utils
 from utils import fmt
 
 
-async def get_orders_from_hyperliquid() -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
-    open_orders = hyperliquid_utils.info.frontend_open_orders(hyperliquid_utils.address)
-    grouped_data: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
+class HyperliquidOrder(TypedDict, total=False):
+    coin: str
+    orderType: str
+    triggerPx: str
+    sz: str
+    oid: int
+    side: str
+    limitPx: str
+
+
+class PositionInfo(TypedDict, total=False):
+    is_long: bool
+    mode: str
+    leverage: str
+    entry: List[Any]  # [label, price, distance]
+    liquidation: List[Any]  # [label, price, distance]
+
+
+async def get_orders_from_hyperliquid() -> Dict[str, Dict[str, List[HyperliquidOrder]]]:
+    open_orders: List[HyperliquidOrder] = hyperliquid_utils.info.frontend_open_orders(hyperliquid_utils.address)
+    grouped_data: Dict[str, Dict[str, List[HyperliquidOrder]]] = defaultdict(lambda: defaultdict(list))
     for order in open_orders:
         grouped_data[order["coin"]][order["orderType"]].append(order)
     return {coin: dict(order_types) for coin, order_types in sorted(grouped_data.items())}
 
 
-def get_sl_tp_orders(order_types: Dict[str, List[Dict[str, Any]]], is_long: bool) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def get_sl_tp_orders(order_types: Dict[str, List[HyperliquidOrder]], is_long: bool) -> Tuple[List[HyperliquidOrder], List[HyperliquidOrder]]:
     sl_raw_orders = order_types.get('Stop Market', [])
-    sl_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=is_long)
+    sl_raw_orders.sort(key=lambda x: float(x["triggerPx"]), reverse=is_long)
     tp_raw_orders = order_types.get('Take Profit Market', [])
-    tp_raw_orders.sort(key=lambda x: x["triggerPx"], reverse=is_long)
+    tp_raw_orders.sort(key=lambda x: float(x["triggerPx"]), reverse=is_long)
     return sl_raw_orders, tp_raw_orders
 
 
-def format_position_info(position: Dict[str, Any], mid: float) -> Dict[str, Any]:
+def format_position_info(position: Dict[str, Any], mid: float) -> PositionInfo:
     is_long = float(position['szi']) > 0
     entry_px = float(position['entryPx'])
     entry_distance = (entry_px / mid - 1) * (100 if is_long else -100)
 
-    info = {
+    info: PositionInfo = {
         'is_long': is_long,
         'mode': f"Mode: {'long' if is_long else 'short'}",
         'leverage': f"Leverage: {position['leverage']['value']}x",
@@ -46,7 +64,7 @@ def format_position_info(position: Dict[str, Any], mid: float) -> Dict[str, Any]
     return info
 
 
-def create_price_table(mid: float, position_info: Dict[str, Any], order_types: Dict[str, List[Dict[str, Any]]]) -> str:
+def create_price_table(mid: float, position_info: PositionInfo, order_types: Dict[str, List[HyperliquidOrder]]) -> str:
     is_long = position_info['is_long']
     sl_raw_orders, tp_raw_orders = get_sl_tp_orders(order_types, is_long)
 
@@ -113,7 +131,7 @@ async def get_open_orders(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await telegram_utils.reply(update, f"Failed to check orders: {str(e)}")
 
 
-def format_orders(raw_orders: List[Dict[str, Any]], mid: float, percentage_format: Callable[[float, float], float]) -> List[List[Any]]:
+def format_orders(raw_orders: List[HyperliquidOrder], mid: float, percentage_format: Callable[[float, float], float]) -> List[List[Any]]:
     return [
         [
             order['sz'],

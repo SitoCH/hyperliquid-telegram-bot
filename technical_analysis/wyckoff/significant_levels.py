@@ -2,7 +2,7 @@ from typing import List, Tuple, Dict, Optional, TypedDict
 import pandas as pd
 import numpy as np
 import time
-from scipy.special import expit  # type: ignore[import]
+from scipy.special import expit
 from tzlocal import get_localzone
 from .wyckoff_types import WyckoffState, WyckoffPhase, CompositeAction, FundingState, Timeframe
 from .wyckoff import STRONG_DEV_THRESHOLD, detect_wyckoff_phase
@@ -169,7 +169,7 @@ def score_level(
             if price > bb_upper * volatility_factor or price < bb_lower / volatility_factor:
                 score *= 0.85
 
-    return min(score, 1.0)
+    return float(min(score, 1.0))
 
 
 async def get_significant_levels_from_timeframe(coin: str, mid: float, timeframe: Timeframe, lookback_days: int) -> Tuple[List[float], List[float]]:

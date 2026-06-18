@@ -6,8 +6,7 @@ from logging_utils import logger
 from telegram_utils import telegram_utils
 from utils import exchange_enabled, fmt_price
 
-from ..wyckoff_types import SignificantLevelsData, Timeframe, WyckoffState
-from .wyckoff_multi_timeframe_types import MultiTimeframeDirection
+from .wyckoff_types import SignificantLevelsData, Timeframe, WyckoffState, MultiTimeframeDirection
 
 MIN_RR_DEFAULT = 1.4
 
@@ -232,23 +231,23 @@ def get_trade_suggestion(
             raw_tp = [r for r in tp_resistances if r > mid]
             raw_sl = [s for s in sl_supports if s < mid]
             # Transformations to place orders inside the level
-            def make_tp(lvl, buf): return lvl * (1 - buf)
-            def make_sl(lvl, buf): return lvl * (1 - buf)
-            def valid_pair(tp, sl): return tp > mid and sl < mid
+            def make_tp(lvl: float, buf: float) -> float: return lvl * (1 - buf)
+            def make_sl(lvl: float, buf: float) -> float: return lvl * (1 - buf)
+            def valid_pair(tp: float, sl: float) -> bool: return tp > mid and sl < mid
             # Distance and RR components
-            def tp_dist_unbuffered(lvl): return abs((lvl - mid) / mid)
-            def tp_pct(tp): return abs((tp - mid) / mid)
-            def sl_pct(sl): return abs((mid - sl) / mid)
+            def tp_dist_unbuffered(lvl: float) -> float: return abs((lvl - mid) / mid)
+            def tp_pct(tp: float) -> float: return abs((tp - mid) / mid)
+            def sl_pct(sl: float) -> float: return abs((mid - sl) / mid)
         else:
             side = "Short"
             raw_tp = [s for s in tp_supports if s < mid]
             raw_sl = [r for r in sl_resistances if r > mid]
-            def make_tp(lvl, buf): return lvl * (1 + buf)
-            def make_sl(lvl, buf): return lvl * (1 + buf)
-            def valid_pair(tp, sl): return tp < mid and sl > mid
-            def tp_dist_unbuffered(lvl): return abs((mid - lvl) / mid)
-            def tp_pct(tp): return abs((mid - tp) / mid)
-            def sl_pct(sl): return abs((sl - mid) / mid)
+            def make_tp(lvl: float, buf: float) -> float: return lvl * (1 + buf)
+            def make_sl(lvl: float, buf: float) -> float: return lvl * (1 + buf)
+            def valid_pair(tp: float, sl: float) -> bool: return tp < mid and sl > mid
+            def tp_dist_unbuffered(lvl: float) -> float: return abs((mid - lvl) / mid)
+            def tp_pct(tp: float) -> float: return abs((mid - tp) / mid)
+            def sl_pct(sl: float) -> float: return abs((sl - mid) / mid)
 
         for tp_level in raw_tp:
             dist_tp_pct = tp_dist_unbuffered(tp_level)

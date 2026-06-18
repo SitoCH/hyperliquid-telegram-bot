@@ -1,4 +1,5 @@
 import pytest
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from telegram.ext import ConversationHandler
 
@@ -50,7 +51,7 @@ class TestHandleCallbackCancel:
     """Tests for _handle_callback_cancel helper."""
 
     @pytest.mark.asyncio
-    async def test_cancel_edits_message_and_ends(self):
+    async def test_cancel_edits_message_and_ends(self) -> None:
         query = AsyncMock()
         result = await _handle_callback_cancel(query)
         query.edit_message_text.assert_called_once()
@@ -61,14 +62,14 @@ class TestHandleCallbackSelection:
     """Tests for _handle_callback_selection helper."""
 
     @pytest.mark.asyncio
-    async def test_no_query_returns_end(self):
+    async def test_no_query_returns_end(self) -> None:
         update = MagicMock()
         update.callback_query = None
         result = await _handle_callback_selection(update, int, "Error", AsyncMock())
         assert result == ConversationHandler.END
 
     @pytest.mark.asyncio
-    async def test_cancel_data_calls_cancel_handler(self):
+    async def test_cancel_data_calls_cancel_handler(self) -> None:
         update = MagicMock()
         query = AsyncMock()
         query.data = 'cancel'
@@ -80,7 +81,7 @@ class TestHandleCallbackSelection:
         assert result == ConversationHandler.END
 
     @pytest.mark.asyncio
-    async def test_none_data_calls_cancel_handler(self):
+    async def test_none_data_calls_cancel_handler(self) -> None:
         update = MagicMock()
         query = AsyncMock()
         query.data = None
@@ -90,7 +91,7 @@ class TestHandleCallbackSelection:
         assert result == ConversationHandler.END
 
     @pytest.mark.asyncio
-    async def test_valid_data_with_converter_calls_next_action(self):
+    async def test_valid_data_with_converter_calls_next_action(self) -> None:
         update = MagicMock()
         query = AsyncMock()
         query.data = '42'
@@ -457,7 +458,7 @@ class TestSelectedAmount:
         context = MagicMock()
         context.user_data = {'selected_coin': 'BTC'}
 
-        mock_user_state = {'assetPositions': []}
+        mock_user_state: dict[str, Any] = {'assetPositions': []}
 
         with patch('trade_conversation.hyperliquid_utils') as mock_hl, \
                 patch('trade_conversation.send_stop_loss_suggestions', new_callable=AsyncMock):
@@ -859,8 +860,8 @@ class TestSelectedTakeProfit:
 
 class TestOpenOrder:
     @pytest.mark.asyncio
-    async def test_open_order_no_amount(self):
-        user_data = {}
+    async def test_open_order_no_amount(self) -> None:
+        user_data: dict[str, Any] = {}
 
         with patch('trade_execution.telegram_utils') as mock_tg:
             mock_tg.send = AsyncMock()
@@ -870,8 +871,8 @@ class TestOpenOrder:
             mock_tg.send.assert_called_with("Error: No amount selected. Please restart the process.")
 
     @pytest.mark.asyncio
-    async def test_open_order_no_stop_loss(self):
-        user_data = {'amount': 100}
+    async def test_open_order_no_stop_loss(self) -> None:
+        user_data: dict[str, Any] = {'amount': 100}
 
         with patch('trade_execution.telegram_utils') as mock_tg:
             mock_tg.send = AsyncMock()
@@ -881,8 +882,8 @@ class TestOpenOrder:
             mock_tg.send.assert_called_with("Error: No stop loss selected. Please restart the process.")
 
     @pytest.mark.asyncio
-    async def test_open_order_no_take_profit(self):
-        user_data = {'amount': 100, 'stop_loss_price': 45000}
+    async def test_open_order_no_take_profit(self) -> None:
+        user_data: dict[str, Any] = {'amount': 100, 'stop_loss_price': 45000}
 
         with patch('trade_execution.telegram_utils') as mock_tg:
             mock_tg.send = AsyncMock()
@@ -892,8 +893,8 @@ class TestOpenOrder:
             mock_tg.send.assert_called_with("Error: No take profit selected. Please restart the process.")
 
     @pytest.mark.asyncio
-    async def test_open_order_no_coin(self):
-        user_data = {
+    async def test_open_order_no_coin(self) -> None:
+        user_data: dict[str, Any] = {
             'amount': 100,
             'stop_loss_price': 45000,
             'take_profit_price': 55000
@@ -908,9 +909,9 @@ class TestOpenOrder:
 
 
 class TestPlaceStopLossOrder:
-    def test_place_stop_loss_order_long(self):
+    def test_place_stop_loss_order_long(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
         with patch('trade_execution.hyperliquid_utils') as mock_hl:
             mock_hl.get_liquidation_px_str.return_value = None
@@ -921,9 +922,9 @@ class TestPlaceStopLossOrder:
 
             mock_exchange.order.assert_called_once()
 
-    def test_place_stop_loss_order_with_liquidation_adjustment_long(self):
+    def test_place_stop_loss_order_with_liquidation_adjustment_long(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
         with patch('trade_execution.hyperliquid_utils') as mock_hl:
             # Liquidation price that would trigger adjustment
@@ -935,9 +936,9 @@ class TestPlaceStopLossOrder:
 
             mock_exchange.order.assert_called_once()
 
-    def test_place_stop_loss_order_zero_price(self):
+    def test_place_stop_loss_order_zero_price(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
         with patch('trade_execution.hyperliquid_utils') as mock_hl:
             mock_hl.get_liquidation_px_str.return_value = None
@@ -951,9 +952,9 @@ class TestPlaceStopLossOrder:
 
 
 class TestPlaceStopLossAndTakeProfitOrders:
-    def test_place_both_orders(self):
+    def test_place_both_orders(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
         with patch('trade_execution.hyperliquid_utils') as mock_hl, \
                 patch('trade_execution.place_stop_loss_order') as mock_sl:
@@ -966,9 +967,9 @@ class TestPlaceStopLossAndTakeProfitOrders:
             mock_sl.assert_called_once()
             mock_exchange.order.assert_called_once()
 
-    def test_no_take_profit_when_zero(self):
+    def test_no_take_profit_when_zero(self) -> None:
         mock_exchange = MagicMock()
-        user_state = {}
+        user_state: dict[str, Any] = {}
 
         with patch('trade_execution.hyperliquid_utils') as mock_hl, \
                 patch('trade_execution.place_stop_loss_order') as mock_sl:

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict
 from hyperliquid.info import Info
 from .hyperliquid_ratelimiter import hyperliquid_rate_limiter
 from logging_utils import logger
@@ -6,7 +6,7 @@ from logging_utils import logger
 
 class InfoProxy:
     # Weight definitions for each endpoint
-    WEIGHTS = {
+    WEIGHTS: Dict[str, int] = {
         'all_mids': 2,
         'user_state': 2,
         'spot_user_state': 2,
@@ -23,13 +23,13 @@ class InfoProxy:
         'funding_history': 20
     }
 
-    def __init__(self, info: Info):
+    def __init__(self, info: Info) -> None:
         self._info = info
 
     def __getattr__(self, name: str) -> Any:
         attr = getattr(self._info, name)
         if callable(attr):
-            def wrapped(*args, **kwargs):
+            def wrapped(*args: Any, **kwargs: Any) -> Any:
                 result = attr(*args, **kwargs)
                 if name in self.WEIGHTS:
                     weight = self.WEIGHTS[name]

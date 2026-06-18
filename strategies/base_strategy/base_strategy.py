@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Any, Optional
 from dataclasses import dataclass
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -35,7 +35,7 @@ class BaseStrategyConfig:
     drift_check_threshold: float = 25.0
     position_drift_threshold: float = 25.0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate configuration parameters."""
         if not 1 <= self.leverage <= 10:
             raise ValueError("Leverage must be between 1 and 10")
@@ -90,7 +90,7 @@ class BaseStrategy(ABC):
     """
     _config: BaseStrategyConfig
 
-    def __init__(self, config: Optional[BaseStrategyConfig] = None):
+    def __init__(self, config: Optional[BaseStrategyConfig] = None) -> None:
         self._config = config or BaseStrategyConfig.default()
 
     @property
@@ -98,8 +98,8 @@ class BaseStrategy(ABC):
         return self._config
 
     def calculate_account_values(
-        self, user_state: Dict, leverage: int
-    ) -> Tuple[Dict[str, float], float, float]:
+        self, user_state: dict[str, Any], leverage: int
+    ) -> tuple[dict[str, float], float, float]:
         """Calculate various account values including positions and balances."""
         position_values = {
             pos["position"]["coin"]: float(pos["position"]["positionValue"])
@@ -115,14 +115,14 @@ class BaseStrategy(ABC):
 
     def calculate_allocations(
         self,
-        top_cryptos: List[Dict],
-        position_values: Dict[str, float],
+        top_cryptos: list[dict[str, Any]],
+        position_values: dict[str, float],
         tradeable_balance: float,
         total_market_cap: float,
-        cryptos: List[Dict],
+        cryptos: list[dict[str, Any]],
         usdc_balance: float,
         usdc_target_balance: float,
-    ) -> Tuple[List[AllocationData], List[PositionData], float]:
+    ) -> tuple[list[AllocationData], list[PositionData], float]:
         """Calculate allocation data for positions and USDC."""
         top_crypto_symbols = {coin["symbol"] for coin in top_cryptos}
         allocation_data = []
@@ -188,7 +188,7 @@ class BaseStrategy(ABC):
         tradeable_balance: float,
         total_market_cap: float,
         idx: Optional[int] = None,
-    ) -> List[List[Any]]:
+    ) -> list[list[Any]]:
         """Generate table rows for a single allocation."""
         market_cap_billion = allocation.market_cap / 1_000_000_000
         curr_value_pct = (allocation.current_value / tradeable_balance) * 100 if tradeable_balance > 0 else 0
@@ -217,14 +217,14 @@ class BaseStrategy(ABC):
 
     def generate_table_data(
         self,
-        allocation_data: List[AllocationData],
-        other_positions: List[PositionData],
+        allocation_data: list[AllocationData],
+        other_positions: list[PositionData],
         tradeable_balance: float,
         total_market_cap: float,
         usdc_balance: float,
         usdc_target_balance: float,
         usdc_difference: float,
-    ) -> List[List[Any]]:
+    ) -> list[list[Any]]:
         """Generate complete table data for display."""
         table_data = []
 
@@ -313,9 +313,9 @@ class BaseStrategy(ABC):
     async def display_crypto_info(
         self,
         update: Update,
-        cryptos: List[Dict],
-        all_mids: Dict[str, str],
-        meta: Dict
+        cryptos: list[dict[str, Any]],
+        all_mids: dict[str, str],
+        meta: dict[str, Any]
     ) -> None:
         """Display comprehensive crypto portfolio information."""
         try:
@@ -449,16 +449,21 @@ class BaseStrategy(ABC):
             )
 
     @abstractmethod
-    def get_strategy_params(self) -> Tuple[List[Dict], Dict[str, str], Dict]:
+    def get_strategy_params(self) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, Any]]:
         """Get strategy-specific parameters including crypto data and exchange info."""
         pass
 
     @abstractmethod
     def filter_top_cryptos(
         self,
-        cryptos: List[Dict],
-        all_mids: Dict[str, str],
-        meta: Dict
-    ) -> List[Dict]:
+        cryptos: list[dict[str, Any]],
+        all_mids: dict[str, str],
+        meta: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Filter and sort cryptos according to strategy criteria."""
+        pass
+
+    @abstractmethod
+    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Initialize the strategy (e.g., start repeating tasks)."""
         pass

@@ -1,10 +1,10 @@
 import io
 import os
-from typing import List, Optional
-import pandas as pd  # type: ignore[import]
+from typing import Optional, Any, cast
+import pandas as pd
 import matplotlib.pyplot as plt
-import mplfinance as mpf  # type: ignore[import]
-import numpy as np  # type: ignore[import]
+import mplfinance as mpf
+import numpy as np
 
 from utils import fmt_price
 from .wyckoff_types import WyckoffState, Timeframe
@@ -27,7 +27,7 @@ def heikin_ashi(df: pd.DataFrame) -> pd.DataFrame:
     ha_df.at[prekey, "o"] = df.at[prekey, "o"]
 
     for key in df.index[1:]:
-        ha_df.at[key, "o"] = (float(ha_df.at[prekey, "o"]) + float(ha_df.at[prekey, "c"])) / 2.0
+        ha_df.at[key, "o"] = (float(cast(Any, ha_df.at[prekey, "o"])) + float(cast(Any, ha_df.at[prekey, "c"]))) / 2.0
         prekey = key
 
     ha_df["h"] = pd.concat([ha_df.o, df.h], axis=1).max(axis=1)
@@ -114,7 +114,7 @@ def save_to_buffer(
     # Apply colors based on full dataset thresholds but only to plotting window data
     macd_hist_colors = df_plot["MACD_Hist"].apply(determine_color).values
 
-    def price_to_percent(price):
+    def price_to_percent(price: float) -> float:
         return ((price / mid) - 1) * 100
 
     level_lines = []
@@ -244,7 +244,7 @@ def generate_chart(
     coin: str,
     mid: float,
     use_heikin_ashi: Optional[bool] = None,
-) -> List[io.BytesIO]:
+) -> list[io.BytesIO]:
     chart_buffers = []
 
     plt.switch_backend("Agg")

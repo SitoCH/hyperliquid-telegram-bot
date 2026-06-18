@@ -1,6 +1,7 @@
 import pytest
-from typing import List, Dict, Tuple
+from typing import Any, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
+from telegram.ext import ContextTypes
 
 from strategies.base_strategy.base_strategy import (
     BaseStrategy,
@@ -149,13 +150,19 @@ class TestPositionData:
 class _ConcreteStrategy(BaseStrategy):
     """Concrete strategy subclass for testing BaseStrategy."""
 
-    def get_strategy_params(self) -> Tuple[List[Dict], Dict[str, str], Dict]:
+    def get_strategy_params(self) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, Any]]:
         return [], {}, {}
 
     def filter_top_cryptos(
-        self, cryptos: List[Dict], all_mids: Dict[str, str], meta: Dict
-    ) -> List[Dict]:
+        self,
+        cryptos: list[dict[str, Any]],
+        all_mids: dict[str, str],
+        meta: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         return cryptos
+
+    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE) -> None:
+        pass
 
 
 class TestBaseStrategyInstantiation:
@@ -163,7 +170,7 @@ class TestBaseStrategyInstantiation:
 
     def test_cannot_instantiate_abstract(self):
         with pytest.raises(TypeError):
-            BaseStrategy()
+            BaseStrategy()  # type: ignore[abstract]
 
     def test_concrete_subclass_no_config(self):
         strategy = _ConcreteStrategy()
@@ -187,7 +194,7 @@ class TestBaseStrategyInstantiation:
             pass
 
         with pytest.raises(TypeError):
-            IncompleteStrategy()
+            IncompleteStrategy()  # type: ignore[abstract]
 
 
 class TestCalculateAccountValues:
@@ -197,7 +204,7 @@ class TestCalculateAccountValues:
     def strategy(self):
         return _ConcreteStrategy()
 
-    def _make_user_state(self, positions=None, total_raw_usd="1000.0"):
+    def _make_user_state(self, positions: Any = None, total_raw_usd: str = "1000.0") -> dict[str, Any]:
         return {
             "assetPositions": positions or [],
             "crossMarginSummary": {
@@ -312,7 +319,7 @@ class TestCalculateAllocations:
             {"symbol": "SOL", "name": "Solana", "market_cap": 80_000_000_000,
              "price_change_percentage_1y_in_currency": 200.0},
         ]
-        position_values = {}
+        position_values: dict[str, float] = {}
         tradeable_balance = 6000.0
         total_market_cap = 1_280_000_000_000
         cryptos = top_cryptos
@@ -752,5 +759,3 @@ class TestRebalance:
                 await strategy.rebalance(update, context)
                 assert mock_tg.reply.call_count >= 2
                 first_call = mock_tg.reply.call_args_list[0]
-
-

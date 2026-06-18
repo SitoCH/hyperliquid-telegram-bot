@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from dacite import from_dict  # type: ignore
+from dacite import from_dict
 from hyperliquid_utils.utils import hyperliquid_utils
 from typing import Dict, List, Any, Optional
 

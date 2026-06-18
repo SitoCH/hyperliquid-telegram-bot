@@ -14,7 +14,7 @@ from ..candles_cache import get_candles_with_cache
 from .wyckoff_types import Timeframe, WyckoffState, SignificantLevelsData
 from ..funding_rates_cache import get_funding_with_cache, FundingRateEntry
 from .wyckoff_chart import generate_chart
-from .mtf.wyckoff_multi_timeframe import analyze_multi_timeframe
+from .mtf_engine import analyze_multi_timeframe
 from ..data_processor import prepare_dataframe, apply_indicators
 from .significant_levels import find_significant_levels
 from .wyckoff import detect_wyckoff_phase
@@ -24,7 +24,7 @@ from .phase_hysteresis import phase_hysteresis
 class WyckoffAnalyzer:
     """Wyckoff-based technical analysis implementation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Lookback values are DAYS, not candle counts.
         self.wyckoff_timeframes = {
             Timeframe.MINUTES_15: 6,
@@ -80,7 +80,7 @@ class WyckoffAnalyzer:
             candles_data[tf] = await get_candles_with_cache(coin, tf, now, lookback, hyperliquid_utils.info.candles_snapshot)
         return candles_data
 
-    def _analyze_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry], local_tz, coin: str) -> WyckoffState:
+    def _analyze_timeframe_data(self, df: pd.DataFrame, timeframe: Timeframe, funding_rates: List[FundingRateEntry], local_tz: Any, coin: str) -> WyckoffState:
         """Process data for a single timeframe with phase hysteresis to reduce flip-flopping."""
         if df.empty:
             return WyckoffState.unknown()
@@ -96,7 +96,7 @@ class WyckoffAnalyzer:
         # Update the state with the confirmed phase
         if confirmed_phase != state.phase:
             # Create a new state with the confirmed phase
-            from .wyckoff_description import generate_wyckoff_description
+            from .formatter import generate_wyckoff_description
             state = WyckoffState(
                 phase=confirmed_phase,
                 uncertain_phase=confirmed_uncertain,
@@ -184,7 +184,7 @@ class WyckoffAnalyzer:
                         continue
 
                     buf = chart
-                    buf.name = f"{coin}_{period}.png"  # type: ignore[attr-defined]
+                    buf.name = f"{coin}_{period}.png"
                     buf.seek(0)
 
                     media_group.append(

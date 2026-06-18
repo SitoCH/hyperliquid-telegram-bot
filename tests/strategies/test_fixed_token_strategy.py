@@ -1,7 +1,7 @@
 import os
 import pytest
 from unittest.mock import MagicMock, patch
-from typing import Dict, List
+from typing import Dict, List, Tuple, Any, Optional
 
 from strategies.fixed_token_strategy.fixed_token_strategy import (
     FixedTokenStrategy,
@@ -103,7 +103,7 @@ class TestFilterTopCryptos:
     def strategy(self):
         return FixedTokenStrategy()
 
-    def _make_coin(self, symbol, market_cap=1_000_000_000_000, yearly_change=50.0):
+    def _make_coin(self, symbol: str, market_cap: float = 1_000_000_000_000, yearly_change: Optional[float] = 50.0) -> dict[str, Any]:
         return {
             "symbol": symbol,
             "name": symbol,
@@ -111,7 +111,7 @@ class TestFilterTopCryptos:
             "price_change_percentage_1y_in_currency": yearly_change,
         }
 
-    def _make_meta(self, symbols_with_leverage: List[tuple]) -> Dict:
+    def _make_meta(self, symbols_with_leverage: List[Tuple[str, int]]) -> Dict[str, Any]:
         return {
             "universe": [
                 {"name": symbol, "maxLeverage": max_lev}
@@ -199,7 +199,7 @@ class TestFilterTopCryptos:
     def test_leverage_missing_from_meta_not_filtered(self, strategy):
         cryptos = [self._make_coin("BTC", 1_200_000_000_000, 120.5)]
         all_mids = {"BTC": "85000"}
-        meta = {"universe": []}
+        meta: dict[str, Any] = {"universe": []}
 
         result = strategy.filter_top_cryptos(cryptos, all_mids, meta)
 

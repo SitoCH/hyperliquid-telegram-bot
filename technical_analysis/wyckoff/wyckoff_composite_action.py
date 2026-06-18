@@ -1,4 +1,4 @@
-import pandas as pd  # type: ignore[import]
+import pandas as pd
 from typing import Final
 from .wyckoff_types import (
     CompositeAction, VolumeMetrics

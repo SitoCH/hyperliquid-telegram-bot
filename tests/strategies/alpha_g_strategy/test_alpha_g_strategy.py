@@ -1,11 +1,11 @@
 import pytest
-from typing import Dict
+from typing import Dict, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from strategies.alpha_g_strategy.alpha_g_strategy import AlphaGStrategy, ReversalSignal
 
 
-def _make_candle(o: float, h: float, l: float, c: float, T: int) -> Dict:
+def _make_candle(o: float, h: float, l: float, c: float, T: int) -> Dict[str, Any]:
     return {"o": str(o), "h": str(h), "l": str(l), "c": str(c), "T": T}
 
 
@@ -36,7 +36,7 @@ class TestCoinVolumeMapFromMeta:
         assert result == {"BTC": 1000000.0, "ETH": 500000.0, "SOL": 750000.0}
 
     def test_missing_volume_defaults_zero(self):
-        meta = (
+        meta: Any = (
             {"universe": [{"name": "BTC"}]},
             [{}]
         )
@@ -351,7 +351,7 @@ class TestDetectConfirmedReversal:
     def test_surge_then_reversal_then_confirmation(self):
         candles = []
         for i in range(5):
-            candles.append(_make_candle(100 + i*20, 100 + i*20 + 5, 100 + i*20 - 5, 100 + i*20 + 3, i * 100))
+            candles.append(_make_candle(100 + i * 20, 100 + i * 20 + 5, 100 + i * 20 - 5, 100 + i * 20 + 3, i * 100))
         candles.append(_make_candle(180, 175, 165, 170, 800))
         candles.append(_make_candle(170, 172, 166, 168, 1000))
 

@@ -1,5 +1,5 @@
-import pandas as pd  # type: ignore[import]
-import numpy as np  # type: ignore[import]
+import pandas as pd
+import numpy as np
 from typing import Final, List, Tuple
 from .wyckoff_types import (
     MarketPattern, VolatilityState, WyckoffState, WyckoffPhase, EffortResult,
@@ -7,7 +7,7 @@ from .wyckoff_types import (
     SHORT_TERM_TIMEFRAMES
 )
 from ..funding_rates_cache import FundingRateEntry
-from .wyckoff_description import generate_wyckoff_description
+from .formatter import generate_wyckoff_description
 from logging_utils import logger
 from .adaptive_thresholds import AdaptiveThresholdManager
 from .wyckoff_composite_action import detect_composite_action
@@ -350,7 +350,7 @@ def detect_wyckoff_phase(df: pd.DataFrame, timeframe: Timeframe, funding_rates: 
             adx_value=adx_value,
         )
 
-        return wyckoff_state  # type: ignore
+        return wyckoff_state
     except Exception as e:
         logger.error(f"Error in Wyckoff phase detection: {e}")
         return WyckoffState.unknown()
@@ -492,7 +492,7 @@ def analyze_funding_rates(funding_rates: List[FundingRateEntry]) -> FundingState
 
     # Convert to numpy array with error handling
     rates = np.array([
-        (1 + np.clip(rate.funding_rate, -0.5, 0.5)) ** 8760 - 1  # More reasonable clipping for extreme values
+        (1 + np.clip(rate.funding_rate, -0.01, 0.01)) ** 8760 - 1  # More reasonable clipping to prevent overflow
         for rate in funding_rates
     ])
     times = np.array([rate.time for rate in funding_rates])

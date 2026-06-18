@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import List, Dict, Any, ClassVar, Optional
+from typing import List, Dict, Any, ClassVar, Optional, Tuple
 
 import eth_account
 from eth_account.signers.local import LocalAccount
@@ -22,15 +22,15 @@ class HyperliquidUtils:
 
     def __init__(self) -> None:
 
-        user_wallet = os.environ.get("HTB_USER_WALLET")
+        user_wallet: Optional[str] = os.environ.get("HTB_USER_WALLET")
         if user_wallet is None:
             logger.error("HTB_USER_WALLET environment variable is not set")
             raise ValueError("HTB_USER_WALLET environment variable is required")
 
-        user_vault = os.environ.get("HTB_USER_VAULT")
-        self.address = user_vault if user_vault is not None else user_wallet
+        user_vault: Optional[str] = os.environ.get("HTB_USER_VAULT")
+        self.address: str = user_vault if user_vault is not None else user_wallet
 
-        self.info = InfoProxy(Info(constants.MAINNET_API_URL, True))
+        self.info: InfoProxy = InfoProxy(Info(constants.MAINNET_API_URL, True))
 
     def init_websocket(self) -> None:
         """Initialize WebSocket connection for live data."""
@@ -48,18 +48,18 @@ class HyperliquidUtils:
         telegram_utils.send_and_exit("Websocket closed, restarting the application...")
 
     def get_exchange(self) -> Optional[Exchange]:
-        key_file = os.environ.get("HTB_KEY_FILE")
+        key_file: Optional[str] = os.environ.get("HTB_KEY_FILE")
         if key_file is not None and os.path.isfile(key_file):
             with open(key_file, 'r') as file:
-                file_content = file.read()
-                ascii_only = file_content.encode("ascii", "ignore").decode("ascii").strip()
+                file_content: str = file.read()
+                ascii_only: str = file_content.encode("ascii", "ignore").decode("ascii").strip()
                 account: LocalAccount = eth_account.Account.from_key(ascii_only)
                 return Exchange(account, constants.MAINNET_API_URL, vault_address=os.environ.get("HTB_USER_VAULT"), account_address=os.environ["HTB_USER_WALLET"])
         return None
 
     def get_sz_decimals(self) -> Dict[str, int]:
-        meta = self.info.meta()
-        sz_decimals = {}
+        meta: Dict[str, Any] = self.info.meta()
+        sz_decimals: Dict[str, int] = {}
         for asset_info in meta["universe"]:
             sz_decimals[asset_info["name"]] = asset_info["szDecimals"]
         return sz_decimals
@@ -106,21 +106,22 @@ class HyperliquidUtils:
         return [asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])]
 
     def get_coins_by_traded_volume(self) -> List[str]:
-        response_data = self.info.meta_and_asset_ctxs()
-        universe, coin_data = response_data[0]['universe'], response_data[1]
+        response_data: Any = self.info.meta_and_asset_ctxs()
+        universe: List[Dict[str, Any]] = response_data[0]['universe']
+        coin_data: List[Dict[str, Any]] = response_data[1]
 
-        coins = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
+        coins: List[Tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
         sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
         return [coin[0] for coin in reversed(sorted_coins[:75])]
 
     def get_coins_reply_markup(self) -> InlineKeyboardMarkup:
-        coins = self.get_coins_by_traded_volume()
-        open_position_coins = set(self.get_coins_with_open_positions())
-        prioritized = [c for c in coins if c in open_position_coins]
-        others = [c for c in coins if c not in open_position_coins]
-        ordered_coins = others + prioritized
+        coins: List[str] = self.get_coins_by_traded_volume()
+        open_position_coins: set[str] = set(self.get_coins_with_open_positions())
+        prioritized: List[str] = [c for c in coins if c in open_position_coins]
+        others: List[str] = [c for c in coins if c not in open_position_coins]
+        ordered_coins: List[str] = others + prioritized
 
-        keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in ordered_coins]
+        keyboard: List[List[InlineKeyboardButton]] = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in ordered_coins]
         keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
         return InlineKeyboardMarkup(keyboard)
 
@@ -154,4 +155,3 @@ class HyperliquidUtils:
 
 
 hyperliquid_utils = HyperliquidUtils()
-

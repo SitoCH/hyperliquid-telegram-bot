@@ -3,9 +3,14 @@ import importlib
 import os
 import random
 import base64
-from typing import Any, Optional
+import warnings
+from typing import Any, Optional, cast
 import numpy as np
 from tzlocal import get_localzone
+from telegram.warnings import PTBUserWarning
+
+# Suppress PTB warnings about ConversationHandler and CallbackQueryHandler
+warnings.filterwarnings("ignore", category=PTBUserWarning)
 
 from logging_utils import logger
 from telegram import Update
@@ -21,9 +26,13 @@ from hyperliquid_alerts import check_profit_percentage, check_positions_to_close
 from hyperliquid_events import on_user_events
 from telegram_utils import conversation_cancel, telegram_utils
 from utils import exchange_enabled
+from strategies.base_strategy.base_strategy import BaseStrategy
 
 
 def main() -> None:
+    # Suppress PTB warnings about ConversationHandler and CallbackQueryHandler
+    warnings.filterwarnings("ignore", category=PTBUserWarning)
+
     hyperliquid_utils.init_websocket()
 
     hyperliquid_utils.info.subscribe(
@@ -41,7 +50,8 @@ def main() -> None:
     start_conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states=enter_position_states,  # type: ignore
-        fallbacks=[CommandHandler('cancel', conversation_cancel)]
+        fallbacks=[CommandHandler('cancel', conversation_cancel)],
+        per_message=False
     )
     telegram_utils.add_handler(start_conv_handler)
 
@@ -54,7 +64,8 @@ def main() -> None:
         states={
             SELECTING_COIN_FOR_TA: [CallbackQueryHandler(selected_coin_for_ta)]
         },
-        fallbacks=[CommandHandler('cancel', conversation_cancel)]
+        fallbacks=[CommandHandler('cancel', conversation_cancel)],
+        per_message=False
     )
     telegram_utils.add_handler(ta_conv_handler)
 
@@ -94,21 +105,24 @@ def main() -> None:
             states={
                 EXIT_CHOOSING: [CallbackQueryHandler(exit_selected_coin)]
             },
-            fallbacks=[CommandHandler('cancel', conversation_cancel)]
+            fallbacks=[CommandHandler('cancel', conversation_cancel)],
+            per_message=False
         )
         telegram_utils.add_handler(sell_conv_handler)
 
         enter_long_conv_handler = ConversationHandler(
             entry_points=[CommandHandler('long', enter_long)],
             states=enter_position_states,  # type: ignore
-            fallbacks=[CommandHandler('cancel', conversation_cancel)]
+            fallbacks=[CommandHandler('cancel', conversation_cancel)],
+            per_message=False
         )
         telegram_utils.add_handler(enter_long_conv_handler)
 
         enter_short_conv_handler = ConversationHandler(
             entry_points=[CommandHandler('short', enter_short)],
             states=enter_position_states,  # type: ignore
-            fallbacks=[CommandHandler('cancel', conversation_cancel)]
+            fallbacks=[CommandHandler('cancel', conversation_cancel)],
+            per_message=False
         )
         telegram_utils.add_handler(enter_short_conv_handler)
 
@@ -119,12 +133,12 @@ def main() -> None:
     # await telegram_utils.stop()
 
 
-def load_strategy(strategy_name: str) -> Any:
+def load_strategy(strategy_name: str) -> Optional[BaseStrategy]:
     module_name = f"strategies.{strategy_name}.{strategy_name}"
     try:
         strategy_module = importlib.import_module(module_name)
         strategy_class = getattr(strategy_module, strategy_name.title().replace('_', ''))
-        return strategy_class()
+        return cast(BaseStrategy, strategy_class())
     except (ModuleNotFoundError, AttributeError) as e:
         logger.critical(e, exc_info=True)
         return None
@@ -153,7 +167,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[
     return ConversationHandler.END
 
 
-async def shutdown(application: Application) -> None:
+async def shutdown(application: Application[Any, Any, Any, Any, Any, Any]) -> None:
     logger.info("Shutting down Hyperliquid Telegram bot...")
     # hyperliquid_utils.info.disconnect_websocket()
     os._exit(0)

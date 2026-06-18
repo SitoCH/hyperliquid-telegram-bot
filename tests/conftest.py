@@ -1,6 +1,11 @@
 import pytest
 import os
+import warnings
 from unittest.mock import MagicMock, AsyncMock, create_autospec
+from telegram.warnings import PTBUserWarning
+
+# Suppress PTB warnings globally during tests
+warnings.simplefilter("ignore", category=PTBUserWarning)
 
 from hyperliquid.exchange import Exchange
 from hyperliquid.info import Info
@@ -34,7 +39,7 @@ def wyckoff_state():
             description="Default test state",
         )
         defaults.update(overrides)
-        return WyckoffState(**defaults)
+        return WyckoffState(**defaults)  # type: ignore[arg-type]
     return _build
 
 
@@ -145,6 +150,7 @@ def sample_open_orders():
 @pytest.fixture
 def sample_positions():
     return [
-        {"coin": "BTC", "szi": "1.5", "entryPx": "40000", "liquidationPx": "39000", "leverage": {"value": "10", "type": "cross"}, "cumFunding": {"allTime": "50"}, "returnOnEquity": "0.15"},
+        {"coin": "BTC", "szi": "1.5", "entryPx": "40000", "liquidationPx": "39000", "leverage": {
+            "value": "10", "type": "cross"}, "cumFunding": {"allTime": "50"}, "returnOnEquity": "0.15"},
         {"coin": "ETH", "szi": "-10.0", "entryPx": "2000", "liquidationPx": "2100", "leverage": {"value": "5", "type": "cross"}, "cumFunding": {"allTime": "-20"}, "returnOnEquity": "-0.05"},
     ]

@@ -1,7 +1,7 @@
 import os
 import pytest
 from unittest.mock import MagicMock, patch
-from typing import Dict, List
+from typing import Dict, List, Any, Tuple
 
 from strategies.etf_strategy.etf_strategy import EtfStrategy, EtfConfig
 
@@ -77,7 +77,7 @@ class TestGetStrategyParams:
     """Tests for get_strategy_params."""
 
     @pytest.fixture
-    def strategy(self):
+    def strategy(self) -> EtfStrategy:
         return EtfStrategy()
 
     def test_default_params(self, strategy):
@@ -122,10 +122,10 @@ class TestFilterTopCryptos:
     """Tests for filter_top_cryptos."""
 
     @pytest.fixture
-    def strategy(self):
+    def strategy(self) -> EtfStrategy:
         return EtfStrategy()
 
-    def _make_coin(self, symbol, market_cap=1_000_000_000_000, yearly_change=50.0):
+    def _make_coin(self, symbol: str, market_cap: int = 1_000_000_000_000, yearly_change: float | None = 50.0) -> Dict[str, Any]:
         return {
             "symbol": symbol,
             "name": symbol,
@@ -133,7 +133,7 @@ class TestFilterTopCryptos:
             "price_change_percentage_1y_in_currency": yearly_change,
         }
 
-    def _make_meta(self, symbols_with_leverage: List[tuple]) -> Dict:
+    def _make_meta(self, symbols_with_leverage: List[Tuple[str, int]]) -> Dict[str, Any]:
         return {
             "universe": [
                 {"name": symbol, "maxLeverage": max_lev}
@@ -222,22 +222,22 @@ class TestFilterTopCryptos:
         assert len(result) == 1
         assert result[0]["symbol"] == "BTC"
 
-    def test_leverage_missing_from_meta(self, strategy):
+    def test_leverage_missing_from_meta(self, strategy: EtfStrategy):
         cryptos = [
             self._make_coin("BTC", 1_200_000_000_000, 120.5),
         ]
         all_mids = {"BTC": "85000"}
-        meta = {"universe": []}
+        meta: Dict[str, Any] = {"universe": []}
 
         result = strategy.filter_top_cryptos(cryptos, all_mids, meta)
 
         assert len(result) == 1
         assert result[0]["symbol"] == "BTC"
 
-    def test_no_universe_in_meta(self, strategy):
+    def test_no_universe_in_meta(self, strategy: EtfStrategy):
         cryptos = [self._make_coin("BTC", 1_200_000_000_000, 120.5)]
         all_mids = {"BTC": "85000"}
-        meta = {}
+        meta: Dict[str, Any] = {}
 
         result = strategy.filter_top_cryptos(cryptos, all_mids, meta)
 

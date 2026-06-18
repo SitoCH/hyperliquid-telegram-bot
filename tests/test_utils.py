@@ -71,7 +71,7 @@ class TestLogExecutionTime:
         mock_logger = MagicMock()
 
         @log_execution_time
-        def sync_func():
+        def sync_func() -> int:
             return 42
 
         with patch('utils.logger', mock_logger):
@@ -88,7 +88,7 @@ class TestLogExecutionTime:
         mock_logger = MagicMock()
 
         @log_execution_time
-        async def async_func():
+        async def async_func() -> int:
             return 99
 
         with patch('utils.logger', mock_logger):
@@ -102,16 +102,16 @@ class TestLogExecutionTime:
 
     def test_preserves_function_name(self):
         @log_execution_time
-        def some_test_func():
+        def some_test_func() -> None:
             pass
 
-        assert some_test_func.__name__ == "async_wrapper" or some_test_func.__name__ == "sync_wrapper"
+        assert some_test_func.__name__ == "some_test_func"
 
     def test_sync_with_args(self):
         mock_logger = MagicMock()
 
         @log_execution_time
-        def add(a, b):
+        def add(a: int, b: int) -> int:
             return a + b
 
         with patch('utils.logger', mock_logger):
@@ -122,7 +122,7 @@ class TestLogExecutionTime:
         mock_logger = MagicMock()
 
         @log_execution_time
-        async def multiply(a, b):
+        async def multiply(a: int, b: int) -> int:
             return a * b
 
         with patch('utils.logger', mock_logger):

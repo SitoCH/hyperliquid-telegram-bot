@@ -2,7 +2,7 @@ import json
 import asyncio
 import math
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Callable
 from .wyckoff.wyckoff_types import Timeframe
 from logging_utils import logger
 
@@ -75,7 +75,7 @@ def verify_candles(coin: str, candles: List[Dict[str, Any]], timeframe: Timefram
     Verify the integrity of candles data.
     Returns (is_valid, error_message)
     """
-    def _clear_all_timeframe_caches(coin: str):
+    def _clear_all_timeframe_caches(coin: str) -> None:
         """Clear cache for all timeframes of a given coin"""
         for tf in Timeframe:
             cache_file = _get_cache_file_path(coin, tf)
@@ -179,7 +179,7 @@ async def get_candles_with_cache(
     timeframe: Timeframe,
     now: int,
     lookback_days: int,
-    fetch_fn,
+    fetch_fn: Callable[[str, str, int, int], List[Dict[str, Any]]],
     include_incomplete: bool = False,
 ) -> List[Dict[str, Any]]:
     """

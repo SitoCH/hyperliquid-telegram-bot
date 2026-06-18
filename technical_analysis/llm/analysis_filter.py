@@ -12,7 +12,7 @@ class AnalysisFilter:
     # Lookback period for trend analysis
     TREND_LOOKBACK_PERIODS = 20
 
-    async def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool, funding_rates: List) -> Tuple[bool, str, float]:
+    async def should_run_llm_analysis(self, dataframes: Dict[Timeframe, pd.DataFrame], coin: str, interactive: bool, funding_rates: List[Any]) -> Tuple[bool, str, float]:
         """Use a cheap LLM model to determine if expensive analysis is warranted."""
 
         always_run_filter = os.getenv("HTB_ALWAYS_RUN_LLM_FILTER", "False").lower() == "true"
@@ -44,7 +44,7 @@ class AnalysisFilter:
             logger.error(f"LLM filter failed for {coin}: {str(e)}", exc_info=True)
             return False, "Fallback: LLM filter failed", 0.0
 
-    def _passes_pre_filter(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Tuple[bool, str, float]:
+    def _passes_pre_filter(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List[Any]) -> Tuple[bool, str, float]:
         """Quick pre-filter to catch obvious noise before LLM analysis.
 
         Simplified structure: early guards, metric collection, then a linear set of
@@ -434,7 +434,7 @@ class AnalysisFilter:
             return "; ".join(reasons)
         return None
 
-    def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List) -> Dict[str, Any]:
+    def _create_market_summary(self, dataframes: Dict[Timeframe, pd.DataFrame], funding_rates: List[Any]) -> Dict[str, Any]:
         """Create a comprehensive market summary for cheap LLM filtering."""
         summary: Dict[str, Dict[str, Any]] = {"timeframes": {}}
 
@@ -490,7 +490,7 @@ class AnalysisFilter:
         """Calculate volatility over the analysis period."""
         high_period = df['h'].iloc[-self.TREND_LOOKBACK_PERIODS:].max() if len(df) >= self.TREND_LOOKBACK_PERIODS else df['h'].max()
         low_period = df['l'].iloc[-self.TREND_LOOKBACK_PERIODS:].min() if len(df) >= self.TREND_LOOKBACK_PERIODS else df['l'].min()
-        return round((high_period - low_period) / current_price * 100, 2)
+        return float(round((high_period - low_period) / current_price * 100, 2))
 
     def _analyze_volume_data(self, df: pd.DataFrame) -> Dict[str, float]:
         """Analyze volume patterns and trends."""

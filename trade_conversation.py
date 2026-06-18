@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any, List, Union, Tuple
+from typing import Dict, Any, List, Union, Tuple, Callable, Awaitable, Optional
 from logging_utils import logger
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from telegram.ext import ConversationHandler, CallbackContext, ContextTypes
@@ -21,7 +21,7 @@ from trade_execution import (
 EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT, SELECTING_LEVERAGE = range(6)
 
 # Type alias for context types used throughout the module
-ContextType = Union[CallbackContext, ContextTypes.DEFAULT_TYPE]
+ContextType = Union[CallbackContext[Any, Any, Any, Any], ContextTypes.DEFAULT_TYPE]
 
 
 def _has_sl_tp_set(context: ContextType) -> bool:
@@ -53,12 +53,12 @@ async def _handle_callback_cancel(query: CallbackQuery) -> int:
 
 async def _handle_callback_selection(
     update: Update,
-    converter: Any,
+    converter: Optional[Callable[[Any], Any]],
     invalid_msg: str,
-    next_action: Any
+    next_action: Callable[[CallbackQuery, Any], Awaitable[int]]
 ) -> int:
     """Generic handler for callback query selections (amount, leverage, coin)."""
-    query: CallbackQuery = update.callback_query  # type: ignore
+    query: Optional[CallbackQuery] = update.callback_query
     if not query:
         return ConversationHandler.END
     await query.answer()
@@ -74,7 +74,7 @@ async def _handle_callback_selection(
         return ConversationHandler.END
 
 
-async def enter_position(update: Update, context: CallbackContext, enter_mode: str) -> int:
+async def enter_position(update: Update, context: ContextType, enter_mode: str) -> int:
     context.user_data.clear()  # type: ignore
     context.user_data["enter_mode"] = enter_mode  # type: ignore
     if skip_sl_tp_prompt():
@@ -93,11 +93,11 @@ async def enter_position(update: Update, context: CallbackContext, enter_mode: s
     return SELECTING_COIN
 
 
-async def enter_long(update: Update, context: CallbackContext) -> int:
+async def enter_long(update: Update, context: ContextType) -> int:
     return await enter_position(update, context, "long")
 
 
-async def enter_short(update: Update, context: CallbackContext) -> int:
+async def enter_short(update: Update, context: ContextType) -> int:
     return await enter_position(update, context, "short")
 
 
@@ -174,7 +174,7 @@ async def selected_leverage(update: Update, context: ContextType) -> int:
     return await _handle_callback_selection(update, int, "Invalid leverage.", process)
 
 
-async def send_stop_loss_suggestions(query: Any, context: ContextType) -> None:
+async def send_stop_loss_suggestions(query: CallbackQuery, context: ContextType) -> None:
     coin = context.user_data['selected_coin']  # type: ignore
     is_long = _is_long_position(context)
     await query.edit_message_text(f"Loading price suggestions for {coin}...")
@@ -188,22 +188,22 @@ async def _handle_price_input(
     update: Update,
     context: ContextType,
     field_name: str,
-    validator: Any,
+    validator: Callable[[float, float, bool], Optional[str]],
     current_state: int,
-    next_action: Any
+    next_action: Callable[[Update, ContextType, str, float], Awaitable[int]]
 ) -> int:
     """Generic handler for price input (stop loss or take profit)."""
     if not update.message:
         return ConversationHandler.END
 
     text = update.message.text
-    if text.lower() == 'cancel':  # type: ignore
+    if text and text.lower() == 'cancel':
         await telegram_utils.reply(update, OPERATION_CANCELLED)
         return ConversationHandler.END
 
     coin = context.user_data["selected_coin"]  # type: ignore
     try:
-        price = float(text)  # type: ignore
+        price = float(text) if text else 0.0
         mid = _get_mid_price(coin)
         is_long = _is_long_position(context)
 

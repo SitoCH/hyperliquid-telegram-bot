@@ -29,7 +29,7 @@ def mock_hyperliquid_utils():
 
 
 @pytest.mark.asyncio
-async def test_get_orders_from_hyperliquid(mock_hyperliquid_utils):
+async def test_get_orders_from_hyperliquid(mock_hyperliquid_utils) -> None:
     with patch('hyperliquid_orders.hyperliquid_utils', mock_hyperliquid_utils):
         result = await get_orders_from_hyperliquid()
         assert "BTC" in result
@@ -40,7 +40,7 @@ async def test_get_orders_from_hyperliquid(mock_hyperliquid_utils):
 
 
 @pytest.mark.asyncio
-async def test_get_open_orders_with_none_liquidation():
+async def test_get_open_orders_with_none_liquidation() -> None:
     update = MagicMock()
     context = MagicMock()
 
@@ -84,7 +84,7 @@ async def test_get_open_orders_with_none_liquidation():
         assert "Liq." not in sent_message  # Verify liquidation price is not included
 
 
-def test_get_sl_tp_orders():
+def test_get_sl_tp_orders() -> None:
     order_types = {
         "Stop Market": [
             {"triggerPx": "25000"},
@@ -97,17 +97,17 @@ def test_get_sl_tp_orders():
     }
 
     # Test long position
-    sl_orders, tp_orders = get_sl_tp_orders(order_types, is_long=True)
+    sl_orders, tp_orders = get_sl_tp_orders(order_types, is_long=True)  # type: ignore
     assert float(sl_orders[0]["triggerPx"]) > float(sl_orders[1]["triggerPx"])
     assert float(tp_orders[0]["triggerPx"]) > float(tp_orders[1]["triggerPx"])
 
     # Test short position
-    sl_orders, tp_orders = get_sl_tp_orders(order_types, is_long=False)
+    sl_orders, tp_orders = get_sl_tp_orders(order_types, is_long=False)  # type: ignore
     assert float(sl_orders[0]["triggerPx"]) < float(sl_orders[1]["triggerPx"])
     assert float(tp_orders[0]["triggerPx"]) < float(tp_orders[1]["triggerPx"])
 
 
-def test_format_orders():
+def test_format_orders() -> None:
     raw_orders = [
         {"sz": "1.0", "triggerPx": "30000"},
         {"sz": "0.5", "triggerPx": "31000"}
@@ -115,7 +115,7 @@ def test_format_orders():
     mid = 29000
     def percentage_format(triggerPx, mid): return (float(triggerPx) / mid - 1) * 100
 
-    result = format_orders(raw_orders, mid, percentage_format)
+    result = format_orders(raw_orders, mid, percentage_format)  # type: ignore
     assert len(result) == 2
     assert len(result[0]) == 3
     assert result[0][0] == "1.0"

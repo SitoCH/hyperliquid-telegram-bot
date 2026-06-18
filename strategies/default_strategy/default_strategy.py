@@ -1,6 +1,6 @@
 import datetime
 import random
-from typing import List, Dict, Tuple
+from typing import Any
 from telegram.ext import ContextTypes, CommandHandler
 from strategies.base_strategy.base_strategy import BaseStrategy
 from logging_utils import logger
@@ -14,7 +14,7 @@ class DefaultStrategy(BaseStrategy):
     It implementation is minimal and meant as a starting point.
     """
 
-    def get_strategy_params(self) -> Tuple[List[Dict], Dict[str, str], Dict]:
+    def get_strategy_params(self) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, Any]]:
         """Get standard parameters for the default strategy."""
         params = {
             "vs_currency": "usd",
@@ -30,10 +30,10 @@ class DefaultStrategy(BaseStrategy):
 
     def filter_top_cryptos(
         self,
-        cryptos: List[Dict],
-        all_mids: Dict[str, str],
-        meta: Dict
-    ) -> List[Dict]:
+        cryptos: list[dict[str, Any]],
+        all_mids: dict[str, str],
+        meta: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Filter to return available coins on Hyperliquid."""
         filtered = []
         for coin in cryptos:
@@ -47,7 +47,7 @@ class DefaultStrategy(BaseStrategy):
                 })
         return filtered
 
-    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE):
+    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Initialize with basic rebalance and analyze commands."""
         try:
             logger.info("Initializing default strategy")

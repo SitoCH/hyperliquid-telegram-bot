@@ -107,7 +107,7 @@ class AdaptiveThresholdManager:
 
             # Calculate adaptive breakout threshold
             base_threshold = 0.015
-            return max(0.01, base_threshold * (1 + volatility_factor * 5) * timeframe_factor)
+            return float(max(0.01, base_threshold * (1 + volatility_factor * 5) * timeframe_factor))
         except Exception as e:
             logger.warning(f"Error calculating breakout threshold: {e}", exc_info=True)
             return 0.015

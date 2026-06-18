@@ -1,10 +1,10 @@
-import os
-from typing import List, Optional, NamedTuple
+from typing import List, Optional, NamedTuple, Dict, Any
 from technical_analysis.wyckoff.significant_levels import get_significant_levels_from_timeframe
 from technical_analysis.wyckoff.wyckoff_types import Timeframe
 from hyperliquid_utils.utils import hyperliquid_utils
 from utils import fmt, fmt_price
 from tabulate import tabulate, simple_separated_format
+
 
 class PriceSuggestion(NamedTuple):
     type: str
@@ -107,7 +107,7 @@ def px_round(px: float, sz_decimals: int) -> float:
 
 
 def get_adjusted_stop_loss_trigger(
-    user_state: dict,
+    user_state: Dict[str, Any],
     coin: str,
     is_long: bool,
     stop_loss_price: float

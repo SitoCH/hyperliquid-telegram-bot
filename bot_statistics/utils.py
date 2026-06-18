@@ -1,5 +1,4 @@
 import bisect
-from datetime import datetime
 
 
 def get_historical_price(timestamp: int, price_history: dict[int, float]) -> float | None:
@@ -17,7 +16,7 @@ def get_historical_price(timestamp: int, price_history: dict[int, float]) -> flo
         return None
 
     timestamps = sorted(price_history.keys())
-    
+
     # Find the index where timestamp would be inserted
     idx = bisect.bisect_left(timestamps, timestamp)
 
@@ -36,17 +35,3 @@ def get_historical_price(timestamp: int, price_history: dict[int, float]) -> flo
             return price_history[before]
         else:
             return price_history[after]
-
-
-def format_timestamp(timestamp_ms: int, format_str: str = '%Y-%m-%d') -> str:
-    """
-    Format a millisecond timestamp into a string.
-
-    Args:
-        timestamp_ms: Timestamp in milliseconds
-        format_str: Strftime format string
-
-    Returns:
-        Formatted date string
-    """
-    return datetime.fromtimestamp(timestamp_ms / 1000).strftime(format_str)

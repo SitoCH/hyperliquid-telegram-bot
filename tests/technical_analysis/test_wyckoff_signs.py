@@ -7,14 +7,21 @@ from technical_analysis.wyckoff.wyckoff_types import WyckoffSign, Timeframe
 TF = Timeframe.HOUR_1
 
 
-def _make_df(close_prices, volumes=None, opens=None, highs=None, lows=None, extra_cols=None):
+def _make_df(
+    close_prices: list[float],
+    volumes: list[float] | None = None,
+    opens: list[float] | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
+    extra_cols: dict[str, list[float]] | None = None,
+) -> pd.DataFrame:
     n = len(close_prices)
     data = {
-        'o': opens if opens else [p * 0.999 for p in close_prices],
-        'h': highs if highs else [p * 1.005 for p in close_prices],
-        'l': lows if lows else [p * 0.995 for p in close_prices],
-        'c': close_prices,
-        'v': volumes if volumes else [1000.0] * n,
+        "o": opens if opens else [p * 0.999 for p in close_prices],
+        "h": highs if highs else [p * 1.005 for p in close_prices],
+        "l": lows if lows else [p * 0.995 for p in close_prices],
+        "c": close_prices,
+        "v": volumes if volumes else [1000.0] * n,
     }
     if extra_cols:
         data.update(extra_cols)
@@ -145,7 +152,7 @@ class TestAutomaticRally:
 
 class TestSecondaryTest:
 
-    def _st_df(self):
+    def _st_df(self) -> pd.DataFrame:
         base = [100.0]
         for i in range(1, 29):
             base.append(base[-1] + (-0.5 if i % 3 == 0 else 0.3))
@@ -248,7 +255,7 @@ class TestUpthrust:
 
 class TestSecondaryTestResistance:
 
-    def _str_df(self):
+    def _str_df(self) -> pd.DataFrame:
         base = [100.0]
         for i in range(1, 29):
             base.append(base[-1] + (0.5 if i % 3 == 0 else -0.3))
@@ -321,7 +328,7 @@ class TestSignScoring:
     def test_all_signs_none_when_scores_below_minimum(self):
         prices = [100.0] * 30
         for i in range(1, 30):
-            prices[i] = prices[i-1] + np.random.default_rng(7).normal(0, 0.1)
+            prices[i] = prices[i - 1] + np.random.default_rng(7).normal(0, 0.1)
         df = _make_df(prices, volumes=[1000.0] * 30)
         assert detect_wyckoff_signs(df, 0.1, 0.0, False, False, TF) == WyckoffSign.NONE
 
@@ -345,7 +352,7 @@ class TestTimeframeBehavior:
     def test_all_configured_timeframes_return_enum(self):
         prices = [100.0] * 40
         for tf in [Timeframe.MINUTES_15, Timeframe.MINUTES_30, Timeframe.HOUR_1, Timeframe.HOURS_4, Timeframe.HOURS_8]:
-            result = detect_wyckoff_signs(pd.DataFrame({'c': prices, 'h': [101.0]*40, 'l': [99.0]*40, 'o': [100.0]*40, 'v': [1000.0]*40}),
+            result = detect_wyckoff_signs(pd.DataFrame({'c': prices, 'h': [101.0] * 40, 'l': [99.0] * 40, 'o': [100.0] * 40, 'v': [1000.0] * 40}),
                                           0.0, 0.0, False, False, tf)
             assert isinstance(result, WyckoffSign)
 

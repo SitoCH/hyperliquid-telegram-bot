@@ -1,6 +1,7 @@
 import litellm
-from typing import Literal
-from logging_utils import logger, logging
+import logging
+from typing import Literal, Any
+from logging_utils import logger
 
 
 class LiteLLMClient:
@@ -14,7 +15,7 @@ class LiteLLMClient:
         "additional text or formatting."
     )
 
-    def __init__(self):
+    def __init__(self) -> None:
         litellm.use_litellm_proxy = True
         logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 
@@ -22,7 +23,7 @@ class LiteLLMClient:
         """Call LiteLLM API for AI analysis and return response."""
 
         try:
-            response = await litellm.acompletion(
+            response: Any = await litellm.acompletion(
                 model=model,
                 messages=[
                     {"role": "system", "content": self.SYSTEM_PROMPT},
@@ -34,7 +35,7 @@ class LiteLLMClient:
                 timeout=60
             )
 
-            content: str = response.choices[0].message.content  # type: ignore
+            content: str = response.choices[0].message.content
             return content.strip().removeprefix("```json").removesuffix("```").strip()
 
         except Exception as e:

@@ -6,6 +6,7 @@ from hyperliquid_utils.utils import hyperliquid_utils
 from telegram_utils import telegram_utils
 from trade_pricing import px_round, get_adjusted_stop_loss_trigger
 
+
 def has_order_error(result: Any) -> bool:
     """Check if order result contains an error."""
     if not result or not isinstance(result, dict):
@@ -30,7 +31,7 @@ def get_order_error_message(result: Any) -> str:
         statuses = response.get('data', {}).get('statuses', [])
         for status in statuses:
             if 'error' in status:
-                return status['error']
+                return str(status['error'])
     return "Unknown order error"
 
 

@@ -39,7 +39,7 @@ def _calculate_spot_balance(spot_state: Dict[str, Any], token_prices: Dict[str, 
     )
 
 
-def _calculate_stacked_balance(staking_summary: Dict[str, float], token_prices: Dict[str, float]) -> float:
+def _calculate_stacked_balance(staking_summary: Dict[str, Any], token_prices: Dict[str, float]) -> float:
     """Calculate total stacked balance from delegator info and token prices."""
     hype_price = token_prices.get("HYPE", 0.0)
 
@@ -257,7 +257,7 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 reverse=True
             )
 
-            def format_position(position):
+            def format_position(position: dict[str, Any]) -> str:
                 direction = "L" if float(position['szi']) > 0 else "S"
                 coin = position['coin'][:4] + "." if len(position['coin']) > 4 else position['coin']
                 return f"{direction} {coin}"
@@ -293,7 +293,7 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await telegram_utils.reply(update, f"Failed to fetch positions: {str(e)}")
 
 
-def _get_token_prices():
+def _get_token_prices() -> dict[str, float]:
     """Get token prices from market data."""
     metadata, market_data = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
     tokens, universe = metadata["tokens"], metadata["universe"]
@@ -320,7 +320,7 @@ def _get_token_prices():
     return token_prices
 
 
-async def spot_positions_messages(tablefmt, spot_user_state):
+async def spot_positions_messages(tablefmt: Any, spot_user_state: dict[str, Any]) -> list[str]:
     """Generate messages for spot positions, sorted by USD value."""
 
     if not spot_user_state.get('balances'):
@@ -373,7 +373,7 @@ async def spot_positions_messages(tablefmt, spot_user_state):
     ]
 
 
-def vault_positions_messages(tablefmt, vaults: List[Dict[str, Any]]):
+def vault_positions_messages(tablefmt: Any, vaults: list[dict[str, Any]]) -> list[str]:
     """Generate messages for vault positions, sorted by USD value."""
 
     if not vaults:

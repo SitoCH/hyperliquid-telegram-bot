@@ -1,4 +1,5 @@
 import pytest
+from typing import Any, Mapping, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
@@ -62,7 +63,7 @@ class TestCalculateSpotBalance:
 
     def test_single_balance(self):
         spot_state = {"balances": [{"coin": "BTC", "total": "2.0"}]}
-        token_prices = {"BTC": 50000}
+        token_prices = {"BTC": 50000.0}
         assert _calculate_spot_balance(spot_state, token_prices) == 100000.0
 
     def test_multiple_balances(self):
@@ -72,12 +73,12 @@ class TestCalculateSpotBalance:
                 {"coin": "ETH", "total": "10.0"},
             ]
         }
-        token_prices = {"BTC": 50000, "ETH": 2000}
+        token_prices = {"BTC": 50000.0, "ETH": 2000.0}
         assert _calculate_spot_balance(spot_state, token_prices) == 70000.0
 
     def test_missing_price_defaults_to_zero(self):
         spot_state = {"balances": [{"coin": "UNKNOWN", "total": "5.0"}]}
-        token_prices = {"BTC": 50000}
+        token_prices = {"BTC": 50000.0}
         assert _calculate_spot_balance(spot_state, token_prices) == 0.0
 
     def test_missing_balances_key(self):
@@ -110,7 +111,7 @@ class TestGetTokenPrices:
             "tokens": [{"name": "USDC"}, {"name": "HYPE"}],
             "universe": [{"tokens": [1, 0], "index": 0}],
         }
-        market_data = [{"midPx": "25.0"}]
+        market_data: Any = [{"midPx": "25.0"}]
 
         with patch("hyperliquid_positions.hyperliquid_utils") as mock_hl:
             mock_hl.info.spot_meta_and_asset_ctxs.return_value = (metadata, market_data)
@@ -119,12 +120,12 @@ class TestGetTokenPrices:
         assert prices["USDC"] == 1.0
         assert prices["HYPE"] == 25.0
 
-    def test_inverse_quote(self):
+    def test_inverse_quote(self) -> None:
         metadata = {
             "tokens": [{"name": "USDC"}, {"name": "BTC"}],
             "universe": [{"tokens": [0, 1], "index": 0}],
         }
-        market_data = [{"midPx": "0.00002"}]
+        market_data: list[Any] = [{"midPx": "0.00002"}]
 
         with patch("hyperliquid_positions.hyperliquid_utils") as mock_hl:
             mock_hl.info.spot_meta_and_asset_ctxs.return_value = (metadata, market_data)
@@ -132,12 +133,12 @@ class TestGetTokenPrices:
 
         assert prices["BTC"] == pytest.approx(50000.0, rel=1e-9)
 
-    def test_skip_no_mid_price(self):
+    def test_skip_no_mid_price(self) -> None:
         metadata = {
             "tokens": [{"name": "USDC"}, {"name": "HYPE"}],
             "universe": [{"tokens": [1, 0], "index": 0}],
         }
-        market_data = [{}]
+        market_data: list[Any] = [{}]
 
         with patch("hyperliquid_positions.hyperliquid_utils") as mock_hl:
             mock_hl.info.spot_meta_and_asset_ctxs.return_value = (metadata, market_data)
@@ -145,12 +146,12 @@ class TestGetTokenPrices:
 
         assert "HYPE" not in prices
 
-    def test_skip_no_market_data(self):
+    def test_skip_no_market_data(self) -> None:
         metadata = {
             "tokens": [{"name": "USDC"}, {"name": "HYPE"}],
             "universe": [{"tokens": [1, 0], "index": 0}],
         }
-        market_data = [None]
+        market_data: list[Any] = [None]
 
         with patch("hyperliquid_positions.hyperliquid_utils") as mock_hl:
             mock_hl.info.spot_meta_and_asset_ctxs.return_value = (metadata, market_data)
@@ -305,14 +306,14 @@ class TestFormatPortfolioMessage:
 
 
 def make_user_state(
-    positions=None,
-    cross_margin_account_value="10000",
-    total_margin_used="3000",
-    total_ntl_pos="2500",
-    margin_account_value="10000",
-    withdrawable="5000",
-    cross_maintenance_margin="500",
-):
+    positions: list[dict[str, Any]] | None = None,
+    cross_margin_account_value: str = "10000",
+    total_margin_used: str = "3000",
+    total_ntl_pos: str = "2500",
+    margin_account_value: str = "10000",
+    withdrawable: str = "5000",
+    cross_maintenance_margin: str = "500",
+) -> dict[str, Any]:
     return {
         "assetPositions": positions or [],
         "crossMarginSummary": {
@@ -336,7 +337,7 @@ def make_user_state(
 class TestGetPortfolioBalance:
     def setup_mocks(self, mock_hl, perp_state=None, spot_state=None,
                     staking_summary=None, vault_equities=None,
-                    spot_meta=None):
+                    spot_meta=None) -> None:
         mock_hl.address = "0xtest"
         mock_hl.info.user_state.return_value = perp_state or make_user_state()
         mock_hl.info.spot_user_state.return_value = spot_state or {"balances": []}
@@ -523,8 +524,8 @@ class TestVaultPositionsMessages:
 
 
 def make_asset_position(coin, szi, entry_px, unrealized_pnl,
-                         return_on_equity, margin_used, position_value,
-                         leverage_value, cum_funding_since_open):
+                        return_on_equity, margin_used, position_value,
+                        leverage_value, cum_funding_since_open) -> dict[str, Any]:
     return {
         "position": {
             "coin": coin, "szi": szi, "entryPx": entry_px,

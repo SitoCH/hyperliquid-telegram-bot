@@ -34,15 +34,13 @@ class TestTelegramUtilsInit:
         with patch.dict(os.environ, {}, clear=True):
             from telegram_utils import TelegramUtils
             instance = TelegramUtils()
-            with pytest.raises(AttributeError):
-                _ = instance.telegram_app
+            assert instance.telegram_app is None
 
     def test_init_missing_chat_id(self):
         with patch.dict(os.environ, {"HTB_TOKEN": "tok"}, clear=True):
             from telegram_utils import TelegramUtils
             instance = TelegramUtils()
-            with pytest.raises(AttributeError):
-                _ = instance.telegram_app
+            assert instance.telegram_app is None
 
 
 class TestTelegramUtilsReplyMarkup:
@@ -120,8 +118,7 @@ class TestTelegramUtilsReply:
         instance = TelegramUtils()
         update = MagicMock()
         update.message = None
-        result = await instance.reply(update, "Hello")
-        assert result is None
+        await instance.reply(update, "Hello")
 
 
 @pytest.mark.asyncio

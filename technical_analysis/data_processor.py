@@ -5,13 +5,13 @@ Extracted from hyperliquid_candles.py for better modularity.
 
 from typing import List, Dict, Any, Tuple, Optional
 import pandas as pd
-import pandas_ta_classic as ta  # type: ignore[import]
+import pandas_ta_classic as ta
 
 from logging_utils import logger
 from .wyckoff.wyckoff_types import Timeframe
 
 
-def prepare_dataframe(candles: List[Dict[str, Any]], local_tz) -> pd.DataFrame:
+def prepare_dataframe(candles: List[Dict[str, Any]], local_tz: Any) -> pd.DataFrame:
     """Prepare DataFrame from candles data with error handling"""
     if not candles:
         # Return empty DataFrame with expected columns
@@ -120,10 +120,10 @@ def _add_bollinger_bands(df: pd.DataFrame, timeframe: Optional[Timeframe] = None
     bb_std = 2.0
 
     bb = ta.bbands(df["c"], length=bb_period, std=bb_std)
-    df['BB_lower'] = bb[f'BBL_{bb_period}_{bb_std}']  # type: ignore[assignment]
-    df['BB_middle'] = bb[f'BBM_{bb_period}_{bb_std}']  # type: ignore[assignment]
-    df['BB_upper'] = bb[f'BBU_{bb_period}_{bb_std}']  # type: ignore[assignment]
-    df['BB_width'] = bb[f'BBB_{bb_period}_{bb_std}']  # type: ignore[assignment]
+    df['BB_lower'] = bb[f'BBL_{bb_period}_{bb_std}']
+    df['BB_middle'] = bb[f'BBM_{bb_period}_{bb_std}']
+    df['BB_upper'] = bb[f'BBU_{bb_period}_{bb_std}']
+    df['BB_width'] = bb[f'BBB_{bb_period}_{bb_std}']
 
 
 def _add_volume_indicators(df: pd.DataFrame) -> None:
@@ -145,13 +145,13 @@ def _add_volume_indicators(df: pd.DataFrame) -> None:
     df['v_sma'] = v_sma
 
     # Handle division by zero and null values
-    df['v_ratio'] = df['v'] / v_sma.replace(0, df['v'].mean())  # type: ignore[assignment]
+    df['v_ratio'] = df['v'] / v_sma.replace(0, df['v'].mean())
     df['v_ratio'] = df['v_ratio'].fillna(1.0)
 
     # Volume trend (short vs long SMA)
     v_short = ta.sma(df['v'], length=v_short_period)
     v_long = ta.sma(df['v'], length=v_long_period)
-    df['v_trend'] = (v_short / v_long.replace(0, v_short.mean())).fillna(1.0)  # type: ignore[assignment]
+    df['v_trend'] = (v_short / v_long.replace(0, v_short.mean())).fillna(1.0)
 
 
 def _add_atr_indicator(df: pd.DataFrame, atr_length: int) -> None:

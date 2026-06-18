@@ -11,7 +11,7 @@ import time
 from typing import cast
 
 from telegram import Update
-from telegram.ext import CallbackContext, ContextTypes, ConversationHandler
+from telegram.ext import ContextTypes, ConversationHandler
 
 # Add analysis mode enum
 from enum import Enum
@@ -29,7 +29,7 @@ ANALYSIS_MODE = AnalysisMode(os.getenv("HTB_ANALYSIS_MODE", "wyckoff").lower())
 SELECTING_COIN_FOR_TA = range(1)
 
 
-async def execute_ta(update: Update, context: CallbackContext) -> int:
+async def execute_ta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not update.message:
         return ConversationHandler.END
 
@@ -44,7 +44,7 @@ async def execute_ta(update: Update, context: CallbackContext) -> int:
     return cast(int, SELECTING_COIN_FOR_TA)
 
 
-async def selected_coin_for_ta(update: Update, context: CallbackContext) -> int:
+async def selected_coin_for_ta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if not update.callback_query:
         return ConversationHandler.END
 
@@ -75,7 +75,7 @@ def has_minimum_balance() -> bool:
     return True
 
 
-async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE):
+async def analyze_candles_for_coin_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Process coins one at a time with rate limiting."""
 
     coins_to_analyze = context.job.data['coins_to_analyze']  # type: ignore

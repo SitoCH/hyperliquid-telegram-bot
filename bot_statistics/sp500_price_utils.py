@@ -3,7 +3,8 @@ import os
 from datetime import datetime
 from typing import Dict, Optional
 from logging_utils import logger
-from .utils import get_historical_price, format_timestamp
+from .utils import get_historical_price
+from hyperliquid_utils.time_utils import format_timestamp
 
 
 def get_sp500_price_history(start_timestamp: int) -> Dict[int, float]:

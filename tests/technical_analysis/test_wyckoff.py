@@ -17,7 +17,14 @@ from technical_analysis.funding_rates_cache import FundingRateEntry
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
-def _make_df(close_prices, volumes=None, opens=None, highs=None, lows=None, extra_cols=None):
+def _make_df(
+    close_prices: list[float],
+    volumes: list[float] | None = None,
+    opens: list[float] | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
+    extra_cols: dict[str, list[float]] | None = None,
+) -> pd.DataFrame:
     """Build a minimal OHLCV DataFrame with required columns."""
     n = len(close_prices)
     data = {
@@ -33,10 +40,17 @@ def _make_df(close_prices, volumes=None, opens=None, highs=None, lows=None, extr
 
 
 def _make_vol_metrics(
-    strength=0.0, ratio=1.0, trend=1.0, impulse=0.0, sma=1.0,
-    consistency=0.5, short_ma=1.0, long_ma=1.0, trend_strength=0.0,
-    state=VolumeState.NEUTRAL
-):
+    strength: float = 0.0,
+    ratio: float = 1.0,
+    trend: float = 1.0,
+    impulse: float = 0.0,
+    sma: float = 1.0,
+    consistency: float = 0.5,
+    short_ma: float = 1.0,
+    long_ma: float = 1.0,
+    trend_strength: float = 0.0,
+    state: VolumeState = VolumeState.NEUTRAL,
+) -> VolumeMetrics:
     return VolumeMetrics(
         strength=strength, ratio=ratio, trend=trend, impulse=impulse,
         sma=sma, consistency=consistency, short_ma=short_ma, long_ma=long_ma,
@@ -396,7 +410,7 @@ class TestDeterminePhaseByPriceStrength:
 
 class TestAnalyzeFundingRates:
 
-    def _rate(self, time, rate):
+    def _rate(self, time: int, rate: float) -> FundingRateEntry:
         return FundingRateEntry(time=time, funding_rate=rate, premium=rate * 0.5)
 
     def test_empty_returns_unknown(self):

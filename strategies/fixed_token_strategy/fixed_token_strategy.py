@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from telegram.ext import ContextTypes, CommandHandler
-from typing import List, Dict, Set, Tuple
+from typing import Any, Set
 from strategies.base_strategy.base_strategy import BaseStrategy, BaseStrategyConfig
 from logging_utils import logger
 from hyperliquid_utils.utils import hyperliquid_utils
@@ -17,7 +17,7 @@ class FixedTokenConfig:
 class FixedTokenStrategy(BaseStrategy):
     """Strategy that manages a portfolio of specific predefined tokens."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         leverage = int(os.getenv("HTB_FIXED_TOKEN_STRATEGY_LEVERAGE", "5"))
         min_yearly_performance = float(os.getenv("HTB_FIXED_TOKEN_STRATEGY_MIN_YEARLY_PERFORMANCE", "15.0"))
         self._config = BaseStrategyConfig(
@@ -28,7 +28,7 @@ class FixedTokenStrategy(BaseStrategy):
         tokens = {s.strip() for s in tokens_raw.split(",") if s.strip()}
         self._fixed_token_config = FixedTokenConfig(tokens=tokens)
 
-    def get_strategy_params(self) -> Tuple[List[Dict], Dict[str, str], Dict]:
+    def get_strategy_params(self) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, Any]]:
         """Get strategy parameters including filtered crypto data and exchange info."""
         params = {
             "vs_currency": "usd",
@@ -46,10 +46,10 @@ class FixedTokenStrategy(BaseStrategy):
 
     def filter_top_cryptos(
         self,
-        cryptos: List[Dict],
-        all_mids: Dict[str, str],
-        meta: Dict
-    ) -> List[Dict]:
+        cryptos: list[dict[str, Any]],
+        all_mids: dict[str, str],
+        meta: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Filter and sort cryptos according to fixed token strategy criteria."""
         filtered_cryptos = []
         asset_info_map = {
@@ -87,7 +87,7 @@ class FixedTokenStrategy(BaseStrategy):
 
         return sorted(filtered_cryptos, key=lambda x: x["market_cap"], reverse=True)
 
-    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE):
+    async def init_strategy(self, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Initialize strategy by setting up Telegram commands."""
         rebalance_button_text = "rebalance"
         telegram_utils.add_buttons([f"/{rebalance_button_text}"], 1)

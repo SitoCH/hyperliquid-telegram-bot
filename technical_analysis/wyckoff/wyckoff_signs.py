@@ -1,5 +1,5 @@
-import pandas as pd  # type: ignore[import]
-import numpy as np  # type: ignore[import]
+import pandas as pd
+import numpy as np
 from typing import Final
 from .wyckoff_types import WyckoffSign, Timeframe
 

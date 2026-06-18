@@ -56,7 +56,7 @@ def get_btc_current_price() -> Optional[float]:
             params={"ids": "bitcoin", "vs_currencies": "usd"}
         )
         data = response.json()
-        return data["bitcoin"]["usd"]
+        return float(data["bitcoin"]["usd"])
     except Exception as e:
         logger.error(f"Error fetching current BTC price: {str(e)}", exc_info=True)
         return None

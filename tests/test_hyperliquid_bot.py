@@ -5,10 +5,12 @@ from unittest.mock import AsyncMock, MagicMock, patch, ANY
 from datetime import datetime, timedelta, timezone
 from telegram.ext import ConversationHandler
 
+from typing import Any
+
 from hyperliquid_bot import main, load_strategy, start, shutdown as shutdown_func
 
 
-def make_update_context(context_args=None):
+def make_update_context(context_args: Any = None) -> tuple[Any, Any]:
     update = MagicMock()
     update.message = MagicMock()
     update.message.delete = AsyncMock()
@@ -19,7 +21,7 @@ def make_update_context(context_args=None):
 
 
 class TestLoadStrategy:
-    def test_loads_strategy_successfully(self):
+    def test_loads_strategy_successfully(self) -> None:
         mock_strategy_instance = MagicMock()
         mock_module = MagicMock()
         mock_module.TestStrategy = MagicMock(return_value=mock_strategy_instance)
@@ -30,7 +32,7 @@ class TestLoadStrategy:
 
         assert result is mock_strategy_instance
 
-    def test_returns_none_on_module_not_found(self):
+    def test_returns_none_on_module_not_found(self) -> None:
         with patch("hyperliquid_bot.importlib") as mock_importlib, \
                 patch("hyperliquid_bot.logger") as mock_logger:
             mock_importlib.import_module.side_effect = ModuleNotFoundError("no module")
@@ -39,7 +41,7 @@ class TestLoadStrategy:
         assert result is None
         mock_logger.critical.assert_called_once()
 
-    def test_returns_none_on_attribute_error(self):
+    def test_returns_none_on_attribute_error(self) -> None:
         with patch("hyperliquid_bot.importlib") as mock_importlib, \
                 patch("hyperliquid_bot.logger") as mock_logger:
             mock_importlib.import_module.return_value = object()
@@ -48,7 +50,7 @@ class TestLoadStrategy:
         assert result is None
         mock_logger.critical.assert_called_once()
 
-    def test_strategy_name_title_conversion(self):
+    def test_strategy_name_title_conversion(self) -> None:
         mock_strategy_instance = MagicMock()
         mock_module = MagicMock()
         mock_module.FixedTokenStrategy = MagicMock(return_value=mock_strategy_instance)
@@ -59,7 +61,7 @@ class TestLoadStrategy:
 
         assert result is mock_strategy_instance
 
-    def test_constructed_with_no_args(self):
+    def test_constructed_with_no_args(self) -> None:
         mock_strategy_instance = MagicMock()
         mock_module = MagicMock()
         mock_module.AlphaG = MagicMock(return_value=mock_strategy_instance)
@@ -71,7 +73,7 @@ class TestLoadStrategy:
         assert result is mock_strategy_instance
         mock_module.AlphaG.assert_called_once_with()
 
-    def test_module_name_format(self):
+    def test_module_name_format(self) -> None:
         mock_module = MagicMock()
         mock_module.EtfStrategy = MagicMock(return_value=MagicMock())
 
@@ -84,7 +86,7 @@ class TestLoadStrategy:
 
 class TestStart:
     @pytest.mark.asyncio
-    async def test_no_args_sends_welcome(self, mock_telegram_utils):
+    async def test_no_args_sends_welcome(self, mock_telegram_utils) -> None:
         update, context = make_update_context()
 
         with patch("hyperliquid_bot.telegram_utils", mock_telegram_utils):
@@ -95,7 +97,7 @@ class TestStart:
         assert "Welcome" in mock_telegram_utils.reply.call_args[0][1]
 
     @pytest.mark.asyncio
-    async def test_no_args_returns_end(self, mock_telegram_utils):
+    async def test_no_args_returns_end(self, mock_telegram_utils) -> None:
         update, context = make_update_context()
 
         with patch("hyperliquid_bot.telegram_utils", mock_telegram_utils):
@@ -104,7 +106,7 @@ class TestStart:
         assert result == ConversationHandler.END
 
     @pytest.mark.asyncio
-    async def test_ta_prefix_deletes_message_and_calls_execute_ta(self, mock_telegram_utils):
+    async def test_ta_prefix_deletes_message_and_calls_execute_ta(self, mock_telegram_utils) -> None:
         update, context = make_update_context(["TA_BTC"])
         mock_execute_ta = AsyncMock(return_value=ConversationHandler.END)
 
@@ -118,7 +120,7 @@ class TestStart:
         assert context.args == ["BTC"]
 
     @pytest.mark.asyncio
-    async def test_trd_long_prefix_decodes_and_calls_enter_long(self, mock_telegram_utils):
+    async def test_trd_long_prefix_decodes_and_calls_enter_long(self, mock_telegram_utils) -> None:
         update, context = make_update_context()
         raw_param = "TRD_" + base64.b64encode(b"L_BTC_45000_55000").decode()
         context.args = [raw_param]
@@ -134,7 +136,7 @@ class TestStart:
         assert context.args == ["BTC", "45000", "55000"]
 
     @pytest.mark.asyncio
-    async def test_trd_short_prefix_decodes_and_calls_enter_short(self, mock_telegram_utils):
+    async def test_trd_short_prefix_decodes_and_calls_enter_short(self, mock_telegram_utils) -> None:
         update, context = make_update_context()
         raw_param = "TRD_" + base64.b64encode(b"S_ETH_2000_1800").decode()
         context.args = [raw_param]
@@ -150,7 +152,7 @@ class TestStart:
         assert context.args == ["ETH", "2000", "1800"]
 
     @pytest.mark.asyncio
-    async def test_trd_without_valid_side_returns_end(self, mock_telegram_utils):
+    async def test_trd_without_valid_side_returns_end(self, mock_telegram_utils) -> None:
         update, context = make_update_context()
         raw_param = "TRD_" + base64.b64encode(b"X_SOL_100_200").decode()
         context.args = [raw_param]
@@ -168,7 +170,7 @@ class TestStart:
         mock_enter_short.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_unknown_arg_prefix_returns_end(self, mock_telegram_utils):
+    async def test_unknown_arg_prefix_returns_end(self, mock_telegram_utils) -> None:
         update, context = make_update_context(["UNKNOWN_param"])
 
         with patch("hyperliquid_bot.telegram_utils", mock_telegram_utils):
@@ -178,7 +180,7 @@ class TestStart:
         update.message.delete.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_ta_path_propagates_execute_ta_return_value(self, mock_telegram_utils):
+    async def test_ta_path_propagates_execute_ta_return_value(self, mock_telegram_utils) -> None:
         update, context = make_update_context(["TA_ETH"])
         expected_state = 42
         mock_execute_ta = AsyncMock(return_value=expected_state)

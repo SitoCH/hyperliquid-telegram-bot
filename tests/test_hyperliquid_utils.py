@@ -56,7 +56,7 @@ class TestHyperliquidUtilsWebsocket:
                 patch('hyperliquid_utils.utils.telegram_utils') as mock_tg:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
-            instance.on_websocket_close(None, None, "closed")
+            instance.on_websocket_close(None, 0, "closed")
             mock_tg.send_and_exit.assert_called_once_with("Websocket closed, restarting the application...")
 
 
@@ -98,7 +98,7 @@ class TestHyperliquidUtilsSzDecimals:
                 patch('hyperliquid_utils.utils.Info') as mock_info:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
-            instance.info.meta = MagicMock(return_value=mock_meta)
+            instance.info.meta = MagicMock(return_value=mock_meta)  # type: ignore[attr-defined]
             result = instance.get_sz_decimals()
             assert result == {"BTC": 5, "ETH": 4}
 
@@ -183,7 +183,7 @@ class TestHyperliquidUtilsPositions:
                 patch('hyperliquid_utils.utils.Info') as mock_info:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
-            instance.info.user_state = MagicMock(return_value=mock_user_state)
+            instance.info.user_state = MagicMock(return_value=mock_user_state)  # type: ignore[attr-defined]
             result = instance.get_coins_with_open_positions()
             assert result == ["BTC", "ETH"]
 
@@ -198,7 +198,7 @@ class TestHyperliquidUtilsCoins:
                 patch('hyperliquid_utils.utils.Info') as mock_info:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
-            instance.info.meta_and_asset_ctxs = MagicMock(return_value=mock_response)
+            instance.info.meta_and_asset_ctxs = MagicMock(return_value=mock_response)  # type: ignore[attr-defined]
             result = instance.get_coins_by_traded_volume()
             assert result == ["BTC", "SOL", "ETH"]
 
@@ -208,8 +208,8 @@ class TestHyperliquidUtilsCoins:
                 patch('hyperliquid_utils.utils.InlineKeyboardMarkup') as mock_markup:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
-            instance.get_coins_by_traded_volume = MagicMock(return_value=["BTC", "ETH"])
-            instance.get_coins_with_open_positions = MagicMock(return_value=["BTC"])
+            instance.get_coins_by_traded_volume = MagicMock(return_value=["BTC", "ETH"])  # type: ignore[method-assign]
+            instance.get_coins_with_open_positions = MagicMock(return_value=["BTC"])  # type: ignore[method-assign]
             result = instance.get_coins_reply_markup()
             mock_markup.assert_called_once()
             assert result is not None

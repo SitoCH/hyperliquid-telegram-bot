@@ -2,7 +2,7 @@ import os
 import datetime
 import logging
 import time
-from typing import Any, List, Sequence
+from typing import Optional, Union, Any, List, Sequence, cast
 from logging_utils import logger
 
 from telegram import (
@@ -16,7 +16,7 @@ from telegram._utils.types import ODVInput
 from telegram.ext._utils.types import CCT, JobCallback
 
 from telegram import Update
-from telegram.ext import Application, ContextTypes, ConversationHandler, CallbackContext
+from telegram.ext import Application, ContextTypes, ConversationHandler
 from telegram.ext._handlers.basehandler import BaseHandler
 from telegram.constants import ParseMode
 
@@ -24,8 +24,6 @@ from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 
 from utils import OPERATION_CANCELLED, exchange_enabled
-
-from typing import Optional, Union
 
 
 filterwarnings(
@@ -44,6 +42,8 @@ class TelegramUtils:
     overview_command = "overview"
     ta_command = "ta"
     stats_command = "stats"
+    telegram_app: Any = None
+    telegram_chat_id: Optional[str] = None
 
     reply_markup = ReplyKeyboardMarkup(
         [
@@ -109,7 +109,7 @@ class TelegramUtils:
         if not self.telegram_app or self.telegram_chat_id is None:
             logging.error(self.MISSING_ENV_VARS_ERROR)
             return None
-        return await self.telegram_app.bot.send_message(text=message, parse_mode=parse_mode, chat_id=self.telegram_chat_id)
+        return cast(Optional[Message], await self.telegram_app.bot.send_message(text=message, parse_mode=parse_mode, chat_id=self.telegram_chat_id))
 
     def send_and_exit(self, message: str) -> None:
         if not self.telegram_app or self.telegram_chat_id is None or not self.telegram_app.job_queue:

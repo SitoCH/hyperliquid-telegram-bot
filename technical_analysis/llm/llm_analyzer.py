@@ -24,7 +24,7 @@ from html import escape as escape_html
 class LLMAnalyzer:
     """LLM-based technical analysis implementation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.timeframe_lookback_days = {
             Timeframe.MINUTES_15: 2,
             Timeframe.MINUTES_30: 3,
@@ -36,7 +36,7 @@ class LLMAnalyzer:
         self.llm_client = LiteLLMClient()
         self.message_formatter = LLMMessageFormatter()
 
-    async def send_llm_analysis_filter_message(self, coin, reason, confidence):
+    async def send_llm_analysis_filter_message(self, coin: str, reason: str, confidence: float) -> None:
         message = f"<b>Technical analysis for {telegram_utils.get_link(coin, f'TA_{coin}')}</b>\n\n"
         message += f"<b>Market Analysis:</b> {escape_html(reason)}\n\n"
         message += f"🎯 <b>Confidence:</b> {confidence:.0%}\n"
