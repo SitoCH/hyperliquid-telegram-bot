@@ -19,6 +19,18 @@ from telegram_utils import TelegramUtils
 # Set required environment variable before any module imports
 os.environ.setdefault("HTB_USER_WALLET", "0x0000000000000000000000000000000000000000")
 
+# Global mock for Info and InfoProxy to prevent network calls during module initialization
+mock_info_instance = MagicMock(spec=Info)
+mock_infoproxy_instance = MagicMock()
+mock_infoproxy_instance._info = mock_info_instance
+
+# Patch Info and InfoProxy at the module level where they are used in HyperliquidUtils
+# This needs to happen early.
+from unittest.mock import patch
+info_patcher = patch('hyperliquid_utils.utils.Info', return_value=mock_info_instance)
+infoproxy_patcher = patch('hyperliquid_utils.utils.InfoProxy', return_value=mock_infoproxy_instance)
+info_patcher.start()
+infoproxy_patcher.start()
 
 @pytest.fixture
 def wyckoff_state():
