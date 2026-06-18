@@ -21,11 +21,11 @@ def detect_composite_action(
             return CompositeAction.UNKNOWN
 
         # Calculate adaptive thresholds based on recent volatility
-        price_volatility = df['c'].pct_change().rolling(5).std().iloc[-1]
+        price_volatility = df['c'].pct_change(fill_method=None).rolling(5).std().iloc[-1]
         min_price_move = max(0.01, price_volatility * 2.0)  # More adaptive threshold
 
         # Recent price action metrics
-        recent_change = df['c'].pct_change().iloc[-1]
+        recent_change = df['c'].pct_change(fill_method=None).iloc[-1]
         body_to_range_ratio = abs(df['c'].iloc[-1] - df['o'].iloc[-1]) / max(df['h'].iloc[-1] - df['l'].iloc[-1], 1e-8)
 
         # Calculate volume trend - consistent definition to use throughout the function

@@ -24,7 +24,7 @@ def detect_wyckoff_signs(
         return WyckoffSign.NONE
 
     # Calculate key metrics with noise reduction
-    price_change = df['c'].pct_change()
+    price_change = df['c'].pct_change(fill_method=None)
     # Avoid using volume pct_change directly (noisy/unstable). We'll use ratio/z later.
 
     # Use timeframe-specific lookback periods from settings
@@ -128,8 +128,8 @@ def detect_wyckoff_signs(
     # Check for recent trend reversal
     recent_trend_changed = False
     if len(df) > (trend_lookback * 2):
-        prev_trend = np.sign(df['c'].pct_change(trend_lookback).iloc[-trend_lookback - 1])
-        current_trend = np.sign(df['c'].pct_change(trend_lookback).iloc[-1])
+        prev_trend = np.sign(df['c'].pct_change(trend_lookback, fill_method=None).iloc[-trend_lookback - 1])
+        current_trend = np.sign(df['c'].pct_change(trend_lookback, fill_method=None).iloc[-1])
         recent_trend_changed = prev_trend != current_trend and abs(current_trend) > 0
 
     # Create context variables using timeframe-specific recent window

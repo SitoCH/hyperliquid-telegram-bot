@@ -85,7 +85,7 @@ def calculate_volume_metrics(df: pd.DataFrame, timeframe: Timeframe) -> VolumeMe
             strength=strength,
             ratio=ratio,
             trend=df['v'].rolling(window=timeframe.settings.volume_trend_window).mean().iloc[-1] / last_sma,
-            impulse=df['v'].pct_change().iloc[-1],
+            impulse=df['v'].pct_change(fill_method=None).iloc[-1],
             sma=last_sma,
             consistency=recent_strong_volume,
             short_ma=volume_short_ma.iloc[-1],
@@ -372,7 +372,7 @@ def identify_wyckoff_phase(
     volume_state = vol_metrics.state
     # Calculate values internally with proper error handling
     try:
-        recent_change = df['c'].pct_change(3).iloc[-1]
+        recent_change = df['c'].pct_change(3, fill_method=None).iloc[-1]
         curr_volume = df['v'].iloc[-1]
 
         # Validate inputs

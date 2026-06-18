@@ -58,10 +58,10 @@ class AdaptiveThresholdManager:
                 }
 
             try:
-                vol_pct = df['v'].pct_change().replace([np.inf, -np.inf], np.nan).dropna()
+                vol_pct = df['v'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
                 vol_std = vol_pct.std() if len(vol_pct) > 1 else 0.1
 
-                price_pct = df['c'].pct_change().replace([np.inf, -np.inf], np.nan).dropna()
+                price_pct = df['c'].pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
                 price_std = price_pct.std() if len(price_pct) > 1 else 0.01
             except Exception as calc_error:
                 logger.warning(f"Error in liquidation thresholds std deviation calculations: {calc_error}")

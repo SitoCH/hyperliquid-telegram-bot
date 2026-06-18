@@ -242,7 +242,7 @@ class LLMPromptGenerator:
         volume_change = ((recent_volume_avg - previous_volume_avg) / previous_volume_avg) * 100 if previous_volume_avg > 0 else 0
 
         # Price volatility
-        volatility = df['c'].pct_change().tail(20).std() * 100
+        volatility = df['c'].pct_change(fill_method=None).tail(20).std() * 100
 
         # Determine potential Wyckoff phase
         wyckoff_phase = self._analyze_wyckoff_phase(df)
