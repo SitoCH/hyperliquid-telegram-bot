@@ -30,7 +30,22 @@ class HyperliquidUtils:
         user_vault: Optional[str] = os.environ.get("HTB_USER_VAULT")
         self.address: str = user_vault if user_vault is not None else user_wallet
 
-        self.info: InfoProxy = InfoProxy(Info(constants.MAINNET_API_URL, True))
+        self._info: Optional[InfoProxy] = None
+
+    @property
+    def info(self) -> InfoProxy:
+        """Lazy initialization of InfoProxy to avoid network calls during module import."""
+        if self._info is None:
+            self._info = InfoProxy(Info(constants.MAINNET_API_URL, True))
+        return self._info
+
+    @info.setter
+    def info(self, value: InfoProxy) -> None:
+        self._info = value
+
+    @info.deleter
+    def info(self) -> None:
+        self._info = None
 
     def init_websocket(self) -> None:
         """Initialize WebSocket connection for live data."""

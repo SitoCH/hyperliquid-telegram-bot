@@ -15,6 +15,9 @@ class TestHyperliquidUtilsInit:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
             assert instance.address == "0x0000000000000000000000000000000000000000"
+            # Info is not called until .info is accessed
+            assert mock_info.call_count == 0
+            _ = instance.info
             mock_info.assert_called_once()
 
     def test_init_with_vault(self):
@@ -39,7 +42,8 @@ class TestHyperliquidUtilsWebsocket:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
             instance.init_websocket()
-            assert mock_info.call_count == 2
+            # Only called once because of lazy property
+            assert mock_info.call_count == 1
 
     def test_on_websocket_error(self):
         with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
