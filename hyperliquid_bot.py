@@ -35,7 +35,7 @@ def main() -> None:
 
     hyperliquid_utils.init_websocket()
 
-    hyperliquid_utils.info.subscribe(
+    hyperliquid_utils.subscribe_websocket(
         {"type": "userEvents", "user": hyperliquid_utils.address}, on_user_events
     )
 

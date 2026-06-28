@@ -238,7 +238,7 @@ class TestMainHelpers:
 
         main()
 
-        mock_hl.info.subscribe.assert_called_once_with(
+        mock_hl.subscribe_websocket.assert_called_once_with(
             {"type": "userEvents", "user": mock_hl.address},
             ANY
         )
@@ -267,7 +267,7 @@ class TestMain:
         main()
 
         mock_hl.init_websocket.assert_called_once()
-        mock_hl.info.subscribe.assert_called_once()
+        mock_hl.subscribe_websocket.assert_called_once()
         assert mock_tg.add_handler.call_count == self.WITHOUT_EXCHANGE_HANDLER_COUNT
         mock_tg.run_repeating.assert_called_once()
         mock_tg.run_polling.assert_called_once_with(shutdown_func)
