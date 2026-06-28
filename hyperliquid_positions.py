@@ -159,9 +159,10 @@ async def _send_dex_detail_positions(update: Update, dex_name: str) -> bool:
 
         for asset_position in sorted_positions:
             coin = asset_position['position']['coin']
+            display_coin = coin.removeprefix(f"{dex_name}:") if coin.startswith(f"{dex_name}:") else coin
             mid = dex_mids.get(coin, "?")
             coin_lines = [
-                f"<b>{telegram_utils.get_link(coin, f'TA_{coin}')}:</b>"
+                f"<b>{telegram_utils.get_link(display_coin, f'TA_{display_coin}')}:</b>"
             ]
             table_data = [
                 ["PnL", f"{fmt(float(asset_position['position']['unrealizedPnl']))}$",
@@ -222,7 +223,9 @@ async def _send_dex_overview_table(update: Update, message_lines: list[str], dex
 
     def fmt_pos(pos: dict) -> str:
         direction = "L" if float(pos['szi']) > 0 else "S"
-        coin = pos['coin'][:4] + "." if len(pos['coin']) > 4 else pos['coin']
+        raw = pos['coin']
+        display = raw.removeprefix(f"{dex_name}:") if raw.startswith(f"{dex_name}:") else raw
+        coin = display[:4] + "." if len(display) > 4 else display
         return f"{direction} {coin}"
 
     table = tabulate(
@@ -340,7 +343,7 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         else:
             await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
-        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address))
+        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address), available_usdc=balance.perp_withdrawable)
         if len(spot_messages) > 0:
             await telegram_utils.reply(update, '\n'.join(spot_messages), parse_mode=ParseMode.HTML)
 
@@ -403,16 +406,17 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
             message_lines.append(f"<pre>{table}</pre>")
 
-        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address))
-        message_lines += spot_messages
+        # Show positions from builder-deployed perp DEXes (e.g. XYZ) first,
+        # then vaults, then spot last
+        for dex_name in hyperliquid_utils.extra_dexes():
+            await _send_dex_overview_table(update, message_lines, dex_name)
 
         vault_messages = vault_positions_messages(tablefmt, balance.vaults)
         if len(vault_messages) > 0:
             message_lines += vault_messages
 
-        # Show positions from builder-deployed perp DEXes (e.g. XYZ)
-        for dex_name in hyperliquid_utils.extra_dexes():
-            await _send_dex_overview_table(update, message_lines, dex_name)
+        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address), available_usdc=balance.perp_withdrawable)
+        message_lines += spot_messages
 
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
@@ -454,8 +458,13 @@ def _get_token_prices() -> dict[str, float]:
     return token_prices
 
 
-async def spot_positions_messages(tablefmt: Any, spot_user_state: dict[str, Any]) -> list[str]:
-    """Generate messages for spot positions, sorted by USD value."""
+async def spot_positions_messages(tablefmt: Any, spot_user_state: dict[str, Any], available_usdc: float | None = None) -> list[str]:
+    """Generate messages for spot positions, sorted by USD value.
+
+    Args:
+        available_usdc: If provided, overrides the USDC spot balance with
+            this value (e.g. the withdrawable/available-to-trade balance).
+    """
 
     if not spot_user_state.get('balances'):
         return []
@@ -469,6 +478,11 @@ async def spot_positions_messages(tablefmt: Any, spot_user_state: dict[str, Any]
         entry_value = float(balance['entryNtl'])
         price = token_prices.get(token, 0.0)
         usd_value = price * amount
+
+        # Override USDC balance with available-to-trade when provided
+        if token == 'USDC' and available_usdc is not None:
+            usd_value = available_usdc
+            entry_value = available_usdc
 
         if usd_value > 1.0:
             pnl = usd_value - entry_value
