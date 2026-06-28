@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import List, Dict, Any, ClassVar, Optional, Tuple
+from typing import List, Dict, Any, ClassVar, Optional, Tuple, Callable
 
 import eth_account
 from eth_account.signers.local import LocalAccount
@@ -37,6 +37,8 @@ class HyperliquidUtils:
             for s in os.environ.get("HTB_EXTRA_DEXES", "xyz").split(",")
             if s.strip()
         ]
+        self._ws_subscriptions: list[tuple[dict[str, Any], Any]] = []
+        self._reconnect_delay: int = 5
 
     @property
     def info(self) -> InfoProxy:
@@ -55,18 +57,73 @@ class HyperliquidUtils:
 
     def init_websocket(self) -> None:
         """Initialize WebSocket connection for live data."""
+        self._init_websocket_inner()
+
+    def _init_websocket_inner(self) -> None:
+        """Create a fresh WebSocket connection and attach handlers."""
         self.info = InfoProxy(Info(constants.MAINNET_API_URL, False))
         if hasattr(self.info._info, 'ws_manager') and self.info._info.ws_manager:
-            self.info._info.ws_manager.ws.on_error = self.on_websocket_error
-            self.info._info.ws_manager.ws.on_close = self.on_websocket_close
+            self.info._info.ws_manager.ws.on_error = self._on_websocket_error
+            self.info._info.ws_manager.ws.on_close = self._on_websocket_close
+        # Re-subscribe any stored subscriptions on the new connection
+        for subscription, callback in self._ws_subscriptions:
+            try:
+                self.info.subscribe(subscription, callback)
+            except Exception as e:
+                logger.error(f"Failed to re-subscribe {subscription}: {e}")
 
-    def on_websocket_error(self, ws: Any, error: Any) -> None:
+    def subscribe_websocket(self, subscription: dict[str, Any], callback: Any) -> None:
+        """Subscribe to a websocket event and store it for reconnection."""
+        self._ws_subscriptions.append((subscription, callback))
+        try:
+            self.info.subscribe(subscription, callback)
+        except Exception as e:
+            logger.error(f"Failed to subscribe {subscription}: {e}")
+
+    def _on_websocket_error(self, ws: Any, error: Any) -> None:
         logger.error(f"Websocket error: {error}")
-        telegram_utils.send_and_exit("Websocket error, restarting the application...")
+        telegram_utils.queue_send("⚠️ WebSocket connection error — reconnecting in 5s...")
+        self._schedule_reconnect()
 
-    def on_websocket_close(self, ws: Any, close_status_code: int, close_msg: str) -> None:
+    def _on_websocket_close(self, ws: Any, close_status_code: int, close_msg: str) -> None:
         logger.warning(f"Websocket closed: {close_msg}")
-        telegram_utils.send_and_exit("Websocket closed, restarting the application...")
+        telegram_utils.queue_send("🔌 WebSocket disconnected — reconnecting in 5s...")
+        self._schedule_reconnect()
+
+    def _schedule_reconnect(self) -> None:
+        """Schedule a websocket reconnection attempt via the Telegram job queue."""
+        if not telegram_utils.telegram_app or not telegram_utils.telegram_app.job_queue:
+            logger.warning("Telegram app not ready, reconnecting immediately")
+            self._do_reconnect()
+            return
+        telegram_utils.telegram_app.job_queue.run_once(
+            self._do_reconnect_job,
+            when=self._reconnect_delay,
+            job_kwargs={'misfire_grace_time': 60},
+        )
+
+    async def _do_reconnect_job(self, context: Any) -> None:
+        """Job callback that performs the actual reconnect."""
+        self._do_reconnect()
+
+    def _do_reconnect(self) -> None:
+        """Perform the actual WebSocket reconnection."""
+        try:
+            # Disconnect old websocket if still alive
+            try:
+                if self._info is not None and hasattr(self._info._info, 'disconnect_websocket'):
+                    self._info._info.disconnect_websocket()
+            except Exception:
+                pass
+
+            # Clear the old info to force fresh creation
+            self._info = None
+
+            # Create fresh connection with re-subscription
+            self._init_websocket_inner()
+            logger.info("WebSocket reconnected successfully")
+        except Exception as e:
+            logger.error(f"WebSocket reconnection failed: {e}", exc_info=True)
 
     def get_exchange(self, dex: str = "") -> Optional[Exchange]:
         """Get or create a cached Exchange for the given perp DEX.

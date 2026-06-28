@@ -51,8 +51,8 @@ class TestHyperliquidUtilsWebsocket:
                 patch('hyperliquid_utils.utils.telegram_utils') as mock_tg:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
-            instance.on_websocket_error(None, "test error")
-            mock_tg.send_and_exit.assert_called_once_with("Websocket error, restarting the application...")
+            instance._on_websocket_error(None, "test error")
+            mock_tg.queue_send.assert_called_once_with("⚠️ WebSocket connection error — reconnecting in 5s...")
 
     def test_on_websocket_close(self):
         with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
@@ -60,8 +60,8 @@ class TestHyperliquidUtilsWebsocket:
                 patch('hyperliquid_utils.utils.telegram_utils') as mock_tg:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
-            instance.on_websocket_close(None, 0, "closed")
-            mock_tg.send_and_exit.assert_called_once_with("Websocket closed, restarting the application...")
+            instance._on_websocket_close(None, 0, "closed")
+            mock_tg.queue_send.assert_called_once_with("🔌 WebSocket disconnected — reconnecting in 5s...")
 
 
 class TestHyperliquidUtilsExchange:
