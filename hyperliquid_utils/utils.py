@@ -31,6 +31,7 @@ class HyperliquidUtils:
         self.address: str = user_vault if user_vault is not None else user_wallet
 
         self._info: Optional[InfoProxy] = None
+        self._exchange_cache: dict[str, Exchange] = {}
         self._extra_dexes: list[str] = [
             s.strip()
             for s in os.environ.get("HTB_EXTRA_DEXES", "xyz").split(",")
@@ -67,15 +68,70 @@ class HyperliquidUtils:
         logger.warning(f"Websocket closed: {close_msg}")
         telegram_utils.send_and_exit("Websocket closed, restarting the application...")
 
-    def get_exchange(self) -> Optional[Exchange]:
+    def get_exchange(self, dex: str = "") -> Optional[Exchange]:
+        """Get or create a cached Exchange for the given perp DEX.
+
+        Args:
+            dex: The perp DEX name (e.g. '' for default, 'xyz', 'flx').
+                 Exchanges are cached per dex name.
+
+        Returns:
+            Exchange instance or None if HTB_KEY_FILE is not configured.
+        """
+        if dex in self._exchange_cache:
+            return self._exchange_cache[dex]
+
         key_file: Optional[str] = os.environ.get("HTB_KEY_FILE")
         if key_file is not None and os.path.isfile(key_file):
             with open(key_file, 'r') as file:
                 file_content: str = file.read()
                 ascii_only: str = file_content.encode("ascii", "ignore").decode("ascii").strip()
                 account: LocalAccount = eth_account.Account.from_key(ascii_only)
-                return Exchange(account, constants.MAINNET_API_URL, vault_address=os.environ.get("HTB_USER_VAULT"), account_address=os.environ["HTB_USER_WALLET"])
+                perp_dexs = [dex] if dex else None  # None = default DEX only
+                exchange = Exchange(
+                    account, constants.MAINNET_API_URL,
+                    vault_address=os.environ.get("HTB_USER_VAULT"),
+                    account_address=os.environ["HTB_USER_WALLET"],
+                    perp_dexs=perp_dexs,
+                )
+                self._exchange_cache[dex] = exchange
+                return exchange
         return None
+
+    @staticmethod
+    def dex_supported(coin: str) -> Optional[str]:
+        """Detect the perp DEX a coin belongs to based on its prefix.
+
+        Coins from builder-deployed perp DEXes use the ``{dex_name}:`` prefix
+        (e.g. ``xyz:AAPL``, ``xyz:SPCX``).  Default DEX coins have no prefix.
+
+        Returns:
+            The dex name (e.g. 'xyz', 'flx') or None for the default DEX.
+        """
+        if ":" in coin:
+            parts = coin.split(":", 1)
+            if parts[0] and parts[1]:
+                return parts[0]
+        return None
+
+    @staticmethod
+    def strip_dex_prefix(coin: str) -> str:
+        """Strip the ``{dex_name}:`` prefix from a coin name."""
+        if ":" in coin:
+            return coin.split(":", 1)[1]
+        return coin
+
+    def get_isolated_only(self, coin: str) -> bool:
+        """Check if a coin is isolated-only (can't use cross margin).
+
+        Queries the meta for the relevant DEX to check the onlyIsolated flag.
+        """
+        dex = self.dex_supported(coin) or ""
+        meta = self.info.meta(dex=dex)
+        for asset_info in meta.get("universe", []):
+            if asset_info["name"] == coin:
+                return bool(asset_info.get("onlyIsolated", False))
+        return False
 
     def get_sz_decimals(self) -> Dict[str, int]:
         meta: Dict[str, Any] = self.info.meta()
@@ -122,15 +178,38 @@ class HyperliquidUtils:
         return None
 
     def get_coins_with_open_positions(self) -> List[str]:
-        user_state = self.info.user_state(self.address)
-        return [asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])]
+        """Get coins with open positions across all DEXes."""
+        coins: list[str] = []
+        dexes: list[str] = [""] + self._extra_dexes
+        for dex in dexes:
+            user_state = self.info.user_state(self.address, dex=dex)
+            coins.extend(
+                ap['position']['coin']
+                for ap in user_state.get("assetPositions", [])
+            )
+        return coins
 
     def get_coins_by_traded_volume(self) -> List[str]:
+        """Get coins available for trading across all DEXes, sorted by volume."""
+        # Default DEX coins
         response_data: Any = self.info.meta_and_asset_ctxs()
         universe: List[Dict[str, Any]] = response_data[0]['universe']
         coin_data: List[Dict[str, Any]] = response_data[1]
+        coins: list[tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
 
-        coins: List[Tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
+        # Extra DEX coins
+        for dex in self._extra_dexes:
+            try:
+                dex_ctxs = self.info.meta_and_asset_ctxs(dex=dex)
+                dex_universe = dex_ctxs[0]['universe']
+                dex_coin_data = dex_ctxs[1]
+                coins.extend(
+                    (u["name"], float(c.get("dayNtlVlm", 0)))
+                    for u, c in zip(dex_universe, dex_coin_data)
+                )
+            except Exception as e:
+                logger.warning(f"Failed to fetch coins for DEX '{dex}': {e}")
+
         sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
         return [coin[0] for coin in reversed(sorted_coins[:75])]
 

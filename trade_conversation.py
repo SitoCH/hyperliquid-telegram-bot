@@ -30,8 +30,9 @@ def _has_sl_tp_set(context: ContextType) -> bool:
 
 
 def _get_mid_price(coin: str) -> float:
-    """Get current mid price for a coin."""
-    return float(hyperliquid_utils.info.all_mids()[coin])
+    """Get current mid price for a coin, resolving the correct DEX."""
+    dex = hyperliquid_utils.dex_supported(coin) or ""
+    return float(hyperliquid_utils.info.all_mids(dex=dex)[coin])
 
 
 def _is_long_position(context: ContextType) -> bool:
@@ -109,7 +110,8 @@ async def _process_amount_selection(query: CallbackQuery, context: ContextType, 
     """Process the amount selection and determine next step."""
     context.user_data["amount"] = amount  # type: ignore
     coin = context.user_data.get("selected_coin", "")  # type: ignore
-    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+    dex = hyperliquid_utils.dex_supported(coin) or ""
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address, dex=dex)
     current_leverage = hyperliquid_utils.get_leverage(user_state, coin)
 
     if current_leverage is not None:
@@ -144,7 +146,8 @@ async def _proceed_after_leverage_set(query: CallbackQuery, context: ContextType
 async def _prompt_for_leverage(query: CallbackQuery, coin: str) -> int:
     """Prompt user to select leverage for the given coin."""
     try:
-        meta: List[Dict[str, Any]] = hyperliquid_utils.info.meta()
+        dex = hyperliquid_utils.dex_supported(coin) or ""
+        meta: List[Dict[str, Any]] = hyperliquid_utils.info.meta(dex=dex)
         asset_info_map = {
             info["name"]: int(info["maxLeverage"])
             for info in meta.get("universe", [])  # type: ignore
@@ -169,7 +172,8 @@ async def selected_leverage(update: Update, context: ContextType) -> int:
     async def process(query: CallbackQuery, leverage: int) -> int:
         context.user_data["leverage"] = leverage  # type: ignore
         coin = context.user_data.get("selected_coin", "")  # type: ignore
-        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+        dex = hyperliquid_utils.dex_supported(coin) or ""
+        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address, dex=dex)
         return await _proceed_after_leverage_set(query, context, user_state, coin)
     return await _handle_callback_selection(update, int, "Invalid leverage.", process)
 
@@ -234,9 +238,10 @@ async def _after_stop_loss_set(update: Update, context: ContextType, coin: str, 
 
 async def _after_take_profit_set(update: Update, context: ContextType, coin: str, mid: float) -> int:
     """Action after take profit is set - open the order."""
+    dex = hyperliquid_utils.dex_supported(coin) or ""
     await open_order(
         context.user_data,  # type: ignore
-        hyperliquid_utils.info.user_state(hyperliquid_utils.address),
+        hyperliquid_utils.info.user_state(hyperliquid_utils.address, dex=dex),
         mid,
         _is_long_position(context),
         skip_sl_tp_prompt()
@@ -294,8 +299,18 @@ async def exit_all_positions(update: Update, context: ContextType) -> None:
 
 
 async def exit_position(update: Update, context: ContextType) -> int:
-    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-    coins = sorted({asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])})
+    """Show positions from all DEXes (default + extra) for closing."""
+    coins: list[str] = []
+    dexes_to_check: list[str] = [""] + hyperliquid_utils.extra_dexes()
+
+    for dex in dexes_to_check:
+        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address, dex=dex)
+        coins.extend(
+            ap['position']['coin']
+            for ap in user_state.get("assetPositions", [])
+        )
+
+    coins = sorted(set(coins))
 
     if not coins:
         await telegram_utils.reply(update, 'No positions to close')
@@ -310,20 +325,34 @@ async def exit_position(update: Update, context: ContextType) -> int:
 
 async def _close_position_with_exchange(
     query: CallbackQuery,
-    close_action: Any,
-    error_prefix: str
+    coin: Optional[str],
 ) -> int:
-    """Helper to close position(s) with exchange error handling."""
+    """Close position(s) on the correct DEX with error handling.
+
+    Args:
+        coin: The coin to close. If None or 'all', closes all positions.
+    """
     try:
-        exchange = hyperliquid_utils.get_exchange()
-        if exchange:
-            close_action(exchange)
+        if coin and coin != 'all':
+            # Close a specific coin on its DEX
+            dex = hyperliquid_utils.dex_supported(coin) or ""
+            exchange = hyperliquid_utils.get_exchange(dex=dex)
+            if not exchange:
+                await query.edit_message_text("Exchange is not enabled")
+                return ConversationHandler.END
+            exchange.market_close(coin)
             await query.delete_message()
         else:
-            await query.edit_message_text("Exchange is not enabled")
+            # Close all positions across all DEXes
+            exchange = hyperliquid_utils.get_exchange()
+            if not exchange:
+                await query.edit_message_text("Exchange is not enabled")
+                return ConversationHandler.END
+            close_all_positions_core(exchange)
+            await query.delete_message()
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await query.edit_message_text(f"{error_prefix}: {str(e)}")
+        await query.edit_message_text(f"Failed to close position: {str(e)}")
     return ConversationHandler.END
 
 
@@ -331,11 +360,7 @@ async def exit_selected_coin(update: Update, context: ContextType) -> int:
     async def process(query: CallbackQuery, coin: str) -> int:
         if coin == 'all':
             await query.edit_message_text("Closing all positions...")
-            return await _close_position_with_exchange(
-                query, close_all_positions_core, "Failed to exit all positions"
-            )
+            return await _close_position_with_exchange(query, None)
         await query.edit_message_text(f"Closing {coin}...")
-        return await _close_position_with_exchange(
-            query, lambda ex: ex.market_close(coin), f"Failed to exit {coin}"
-        )
+        return await _close_position_with_exchange(query, coin)
     return await _handle_callback_selection(update, None, "Invalid coin.", process)

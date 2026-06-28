@@ -187,6 +187,7 @@ class TestHyperliquidUtilsPositions:
                 patch('hyperliquid_utils.utils.Info') as mock_info:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
+            instance._extra_dexes = []
             instance.info.user_state = MagicMock(return_value=mock_user_state)  # type: ignore[attr-defined]
             result = instance.get_coins_with_open_positions()
             assert result == ["BTC", "ETH"]
@@ -202,6 +203,7 @@ class TestHyperliquidUtilsCoins:
                 patch('hyperliquid_utils.utils.Info') as mock_info:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
+            instance._extra_dexes = []
             instance.info.meta_and_asset_ctxs = MagicMock(return_value=mock_response)  # type: ignore[attr-defined]
             result = instance.get_coins_by_traded_volume()
             assert result == ["BTC", "SOL", "ETH"]
