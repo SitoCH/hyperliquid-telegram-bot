@@ -1,0 +1,12 @@
+# CODEOWNERS: Defines who must approve changes to each part of the codebase.
+# These owners are automatically requested as reviewers on PRs touching their paths.
+#
+# GitHub will fall back to the repo-level "Require pull request reviews" setting
+# when no CODEOWNERS match is found. To enforce approval from these owners,
+# enable "Require approval from code owners" in:
+#   Settings > Branches > main > Require a pull request before merging
+#
+# Format: <pattern> <@username or @team>
+
+# Everything — Sito is the primary code owner
+* @SitoCH
