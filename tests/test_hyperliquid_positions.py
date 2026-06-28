@@ -209,6 +209,37 @@ class TestGetTokenPrices:
         assert "AAA" not in prices
         assert "BBB" not in prices
 
+    def test_non_sequential_token_indices(self) -> None:
+        """Verify no IndexError when spot_meta token indices skip values.
+
+        The old code did tokens[idx]["name"] (list index by position),
+        which crashed when token indices were not sequential starting
+        from 0 (e.g., indices 0, 2, 5 instead of 0, 1, 2).
+        """
+        metadata = {
+            "tokens": [
+                {"index": 0, "name": "USDC"},
+                {"index": 2, "name": "HYPE"},  # non-sequential
+                {"index": 5, "name": "SOL"},   # non-sequential
+            ],
+            "universe": [
+                {"tokens": [2, 0], "index": 0},
+                {"tokens": [5, 0], "index": 1},
+            ],
+        }
+        market_data: list[dict[str, str]] = [
+            {"midPx": "25.0"},
+            {"midPx": "150.0"},
+        ]
+
+        with patch("hyperliquid_positions.hyperliquid_utils") as mock_hl:
+            mock_hl.info.spot_meta_and_asset_ctxs.return_value = (metadata, market_data)
+            prices = _get_token_prices()
+
+        assert prices["USDC"] == 1.0
+        assert prices["HYPE"] == 25.0
+        assert prices["SOL"] == 150.0
+
 
 class TestFormatPortfolioMessage:
     def test_basic_message(self):

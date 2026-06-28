@@ -297,6 +297,10 @@ def _get_token_prices() -> dict[str, float]:
     """Get token prices from market data."""
     metadata, market_data = hyperliquid_utils.info.spot_meta_and_asset_ctxs()
     tokens, universe = metadata["tokens"], metadata["universe"]
+    token_by_index: dict[int, dict[str, Any]] = {}
+    for i, token in enumerate(tokens):
+        key = token.get("index", i)
+        token_by_index[key] = token
     market_data_map = {i: data for i, data in enumerate(market_data)}
     token_prices = {"USDC": 1.0}
 
@@ -305,7 +309,9 @@ def _get_token_prices() -> dict[str, float]:
         if not market or not (mid_price := float(market.get("midPx") or 0)):
             continue
 
-        base_token, quote_token = (tokens[idx]["name"] for idx in pair["tokens"])
+        base_token, quote_token = (
+            token_by_index[idx]["name"] for idx in pair["tokens"]
+        )
 
         if quote_token == "USDC":
             token_prices[base_token] = mid_price
