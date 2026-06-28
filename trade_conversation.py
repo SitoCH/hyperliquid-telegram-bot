@@ -294,8 +294,18 @@ async def exit_all_positions(update: Update, context: ContextType) -> None:
 
 
 async def exit_position(update: Update, context: ContextType) -> int:
-    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
-    coins = sorted({asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])})
+    """Show positions from all DEXes (default + extra) for closing."""
+    coins: list[str] = []
+    dexes_to_check: list[str] = [""] + hyperliquid_utils.extra_dexes()
+
+    for dex in dexes_to_check:
+        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address, dex=dex)
+        coins.extend(
+            ap['position']['coin']
+            for ap in user_state.get("assetPositions", [])
+        )
+
+    coins = sorted(set(coins))
 
     if not coins:
         await telegram_utils.reply(update, 'No positions to close')
@@ -310,20 +320,34 @@ async def exit_position(update: Update, context: ContextType) -> int:
 
 async def _close_position_with_exchange(
     query: CallbackQuery,
-    close_action: Any,
-    error_prefix: str
+    coin: Optional[str],
 ) -> int:
-    """Helper to close position(s) with exchange error handling."""
+    """Close position(s) on the correct DEX with error handling.
+
+    Args:
+        coin: The coin to close. If None or 'all', closes all positions.
+    """
     try:
-        exchange = hyperliquid_utils.get_exchange()
-        if exchange:
-            close_action(exchange)
+        if coin and coin != 'all':
+            # Close a specific coin on its DEX
+            dex = hyperliquid_utils.dex_supported(coin) or ""
+            exchange = hyperliquid_utils.get_exchange(dex=dex)
+            if not exchange:
+                await query.edit_message_text("Exchange is not enabled")
+                return ConversationHandler.END
+            exchange.market_close(coin)
             await query.delete_message()
         else:
-            await query.edit_message_text("Exchange is not enabled")
+            # Close all positions across all DEXes
+            exchange = hyperliquid_utils.get_exchange()
+            if not exchange:
+                await query.edit_message_text("Exchange is not enabled")
+                return ConversationHandler.END
+            close_all_positions_core(exchange)
+            await query.delete_message()
     except Exception as e:
         logger.critical(e, exc_info=True)
-        await query.edit_message_text(f"{error_prefix}: {str(e)}")
+        await query.edit_message_text(f"Failed to close position: {str(e)}")
     return ConversationHandler.END
 
 
@@ -331,11 +355,7 @@ async def exit_selected_coin(update: Update, context: ContextType) -> int:
     async def process(query: CallbackQuery, coin: str) -> int:
         if coin == 'all':
             await query.edit_message_text("Closing all positions...")
-            return await _close_position_with_exchange(
-                query, close_all_positions_core, "Failed to exit all positions"
-            )
+            return await _close_position_with_exchange(query, None)
         await query.edit_message_text(f"Closing {coin}...")
-        return await _close_position_with_exchange(
-            query, lambda ex: ex.market_close(coin), f"Failed to exit {coin}"
-        )
+        return await _close_position_with_exchange(query, coin)
     return await _handle_callback_selection(update, None, "Invalid coin.", process)

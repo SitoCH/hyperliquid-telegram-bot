@@ -1,4 +1,5 @@
 import pytest
+import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from telegram.ext import ConversationHandler
@@ -988,6 +989,7 @@ class TestCloseAllPositionsCore:
         mock_exchange = MagicMock()
 
         with patch('trade_execution.hyperliquid_utils') as mock_hl:
+            mock_hl.extra_dexes.return_value = []
             mock_hl.info.user_state.return_value = {'assetPositions': []}
             mock_hl.address = "test_address"
 
@@ -1000,6 +1002,7 @@ class TestCloseAllPositionsCore:
         mock_exchange = MagicMock()
 
         with patch('trade_execution.hyperliquid_utils') as mock_hl:
+            mock_hl.extra_dexes.return_value = []
             mock_hl.info.user_state.return_value = {
                 'assetPositions': [
                     {'position': {'coin': 'BTC'}},
@@ -1019,6 +1022,7 @@ class TestCloseAllPositionsCore:
         mock_exchange = MagicMock()
 
         with patch('trade_execution.hyperliquid_utils') as mock_hl:
+            mock_hl.extra_dexes.return_value = []
             mock_hl.info.user_state.return_value = {
                 'assetPositions': [
                     {'position': {}},  # Missing coin
@@ -1071,6 +1075,7 @@ class TestExitPosition:
 
         with patch('trade_conversation.hyperliquid_utils') as mock_hl, \
                 patch('trade_conversation.telegram_utils') as mock_tg:
+            mock_hl.extra_dexes.return_value = []
             mock_hl.info.user_state.return_value = {'assetPositions': []}
             mock_hl.address = "test_address"
             mock_tg.reply = AsyncMock()
@@ -1087,6 +1092,7 @@ class TestExitPosition:
 
         with patch('trade_conversation.hyperliquid_utils') as mock_hl, \
                 patch('trade_conversation.telegram_utils') as mock_tg:
+            mock_hl.extra_dexes.return_value = []
             mock_hl.info.user_state.return_value = {
                 'assetPositions': [
                     {'position': {'coin': 'BTC'}},
