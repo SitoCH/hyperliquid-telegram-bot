@@ -178,15 +178,38 @@ class HyperliquidUtils:
         return None
 
     def get_coins_with_open_positions(self) -> List[str]:
-        user_state = self.info.user_state(self.address)
-        return [asset_position['position']['coin'] for asset_position in user_state.get("assetPositions", [])]
+        """Get coins with open positions across all DEXes."""
+        coins: list[str] = []
+        dexes: list[str] = [""] + self._extra_dexes
+        for dex in dexes:
+            user_state = self.info.user_state(self.address, dex=dex)
+            coins.extend(
+                ap['position']['coin']
+                for ap in user_state.get("assetPositions", [])
+            )
+        return coins
 
     def get_coins_by_traded_volume(self) -> List[str]:
+        """Get coins available for trading across all DEXes, sorted by volume."""
+        # Default DEX coins
         response_data: Any = self.info.meta_and_asset_ctxs()
         universe: List[Dict[str, Any]] = response_data[0]['universe']
         coin_data: List[Dict[str, Any]] = response_data[1]
+        coins: list[tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
 
-        coins: List[Tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
+        # Extra DEX coins
+        for dex in self._extra_dexes:
+            try:
+                dex_ctxs = self.info.meta_and_asset_ctxs(dex=dex)
+                dex_universe = dex_ctxs[0]['universe']
+                dex_coin_data = dex_ctxs[1]
+                coins.extend(
+                    (u["name"], float(c.get("dayNtlVlm", 0)))
+                    for u, c in zip(dex_universe, dex_coin_data)
+                )
+            except Exception as e:
+                logger.warning(f"Failed to fetch coins for DEX '{dex}': {e}")
+
         sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
         return [coin[0] for coin in reversed(sorted_coins[:75])]
 

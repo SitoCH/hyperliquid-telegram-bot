@@ -14,7 +14,8 @@ class PriceSuggestion(NamedTuple):
 
 def _get_mid_price(coin: str) -> float:
     """Get current mid price for a coin."""
-    return float(hyperliquid_utils.info.all_mids()[coin])
+    dex = hyperliquid_utils.dex_supported(coin) or ""
+    return float(hyperliquid_utils.info.all_mids(dex=dex)[coin])
 
 
 async def get_price_suggestions(coin: str, mid: float, is_stop_loss: bool, is_long: bool) -> List[PriceSuggestion]:

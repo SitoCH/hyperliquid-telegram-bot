@@ -30,8 +30,9 @@ def _has_sl_tp_set(context: ContextType) -> bool:
 
 
 def _get_mid_price(coin: str) -> float:
-    """Get current mid price for a coin."""
-    return float(hyperliquid_utils.info.all_mids()[coin])
+    """Get current mid price for a coin, resolving the correct DEX."""
+    dex = hyperliquid_utils.dex_supported(coin) or ""
+    return float(hyperliquid_utils.info.all_mids(dex=dex)[coin])
 
 
 def _is_long_position(context: ContextType) -> bool:
@@ -109,7 +110,8 @@ async def _process_amount_selection(query: CallbackQuery, context: ContextType, 
     """Process the amount selection and determine next step."""
     context.user_data["amount"] = amount  # type: ignore
     coin = context.user_data.get("selected_coin", "")  # type: ignore
-    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+    dex = hyperliquid_utils.dex_supported(coin) or ""
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address, dex=dex)
     current_leverage = hyperliquid_utils.get_leverage(user_state, coin)
 
     if current_leverage is not None:
@@ -144,7 +146,8 @@ async def _proceed_after_leverage_set(query: CallbackQuery, context: ContextType
 async def _prompt_for_leverage(query: CallbackQuery, coin: str) -> int:
     """Prompt user to select leverage for the given coin."""
     try:
-        meta: List[Dict[str, Any]] = hyperliquid_utils.info.meta()
+        dex = hyperliquid_utils.dex_supported(coin) or ""
+        meta: List[Dict[str, Any]] = hyperliquid_utils.info.meta(dex=dex)
         asset_info_map = {
             info["name"]: int(info["maxLeverage"])
             for info in meta.get("universe", [])  # type: ignore
@@ -169,7 +172,8 @@ async def selected_leverage(update: Update, context: ContextType) -> int:
     async def process(query: CallbackQuery, leverage: int) -> int:
         context.user_data["leverage"] = leverage  # type: ignore
         coin = context.user_data.get("selected_coin", "")  # type: ignore
-        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
+        dex = hyperliquid_utils.dex_supported(coin) or ""
+        user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address, dex=dex)
         return await _proceed_after_leverage_set(query, context, user_state, coin)
     return await _handle_callback_selection(update, int, "Invalid leverage.", process)
 
@@ -234,9 +238,10 @@ async def _after_stop_loss_set(update: Update, context: ContextType, coin: str, 
 
 async def _after_take_profit_set(update: Update, context: ContextType, coin: str, mid: float) -> int:
     """Action after take profit is set - open the order."""
+    dex = hyperliquid_utils.dex_supported(coin) or ""
     await open_order(
         context.user_data,  # type: ignore
-        hyperliquid_utils.info.user_state(hyperliquid_utils.address),
+        hyperliquid_utils.info.user_state(hyperliquid_utils.address, dex=dex),
         mid,
         _is_long_position(context),
         skip_sl_tp_prompt()
