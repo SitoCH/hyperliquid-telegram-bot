@@ -122,6 +122,126 @@ def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
     return message
 
 
+async def _send_dex_detail_positions(update: Update, dex_name: str) -> bool:
+    """Query and send detailed per-coin position tables for a builder-deployed perp DEX.
+
+    Returns True if positions were found and sent.
+    """
+    try:
+        address = hyperliquid_utils.address
+        dex_state = hyperliquid_utils.info.user_state(address, dex=dex_name)
+        if not dex_state.get("assetPositions"):
+            return False
+
+        dex_mids = hyperliquid_utils.info.all_mids(dex=dex_name)
+        tablefmt = simple_separated_format('  ')
+
+        dex_account_value = float(dex_state['marginSummary']['accountValue'])
+        dex_withdrawable = float(dex_state['withdrawable'])
+
+        total_pnl = sum(
+            float(ap['position']['unrealizedPnl'])
+            for ap in dex_state["assetPositions"]
+        )
+        header_lines = [
+            f"<b>DEX: {dex_name} — Perps positions:</b>",
+            f"Total balance: {fmt(dex_account_value)} USDC",
+            f"Withdrawable balance: {fmt(dex_withdrawable)} USDC",
+            f"Unrealized profit: {fmt(total_pnl)} USDC",
+        ]
+        await telegram_utils.reply(update, '\n'.join(header_lines), parse_mode=ParseMode.HTML)
+
+        sorted_positions = sorted(
+            dex_state["assetPositions"],
+            key=lambda x: float(x['position']['positionValue']),
+            reverse=True
+        )
+
+        for asset_position in sorted_positions:
+            coin = asset_position['position']['coin']
+            mid = dex_mids.get(coin, "?")
+            coin_lines = [
+                f"<b>{telegram_utils.get_link(coin, f'TA_{coin}')}:</b>"
+            ]
+            table_data = [
+                ["PnL", f"{fmt(float(asset_position['position']['unrealizedPnl']))}$",
+                 f"({fmt(float(asset_position['position']['returnOnEquity']) * 100.0)}%)"],
+                ["Entry price", "", f"{asset_position['position']['entryPx']}"],
+                ["Mid price", "", f"{mid}"],
+                ["Margin used", "", f"{fmt(float(asset_position['position']['marginUsed']))}$"],
+                ["Leverage", "", f"{asset_position['position']['leverage']['value']}x"],
+                ["Funding", "", f"{fmt(float(asset_position['position']['cumFunding']['sinceOpen']) * -1.0)}$"],
+                ["Pos. value", "", f"{fmt(float(asset_position['position']['positionValue']))}$"],
+                ["Size", "", f"{asset_position['position']['szi']}"],
+            ]
+            table = tabulate(
+                table_data,
+                headers=[" ", " ", " ", " "],
+                tablefmt=tablefmt,
+                colalign=("right", "right", "right")
+            )
+            coin_lines.append(f"<pre>{table}</pre>")
+            await telegram_utils.reply(update, '\n'.join(coin_lines), parse_mode=ParseMode.HTML)
+
+        return True
+    except Exception as e:
+        logger.error(f"Error displaying {dex_name} DEX positions: {str(e)}")
+        return False
+
+
+async def _send_dex_overview_table(update: Update, message_lines: list[str], dex_name: str) -> None:
+    """Append a compact overview table for a builder-deployed perp DEX into message_lines."""
+    address = hyperliquid_utils.address
+    dex_state = hyperliquid_utils.info.user_state(address, dex=dex_name)
+    if not dex_state.get("assetPositions"):
+        return
+
+    dex_mids = hyperliquid_utils.info.all_mids(dex=dex_name)
+    tablefmt = simple_separated_format(' ')
+
+    dex_account_value = float(dex_state['marginSummary']['accountValue'])
+    dex_withdrawable = float(dex_state['withdrawable'])
+
+    total_pnl = sum(
+        float(ap['position']['unrealizedPnl'])
+        for ap in dex_state["assetPositions"]
+    )
+
+    message_lines.append("")
+    message_lines.append(f"<b>DEX: {dex_name}</b>")
+    message_lines.append(f"Total balance: {fmt(dex_account_value)} USDC")
+    message_lines.append(f"Withdrawable balance: {fmt(dex_withdrawable)} USDC")
+    message_lines.append(f"Unrealized profit: {fmt(total_pnl)} USDC")
+    message_lines.append("")
+
+    sorted_positions = sorted(
+        dex_state["assetPositions"],
+        key=lambda x: float(x['position']['positionValue']),
+        reverse=True
+    )
+
+    def fmt_pos(pos: dict) -> str:
+        direction = "L" if float(pos['szi']) > 0 else "S"
+        coin = pos['coin'][:4] + "." if len(pos['coin']) > 4 else pos['coin']
+        return f"{direction} {coin}"
+
+    table = tabulate(
+        [
+            [
+                fmt_pos(ap['position']),
+                f"{fmt(float(ap['position']['positionValue']))}",
+                f"{fmt(float(ap['position']['unrealizedPnl']))}",
+                f"{fmt(float(ap['position']['returnOnEquity']) * 100.0)}%"
+            ]
+            for ap in sorted_positions
+        ],
+        headers=["  Coin", "Balance", "PnL ($)", "PnL (%)"],
+        tablefmt=tablefmt,
+        colalign=("left", "right", "right", "right")
+    )
+    message_lines.append(f"<pre>{table}</pre>")
+
+
 async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handler for getting current portfolio positions."""
     try:
@@ -228,6 +348,10 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if len(vault_messages) > 0:
             await telegram_utils.reply(update, '\n'.join(vault_messages), parse_mode=ParseMode.HTML)
 
+        # Show positions from builder-deployed perp DEXes (e.g. XYZ)
+        for dex_name in hyperliquid_utils.extra_dexes():
+            await _send_dex_detail_positions(update, dex_name)
+
     except Exception as e:
         logger.error(f"Error getting positions: {str(e)}")
         await telegram_utils.reply(
@@ -285,6 +409,10 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         vault_messages = vault_positions_messages(tablefmt, balance.vaults)
         if len(vault_messages) > 0:
             message_lines += vault_messages
+
+        # Show positions from builder-deployed perp DEXes (e.g. XYZ)
+        for dex_name in hyperliquid_utils.extra_dexes():
+            await _send_dex_overview_table(update, message_lines, dex_name)
 
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 

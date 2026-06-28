@@ -31,6 +31,11 @@ class HyperliquidUtils:
         self.address: str = user_vault if user_vault is not None else user_wallet
 
         self._info: Optional[InfoProxy] = None
+        self._extra_dexes: list[str] = [
+            s.strip()
+            for s in os.environ.get("HTB_EXTRA_DEXES", "xyz").split(",")
+            if s.strip()
+        ]
 
     @property
     def info(self) -> InfoProxy:
@@ -128,6 +133,10 @@ class HyperliquidUtils:
         coins: List[Tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
         sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
         return [coin[0] for coin in reversed(sorted_coins[:75])]
+
+    def extra_dexes(self) -> List[str]:
+        """Return the list of extra perp DEX names to query (e.g. ['xyz'])."""
+        return list(self._extra_dexes)
 
     def get_coins_reply_markup(self) -> InlineKeyboardMarkup:
         coins: List[str] = self.get_coins_by_traded_volume()
