@@ -38,7 +38,7 @@ class HyperliquidUtils:
             if s.strip()
         ]
         self._ws_subscriptions: list[tuple[dict[str, Any], Any]] = []
-        self._reconnect_delay: int = 5
+        self._reconnecting: bool = False
 
     @property
     def info(self) -> InfoProxy:
@@ -82,23 +82,26 @@ class HyperliquidUtils:
 
     def _on_websocket_error(self, ws: Any, error: Any) -> None:
         logger.error(f"Websocket error: {error}")
-        telegram_utils.queue_send("⚠️ WebSocket connection error — reconnecting in 5s...")
-        self._schedule_reconnect()
+        self._notify_and_reconnect("⚠️", "WebSocket connection error")
 
     def _on_websocket_close(self, ws: Any, close_status_code: int, close_msg: str) -> None:
         logger.warning(f"Websocket closed: {close_msg}")
-        telegram_utils.queue_send("🔌 WebSocket disconnected — reconnecting in 5s...")
-        self._schedule_reconnect()
+        self._notify_and_reconnect("🔌", "WebSocket disconnected")
 
-    def _schedule_reconnect(self) -> None:
-        """Schedule a websocket reconnection attempt via the Telegram job queue."""
+    def _notify_and_reconnect(self, icon: str, reason: str) -> None:
+        """Notify user and schedule reconnect, debounced to prevent duplicates."""
+        if self._reconnecting:
+            logger.info(f"Ignoring {reason} — reconnection already in progress")
+            return
+        self._reconnecting = True
+        telegram_utils.queue_send(f"{icon} {reason} — reconnecting...")
         if not telegram_utils.telegram_app or not telegram_utils.telegram_app.job_queue:
             logger.warning("Telegram app not ready, reconnecting immediately")
             self._do_reconnect()
             return
         telegram_utils.telegram_app.job_queue.run_once(
             self._do_reconnect_job,
-            when=self._reconnect_delay,
+            when=5,
             job_kwargs={'misfire_grace_time': 60},
         )
 
@@ -121,9 +124,13 @@ class HyperliquidUtils:
 
             # Create fresh connection with re-subscription
             self._init_websocket_inner()
+            self._reconnecting = False
             logger.info("WebSocket reconnected successfully")
+            telegram_utils.queue_send("✅ WebSocket reconnected")
         except Exception as e:
             logger.error(f"WebSocket reconnection failed: {e}", exc_info=True)
+            self._reconnecting = False
+            telegram_utils.queue_send(f"❌ WebSocket reconnect failed: {e}")
 
     def get_exchange(self, dex: str = "") -> Optional[Exchange]:
         """Get or create a cached Exchange for the given perp DEX.

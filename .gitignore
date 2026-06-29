@@ -31,3 +31,4 @@ node_modules/
 
 scratch.py
 /cache/
+.hermes/
