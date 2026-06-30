@@ -197,8 +197,13 @@ class HyperliquidUtils:
                 return bool(asset_info.get("onlyIsolated", False))
         return False
 
-    def get_sz_decimals(self) -> Dict[str, int]:
-        meta: Dict[str, Any] = self.info.meta()
+    def get_sz_decimals(self, dex: str = "") -> Dict[str, int]:
+        """Get szDecimals for all coins on a specific perp DEX.
+
+        Args:
+            dex: DEX name ('' for default, 'xyz', 'flx', etc.).
+        """
+        meta: Dict[str, Any] = self.info.meta(dex=dex)
         sz_decimals: Dict[str, int] = {}
         for asset_info in meta["universe"]:
             sz_decimals[asset_info["name"]] = asset_info["szDecimals"]
@@ -300,7 +305,13 @@ class HyperliquidUtils:
         others: List[str] = [c for c in coins if c not in open_position_coins]
         ordered_coins: List[str] = others + prioritized
 
-        keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in ordered_coins]
+        keyboard = [
+            [InlineKeyboardButton(
+                self.strip_dex_prefix(coin) if dex else coin,
+                callback_data=coin,
+            )]
+            for coin in ordered_coins
+        ]
         keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
         return InlineKeyboardMarkup(keyboard)
 
