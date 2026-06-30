@@ -18,7 +18,7 @@ from trade_execution import (
     calculate_available_margin
 )
 
-EXIT_CHOOSING, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT, SELECTING_LEVERAGE = range(6)
+EXIT_CHOOSING, SELECTING_DEX, SELECTING_COIN, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_AMOUNT, SELECTING_LEVERAGE = range(7)
 
 # Type alias for context types used throughout the module
 ContextType = Union[CallbackContext[Any, Any, Any, Any], ContextTypes.DEFAULT_TYPE]
@@ -90,6 +90,15 @@ async def enter_position(update: Update, context: ContextType, enter_mode: str) 
         await telegram_utils.reply(update, message, reply_markup=reply_markup)
         return SELECTING_AMOUNT
 
+    # If extra DEXes are configured, ask the user which DEX first
+    if hyperliquid_utils.extra_dexes():
+        await telegram_utils.reply(
+            update,
+            f"Choose a DEX to {enter_mode}:",
+            reply_markup=hyperliquid_utils.get_dex_reply_markup(),
+        )
+        return SELECTING_DEX
+
     await telegram_utils.reply(update, f'Choose a coin to {enter_mode}:', reply_markup=hyperliquid_utils.get_coins_reply_markup())
     return SELECTING_COIN
 
@@ -100,6 +109,23 @@ async def enter_long(update: Update, context: ContextType) -> int:
 
 async def enter_short(update: Update, context: ContextType) -> int:
     return await enter_position(update, context, "short")
+
+
+async def selected_dex(update: Update, context: ContextType) -> int:
+    """Handle DEX selection from the /long or /short flow."""
+    async def process(query: CallbackQuery, raw: str) -> int:
+        await query.edit_message_text("Loading...")
+        # callback_data is "__dex__" for default or "__dex__xyz" for extra DEXes
+        dex = raw.removeprefix("__dex__")
+        context.user_data["selected_dex"] = dex  # type: ignore
+        label = "Default (Hyperliquid)" if not dex else dex.upper()
+        coins_markup = hyperliquid_utils.get_coins_reply_markup(dex=dex)
+        await query.edit_message_text(
+            f"Choose a coin on {label}:",
+            reply_markup=coins_markup,
+        )
+        return SELECTING_COIN
+    return await _handle_callback_selection(update, None, "Invalid DEX.", process)
 
 
 def skip_sl_tp_prompt() -> bool:
