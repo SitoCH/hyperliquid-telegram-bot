@@ -300,7 +300,8 @@ async def selected_coin(update: Update, context: ContextType) -> int:
 
 
 async def get_amount_suggestions(context: ContextType) -> Tuple[str, InlineKeyboardMarkup]:
-    available_margin = calculate_available_margin()
+    dex = context.user_data.get("selected_dex", "")  # type: ignore
+    available_margin = calculate_available_margin(dex=dex)
 
     keyboard = [
         [InlineKeyboardButton(f"{amount}% (~{fmt(available_margin * amount / 100.0)} USDC)", callback_data=str(amount))]
