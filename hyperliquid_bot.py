@@ -18,7 +18,7 @@ from telegram.ext import CommandHandler, ConversationHandler, CallbackQueryHandl
 
 from technical_analysis.hyperliquid_candles import SELECTING_COIN_FOR_TA, analyze_candles, execute_ta, selected_coin_for_ta
 from hyperliquid_orders import get_open_orders
-from trade_conversation import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_LEVERAGE, enter_long, enter_short, selected_amount, selected_coin, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit, selected_leverage
+from trade_conversation import SELECTING_COIN, SELECTING_AMOUNT, EXIT_CHOOSING, SELECTING_STOP_LOSS, SELECTING_TAKE_PROFIT, SELECTING_LEVERAGE, SELECTING_DEX, enter_long, enter_short, selected_amount, selected_coin, selected_dex, exit_position, exit_selected_coin, selected_stop_loss, selected_take_profit, selected_leverage
 from hyperliquid_utils.utils import hyperliquid_utils
 from hyperliquid_positions import get_positions, get_overview
 from bot_statistics.hyperliquid_stats import get_stats
@@ -40,6 +40,7 @@ def main() -> None:
     )
 
     enter_position_states = {
+        SELECTING_DEX: [CallbackQueryHandler(selected_dex)],
         SELECTING_COIN: [CallbackQueryHandler(selected_coin)],
         SELECTING_AMOUNT: [CallbackQueryHandler(selected_amount)],
         SELECTING_LEVERAGE: [CallbackQueryHandler(selected_leverage)],

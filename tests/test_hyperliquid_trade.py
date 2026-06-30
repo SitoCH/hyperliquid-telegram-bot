@@ -354,6 +354,7 @@ class TestEnterPosition:
 
         with patch('trade_conversation.telegram_utils') as mock_tg, \
                 patch('trade_conversation.hyperliquid_utils') as mock_hl:
+            mock_hl.extra_dexes.return_value = []
             mock_tg.reply = AsyncMock()
             mock_hl.get_coins_reply_markup.return_value = MagicMock()
 
@@ -371,6 +372,7 @@ class TestEnterPosition:
 
         with patch('trade_conversation.telegram_utils') as mock_tg, \
                 patch('trade_conversation.hyperliquid_utils') as mock_hl:
+            mock_hl.extra_dexes.return_value = []
             mock_tg.reply = AsyncMock()
             mock_hl.get_coins_reply_markup.return_value = MagicMock()
 
@@ -409,6 +411,7 @@ class TestEnterPosition:
         with patch('trade_conversation.telegram_utils') as mock_tg, \
                 patch('trade_conversation.hyperliquid_utils') as mock_hl, \
                 patch('trade_conversation.skip_sl_tp_prompt', return_value=True):
+            mock_hl.extra_dexes.return_value = []
             mock_tg.reply = AsyncMock()
             mock_hl.get_coins_reply_markup.return_value = MagicMock()
 
