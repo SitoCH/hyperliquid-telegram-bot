@@ -246,42 +246,50 @@ class HyperliquidUtils:
             )
         return coins
 
-    def get_coins_by_traded_volume(self) -> List[str]:
-        """Get coins available for trading across all DEXes, sorted by volume."""
-        # Default DEX coins
+    def get_coins_by_traded_volume(self, dex: str = "") -> List[str]:
+        """Get coins available for trading on a specific perp DEX, sorted by volume.
+
+        Args:
+            dex: DEX name ('' for default, 'xyz', 'flx', etc.).
+        """
+        if dex:
+            # Extra DEX — sorted by mid price descending
+            dex_meta = self.info.meta(dex=dex)
+            dex_mids = self.info.all_mids(dex=dex)
+            coins = sorted(
+                dex_meta.get("universe", []),
+                key=lambda a: float(dex_mids.get(a["name"], 0)),
+                reverse=True,
+            )
+            return [a["name"] for a in coins]
+
+        # Default DEX — top 40 by 24h volume
         response_data: Any = self.info.meta_and_asset_ctxs()
         universe: List[Dict[str, Any]] = response_data[0]['universe']
         coin_data: List[Dict[str, Any]] = response_data[1]
         coins: list[tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
+        sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)[:40]
+        return [c[0] for c in sorted_coins]
 
-        # Extra DEX coins
+    def get_dex_reply_markup(self) -> InlineKeyboardMarkup:
+        """Build a keyboard to let the user pick which perp DEX to trade on."""
+        buttons: list[list[InlineKeyboardButton]] = [
+            [InlineKeyboardButton("Default (Hyperliquid)", callback_data="__dex__")]
+        ]
         for dex in self._extra_dexes:
-            try:
-                dex_ctxs = self.info.meta_and_asset_ctxs(dex=dex)
-                dex_universe = dex_ctxs[0]['universe']
-                dex_coin_data = dex_ctxs[1]
-                coins.extend(
-                    (u["name"], float(c.get("dayNtlVlm", 0)))
-                    for u, c in zip(dex_universe, dex_coin_data)
-                )
-            except Exception as e:
-                logger.warning(f"Failed to fetch coins for DEX '{dex}': {e}")
+            buttons.append([InlineKeyboardButton(dex.upper(), callback_data=f"__dex__{dex}")])
+        buttons.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
+        return InlineKeyboardMarkup(buttons)
 
-        sorted_coins = sorted(coins, key=lambda x: x[1], reverse=True)
-        return [coin[0] for coin in reversed(sorted_coins[:75])]
-
-    def extra_dexes(self) -> List[str]:
-        """Return the list of extra perp DEX names to query (e.g. ['xyz'])."""
-        return list(self._extra_dexes)
-
-    def get_coins_reply_markup(self) -> InlineKeyboardMarkup:
-        coins: List[str] = self.get_coins_by_traded_volume()
+    def get_coins_reply_markup(self, dex: str = "") -> InlineKeyboardMarkup:
+        """Build a keyboard of coin buttons for a specific perp DEX."""
+        coins: List[str] = self.get_coins_by_traded_volume(dex=dex)
         open_position_coins: set[str] = set(self.get_coins_with_open_positions())
         prioritized: List[str] = [c for c in coins if c in open_position_coins]
         others: List[str] = [c for c in coins if c not in open_position_coins]
         ordered_coins: List[str] = others + prioritized
 
-        keyboard: List[List[InlineKeyboardButton]] = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in ordered_coins]
+        keyboard = [[InlineKeyboardButton(coin, callback_data=coin)] for coin in ordered_coins]
         keyboard.append([InlineKeyboardButton("Cancel", callback_data='cancel')])
         return InlineKeyboardMarkup(keyboard)
 

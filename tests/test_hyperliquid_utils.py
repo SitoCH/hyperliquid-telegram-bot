@@ -206,7 +206,7 @@ class TestHyperliquidUtilsCoins:
             instance._extra_dexes = []
             instance.info.meta_and_asset_ctxs = MagicMock(return_value=mock_response)  # type: ignore[attr-defined]
             result = instance.get_coins_by_traded_volume()
-            assert result == ["BTC", "SOL", "ETH"]
+            assert result == ["ETH", "SOL", "BTC"]
 
     def test_get_coins_reply_markup(self):
         with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
