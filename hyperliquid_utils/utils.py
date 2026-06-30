@@ -253,6 +253,10 @@ class HyperliquidUtils:
             )
         return coins
 
+    def extra_dexes(self) -> List[str]:
+        """Return the list of extra perp DEX names to query (e.g. ['xyz'])."""
+        return list(self._extra_dexes)
+
     def get_coins_by_traded_volume(self, dex: str = "") -> List[str]:
         """Get coins available for trading on a specific perp DEX, sorted by volume.
 
