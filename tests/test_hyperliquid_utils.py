@@ -51,10 +51,8 @@ class TestHyperliquidUtilsWebsocket:
                 patch('hyperliquid_utils.utils.telegram_utils') as mock_tg:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
-            instance._reconnecting = False
             instance._on_websocket_error(None, "test error")
-            assert instance._reconnecting is True
-            mock_tg.queue_send.assert_called_once_with("⚠️ WebSocket connection error — reconnecting...")
+            mock_tg.queue_send.assert_called_once_with("⚠️ WebSocket connection error — reconnecting in 5s...")
 
     def test_on_websocket_close(self):
         with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
@@ -62,24 +60,8 @@ class TestHyperliquidUtilsWebsocket:
                 patch('hyperliquid_utils.utils.telegram_utils') as mock_tg:
             from hyperliquid_utils.utils import HyperliquidUtils
             instance = HyperliquidUtils()
-            instance._reconnecting = False
             instance._on_websocket_close(None, 0, "closed")
-            assert instance._reconnecting is True
-            mock_tg.queue_send.assert_called_once_with("🔌 WebSocket disconnected — reconnecting...")
-
-    def test_reconnect_debounce(self):
-        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
-                patch('hyperliquid_utils.utils.Info') as mock_info, \
-                patch('hyperliquid_utils.utils.telegram_utils') as mock_tg:
-            from hyperliquid_utils.utils import HyperliquidUtils
-            instance = HyperliquidUtils()
-            instance._reconnecting = False
-            # First call should proceed
-            instance._on_websocket_close(None, 0, "closed")
-            assert mock_tg.queue_send.call_count == 1
-            # Second call should be ignored (debounced)
-            instance._on_websocket_close(None, 0, "closed again")
-            assert mock_tg.queue_send.call_count == 1
+            mock_tg.queue_send.assert_called_once_with("🔌 WebSocket disconnected — reconnecting in 5s...")
 
 
 class TestHyperliquidUtilsExchange:

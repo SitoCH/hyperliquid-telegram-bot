@@ -38,7 +38,7 @@ class HyperliquidUtils:
             if s.strip()
         ]
         self._ws_subscriptions: list[tuple[dict[str, Any], Any]] = []
-        self._reconnecting: bool = False
+        self._reconnect_delay: int = 5
 
     @property
     def info(self) -> InfoProxy:
@@ -82,26 +82,23 @@ class HyperliquidUtils:
 
     def _on_websocket_error(self, ws: Any, error: Any) -> None:
         logger.error(f"Websocket error: {error}")
-        self._notify_and_reconnect("⚠️", "WebSocket connection error")
+        telegram_utils.queue_send("⚠️ WebSocket connection error — reconnecting in 5s...")
+        self._schedule_reconnect()
 
     def _on_websocket_close(self, ws: Any, close_status_code: int, close_msg: str) -> None:
         logger.warning(f"Websocket closed: {close_msg}")
-        self._notify_and_reconnect("🔌", "WebSocket disconnected")
+        telegram_utils.queue_send("🔌 WebSocket disconnected — reconnecting in 5s...")
+        self._schedule_reconnect()
 
-    def _notify_and_reconnect(self, icon: str, reason: str) -> None:
-        """Notify user and schedule reconnect, debounced to prevent duplicates."""
-        if self._reconnecting:
-            logger.info(f"Ignoring {reason} — reconnection already in progress")
-            return
-        self._reconnecting = True
-        telegram_utils.queue_send(f"{icon} {reason} — reconnecting...")
+    def _schedule_reconnect(self) -> None:
+        """Schedule a websocket reconnection attempt via the Telegram job queue."""
         if not telegram_utils.telegram_app or not telegram_utils.telegram_app.job_queue:
             logger.warning("Telegram app not ready, reconnecting immediately")
             self._do_reconnect()
             return
         telegram_utils.telegram_app.job_queue.run_once(
             self._do_reconnect_job,
-            when=5,
+            when=self._reconnect_delay,
             job_kwargs={'misfire_grace_time': 60},
         )
 
@@ -124,13 +121,9 @@ class HyperliquidUtils:
 
             # Create fresh connection with re-subscription
             self._init_websocket_inner()
-            self._reconnecting = False
             logger.info("WebSocket reconnected successfully")
-            telegram_utils.queue_send("✅ WebSocket reconnected")
         except Exception as e:
             logger.error(f"WebSocket reconnection failed: {e}", exc_info=True)
-            self._reconnecting = False
-            telegram_utils.queue_send(f"❌ WebSocket reconnect failed: {e}")
 
     def get_exchange(self, dex: str = "") -> Optional[Exchange]:
         """Get or create a cached Exchange for the given perp DEX.
@@ -261,16 +254,16 @@ class HyperliquidUtils:
         coin_data: List[Dict[str, Any]] = response_data[1]
         coins: list[tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
 
-        # Extra DEX coins — meta() supports dex, meta_and_asset_ctxs() does not
+        # Extra DEX coins
         for dex in self._extra_dexes:
             try:
-                dex_meta = self.info.meta(dex=dex)
-                dex_mids = self.info.all_mids(dex=dex)
-                for asset_info in dex_meta.get("universe", []):
-                    coin = asset_info["name"]
-                    # Use mid price as a rough volume proxy for ordering
-                    mid = float(dex_mids.get(coin, 0))
-                    coins.append((coin, mid))
+                dex_ctxs = self.info.meta_and_asset_ctxs(dex=dex)
+                dex_universe = dex_ctxs[0]['universe']
+                dex_coin_data = dex_ctxs[1]
+                coins.extend(
+                    (u["name"], float(c.get("dayNtlVlm", 0)))
+                    for u, c in zip(dex_universe, dex_coin_data)
+                )
             except Exception as e:
                 logger.warning(f"Failed to fetch coins for DEX '{dex}': {e}")
 
