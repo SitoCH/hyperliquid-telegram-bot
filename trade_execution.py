@@ -101,7 +101,7 @@ async def open_order(user_data: Dict[str, Any], user_state: Dict[str, Any], mid:
         update_leverage_result = exchange.update_leverage(leverage, selected_coin, is_cross)
         logger.info(update_leverage_result)
 
-        sz_decimals = hyperliquid_utils.get_sz_decimals()
+        sz_decimals = hyperliquid_utils.get_sz_decimals(dex=dex)
         sz = round(balance_to_use * leverage / mid, sz_decimals[selected_coin])
         if sz * mid < 10.0:
             await telegram_utils.send("The order value is less than 10 USDC and can't be executed")

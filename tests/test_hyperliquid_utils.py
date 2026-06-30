@@ -124,6 +124,24 @@ class TestHyperliquidUtilsSzDecimals:
             result = instance.get_sz_decimals()
             assert result == {"BTC": 5, "ETH": 4}
 
+    def test_get_sz_decimals_with_dex(self):
+        """szDecimals for an extra DEX queries meta(dex=...) instead of default."""
+        mock_xyz_meta = {
+            "universe": [
+                {"name": "xyz:BABA", "szDecimals": 3},
+                {"name": "xyz:AAPL", "szDecimals": 2},
+            ]
+        }
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            instance.info.meta = MagicMock(return_value=mock_xyz_meta)  # type: ignore[attr-defined]
+            result = instance.get_sz_decimals(dex="xyz")
+            # Should query meta(dex='xyz'), not just meta()
+            instance.info.meta.assert_called_with(dex="xyz")
+            assert result == {"xyz:BABA": 3, "xyz:AAPL": 2}
+
 
 class TestHyperliquidUtilsPositions:
     def test_get_size_with_position(self, sample_user_state):
@@ -261,6 +279,25 @@ class TestHyperliquidUtilsCoins:
             result = instance.get_coins_reply_markup()
             mock_markup.assert_called_once()
             assert result is not None
+
+    def test_get_coins_reply_markup_strips_prefix(self):
+        """When a dex is specified, coin labels should strip the dex_name: prefix."""
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info:
+            from hyperliquid_utils.utils import HyperliquidUtils, InlineKeyboardMarkup
+            instance = HyperliquidUtils()
+            instance.get_coins_by_traded_volume = MagicMock(return_value=["xyz:BABA", "xyz:AAPL"])  # type: ignore[method-assign]
+            instance.get_coins_with_open_positions = MagicMock(return_value=[])  # type: ignore[method-assign]
+
+            markup = instance.get_coins_reply_markup(dex="xyz")
+            assert isinstance(markup, InlineKeyboardMarkup)
+            button_texts = [btn.text for row in markup.inline_keyboard for btn in row]
+            assert "BABA" in button_texts
+            assert "AAPL" in button_texts
+            assert "xyz:BABA" not in button_texts
+            button_data = [btn.callback_data for row in markup.inline_keyboard for btn in row]
+            assert "xyz:BABA" in button_data
+            assert "xyz:AAPL" in button_data
 
 
 class TestHyperliquidUtilsSymbol:
