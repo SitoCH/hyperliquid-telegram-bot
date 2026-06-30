@@ -261,16 +261,16 @@ class HyperliquidUtils:
         coin_data: List[Dict[str, Any]] = response_data[1]
         coins: list[tuple[str, float]] = [(u["name"], float(c["dayNtlVlm"])) for u, c in zip(universe, coin_data)]
 
-        # Extra DEX coins
+        # Extra DEX coins — meta() supports dex, meta_and_asset_ctxs() does not
         for dex in self._extra_dexes:
             try:
-                dex_ctxs = self.info.meta_and_asset_ctxs(dex=dex)
-                dex_universe = dex_ctxs[0]['universe']
-                dex_coin_data = dex_ctxs[1]
-                coins.extend(
-                    (u["name"], float(c.get("dayNtlVlm", 0)))
-                    for u, c in zip(dex_universe, dex_coin_data)
-                )
+                dex_meta = self.info.meta(dex=dex)
+                dex_mids = self.info.all_mids(dex=dex)
+                for asset_info in dex_meta.get("universe", []):
+                    coin = asset_info["name"]
+                    # Use mid price as a rough volume proxy for ordering
+                    mid = float(dex_mids.get(coin, 0))
+                    coins.append((coin, mid))
             except Exception as e:
                 logger.warning(f"Failed to fetch coins for DEX '{dex}': {e}")
 
