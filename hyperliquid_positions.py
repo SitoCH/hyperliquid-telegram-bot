@@ -52,6 +52,16 @@ def _calculate_stacked_balance(staking_summary: Dict[str, Any], token_prices: Di
 
 def _get_portfolio_balance() -> PortfolioBalance:
     """Get current portfolio balance information."""
+    balance, _, _ = _get_portfolio_data()
+    return balance
+
+
+def _get_portfolio_data() -> tuple[PortfolioBalance, dict[str, Any], dict[str, float]]:
+    """Get portfolio balance, perp user state, and token prices (eliminates duplicate API calls).
+
+    Returns:
+        (balance, perp_state, token_prices)
+    """
     address = hyperliquid_utils.address
     perp_state = hyperliquid_utils.info.user_state(address)
     spot_state = hyperliquid_utils.info.spot_user_state(address)
@@ -65,7 +75,7 @@ def _get_portfolio_balance() -> PortfolioBalance:
 
     total_margin_used = float(perp_state['crossMarginSummary']['totalMarginUsed'])
 
-    return PortfolioBalance(
+    balance = PortfolioBalance(
         perp_total=float(perp_state['marginSummary']['accountValue']),
         perp_withdrawable=float(perp_state['withdrawable']),
         perp_margin_available=max(cross_margin_account_value - total_margin_used, 0.0),
@@ -75,6 +85,7 @@ def _get_portfolio_balance() -> PortfolioBalance:
         cross_margin_ratio=maintenance_margin / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
         cross_account_leverage=cross_margin_positions_value / cross_margin_account_value if cross_margin_account_value > 0 else 0.0,
     )
+    return balance, perp_state, token_prices
 
 
 def _format_portfolio_message(balance: PortfolioBalance) -> List[str]:
@@ -248,11 +259,10 @@ async def _send_dex_overview_table(update: Update, message_lines: list[str], dex
 async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handler for getting current portfolio positions."""
     try:
-        balance = _get_portfolio_balance()
+        balance, perp_user_state, token_prices = _get_portfolio_data()
         message_lines = _format_portfolio_message(balance)
 
         all_mids = hyperliquid_utils.info.all_mids()
-        perp_user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
         tablefmt = simple_separated_format('  ')
         if perp_user_state["assetPositions"]:
             total_pnl = sum(
@@ -343,7 +353,7 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         else:
             await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
 
-        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address), available_usdc=balance.perp_withdrawable)
+        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address), available_usdc=balance.perp_withdrawable, token_prices=token_prices)
         if len(spot_messages) > 0:
             await telegram_utils.reply(update, '\n'.join(spot_messages), parse_mode=ParseMode.HTML)
 
@@ -365,10 +375,9 @@ async def get_positions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        balance = _get_portfolio_balance()
+        balance, perp_user_state, token_prices = _get_portfolio_data()
         message_lines = _format_portfolio_message(balance)
 
-        perp_user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
         tablefmt = simple_separated_format(' ')
         if perp_user_state["assetPositions"]:
             total_pnl = sum(
@@ -415,7 +424,7 @@ async def get_overview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if len(vault_messages) > 0:
             message_lines += vault_messages
 
-        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address), available_usdc=balance.perp_withdrawable)
+        spot_messages = await spot_positions_messages(tablefmt, hyperliquid_utils.info.spot_user_state(hyperliquid_utils.address), available_usdc=balance.perp_withdrawable, token_prices=token_prices)
         message_lines += spot_messages
 
         await telegram_utils.reply(update, '\n'.join(message_lines), parse_mode=ParseMode.HTML)
@@ -458,18 +467,20 @@ def _get_token_prices() -> dict[str, float]:
     return token_prices
 
 
-async def spot_positions_messages(tablefmt: Any, spot_user_state: dict[str, Any], available_usdc: float | None = None) -> list[str]:
+async def spot_positions_messages(tablefmt: Any, spot_user_state: dict[str, Any], available_usdc: float | None = None, token_prices: dict[str, float] | None = None) -> list[str]:
     """Generate messages for spot positions, sorted by USD value.
 
     Args:
         available_usdc: If provided, overrides the USDC spot balance with
             this value (e.g. the withdrawable/available-to-trade balance).
+        token_prices: Pre-fetched token prices. If omitted, fetches fresh.
     """
 
     if not spot_user_state.get('balances'):
         return []
 
-    token_prices = _get_token_prices()
+    if token_prices is None:
+        token_prices = _get_token_prices()
 
     positions = []
     for balance in spot_user_state['balances']:
