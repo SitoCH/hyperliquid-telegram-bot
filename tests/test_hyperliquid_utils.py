@@ -212,6 +212,30 @@ class TestHyperliquidUtilsPositions:
 
 
 class TestHyperliquidUtilsCoins:
+    def test_extra_dexes_default_xyz(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch.dict(os.environ, {"HTB_USER_WALLET": "0x0", "HTB_EXTRA_DEXES": "xyz"}, clear=True):
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.extra_dexes() == ["xyz"]
+
+    def test_extra_dexes_empty(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch.dict(os.environ, {"HTB_USER_WALLET": "0x0", "HTB_EXTRA_DEXES": ""}, clear=True):
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.extra_dexes() == []
+
+    def test_extra_dexes_multiple(self):
+        with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
+                patch('hyperliquid_utils.utils.Info') as mock_info, \
+                patch.dict(os.environ, {"HTB_USER_WALLET": "0x0", "HTB_EXTRA_DEXES": "xyz,flx,vntl"}, clear=True):
+            from hyperliquid_utils.utils import HyperliquidUtils
+            instance = HyperliquidUtils()
+            assert instance.extra_dexes() == ["xyz", "flx", "vntl"]
+
     def test_get_coins_by_traded_volume(self):
         mock_response = (
             {"universe": [{"name": "BTC"}, {"name": "ETH"}, {"name": "SOL"}]},
