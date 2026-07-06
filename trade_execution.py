@@ -36,12 +36,13 @@ def get_order_error_message(result: Any) -> str:
 
 
 def calculate_available_margin(dex: str = "") -> float:
-    """Calculate available margin for trading on a specific perp DEX.
+    """Calculate available margin for trading.
 
-    Args:
-        dex: The perp DEX name ('' for default Hyperliquid DEX).
+    Cross margin is shared across all DEXes, so the available balance
+    comes from the default DEX's user state regardless of which DEX
+    the trade targets.
     """
-    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address, dex=dex)
+    user_state = hyperliquid_utils.info.user_state(hyperliquid_utils.address)
     cross_margin_account_value = float(user_state['crossMarginSummary']['accountValue'])
     total_margin_used = float(user_state['crossMarginSummary']['totalMarginUsed'])
     return max(cross_margin_account_value - total_margin_used, 0.0)
