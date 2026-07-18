@@ -57,6 +57,7 @@ class TestHyperliquidUtilsWebsocket:
             mock_tg.queue_send.assert_called_once_with("⚠️ WebSocket connection error — reconnecting...")
 
     def test_on_websocket_close(self):
+        """Close reconnects silently — no user notification."""
         with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
                 patch('hyperliquid_utils.utils.Info') as mock_info, \
                 patch('hyperliquid_utils.utils.telegram_utils') as mock_tg:
@@ -65,7 +66,7 @@ class TestHyperliquidUtilsWebsocket:
             instance._reconnecting = False
             instance._on_websocket_close(None, 0, "closed")
             assert instance._reconnecting is True
-            mock_tg.queue_send.assert_called_once_with("🔌 WebSocket disconnected — reconnecting...")
+            mock_tg.queue_send.assert_not_called()
 
     def test_reconnect_debounce(self):
         with patch('hyperliquid_utils.utils.InfoProxy') as mock_info_proxy, \
@@ -76,10 +77,10 @@ class TestHyperliquidUtilsWebsocket:
             instance._reconnecting = False
             # First call should proceed
             instance._on_websocket_close(None, 0, "closed")
-            assert mock_tg.queue_send.call_count == 1
+            assert mock_tg.queue_send.call_count == 0  # silent
             # Second call should be ignored (debounced)
             instance._on_websocket_close(None, 0, "closed again")
-            assert mock_tg.queue_send.call_count == 1
+            assert mock_tg.queue_send.call_count == 0
 
 
 class TestHyperliquidUtilsExchange:

@@ -39,6 +39,8 @@ class HyperliquidUtils:
         ]
         self._ws_subscriptions: list[tuple[dict[str, Any], Any]] = []
         self._reconnecting: bool = False
+        self._reconnect_attempts: int = 0
+        self._max_reconnect_attempts: int = 10
 
     @property
     def info(self) -> InfoProxy:
@@ -86,22 +88,42 @@ class HyperliquidUtils:
 
     def _on_websocket_close(self, ws: Any, close_status_code: int, close_msg: str) -> None:
         logger.warning(f"Websocket closed: {close_msg}")
-        self._notify_and_reconnect("🔌", "WebSocket disconnected")
+        # Normal close — reconnect silently, no user notification
+        self._reconnect_silently()
 
     def _notify_and_reconnect(self, icon: str, reason: str) -> None:
-        """Notify user and schedule reconnect, debounced to prevent duplicates."""
+        """Notify user and schedule reconnect with up to 10 retries, 10s apart."""
         if self._reconnecting:
             logger.info(f"Ignoring {reason} — reconnection already in progress")
             return
         self._reconnecting = True
+        self._reconnect_attempts = 0
         telegram_utils.queue_send(f"{icon} {reason} — reconnecting...")
+        self._schedule_reconnect_attempt()
+
+    def _reconnect_silently(self) -> None:
+        """Silently reconnect without notifying the user."""
+        if self._reconnecting:
+            return
+        self._reconnecting = True
+        self._reconnect_attempts = 0
+        self._schedule_reconnect_attempt()
+
+    def _schedule_reconnect_attempt(self) -> None:
+        """Schedule the next reconnect attempt, up to max attempts."""
+        if self._reconnect_attempts >= self._max_reconnect_attempts:
+            self._reconnecting = False
+            telegram_utils.queue_send("❌ WebSocket reconnect failed after 10 attempts")
+            return
+
+        self._reconnect_attempts += 1
         if not telegram_utils.telegram_app or not telegram_utils.telegram_app.job_queue:
             logger.warning("Telegram app not ready, reconnecting immediately")
             self._do_reconnect()
             return
         telegram_utils.telegram_app.job_queue.run_once(
             self._do_reconnect_job,
-            when=5,
+            when=10,
             job_kwargs={'misfire_grace_time': 60},
         )
 
@@ -110,7 +132,12 @@ class HyperliquidUtils:
         self._do_reconnect()
 
     def _do_reconnect(self) -> None:
-        """Perform the actual WebSocket reconnection."""
+        """Perform the actual WebSocket reconnection.
+
+        On success: resets reconnecting flag and notifies user if they
+        were warned about the disconnect.
+        On failure: schedules another attempt up to _max_reconnect_attempts.
+        """
         try:
             # Disconnect old websocket if still alive
             try:
@@ -125,12 +152,13 @@ class HyperliquidUtils:
             # Create fresh connection with re-subscription
             self._init_websocket_inner()
             self._reconnecting = False
+            self._reconnect_attempts = 0
             logger.info("WebSocket reconnected successfully")
             telegram_utils.queue_send("✅ WebSocket reconnected")
         except Exception as e:
-            logger.error(f"WebSocket reconnection failed: {e}", exc_info=True)
-            self._reconnecting = False
-            telegram_utils.queue_send(f"❌ WebSocket reconnect failed: {e}")
+            logger.error(f"WebSocket reconnection attempt {self._reconnect_attempts}/{self._max_reconnect_attempts} failed: {e}", exc_info=True)
+            # Schedule next attempt — _schedule_reconnect_attempt will check the limit
+            self._schedule_reconnect_attempt()
 
     def get_exchange(self, dex: str = "") -> Optional[Exchange]:
         """Get or create a cached Exchange for the given perp DEX.
