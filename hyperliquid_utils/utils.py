@@ -154,7 +154,6 @@ class HyperliquidUtils:
             self._reconnecting = False
             self._reconnect_attempts = 0
             logger.info("WebSocket reconnected successfully")
-            telegram_utils.queue_send("✅ WebSocket reconnected")
         except Exception as e:
             logger.error(f"WebSocket reconnection attempt {self._reconnect_attempts}/{self._max_reconnect_attempts} failed: {e}", exc_info=True)
             # Schedule next attempt — _schedule_reconnect_attempt will check the limit
