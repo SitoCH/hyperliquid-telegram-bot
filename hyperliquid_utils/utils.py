@@ -92,13 +92,16 @@ class HyperliquidUtils:
         self._reconnect_silently()
 
     def _notify_and_reconnect(self, icon: str, reason: str) -> None:
-        """Notify user and schedule reconnect with up to 10 retries, 10s apart."""
+        """Schedule reconnect with up to 10 retries, 10s apart.
+
+        Only notifies the user if all retries are exhausted.
+        """
         if self._reconnecting:
             logger.info(f"Ignoring {reason} — reconnection already in progress")
             return
         self._reconnecting = True
         self._reconnect_attempts = 0
-        telegram_utils.queue_send(f"{icon} {reason} — reconnecting...")
+        # Don't notify the user — reconnection is handled behind the scenes
         self._schedule_reconnect_attempt()
 
     def _reconnect_silently(self) -> None:
