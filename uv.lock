@@ -1166,7 +1166,7 @@ requires-dist = [
     { name = "pytest-mock", specifier = ">=3.12.0" },
     { name = "python-telegram-bot", extras = ["job-queue"], specifier = ">=21.6" },
     { name = "scipy", specifier = ">=1.14.1" },
-    { name = "setuptools", specifier = ">=75.5.0" },
+    { name = "setuptools", specifier = ">=83.0.0" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "types-requests", specifier = ">=2.32.0.20241016" },
     { name = "types-tabulate", specifier = ">=0.9.0.20240106" },
@@ -2612,11 +2612,11 @@ wheels = [
 
 [[package]]
 name = "setuptools"
-version = "80.1.0"
+version = "83.0.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/aa/b2/bd26ed086b842b68c8fe9aac380ad7e5118cf84fa7abd45bb059a88368a8/setuptools-80.1.0.tar.gz", hash = "sha256:2e308396e1d83de287ada2c2fd6e64286008fe6aca5008e0b6a8cb0e2c86eedd", size = 1354038, upload-time = "2025-04-30T17:41:06.171Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/26/f5d29e25ffdb535afef2d35cdb55b325298f96debd670da4c325e08d70f4/setuptools-83.0.0.tar.gz", hash = "sha256:025bccbbf0fa05b6192bc64ae1e7b16e001fd6d6d4d5de03c97b1c1ade523bef", size = 1154254, upload-time = "2026-07-04T15:31:22.699Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8b/f6/126c9309c8fe93e5d6bb850593cd58d591daf2da45cc78b61e48d8d95879/setuptools-80.1.0-py3-none-any.whl", hash = "sha256:ea0e7655c05b74819f82e76e11a85b31779fee7c4969e82f72bab0664e8317e4", size = 1240689, upload-time = "2025-04-30T17:41:03.789Z" },
+    { url = "https://files.pythonhosted.org/packages/5d/40/e1e72872c6354b306daef1703549e8e83b4d43cfea356311bf722a043752/setuptools-83.0.0-py3-none-any.whl", hash = "sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3", size = 1008090, upload-time = "2026-07-04T15:31:20.885Z" },
 ]
 
 [[package]]
