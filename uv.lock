@@ -1166,7 +1166,7 @@ requires-dist = [
     { name = "pytest-mock", specifier = ">=3.12.0" },
     { name = "python-telegram-bot", extras = ["job-queue"], specifier = ">=21.6" },
     { name = "scipy", specifier = ">=1.14.1" },
-    { name = "setuptools", specifier = ">=75.5.0" },
+    { name = "setuptools", specifier = ">=68" },
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "types-requests", specifier = ">=2.32.0.20241016" },
     { name = "types-tabulate", specifier = ">=0.9.0.20240106" },
