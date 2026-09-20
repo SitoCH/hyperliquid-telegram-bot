@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM python:3.10-slim-bullseye AS base
+FROM python:3.10-slim-bookworm AS base
 
 FROM ghcr.io/astral-sh/uv:0.8.22 AS uv
 
